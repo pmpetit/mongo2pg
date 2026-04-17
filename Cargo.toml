@@ -1,0 +1,31 @@
+[package]
+name = "mongodb_to_pg"
+version = "0.1.0"
+edition = "2021"
+description = "Schema inference and conversion tool: MongoDB → JSON Schema variants"
+license = "Apache-2.0"
+
+[lib]
+name = "mongodb_to_pg"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mongodb_to_pg"
+path = "src/bin/mongodb_to_pg.rs"
+
+[dependencies]
+mongodb = "3.2.5"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+bson = "2"
+clap = { version = "4", features = ["derive"] }
+indexmap = { version = "2", features = ["serde"] }
+regex = "1"
+rand = { version = "0.8", features = ["small_rng"] }
+anyhow = "1"
+futures = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
