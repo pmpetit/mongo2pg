@@ -4,9 +4,9 @@
 //! live MongoDB connection is required.
 
 use bson::{doc, Bson};
-use mongodb_to_pg::analyzer::{Analyzer, CollectionSchema};
-use mongodb_to_pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
-use mongodb_to_pg::stats::SchemaStats;
+use mongo2pg::analyzer::{Analyzer, CollectionSchema};
+use mongo2pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
+use mongo2pg::stats::SchemaStats;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -347,7 +347,7 @@ fn test_stats_branch_count() {
 
 #[test]
 fn test_semantic_type_email_detected() {
-    use mongodb_to_pg::semantic_types::SemanticDetector;
+    use mongo2pg::semantic_types::SemanticDetector;
     let det = SemanticDetector::new();
     let values = vec![
         "alice@example.com",
@@ -361,7 +361,7 @@ fn test_semantic_type_email_detected() {
 
 #[test]
 fn test_semantic_type_with_analyzer() {
-    use mongodb_to_pg::semantic_types::SemanticDetector;
+    use mongo2pg::semantic_types::SemanticDetector;
     let docs: Vec<bson::Document> = (0..10)
         .map(|i| doc! { "_id": i, "email": format!("user{i}@example.com") })
         .collect();

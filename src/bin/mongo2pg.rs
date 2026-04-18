@@ -1,8 +1,8 @@
-//! `mongodb_to_pg` CLI – Sample a MongoDB collection and infer its schema.
+//! `mongo2pg` CLI – Sample a MongoDB collection and infer its schema.
 //!
 //! # Usage
 //! ```text
-//! mongodb_to_pg <URI> <DB.COLLECTION> [OPTIONS]
+//! mongo2pg <URI> <DB.COLLECTION> [OPTIONS]
 //!
 //! Options:
 //!   -n, --number <N>       Number of documents to sample [default: 1000]
@@ -22,10 +22,10 @@ use bson::doc;
 use clap::Parser;
 use futures::TryStreamExt;
 use mongodb::{Client, options::ClientOptions};
-use mongodb_to_pg::analyzer::Analyzer;
-use mongodb_to_pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
-use mongodb_to_pg::semantic_types::SemanticDetector;
-use mongodb_to_pg::stats::format_stats;
+use mongo2pg::analyzer::Analyzer;
+use mongo2pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
+use mongo2pg::semantic_types::SemanticDetector;
+use mongo2pg::stats::format_stats;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI argument definition
@@ -33,7 +33,7 @@ use mongodb_to_pg::stats::format_stats;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "mongodb_to_pg",
+    name = "mongo2pg",
     about = "Sample a MongoDB collection and infer its JSON Schema",
     version
 )]
@@ -204,7 +204,7 @@ fn parse_format(format: &str) -> (SchemaDialect, Renderer) {
 }
 
 /// Render a simple ASCII table of the top-level schema fields.
-fn render_table(schema: &mongodb_to_pg::analyzer::CollectionSchema) -> String {
+fn render_table(schema: &mongo2pg::analyzer::CollectionSchema) -> String {
     let mut lines = Vec::new();
     let header = format!(
         "{:<30} {:>8} {:>8} {}",

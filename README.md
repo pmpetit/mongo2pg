@@ -1,4 +1,4 @@
-# mongodb_to_pg
+# mongo2pg
 
 A Rust library and CLI tool for **MongoDB schema inference and conversion**. It samples documents from a MongoDB collection, infers a probabilistic schema, and exports it in multiple JSON Schema dialects.
 
@@ -28,10 +28,10 @@ cargo install --path .
 Or build from source:
 
 ```bash
-git clone https://github.com/pmpetit/mongodb_to_pg
-cd mongodb_to_pg
+git clone https://github.com/pmpetit/mongo2pg
+cd mongo2pg
 cargo build --release
-# Binary at: ./target/release/mongodb_to_pg
+# Binary at: ./target/release/mongo2pg
 ```
 
 ---
@@ -39,7 +39,7 @@ cargo build --release
 ## CLI Usage
 
 ```
-mongodb_to_pg <URI> <DB.COLLECTION> [OPTIONS]
+mongo2pg <URI> <DB.COLLECTION> [OPTIONS]
 
 Arguments:
   <URI>            MongoDB connection URI (e.g. mongodb://localhost:27017)
@@ -68,22 +68,22 @@ Options:
 
 ```bash
 # Infer schema in expanded format (default), pretty-printed JSON
-mongodb_to_pg mongodb://localhost:27017 mydb.users
+mongo2pg mongodb://localhost:27017 mydb.users
 
 # MongoDB JSON Schema dialect, sample 500 docs
-mongodb_to_pg mongodb://localhost:27017 mydb.users -n 500 -f mongodb
+mongo2pg mongodb://localhost:27017 mydb.users -n 500 -f mongodb
 
 # Standard JSON Schema + stats on stderr
-mongodb_to_pg mongodb://localhost:27017 mydb.orders -f standard --stats
+mongo2pg mongodb://localhost:27017 mydb.orders -f standard --stats
 
 # YAML output with semantic-type detection
-mongodb_to_pg mongodb://localhost:27017 mydb.customers -f yaml -t
+mongo2pg mongodb://localhost:27017 mydb.customers -f yaml -t
 
 # ASCII table of top-level fields
-mongodb_to_pg mongodb://localhost:27017 mydb.products -f table
+mongo2pg mongodb://localhost:27017 mydb.products -f table
 
 # No sampling (sequential scan), no value collection
-mongodb_to_pg mongodb://localhost:27017 mydb.events --no-sampling --no-values
+mongo2pg mongodb://localhost:27017 mydb.events --no-sampling --no-values
 ```
 
 ---
@@ -91,8 +91,8 @@ mongodb_to_pg mongodb://localhost:27017 mydb.events --no-sampling --no-values
 ## Library Usage
 
 ```rust
-use mongodb_to_pg::analyzer::Analyzer;
-use mongodb_to_pg::converters::{to_expanded_schema, to_mongodb_schema, to_json_schema};
+use mongo2pg::analyzer::Analyzer;
+use mongo2pg::converters::{to_expanded_schema, to_mongodb_schema, to_json_schema};
 
 // Feed BSON documents (from any source)
 let mut analyzer = Analyzer::new(/*collect_values=*/true, /*semantic_detector=*/None);
