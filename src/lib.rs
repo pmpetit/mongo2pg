@@ -1,4 +1,4 @@
-//! `mongodb_to_pg` – Schema inference and conversion library.
+//! `mongo2pg` – Schema inference and conversion library.
 //!
 //! Samples documents from a MongoDB collection, infers a probabilistic schema,
 //! and exports it in three JSON Schema dialects:

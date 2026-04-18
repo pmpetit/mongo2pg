@@ -990,6 +990,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mongo2pg"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bson",
+ "clap",
+ "futures",
+ "indexmap",
+ "mongodb",
+ "rand 0.8.6",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tokio",
+]
+
+[[package]]
 name = "mongocrypt"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1063,24 +1081,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "mongodb_to_pg"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bson",
- "clap",
- "futures",
- "indexmap",
- "mongodb",
- "rand 0.8.6",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "tokio",
 ]
 
 [[package]]

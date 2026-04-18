@@ -1,17 +1,17 @@
 [package]
-name = "mongodb_to_pg"
+name = "mongo2pg"
 version = "0.1.0"
 edition = "2021"
 description = "Schema inference and conversion tool: MongoDB → JSON Schema variants"
 license = "Apache-2.0"
 
 [lib]
-name = "mongodb_to_pg"
+name = "mongo2pg"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mongodb_to_pg"
-path = "src/bin/mongodb_to_pg.rs"
+name = "mongo2pg"
+path = "src/bin/mongo2pg.rs"
 
 [dependencies]
 mongodb = "3.2.5"
