@@ -1,41 +1,63 @@
-//! `mongo2pg` CLI – Sample a MongoDB collection and infer its schema.
+//! `mongo2pg` CLI – Infer a MongoDB collection schema and convert it to PostgreSQL DDL.
 //!
-//! # Usage
+//! # Subcommands
+//!
+//! ## `mongo2pg infer` (default when no subcommand given)
 //! ```text
-//! mongo2pg <URI> <DB.COLLECTION> [OPTIONS]
-//!
-//! Options:
-//!   -n, --number <N>       Number of documents to sample [default: 1000]
-//!   -p, --percent <PCT>    Percentage of the collection to sample (mutually exclusive with -n)
-//!       --values           Collect sample values (default)
-//!       --no-values        Disable sample-value collection
-//!       --sampling         Use $sample aggregation (default)
-//!       --no-sampling      Use sequential find/limit instead of $sample
-//!       --no-output        Suppress schema output to stdout (useful with --stats)
+//! mongo2pg infer <URI> <DB.COLLECTION> [OPTIONS]
 //! ```
+//! Samples documents and writes the inferred schema JSON to stdout.
+//!
+//! ## `mongo2pg to-pg`
+//! ```text
+//! mongo2pg to-pg <SCHEMA_FILE> [--table <TABLE_NAME>]
+//! ```
+//! Converts a schema JSON file produced by `infer` into PostgreSQL DDL.
 
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
 use bson::doc;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use futures::TryStreamExt;
-use mongo2pg::analyzer::Analyzer;
+use mongo2pg::analyzer::{Analyzer, CollectionSchema};
 use mongo2pg::converters::to_expanded_schema;
 use mongo2pg::stats::format_stats;
+use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
 
 // ──────────────────────────────────────────────────────────────────────────────
-// CLI argument definition
+// CLI definition
 // ──────────────────────────────────────────────────────────────────────────────
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(
     name = "mongo2pg",
-    about = "Sample a MongoDB collection and infer its JSON Schema",
-    version
+    about = "Infer a MongoDB collection schema and convert it to PostgreSQL DDL",
+    version,
+    // Allow bare `mongo2pg <URI> <NS>` without an explicit subcommand.
+    args_conflicts_with_subcommands = true
 )]
-struct Args {
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    // Flat infer args (used when no subcommand is given)
+    #[command(flatten)]
+    infer: Option<InferArgs>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Sample a MongoDB collection and infer its JSON Schema (default)
+    Infer(InferArgs),
+    /// Convert a schema JSON file to PostgreSQL DDL CREATE TABLE statements
+    ToPg(ToPgArgs),
+}
+
+#[derive(Parser, Debug)]
+struct InferArgs {
     /// MongoDB connection URI (e.g. mongodb://localhost:27017)
     uri: String,
 
@@ -71,9 +93,25 @@ struct Args {
     #[arg(long = "no-sampling", action = clap::ArgAction::SetTrue)]
     no_sampling: bool,
 
-    /// Suppress schema output to stdout (useful with --stats)
+    /// Suppress schema output to stdout
     #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
     no_output: bool,
+
+    /// Output the extended JSON Schema dialect (x-bsonType, x-metadata, x-sampleValues)
+    /// instead of the raw CollectionSchema JSON. Use this for human inspection;
+    /// the raw format is required by `mongo2pg to-pg`.
+    #[arg(long = "expanded", action = clap::ArgAction::SetTrue)]
+    expanded: bool,
+}
+
+#[derive(Parser, Debug)]
+struct ToPgArgs {
+    /// Path to a schema JSON file produced by `mongo2pg infer`
+    schema_file: PathBuf,
+
+    /// Root table name (defaults to the schema file stem)
+    #[arg(short = 't', long = "table")]
+    table: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -82,15 +120,48 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
+    match cli.command {
+        Some(Command::ToPg(args)) => run_to_pg(args),
+        Some(Command::Infer(args)) => run_infer(args).await,
+        None => run_infer(cli.infer.expect("clap ensures args are present")).await,
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// `to-pg` subcommand
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn run_to_pg(args: ToPgArgs) -> Result<()> {
+    let content = std::fs::read_to_string(&args.schema_file)
+        .with_context(|| format!("Failed to read {}", args.schema_file.display()))?;
+
+    let schema: CollectionSchema = serde_json::from_str(&content)
+        .context("Failed to parse schema JSON – make sure the file was produced by mongo2pg")?;
+
+    let table_name = args.table.unwrap_or_else(|| {
+        args.schema_file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("collection")
+            .to_owned()
+    });
+
+    println!("{}", schema_to_ddl(&schema, &table_name));
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// `infer` subcommand (also the default)
+// ──────────────────────────────────────────────────────────────────────────────
+
+async fn run_infer(args: InferArgs) -> Result<()> {
     let collect_values = !args.no_values;
     let use_sampling = !args.no_sampling;
 
-    // Parse namespace
     let (db_name, coll_name) = parse_namespace(&args.namespace)?;
 
-    // Connect to MongoDB
     let client_options = ClientOptions::parse(&args.uri)
         .await
         .context("Failed to parse MongoDB URI")?;
@@ -98,8 +169,6 @@ async fn main() -> Result<()> {
     let db = client.database(db_name);
     let collection = db.collection::<bson::Document>(coll_name);
 
-    // Resolve the number of documents to sample.
-    // When --percent is given we need the collection size first.
     let (sample_size, known_total) = if let Some(pct) = args.percent {
         if pct <= 0.0 || pct > 100.0 {
             return Err(anyhow!(
@@ -116,12 +185,9 @@ async fn main() -> Result<()> {
         (args.number, None)
     };
 
-    // Build analyzer
     let mut analyzer = Analyzer::new(collect_values);
 
-    // Sample documents
     if use_sampling {
-        // Use $sample aggregation
         let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
         let mut cursor = collection
             .aggregate(pipeline)
@@ -131,7 +197,6 @@ async fn main() -> Result<()> {
             analyzer.process_document(&doc);
         }
     } else {
-        // Sequential find/limit
         let find_opts = mongodb::options::FindOptions::builder()
             .limit(sample_size as i64)
             .build();
@@ -147,7 +212,6 @@ async fn main() -> Result<()> {
 
     let schema = analyzer.finish();
 
-    // Print stats to stderr
     {
         let total_docs = if let Some(t) = known_total {
             t
@@ -165,11 +229,13 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Convert schema to expanded format and print as JSON
     let value = to_expanded_schema(&schema);
-
     if !args.no_output {
-        println!("{}", serde_json::to_string_pretty(&value)?);
+        if args.expanded {
+            println!("{}", serde_json::to_string_pretty(&value)?);
+        } else {
+            println!("{}", serde_json::to_string_pretty(&schema)?);
+        }
     }
     Ok(())
 }

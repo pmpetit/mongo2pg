@@ -193,6 +193,14 @@ Mixed-type fields are the trickiest to migrate: you will need to decide whether 
 
 This tutorial walks you through starting a local MongoDB instance with Docker, loading the official MongoDB sample datasets, and running `mongo2pg` against each collection.
 
+The main principe is
+
+```bash
+# default output = raw CollectionSchema (needed by to-pg)
+mongo2pg "mongodb://..." db.col > schema.json
+mongo2pg to-pg schema.json > schema.sql
+```
+
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) installed and running
@@ -253,9 +261,11 @@ bash start.sh 'mongodb://user:pass@localhost:2717/?authSource=admin'
 
 The URI for all commands below is:
 
-```
+```bash
 mongodb://user:pass@localhost:2717/?authSource=admin
 ```
+
+The --no-output option removes the `json` output and keep only statistics on collection.
 
 #### sample_airbnb
 
@@ -346,9 +356,10 @@ mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
 
 ### Step 4 — Save schemas to files
 
-To keep the inferred schemas for later analysis:
+To keep the inferred schemas for later analysis or create the postgres ddl.
 
 ```bash
+cd target
 URI="mongodb://user:pass@localhost:2717/?authSource=admin"
 mkdir -p schemas
 
@@ -381,7 +392,35 @@ Each collection produces two files: `<db>_<collection>.json` (the schema) and `<
 
 ---
 
-### Step 5 — Tear down
+### Step 5 — Generate pg DDL
+
+```bash
+for ns in \
+  sample_airbnb.listingsAndReviews \
+  sample_analytics_accounts \
+  sample_analytics_customers \
+  sample_analytics_transactions \
+  sample_geospatial_shipwrecks \
+  sample_mflix_comments \
+  sample_mflix_movies \
+  sample_mflix_theaters \
+  sample_mflix_users \
+  sample_supplies_sales \
+  sample_training_companies \
+  sample_training_grades \
+  sample_training_inspections \
+  sample_training_routes \
+  sample_training_trips \
+  sample_training_zips \
+  sample_weatherdata_data
+do
+  filename=$(echo "$ns" | tr '.' '_')
+  echo "→ $ns"
+  mongo2pg to-pg schemas/${filename}.json > schemas/${filename}.sql
+done
+```
+
+### Step 6 — Tear down
 
 ```bash
 docker stop mongodb && docker rm mongodb
