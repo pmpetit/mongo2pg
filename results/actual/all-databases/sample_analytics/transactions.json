@@ -1,0 +1,137 @@
+{
+  "count": 1746,
+  "object": {
+    "_id": {
+      "count": 1746,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 1746,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "account_id": {
+      "count": 1746,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 1746,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "bucket_end_date": {
+      "count": 1746,
+      "prop_in_object": 1.0,
+      "types": {
+        "Date": {
+          "count": 1746,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "bucket_start_date": {
+      "count": 1746,
+      "prop_in_object": 1.0,
+      "types": {
+        "Date": {
+          "count": 1746,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "transaction_count": {
+      "count": 1746,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 1746,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "transactions": {
+      "count": 1746,
+      "prop_in_object": 1.0,
+      "types": {
+        "Array": {
+          "count": 1746,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 88119,
+            "prop_in_object": 50.46907216494845,
+            "types": {
+              "Object": {
+                "count": 88119,
+                "prop_in_types": 1.0,
+                "object": {
+                  "amount": {
+                    "count": 88119,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Number": {
+                        "count": 88119,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "date": {
+                    "count": 88119,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Date": {
+                        "count": 88119,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "price": {
+                    "count": 88119,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 88119,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "symbol": {
+                    "count": 88119,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 88119,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "total": {
+                    "count": 88119,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 88119,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "transaction_code": {
+                    "count": 88119,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 88119,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

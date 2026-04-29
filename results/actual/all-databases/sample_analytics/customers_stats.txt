@@ -1,0 +1,5 @@
+Documents sampled : 500
+Width (top-level fields): 9
+Depth (max nesting)     : 4
+Branch (total fields)   : 2746
+Top-level types         : _id:ObjectId, accounts:Array, active:Boolean, address:String, birthdate:Date, email:String, name:String, tier_and_details:Object, username:String

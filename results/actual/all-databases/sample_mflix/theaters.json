@@ -1,0 +1,149 @@
+{
+  "count": 1564,
+  "object": {
+    "_id": {
+      "count": 1564,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 1564,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "location": {
+      "count": 1564,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 1564,
+          "prop_in_types": 1.0,
+          "object": {
+            "address": {
+              "count": 1564,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 1564,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "city": {
+                      "count": 1564,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 1564,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "state": {
+                      "count": 1564,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 1564,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "street1": {
+                      "count": 1564,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 1564,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "street2": {
+                      "count": 556,
+                      "prop_in_object": 0.3554987212276215,
+                      "types": {
+                        "Null": {
+                          "count": 189,
+                          "prop_in_types": 0.33992805755395683
+                        },
+                        "String": {
+                          "count": 367,
+                          "prop_in_types": 0.6600719424460432
+                        },
+                        "Undefined": {
+                          "count": 1008,
+                          "prop_in_types": 0.6445012787723785
+                        }
+                      }
+                    },
+                    "zipcode": {
+                      "count": 1564,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 1564,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "geo": {
+              "count": 1564,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 1564,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "coordinates": {
+                      "count": 1564,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Array": {
+                          "count": 1564,
+                          "prop_in_types": 1.0,
+                          "array": {
+                            "count": 3128,
+                            "prop_in_object": 2.0,
+                            "types": {
+                              "Number": {
+                                "count": 3128,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "type": {
+                      "count": 1564,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 1564,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "theaterId": {
+      "count": 1564,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 1564,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+Documents sampled : 100000
+Width (top-level fields): 4
+Depth (max nesting)     : 3
+Branch (total fields)   : 7
+Top-level types         : _id:ObjectId, class_id:Number, scores:Array, student_id:Number

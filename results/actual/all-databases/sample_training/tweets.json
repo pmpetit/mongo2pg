@@ -1,0 +1,1962 @@
+{
+  "count": 24832,
+  "object": {
+    "_id": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "contributors": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "coordinates": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 24673,
+          "prop_in_types": 0.9935969716494846
+        },
+        "Object": {
+          "count": 159,
+          "prop_in_types": 0.006403028350515464,
+          "object": {
+            "coordinates": {
+              "count": 159,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 159,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 318,
+                    "prop_in_object": 2.0,
+                    "types": {
+                      "Number": {
+                        "count": 318,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "type": {
+              "count": 159,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 159,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "created_at": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "entities": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 24832,
+          "prop_in_types": 1.0,
+          "object": {
+            "hashtags": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 24832,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 4185,
+                    "prop_in_object": 0.1685325386597938,
+                    "types": {
+                      "Object": {
+                        "count": 4185,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "indices": {
+                            "count": 4185,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Array": {
+                                "count": 4185,
+                                "prop_in_types": 1.0,
+                                "array": {
+                                  "count": 8370,
+                                  "prop_in_object": 2.0,
+                                  "types": {
+                                    "Number": {
+                                      "count": 8370,
+                                      "prop_in_types": 1.0
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "text": {
+                            "count": 4185,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 4185,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "Undefined": {
+                        "count": 20647,
+                        "prop_in_types": 0.8314674613402062
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "urls": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 24832,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 5325,
+                    "prop_in_object": 0.214441043814433,
+                    "types": {
+                      "Object": {
+                        "count": 5325,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "expanded_url": {
+                            "count": 5325,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Null": {
+                                "count": 5224,
+                                "prop_in_types": 0.9810328638497653
+                              },
+                              "String": {
+                                "count": 101,
+                                "prop_in_types": 0.01896713615023474
+                              }
+                            }
+                          },
+                          "indices": {
+                            "count": 5325,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Array": {
+                                "count": 5325,
+                                "prop_in_types": 1.0,
+                                "array": {
+                                  "count": 10650,
+                                  "prop_in_object": 2.0,
+                                  "types": {
+                                    "Number": {
+                                      "count": 10650,
+                                      "prop_in_types": 1.0
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "url": {
+                            "count": 5325,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 5325,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "Undefined": {
+                        "count": 19507,
+                        "prop_in_types": 0.785558956185567
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "user_mentions": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 24832,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 16341,
+                    "prop_in_object": 0.6580621778350515,
+                    "types": {
+                      "Object": {
+                        "count": 16341,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "id": {
+                            "count": 16341,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Number": {
+                                "count": 16341,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          },
+                          "indices": {
+                            "count": 16341,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Array": {
+                                "count": 16341,
+                                "prop_in_types": 1.0,
+                                "array": {
+                                  "count": 32682,
+                                  "prop_in_object": 2.0,
+                                  "types": {
+                                    "Number": {
+                                      "count": 32682,
+                                      "prop_in_types": 1.0
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "name": {
+                            "count": 16341,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 16341,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          },
+                          "screen_name": {
+                            "count": 16341,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 16341,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "Undefined": {
+                        "count": 8491,
+                        "prop_in_types": 0.34193782216494845
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "favorited": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Boolean": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "geo": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 24673,
+          "prop_in_types": 0.9935969716494846
+        },
+        "Object": {
+          "count": 159,
+          "prop_in_types": 0.006403028350515464,
+          "object": {
+            "coordinates": {
+              "count": 159,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 159,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 318,
+                    "prop_in_object": 2.0,
+                    "types": {
+                      "Number": {
+                        "count": 318,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "type": {
+              "count": 159,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 159,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "id": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "in_reply_to_screen_name": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 16716,
+          "prop_in_types": 0.6731636597938144
+        },
+        "String": {
+          "count": 8116,
+          "prop_in_types": 0.32683634020618557
+        }
+      }
+    },
+    "in_reply_to_status_id": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 18042,
+          "prop_in_types": 0.7265625
+        },
+        "Number": {
+          "count": 6790,
+          "prop_in_types": 0.2734375
+        }
+      }
+    },
+    "in_reply_to_user_id": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 16716,
+          "prop_in_types": 0.6731636597938144
+        },
+        "Number": {
+          "count": 8116,
+          "prop_in_types": 0.32683634020618557
+        }
+      }
+    },
+    "place": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 24645,
+          "prop_in_types": 0.9924693943298969
+        },
+        "Object": {
+          "count": 187,
+          "prop_in_types": 0.007530605670103093,
+          "object": {
+            "attributes": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 187,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "street_address": {
+                      "count": 10,
+                      "prop_in_object": 0.053475935828877004,
+                      "types": {
+                        "String": {
+                          "count": 10,
+                          "prop_in_types": 1.0
+                        },
+                        "Undefined": {
+                          "count": 177,
+                          "prop_in_types": 0.946524064171123
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "bounding_box": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 187,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "coordinates": {
+                      "count": 187,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Array": {
+                          "count": 187,
+                          "prop_in_types": 1.0,
+                          "array": {
+                            "count": 187,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Array": {
+                                "count": 187,
+                                "prop_in_types": 1.0,
+                                "array": {
+                                  "count": 748,
+                                  "prop_in_object": 4.0,
+                                  "types": {
+                                    "Array": {
+                                      "count": 748,
+                                      "prop_in_types": 1.0,
+                                      "array": {
+                                        "count": 1496,
+                                        "prop_in_object": 8.0,
+                                        "types": {
+                                          "Number": {
+                                            "count": 1496,
+                                            "prop_in_types": 1.0
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "type": {
+                      "count": 187,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 187,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "country": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 187,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "country_code": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 187,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "full_name": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 187,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "id": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 187,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "name": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 187,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "place_type": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 187,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "url": {
+              "count": 187,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 187,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "retweet_count": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Null": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "retweeted": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Boolean": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "retweeted_status": {
+      "count": 2045,
+      "prop_in_object": 0.08235341494845361,
+      "types": {
+        "Object": {
+          "count": 2045,
+          "prop_in_types": 1.0,
+          "object": {
+            "contributors": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 1,
+                  "prop_in_types": 0.0004889975550122249,
+                  "array": {
+                    "count": 1,
+                    "prop_in_object": 0.0004889975550122249,
+                    "types": {
+                      "Number": {
+                        "count": 1,
+                        "prop_in_types": 1.0
+                      },
+                      "Undefined": {
+                        "count": 2044,
+                        "prop_in_types": 0.9995110024449878
+                      }
+                    }
+                  }
+                },
+                "Null": {
+                  "count": 2044,
+                  "prop_in_types": 0.9995110024449878
+                }
+              }
+            },
+            "coordinates": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 2044,
+                  "prop_in_types": 0.9995110024449878
+                },
+                "Object": {
+                  "count": 1,
+                  "prop_in_types": 0.0004889975550122249,
+                  "object": {
+                    "coordinates": {
+                      "count": 1,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Array": {
+                          "count": 1,
+                          "prop_in_types": 1.0,
+                          "array": {
+                            "count": 2,
+                            "prop_in_object": 2.0,
+                            "types": {
+                              "Number": {
+                                "count": 2,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "type": {
+                      "count": 1,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 1,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "created_at": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "entities": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 2045,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "hashtags": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Array": {
+                          "count": 2045,
+                          "prop_in_types": 1.0,
+                          "array": {
+                            "count": 778,
+                            "prop_in_object": 0.380440097799511,
+                            "types": {
+                              "Object": {
+                                "count": 778,
+                                "prop_in_types": 1.0,
+                                "object": {
+                                  "indices": {
+                                    "count": 778,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "Array": {
+                                        "count": 778,
+                                        "prop_in_types": 1.0,
+                                        "array": {
+                                          "count": 1556,
+                                          "prop_in_object": 2.0,
+                                          "types": {
+                                            "Number": {
+                                              "count": 1556,
+                                              "prop_in_types": 1.0
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "text": {
+                                    "count": 778,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "String": {
+                                        "count": 778,
+                                        "prop_in_types": 1.0
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "Undefined": {
+                                "count": 1267,
+                                "prop_in_types": 0.619559902200489
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "urls": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Array": {
+                          "count": 2045,
+                          "prop_in_types": 1.0,
+                          "array": {
+                            "count": 627,
+                            "prop_in_object": 0.30660146699266505,
+                            "types": {
+                              "Object": {
+                                "count": 627,
+                                "prop_in_types": 1.0,
+                                "object": {
+                                  "expanded_url": {
+                                    "count": 627,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "Null": {
+                                        "count": 614,
+                                        "prop_in_types": 0.9792663476874003
+                                      },
+                                      "String": {
+                                        "count": 13,
+                                        "prop_in_types": 0.02073365231259968
+                                      }
+                                    }
+                                  },
+                                  "indices": {
+                                    "count": 627,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "Array": {
+                                        "count": 627,
+                                        "prop_in_types": 1.0,
+                                        "array": {
+                                          "count": 1254,
+                                          "prop_in_object": 2.0,
+                                          "types": {
+                                            "Number": {
+                                              "count": 1254,
+                                              "prop_in_types": 1.0
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "url": {
+                                    "count": 627,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "String": {
+                                        "count": 627,
+                                        "prop_in_types": 1.0
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "Undefined": {
+                                "count": 1418,
+                                "prop_in_types": 0.693398533007335
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "user_mentions": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Array": {
+                          "count": 2045,
+                          "prop_in_types": 1.0,
+                          "array": {
+                            "count": 1087,
+                            "prop_in_object": 0.5315403422982885,
+                            "types": {
+                              "Object": {
+                                "count": 1087,
+                                "prop_in_types": 1.0,
+                                "object": {
+                                  "id": {
+                                    "count": 1087,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "Number": {
+                                        "count": 1087,
+                                        "prop_in_types": 1.0
+                                      }
+                                    }
+                                  },
+                                  "indices": {
+                                    "count": 1087,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "Array": {
+                                        "count": 1087,
+                                        "prop_in_types": 1.0,
+                                        "array": {
+                                          "count": 2174,
+                                          "prop_in_object": 2.0,
+                                          "types": {
+                                            "Number": {
+                                              "count": 2174,
+                                              "prop_in_types": 1.0
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "name": {
+                                    "count": 1087,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "String": {
+                                        "count": 1087,
+                                        "prop_in_types": 1.0
+                                      }
+                                    }
+                                  },
+                                  "screen_name": {
+                                    "count": 1087,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "String": {
+                                        "count": 1087,
+                                        "prop_in_types": 1.0
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "Undefined": {
+                                "count": 958,
+                                "prop_in_types": 0.4684596577017115
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "favorited": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "geo": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 2044,
+                  "prop_in_types": 0.9995110024449878
+                },
+                "Object": {
+                  "count": 1,
+                  "prop_in_types": 0.0004889975550122249,
+                  "object": {
+                    "coordinates": {
+                      "count": 1,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Array": {
+                          "count": 1,
+                          "prop_in_types": 1.0,
+                          "array": {
+                            "count": 2,
+                            "prop_in_object": 2.0,
+                            "types": {
+                              "Number": {
+                                "count": 2,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "type": {
+                      "count": 1,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 1,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "id": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "in_reply_to_screen_name": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 1870,
+                  "prop_in_types": 0.9144254278728606
+                },
+                "String": {
+                  "count": 175,
+                  "prop_in_types": 0.08557457212713937
+                }
+              }
+            },
+            "in_reply_to_status_id": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 1936,
+                  "prop_in_types": 0.9466992665036675
+                },
+                "Number": {
+                  "count": 109,
+                  "prop_in_types": 0.05330073349633252
+                }
+              }
+            },
+            "in_reply_to_user_id": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 1870,
+                  "prop_in_types": 0.9144254278728606
+                },
+                "Number": {
+                  "count": 175,
+                  "prop_in_types": 0.08557457212713937
+                }
+              }
+            },
+            "place": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 2043,
+                  "prop_in_types": 0.9990220048899755
+                },
+                "Object": {
+                  "count": 2,
+                  "prop_in_types": 0.0009779951100244498,
+                  "object": {
+                    "attributes": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Object": {
+                          "count": 2,
+                          "prop_in_types": 1.0,
+                          "object": {}
+                        }
+                      }
+                    },
+                    "bounding_box": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Object": {
+                          "count": 2,
+                          "prop_in_types": 1.0,
+                          "object": {
+                            "coordinates": {
+                              "count": 2,
+                              "prop_in_object": 1.0,
+                              "types": {
+                                "Array": {
+                                  "count": 2,
+                                  "prop_in_types": 1.0,
+                                  "array": {
+                                    "count": 2,
+                                    "prop_in_object": 1.0,
+                                    "types": {
+                                      "Array": {
+                                        "count": 2,
+                                        "prop_in_types": 1.0,
+                                        "array": {
+                                          "count": 8,
+                                          "prop_in_object": 4.0,
+                                          "types": {
+                                            "Array": {
+                                              "count": 8,
+                                              "prop_in_types": 1.0,
+                                              "array": {
+                                                "count": 16,
+                                                "prop_in_object": 8.0,
+                                                "types": {
+                                                  "Number": {
+                                                    "count": 16,
+                                                    "prop_in_types": 1.0
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "type": {
+                              "count": 2,
+                              "prop_in_object": 1.0,
+                              "types": {
+                                "String": {
+                                  "count": 2,
+                                  "prop_in_types": 1.0
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "country": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "country_code": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "full_name": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "id": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "name": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "place_type": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "url": {
+                      "count": 2,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "retweet_count": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "retweeted": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "source": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "text": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "truncated": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 2045,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "user": {
+              "count": 2045,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 2045,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "contributors_enabled": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Boolean": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "created_at": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "description": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 13,
+                          "prop_in_types": 0.006356968215158924
+                        },
+                        "String": {
+                          "count": 2032,
+                          "prop_in_types": 0.993643031784841
+                        }
+                      }
+                    },
+                    "favourites_count": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "follow_request_sent": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "followers_count": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "following": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "friends_count": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "geo_enabled": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Boolean": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "id": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "lang": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "listed_count": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "location": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 13,
+                          "prop_in_types": 0.006356968215158924
+                        },
+                        "String": {
+                          "count": 2032,
+                          "prop_in_types": 0.993643031784841
+                        }
+                      }
+                    },
+                    "name": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "notifications": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_background_color": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_background_image_url": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_background_tile": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Boolean": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_image_url": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_link_color": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_sidebar_border_color": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_sidebar_fill_color": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_text_color": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "profile_use_background_image": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Boolean": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "protected": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Boolean": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "screen_name": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "show_all_inline_media": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Boolean": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "statuses_count": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "time_zone": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 229,
+                          "prop_in_types": 0.1119804400977995
+                        },
+                        "String": {
+                          "count": 1816,
+                          "prop_in_types": 0.8880195599022005
+                        }
+                      }
+                    },
+                    "url": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 512,
+                          "prop_in_types": 0.25036674816625915
+                        },
+                        "String": {
+                          "count": 1533,
+                          "prop_in_types": 0.7496332518337409
+                        }
+                      }
+                    },
+                    "utc_offset": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Null": {
+                          "count": 229,
+                          "prop_in_types": 0.1119804400977995
+                        },
+                        "Number": {
+                          "count": 1816,
+                          "prop_in_types": 0.8880195599022005
+                        }
+                      }
+                    },
+                    "verified": {
+                      "count": 2045,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Boolean": {
+                          "count": 2045,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 22787,
+          "prop_in_types": 0.9176465850515464
+        }
+      }
+    },
+    "source": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "text": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "truncated": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Boolean": {
+          "count": 24832,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "user": {
+      "count": 24832,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 24832,
+          "prop_in_types": 1.0,
+          "object": {
+            "contributors_enabled": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "created_at": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "description": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 896,
+                  "prop_in_types": 0.03608247422680412
+                },
+                "String": {
+                  "count": 23936,
+                  "prop_in_types": 0.9639175257731959
+                }
+              }
+            },
+            "favourites_count": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "follow_request_sent": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "followers_count": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "following": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "friends_count": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "geo_enabled": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "id": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "lang": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "listed_count": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "location": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 867,
+                  "prop_in_types": 0.034914626288659795
+                },
+                "String": {
+                  "count": 23965,
+                  "prop_in_types": 0.9650853737113402
+                }
+              }
+            },
+            "name": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "notifications": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_background_color": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_background_image_url": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_background_tile": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_image_url": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_link_color": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_sidebar_border_color": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_sidebar_fill_color": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_text_color": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "profile_use_background_image": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "protected": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "screen_name": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "show_all_inline_media": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "statuses_count": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "time_zone": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 4473,
+                  "prop_in_types": 0.18013047680412372
+                },
+                "String": {
+                  "count": 20359,
+                  "prop_in_types": 0.8198695231958762
+                }
+              }
+            },
+            "url": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 11067,
+                  "prop_in_types": 0.4456749355670103
+                },
+                "String": {
+                  "count": 13765,
+                  "prop_in_types": 0.5543250644329897
+                }
+              }
+            },
+            "utc_offset": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Null": {
+                  "count": 4475,
+                  "prop_in_types": 0.18021101804123713
+                },
+                "Number": {
+                  "count": 20357,
+                  "prop_in_types": 0.8197889819587629
+                }
+              }
+            },
+            "verified": {
+              "count": 24832,
+              "prop_in_object": 1.0,
+              "types": {
+                "Boolean": {
+                  "count": 24832,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

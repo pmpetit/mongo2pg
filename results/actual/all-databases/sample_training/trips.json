@@ -1,0 +1,213 @@
+{
+  "count": 10000,
+  "object": {
+    "_id": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "bikeid": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "birth year": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 8011,
+          "prop_in_types": 0.8011
+        },
+        "String": {
+          "count": 1989,
+          "prop_in_types": 0.1989
+        }
+      }
+    },
+    "end station id": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "end station location": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "coordinates": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 10000,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 20000,
+                    "prop_in_object": 2.0,
+                    "types": {
+                      "Number": {
+                        "count": 20000,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "type": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "end station name": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "gender": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "start station id": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "start station location": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "coordinates": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 10000,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 20000,
+                    "prop_in_object": 2.0,
+                    "types": {
+                      "Number": {
+                        "count": 20000,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "type": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "start station name": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "start time": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Date": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "stop time": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Date": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "tripduration": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "usertype": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "count": 80047,
+  "object": {
+    "_id": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 80047,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "address": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 80047,
+          "prop_in_types": 1.0,
+          "object": {
+            "city": {
+              "count": 80047,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 80047,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "number": {
+              "count": 80047,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 77371,
+                  "prop_in_types": 0.9665696403363024
+                },
+                "String": {
+                  "count": 2676,
+                  "prop_in_types": 0.033430359663697576
+                }
+              }
+            },
+            "street": {
+              "count": 80047,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 2,
+                  "prop_in_types": 0.000024985321123839744
+                },
+                "String": {
+                  "count": 80045,
+                  "prop_in_types": 0.9999750146788762
+                }
+              }
+            },
+            "zip": {
+              "count": 80047,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 79888,
+                  "prop_in_types": 0.9980136669706547
+                },
+                "String": {
+                  "count": 159,
+                  "prop_in_types": 0.0019863330293452596
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "business_name": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 80047,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "certificate_number": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 79894,
+          "prop_in_types": 0.9980886229340262
+        },
+        "String": {
+          "count": 153,
+          "prop_in_types": 0.0019113770659737405
+        }
+      }
+    },
+    "date": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 80047,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "id": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 80047,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "result": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 80047,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "sector": {
+      "count": 80047,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 80047,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}

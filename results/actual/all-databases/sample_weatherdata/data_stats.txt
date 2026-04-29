@@ -1,0 +1,5 @@
+Documents sampled : 10000
+Width (top-level fields): 27
+Depth (max nesting)     : 4
+Branch (total fields)   : 131
+Top-level types         : _id:ObjectId, airTemperature:Object, atmosphericPressureChange:Object, atmosphericPressureObservation:Object, callLetters:String, dataSource:String, dewPoint:Object, elevation:Number, extremeAirTemperature:Array, liquidPrecipitation:Array, pastWeatherObservationManual:Array, position:Object, precipitationEstimatedObservation:Object, presentWeatherObservationManual:Array, pressure:Object, qualityControlProcess:String, seaSurfaceTemperature:Object, sections:Array, skyCondition:Object, skyConditionObservation:Object, skyCoverLayer:Array, st:String, ts:Date, type:String, visibility:Object, waveMeasurement:Object, wind:Object

@@ -1,0 +1,5 @@
+Documents sampled : 1
+Width (top-level fields): 3
+Depth (max nesting)     : 1
+Branch (total fields)   : 3
+Top-level types         : _id:ObjectId, jwt:String, user_id:String

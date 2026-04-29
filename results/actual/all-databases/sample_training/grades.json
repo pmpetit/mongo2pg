@@ -1,0 +1,77 @@
+{
+  "count": 100000,
+  "object": {
+    "_id": {
+      "count": 100000,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 100000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "class_id": {
+      "count": 100000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 100000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "scores": {
+      "count": 100000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Array": {
+          "count": 100000,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 400000,
+            "prop_in_object": 4.0,
+            "types": {
+              "Object": {
+                "count": 400000,
+                "prop_in_types": 1.0,
+                "object": {
+                  "score": {
+                    "count": 400000,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Number": {
+                        "count": 400000,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "type": {
+                    "count": 400000,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 400000,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "student_id": {
+      "count": 100000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 100000,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}

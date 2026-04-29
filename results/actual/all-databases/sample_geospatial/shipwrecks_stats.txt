@@ -1,0 +1,5 @@
+Documents sampled : 11095
+Width (top-level fields): 14
+Depth (max nesting)     : 2
+Branch (total fields)   : 15
+Top-level types         : _id:ObjectId, chart:String, coordinates:Array, depth:String, feature_type:String, gp_quality:String, history:String, latdec:Number, londec:Number, quasou:String, recrd:String, sounding_type:String, vesslterms:String, watlev:String

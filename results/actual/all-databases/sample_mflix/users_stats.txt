@@ -1,0 +1,5 @@
+Documents sampled : 185
+Width (top-level fields): 5
+Depth (max nesting)     : 1
+Branch (total fields)   : 5
+Top-level types         : _id:ObjectId, email:String, name:String, password:String, preferences:Object

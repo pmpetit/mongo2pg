@@ -1,0 +1,5 @@
+Documents sampled : 500
+Width (top-level fields): 8
+Depth (max nesting)     : 3
+Branch (total fields)   : 13
+Top-level types         : _id:ObjectId, author:String, body:String, comments:Array, date:Date, permalink:String, tags:Array, title:String

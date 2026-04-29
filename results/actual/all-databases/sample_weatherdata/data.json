@@ -1,0 +1,1461 @@
+{
+  "count": 10000,
+  "object": {
+    "_id": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "airTemperature": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "quality": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "value": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "atmosphericPressureChange": {
+      "count": 8431,
+      "prop_in_object": 0.8431,
+      "types": {
+        "Object": {
+          "count": 8431,
+          "prop_in_types": 1.0,
+          "object": {
+            "quantity24Hours": {
+              "count": 8431,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 8431,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 8431,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 8431,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 8431,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 8431,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "quantity3Hours": {
+              "count": 8431,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 8431,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 8431,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 8431,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 8431,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 8431,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "tendency": {
+              "count": 8431,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 8431,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "code": {
+                      "count": 8431,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 8431,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "quality": {
+                      "count": 8431,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 8431,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 1569,
+          "prop_in_types": 0.1569
+        }
+      }
+    },
+    "atmosphericPressureObservation": {
+      "count": 60,
+      "prop_in_object": 0.006,
+      "types": {
+        "Object": {
+          "count": 60,
+          "prop_in_types": 1.0,
+          "object": {
+            "altimeterSetting": {
+              "count": 60,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 60,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 60,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 60,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 60,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 60,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "stationPressure": {
+              "count": 60,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 60,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 60,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 60,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 60,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 60,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 9940,
+          "prop_in_types": 0.994
+        }
+      }
+    },
+    "callLetters": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "dataSource": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "dewPoint": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "quality": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "value": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "elevation": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "extremeAirTemperature": {
+      "count": 7,
+      "prop_in_object": 0.0007,
+      "types": {
+        "Array": {
+          "count": 7,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 7,
+            "prop_in_object": 0.0007,
+            "types": {
+              "Object": {
+                "count": 7,
+                "prop_in_types": 1.0,
+                "object": {
+                  "code": {
+                    "count": 7,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 7,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "period": {
+                    "count": 7,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Number": {
+                        "count": 7,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "quantity": {
+                    "count": 7,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 7,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "value": {
+                    "count": 7,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Number": {
+                        "count": 7,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              },
+              "Undefined": {
+                "count": 9993,
+                "prop_in_types": 0.9993
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 9993,
+          "prop_in_types": 0.9993
+        }
+      }
+    },
+    "liquidPrecipitation": {
+      "count": 105,
+      "prop_in_object": 0.0105,
+      "types": {
+        "Array": {
+          "count": 105,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 107,
+            "prop_in_object": 0.0107,
+            "types": {
+              "Object": {
+                "count": 107,
+                "prop_in_types": 1.0,
+                "object": {
+                  "condition": {
+                    "count": 107,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 107,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "depth": {
+                    "count": 107,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Number": {
+                        "count": 107,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "period": {
+                    "count": 107,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Number": {
+                        "count": 107,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "quality": {
+                    "count": 107,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 107,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              },
+              "Undefined": {
+                "count": 9893,
+                "prop_in_types": 0.9893
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 9895,
+          "prop_in_types": 0.9895
+        }
+      }
+    },
+    "pastWeatherObservationManual": {
+      "count": 9042,
+      "prop_in_object": 0.9042,
+      "types": {
+        "Array": {
+          "count": 9042,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 9042,
+            "prop_in_object": 0.9042,
+            "types": {
+              "Object": {
+                "count": 9042,
+                "prop_in_types": 1.0,
+                "object": {
+                  "atmosphericCondition": {
+                    "count": 9042,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Object": {
+                        "count": 9042,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "quality": {
+                            "count": 9042,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 9042,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          },
+                          "value": {
+                            "count": 9042,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 9042,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "period": {
+                    "count": 9042,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Object": {
+                        "count": 9042,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "quality": {
+                            "count": 9042,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 9042,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          },
+                          "value": {
+                            "count": 9042,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Number": {
+                                "count": 9042,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "Undefined": {
+                "count": 958,
+                "prop_in_types": 0.0958
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 958,
+          "prop_in_types": 0.0958
+        }
+      }
+    },
+    "position": {
+      "count": 9994,
+      "prop_in_object": 0.9994,
+      "types": {
+        "Object": {
+          "count": 9994,
+          "prop_in_types": 1.0,
+          "object": {
+            "coordinates": {
+              "count": 9994,
+              "prop_in_object": 1.0,
+              "types": {
+                "Array": {
+                  "count": 9994,
+                  "prop_in_types": 1.0,
+                  "array": {
+                    "count": 19988,
+                    "prop_in_object": 2.0,
+                    "types": {
+                      "Number": {
+                        "count": 19988,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "type": {
+              "count": 9994,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 9994,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 6,
+          "prop_in_types": 0.0006
+        }
+      }
+    },
+    "precipitationEstimatedObservation": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "discrepancy": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "estimatedWaterDepth": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "presentWeatherObservationManual": {
+      "count": 9106,
+      "prop_in_object": 0.9106,
+      "types": {
+        "Array": {
+          "count": 9106,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 9106,
+            "prop_in_object": 0.9106,
+            "types": {
+              "Object": {
+                "count": 9106,
+                "prop_in_types": 1.0,
+                "object": {
+                  "condition": {
+                    "count": 9106,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 9106,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "quality": {
+                    "count": 9106,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 9106,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              },
+              "Undefined": {
+                "count": 894,
+                "prop_in_types": 0.0894
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 894,
+          "prop_in_types": 0.0894
+        }
+      }
+    },
+    "pressure": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "quality": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "value": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "qualityControlProcess": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "seaSurfaceTemperature": {
+      "count": 8015,
+      "prop_in_object": 0.8015,
+      "types": {
+        "Object": {
+          "count": 8015,
+          "prop_in_types": 1.0,
+          "object": {
+            "quality": {
+              "count": 8015,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 8015,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "value": {
+              "count": 8015,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 8015,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 1985,
+          "prop_in_types": 0.1985
+        }
+      }
+    },
+    "sections": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Array": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 68384,
+            "prop_in_object": 6.8384,
+            "types": {
+              "String": {
+                "count": 68384,
+                "prop_in_types": 1.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "skyCondition": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "cavok": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "ceilingHeight": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 10000,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "determination": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "quality": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "skyConditionObservation": {
+      "count": 9437,
+      "prop_in_object": 0.9437,
+      "types": {
+        "Object": {
+          "count": 9437,
+          "prop_in_types": 1.0,
+          "object": {
+            "highCloudGenus": {
+              "count": 9437,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 9437,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "lowCloudGenus": {
+              "count": 9437,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 9437,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "lowestCloudBaseHeight": {
+              "count": 9437,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 9437,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "lowestCloudCoverage": {
+              "count": 9437,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 9437,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "midCloudGenus": {
+              "count": 9437,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 9437,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "totalCoverage": {
+              "count": 9437,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 9437,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "opaque": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "quality": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 9437,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 9437,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 563,
+          "prop_in_types": 0.0563
+        }
+      }
+    },
+    "skyCoverLayer": {
+      "count": 741,
+      "prop_in_object": 0.0741,
+      "types": {
+        "Array": {
+          "count": 741,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 768,
+            "prop_in_object": 0.0768,
+            "types": {
+              "Object": {
+                "count": 768,
+                "prop_in_types": 1.0,
+                "object": {
+                  "baseHeight": {
+                    "count": 768,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Object": {
+                        "count": 768,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "quality": {
+                            "count": 768,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 768,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          },
+                          "value": {
+                            "count": 768,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "Number": {
+                                "count": 768,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cloudType": {
+                    "count": 768,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Object": {
+                        "count": 768,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "quality": {
+                            "count": 768,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 768,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          },
+                          "value": {
+                            "count": 768,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 768,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "coverage": {
+                    "count": 768,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "Object": {
+                        "count": 768,
+                        "prop_in_types": 1.0,
+                        "object": {
+                          "quality": {
+                            "count": 768,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 768,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          },
+                          "value": {
+                            "count": 768,
+                            "prop_in_object": 1.0,
+                            "types": {
+                              "String": {
+                                "count": 768,
+                                "prop_in_types": 1.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "Undefined": {
+                "count": 9232,
+                "prop_in_types": 0.9232
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 9259,
+          "prop_in_types": 0.9259
+        }
+      }
+    },
+    "st": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "ts": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Date": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "type": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 10000,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "visibility": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "distance": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 10000,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "variability": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 10000,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "value": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "waveMeasurement": {
+      "count": 7553,
+      "prop_in_object": 0.7553,
+      "types": {
+        "Object": {
+          "count": 7553,
+          "prop_in_types": 1.0,
+          "object": {
+            "method": {
+              "count": 7553,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 7553,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "seaState": {
+              "count": 7553,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 7553,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "code": {
+                      "count": 7553,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 7553,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "quality": {
+                      "count": 7553,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 7553,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "waves": {
+              "count": 7553,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 7553,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "height": {
+                      "count": 7553,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 7553,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "period": {
+                      "count": 7553,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 7553,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "quality": {
+                      "count": 7553,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 7553,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Undefined": {
+          "count": 2447,
+          "prop_in_types": 0.2447
+        }
+      }
+    },
+    "wind": {
+      "count": 10000,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 10000,
+          "prop_in_types": 1.0,
+          "object": {
+            "direction": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 10000,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "angle": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "quality": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "speed": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "Object": {
+                  "count": 10000,
+                  "prop_in_types": 1.0,
+                  "object": {
+                    "quality": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "String": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    },
+                    "rate": {
+                      "count": 10000,
+                      "prop_in_object": 1.0,
+                      "types": {
+                        "Number": {
+                          "count": 10000,
+                          "prop_in_types": 1.0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "type": {
+              "count": 10000,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 10000,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
