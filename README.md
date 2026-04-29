@@ -25,6 +25,8 @@ There is also a **cost dimension**: managed MongoDB clusters can cost up to **~1
 
 `mongo2pg` helps you make that assessment quickly: it samples a collection, infers its probabilistic schema, and surfaces the structural metrics (depth, width, branching factor) that reveal whether a collection is a good migration candidate.
 
+> **Inspiration:** This project is inspired by [`mongodb-schema`](https://github.com/mongodb-js/mongodb-schema), with modifications to the values that are output.
+
 ---
 
 ## Features
