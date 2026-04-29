@@ -209,7 +209,7 @@ mongo2pg to-pg schema.json > schema.sql
 
 ---
 
-### Step 1 — Start MongoDB in Docker
+### Step 1 — Start MongoDB community in Docker
 
 ```bash
 docker run --name mongodb -d \
