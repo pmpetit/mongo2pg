@@ -22,7 +22,6 @@ serde_yaml = "0.9"
 bson = "2"
 clap = { version = "4", features = ["derive"] }
 indexmap = { version = "2", features = ["serde"] }
-regex = "1"
 rand = { version = "0.8", features = ["small_rng"] }
 anyhow = "1"
 futures = "0.3"

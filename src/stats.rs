@@ -121,7 +121,6 @@ mod tests {
                 count: 3,
                 prop_in_object: 1.0,
                 types,
-                semantic_type: None,
             },
         );
         CollectionSchema { count: 3, object }

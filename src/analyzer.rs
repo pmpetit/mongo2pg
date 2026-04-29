@@ -18,8 +18,6 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
-use crate::semantic_types::SemanticDetector;
-
 // ──────────────────────────────────────────────────────────────────────────────
 // Internal type-name constants
 // ──────────────────────────────────────────────────────────────────────────────
@@ -66,9 +64,6 @@ pub struct FieldSchema {
     pub prop_in_object: f64,
     /// Type distribution for this field.
     pub types: IndexMap<String, TypeSchema>,
-    /// Optional semantic type (e.g. `"Email"`), set when detection is enabled.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub semantic_type: Option<String>,
 }
 
 /// Schema for one BSON type within a field.
@@ -231,20 +226,17 @@ pub struct Analyzer {
     total_docs: u64,
     root: ObjectAcc,
     collect_values: bool,
-    semantic_detector: Option<SemanticDetector>,
 }
 
 impl Analyzer {
     /// Create a new analyzer.
     ///
     /// * `collect_values` – whether to reservoir-sample field values.
-    /// * `semantic_detector` – optional detector for semantic types.
-    pub fn new(collect_values: bool, semantic_detector: Option<SemanticDetector>) -> Self {
+    pub fn new(collect_values: bool) -> Self {
         Self {
             total_docs: 0,
             root: ObjectAcc::new(),
             collect_values,
-            semantic_detector,
         }
     }
 
@@ -259,8 +251,7 @@ impl Analyzer {
     /// Finalize and return the inferred [`CollectionSchema`].
     pub fn finish(self) -> CollectionSchema {
         let total = self.total_docs;
-        let detector = self.semantic_detector.as_ref();
-        let object = build_field_map(self.root, total, detector);
+        let object = build_field_map(self.root, total);
         CollectionSchema {
             count: total,
             object,
@@ -275,13 +266,12 @@ impl Analyzer {
 fn build_field_map(
     acc: ObjectAcc,
     total_docs: u64,
-    detector: Option<&SemanticDetector>,
 ) -> IndexMap<String, FieldSchema> {
     let mut entries: Vec<(String, FieldSchema)> = acc
         .fields
         .into_iter()
         .map(|(name, fa)| {
-            let schema = build_field_schema(fa, total_docs, detector);
+            let schema = build_field_schema(fa, total_docs);
             (name, schema)
         })
         .collect();
@@ -307,7 +297,6 @@ fn build_field_map(
 fn build_field_schema(
     fa: FieldAcc,
     total_docs: u64,
-    detector: Option<&SemanticDetector>,
 ) -> FieldSchema {
     let field_count = fa.count;
     let prop_in_object = if total_docs > 0 {
@@ -320,7 +309,7 @@ fn build_field_schema(
         .types
         .into_iter()
         .map(|(tname, ta)| {
-            let schema = build_type_schema(ta, field_count, total_docs, detector);
+            let schema = build_type_schema(ta, field_count, total_docs);
             (tname, schema)
         })
         .collect();
@@ -354,24 +343,10 @@ fn build_field_schema(
         types.insert(k, v);
     }
 
-    // Detect semantic type from sampled String values
-    let semantic_type = detector.and_then(|det| {
-        types.get(TYPE_STRING).and_then(|ts| {
-            ts.values.as_ref().and_then(|vals| {
-                let strings: Vec<&str> = vals
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .collect();
-                det.detect(&strings)
-            })
-        })
-    });
-
     FieldSchema {
         count: field_count,
         prop_in_object,
         types,
-        semantic_type,
     }
 }
 
@@ -379,7 +354,6 @@ fn build_type_schema(
     ta: TypeAcc,
     field_count: u64,
     total_docs: u64,
-    detector: Option<&SemanticDetector>,
 ) -> TypeSchema {
     let prop_in_types = if field_count > 0 {
         ta.count as f64 / field_count as f64
@@ -388,11 +362,11 @@ fn build_type_schema(
     };
 
     let object = ta.nested_object.map(|nested| {
-        build_field_map(nested, ta.count, detector)
+        build_field_map(nested, ta.count)
     });
 
     let array = ta.array_items.map(|items_fa| {
-        Box::new(build_field_schema(*items_fa, total_docs, detector))
+        Box::new(build_field_schema(*items_fa, total_docs))
     });
 
     let values = ta.values.map(|r| r.into_values()).filter(|v| !v.is_empty());
