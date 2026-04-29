@@ -1,11 +1,11 @@
 //! `mongo2pg` – Schema inference and conversion library.
 //!
 //! Samples documents from a MongoDB collection, infers a probabilistic schema,
-//! and exports it in three JSON Schema dialects:
+//! and exports it in the **expanded** JSON Schema dialect:
 //!
-//! * **mongodb** – MongoDB JSON Schema (`bsonType`, `properties`, `required`, `anyOf`)
-//! * **standard** – JSON Schema draft 2020-12 (`$schema`, `$defs`)
-//! * **expanded** – Extended schema with `x-bsonType`, `x-metadata`, `x-sampleValues`
+//! * `x-bsonType` – the internal BSON type name
+//! * `x-metadata` – `{ "count", "prob" }` per field/type
+//! * `x-sampleValues` – reservoir-sampled values when available
 
 pub mod analyzer;
 pub mod converters;
