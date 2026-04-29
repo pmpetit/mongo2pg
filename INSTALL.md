@@ -17,7 +17,9 @@ Go to the [Releases page](https://github.com/pmpetit/mongo2pg/releases) and down
 
 ```bash
 # Replace <version> and <platform> with your values, e.g. v0.2.0 and linux-x86_64
-curl -L https://github.com/pmpetit/mongo2pg/releases/download/<version>/mongo2pg-<platform> \
+version="v0.2.0"
+platform="linux-x86_64"
+curl -fL "https://github.com/pmpetit/mongo2pg/releases/download/${version}/mongo2pg-${platform}" \
   -o mongo2pg
 chmod +x mongo2pg
 sudo mv mongo2pg /usr/local/bin/
