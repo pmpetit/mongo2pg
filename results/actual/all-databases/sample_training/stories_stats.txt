@@ -1,0 +1,5 @@
+Documents sampled : 9842
+Width (top-level fields): 20
+Depth (max nesting)     : 3
+Branch (total fields)   : 38
+Top-level types         : _id:ObjectId, comments:Number, container:Object, description:String, diggs:Number, href:String, id:String, inaccurate:Number, link:String, media:String, promote_date:Number, shorturl:Array, status:String, submit_date:Number, takedowndays:Number, takedownuri:String, thumbnail:Object, title:String, topic:Object, user:Object

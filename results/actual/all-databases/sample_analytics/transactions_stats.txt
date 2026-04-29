@@ -1,0 +1,5 @@
+Documents sampled : 1746
+Width (top-level fields): 6
+Depth (max nesting)     : 3
+Branch (total fields)   : 13
+Top-level types         : _id:ObjectId, account_id:Number, bucket_end_date:Date, bucket_start_date:Date, transaction_count:Number, transactions:Array

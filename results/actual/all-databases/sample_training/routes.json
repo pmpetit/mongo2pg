@@ -1,0 +1,129 @@
+{
+  "count": 66985,
+  "object": {
+    "_id": {
+      "count": 66985,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 66985,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "airline": {
+      "count": 66985,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 66985,
+          "prop_in_types": 1.0,
+          "object": {
+            "alias": {
+              "count": 66985,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 66985,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "iata": {
+              "count": 66985,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 66985,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "id": {
+              "count": 66985,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 66985,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "name": {
+              "count": 66985,
+              "prop_in_object": 1.0,
+              "types": {
+                "String": {
+                  "count": 66985,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "airplane": {
+      "count": 66985,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 31598,
+          "prop_in_types": 0.47171754870493393
+        },
+        "String": {
+          "count": 35387,
+          "prop_in_types": 0.528282451295066
+        }
+      }
+    },
+    "codeshare": {
+      "count": 66985,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 66985,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "dst_airport": {
+      "count": 66985,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 40,
+          "prop_in_types": 0.0005971486153616482
+        },
+        "String": {
+          "count": 66945,
+          "prop_in_types": 0.9994028513846384
+        }
+      }
+    },
+    "src_airport": {
+      "count": 66985,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 43,
+          "prop_in_types": 0.0006419347615137718
+        },
+        "String": {
+          "count": 66942,
+          "prop_in_types": 0.9993580652384862
+        }
+      }
+    },
+    "stops": {
+      "count": 66985,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 66985,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}

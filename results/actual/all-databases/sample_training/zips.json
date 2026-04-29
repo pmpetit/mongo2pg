@@ -1,0 +1,87 @@
+{
+  "count": 29470,
+  "object": {
+    "_id": {
+      "count": 29470,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 29470,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "city": {
+      "count": 29470,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 29470,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "loc": {
+      "count": 29470,
+      "prop_in_object": 1.0,
+      "types": {
+        "Object": {
+          "count": 29470,
+          "prop_in_types": 1.0,
+          "object": {
+            "x": {
+              "count": 29470,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 29470,
+                  "prop_in_types": 1.0
+                }
+              }
+            },
+            "y": {
+              "count": 29470,
+              "prop_in_object": 1.0,
+              "types": {
+                "Number": {
+                  "count": 29470,
+                  "prop_in_types": 1.0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "pop": {
+      "count": 29470,
+      "prop_in_object": 1.0,
+      "types": {
+        "Number": {
+          "count": 29470,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "state": {
+      "count": 29470,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 29470,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "zip": {
+      "count": 29470,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 29470,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}

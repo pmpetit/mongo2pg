@@ -1,0 +1,35 @@
+{
+  "count": 1,
+  "object": {
+    "_id": {
+      "count": 1,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 1,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "jwt": {
+      "count": 1,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 1,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "user_id": {
+      "count": 1,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 1,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}

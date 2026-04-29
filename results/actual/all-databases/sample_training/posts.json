@@ -1,0 +1,137 @@
+{
+  "count": 500,
+  "object": {
+    "_id": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "ObjectId": {
+          "count": 500,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "author": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 500,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "body": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 500,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "comments": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "Array": {
+          "count": 500,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 25000,
+            "prop_in_object": 50.0,
+            "types": {
+              "Object": {
+                "count": 25000,
+                "prop_in_types": 1.0,
+                "object": {
+                  "author": {
+                    "count": 25000,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 25000,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "body": {
+                    "count": 25000,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 25000,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  },
+                  "email": {
+                    "count": 25000,
+                    "prop_in_object": 1.0,
+                    "types": {
+                      "String": {
+                        "count": 25000,
+                        "prop_in_types": 1.0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "date": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "Date": {
+          "count": 500,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "permalink": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 500,
+          "prop_in_types": 1.0
+        }
+      }
+    },
+    "tags": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "Array": {
+          "count": 500,
+          "prop_in_types": 1.0,
+          "array": {
+            "count": 5000,
+            "prop_in_object": 10.0,
+            "types": {
+              "String": {
+                "count": 5000,
+                "prop_in_types": 1.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "title": {
+      "count": 500,
+      "prop_in_object": 1.0,
+      "types": {
+        "String": {
+          "count": 500,
+          "prop_in_types": 1.0
+        }
+      }
+    }
+  }
+}
