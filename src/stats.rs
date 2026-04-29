@@ -80,7 +80,9 @@ fn field_depth_branch(
 }
 
 /// Format stats as human-readable lines (intended for stderr).
-pub fn format_stats(schema: &CollectionSchema) -> Vec<String> {
+///
+/// `total_docs` is the actual collection size from MongoDB; pass `None` when unavailable.
+pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<String> {
     let s = SchemaStats::compute(schema);
     let type_summary = top_level_type_summary(schema);
     let branch_by_level: String = s
@@ -90,8 +92,13 @@ pub fn format_stats(schema: &CollectionSchema) -> Vec<String> {
         .map(|(i, &c)| format!("L{}:{}", i + 1, c))
         .collect::<Vec<_>>()
         .join("  ");
+    let total_line = match total_docs {
+        Some(n) => format!("Documents in collection : {}", n),
+        None => "Documents in collection : (unknown)".to_owned(),
+    };
     vec![
-        format!("Documents sampled : {}", schema.count),
+        total_line,
+        format!("Documents sampled       : {}", schema.count),
         format!("Width (top-level fields): {}", s.width),
         format!("Depth (max nesting)     : {}", s.depth),
         format!("Branch (per level)      : {}", branch_by_level),
@@ -109,7 +116,9 @@ fn top_level_type_summary(schema: &CollectionSchema) -> String {
                 .iter()
                 .filter(|(t, _)| t.as_str() != crate::analyzer::TYPE_UNDEFINED)
                 .max_by(|(_, a), (_, b)| {
-                    a.count.partial_cmp(&b.count).unwrap_or(std::cmp::Ordering::Equal)
+                    a.count
+                        .partial_cmp(&b.count)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .map(|(t, _)| t.as_str())
                 .unwrap_or("?");

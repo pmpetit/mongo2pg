@@ -6,12 +6,12 @@
 //!
 //! Options:
 //!   -n, --number <N>       Number of documents to sample [default: 1000]
-//!   -f, --format <FMT>     Output renderer: json (default), yaml, table
-//!   -s, --stats            Print statistics to stderr
+//!   -p, --percent <PCT>    Percentage of the collection to sample (mutually exclusive with -n)
 //!       --values           Collect sample values (default)
 //!       --no-values        Disable sample-value collection
 //!       --sampling         Use $sample aggregation (default)
 //!       --no-sampling      Use sequential find/limit instead of $sample
+//!       --no-output        Suppress schema output to stdout (useful with --stats)
 //! ```
 
 use std::io::{self, Write};
@@ -20,10 +20,10 @@ use anyhow::{anyhow, Context, Result};
 use bson::doc;
 use clap::Parser;
 use futures::TryStreamExt;
-use mongodb::{Client, options::ClientOptions};
 use mongo2pg::analyzer::Analyzer;
-use mongo2pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
+use mongo2pg::converters::to_expanded_schema;
 use mongo2pg::stats::format_stats;
+use mongodb::{options::ClientOptions, Client};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI argument definition
@@ -42,18 +42,18 @@ struct Args {
     /// Namespace in the form <db>.<collection>
     namespace: String,
 
-    /// Number of documents to sample
-    #[arg(short = 'n', long = "number", default_value_t = 1000)]
+    /// Number of documents to sample (mutually exclusive with --percent)
+    #[arg(
+        short = 'n',
+        long = "number",
+        default_value_t = 1000,
+        conflicts_with = "percent"
+    )]
     number: u64,
 
-    /// Output renderer: json (default), yaml, table
-    /// The schema dialect is always expanded (x-bsonType, x-metadata, x-sampleValues).
-    #[arg(short = 'f', long = "format", default_value = "json")]
-    format: String,
-
-    /// Print statistics to stderr
-    #[arg(short = 's', long = "stats", default_value_t = false)]
-    stats: bool,
+    /// Percentage of the collection to sample, e.g. 10 for 10% (mutually exclusive with --number)
+    #[arg(short = 'p', long = "percent", conflicts_with = "number", value_parser = clap::value_parser!(f64))]
+    percent: Option<f64>,
 
     /// Collect sample values (default: true)
     #[arg(long = "values", default_value_t = true, action = clap::ArgAction::SetTrue)]
@@ -70,6 +70,10 @@ struct Args {
     /// Use sequential find/limit instead of $sample
     #[arg(long = "no-sampling", action = clap::ArgAction::SetTrue)]
     no_sampling: bool,
+
+    /// Suppress schema output to stdout (useful with --stats)
+    #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
+    no_output: bool,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -94,13 +98,31 @@ async fn main() -> Result<()> {
     let db = client.database(db_name);
     let collection = db.collection::<bson::Document>(coll_name);
 
+    // Resolve the number of documents to sample.
+    // When --percent is given we need the collection size first.
+    let (sample_size, known_total) = if let Some(pct) = args.percent {
+        if pct <= 0.0 || pct > 100.0 {
+            return Err(anyhow!(
+                "--percent must be between 0 (exclusive) and 100 (inclusive), got {pct}"
+            ));
+        }
+        let total = collection
+            .estimated_document_count()
+            .await
+            .context("Failed to get document count for --percent calculation")?;
+        let n = ((total as f64 * pct / 100.0).ceil() as u64).max(1);
+        (n, Some(total))
+    } else {
+        (args.number, None)
+    };
+
     // Build analyzer
     let mut analyzer = Analyzer::new(collect_values);
 
     // Sample documents
     if use_sampling {
         // Use $sample aggregation
-        let pipeline = vec![doc! { "$sample": { "size": args.number as i64 } }];
+        let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
         let mut cursor = collection
             .aggregate(pipeline)
             .await
@@ -111,7 +133,7 @@ async fn main() -> Result<()> {
     } else {
         // Sequential find/limit
         let find_opts = mongodb::options::FindOptions::builder()
-            .limit(args.number as i64)
+            .limit(sample_size as i64)
             .build();
         let mut cursor = collection
             .find(doc! {})
@@ -126,8 +148,16 @@ async fn main() -> Result<()> {
     let schema = analyzer.finish();
 
     // Print stats to stderr
-    if args.stats {
-        let stats_lines = format_stats(&schema);
+    {
+        let total_docs = if let Some(t) = known_total {
+            t
+        } else {
+            collection
+                .estimated_document_count()
+                .await
+                .context("Failed to get document count")?
+        };
+        let stats_lines = format_stats(&schema, Some(total_docs));
         let stderr = io::stderr();
         let mut handle = stderr.lock();
         for line in stats_lines {
@@ -135,19 +165,12 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Convert schema to expanded format (the only supported output kind)
+    // Convert schema to expanded format and print as JSON
     let value = to_expanded_schema(&schema);
 
-    // Render output
-    let renderer = parse_format(&args.format)?;
-    let output = match renderer {
-        Renderer::Json => serde_json::to_string_pretty(&value)?,
-        Renderer::Yaml => serde_yaml::to_string(&value)
-            .map_err(|e| anyhow!("YAML serialization error: {e}"))?,
-        Renderer::Table => render_table(&schema),
-    };
-
-    println!("{output}");
+    if !args.no_output {
+        println!("{}", serde_json::to_string_pretty(&value)?);
+    }
     Ok(())
 }
 
@@ -160,56 +183,4 @@ fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
         .find('.')
         .ok_or_else(|| anyhow!("Namespace must be in the form <db>.<collection>, got: {ns}"))?;
     Ok((&ns[..dot], &ns[dot + 1..]))
-}
-
-#[derive(Debug)]
-enum Renderer {
-    Json,
-    Yaml,
-    Table,
-}
-
-fn parse_format(format: &str) -> Result<Renderer> {
-    match format.to_lowercase().as_str() {
-        "json" | "expanded" => Ok(Renderer::Json),
-        "yaml" => Ok(Renderer::Yaml),
-        "table" => Ok(Renderer::Table),
-        "mongodb" | "standard" => Err(anyhow!(
-            "The '{format}' schema dialect is no longer supported. \
-             The only output kind is 'expanded'. \
-             Use -f json (default), -f yaml, or -f table to choose the renderer."
-        )),
-        other => Err(anyhow!(
-            "Unknown format '{other}'. Valid renderers: json (default), yaml, table."
-        )),
-    }
-}
-
-/// Render a simple ASCII table of the top-level schema fields.
-fn render_table(schema: &mongo2pg::analyzer::CollectionSchema) -> String {
-    let mut lines = Vec::new();
-    let header = format!(
-        "{:<30} {:>8} {:>8} {}",
-        "Field", "Count", "Prob", "Types"
-    );
-    let sep = "-".repeat(header.len().max(60));
-    lines.push(sep.clone());
-    lines.push(header);
-    lines.push(sep.clone());
-    for (name, field) in &schema.object {
-        let type_list: Vec<String> = field
-            .types
-            .keys()
-            .map(|t| t.as_str().to_owned())
-            .collect();
-        lines.push(format!(
-            "{:<30} {:>8} {:>8.3} {}",
-            name,
-            field.count,
-            field.prop_in_object,
-            type_list.join(", ")
-        ));
-    }
-    lines.push(sep);
-    lines.join("\n")
 }
