@@ -6,7 +6,7 @@
 //!
 //! Options:
 //!   -n, --number <N>       Number of documents to sample [default: 1000]
-//!   -f, --format <FMT>     Output format: expanded|mongodb|standard|json|yaml|table [default: expanded]
+//!   -f, --format <FMT>     Output renderer: json (default), yaml, table
 //!   -s, --stats            Print statistics to stderr
 //!   -t, --semantic-types   Enable semantic-type detection (e.g., email)
 //!       --values           Collect sample values (default)
@@ -23,7 +23,7 @@ use clap::Parser;
 use futures::TryStreamExt;
 use mongodb::{Client, options::ClientOptions};
 use mongo2pg::analyzer::Analyzer;
-use mongo2pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
+use mongo2pg::converters::to_expanded_schema;
 use mongo2pg::semantic_types::SemanticDetector;
 use mongo2pg::stats::format_stats;
 
@@ -48,9 +48,9 @@ struct Args {
     #[arg(short = 'n', long = "number", default_value_t = 1000)]
     number: u64,
 
-    /// Output format: expanded (default), mongodb, standard
-    /// Renderer: json, yaml, table
-    #[arg(short = 'f', long = "format", default_value = "expanded")]
+    /// Output renderer: json (default), yaml, table
+    /// The schema dialect is always expanded (x-bsonType, x-metadata, x-sampleValues).
+    #[arg(short = 'f', long = "format", default_value = "json")]
     format: String,
 
     /// Print statistics to stderr
@@ -146,15 +146,11 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Convert schema to the requested format
-    let (schema_dialect, renderer) = parse_format(&args.format);
-    let value = match schema_dialect {
-        SchemaDialect::Expanded => to_expanded_schema(&schema),
-        SchemaDialect::MongoDB => to_mongodb_schema(&schema),
-        SchemaDialect::Standard => to_json_schema(&schema),
-    };
+    // Convert schema to expanded format (the only supported output kind)
+    let value = to_expanded_schema(&schema);
 
     // Render output
+    let renderer = parse_format(&args.format)?;
     let output = match renderer {
         Renderer::Json => serde_json::to_string_pretty(&value)?,
         Renderer::Yaml => serde_yaml::to_string(&value)
@@ -178,28 +174,25 @@ fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
 }
 
 #[derive(Debug)]
-enum SchemaDialect {
-    Expanded,
-    MongoDB,
-    Standard,
-}
-
-#[derive(Debug)]
 enum Renderer {
     Json,
     Yaml,
     Table,
 }
 
-fn parse_format(format: &str) -> (SchemaDialect, Renderer) {
-    // The format flag doubles as both dialect selector and renderer.
+fn parse_format(format: &str) -> Result<Renderer> {
     match format.to_lowercase().as_str() {
-        "mongodb" => (SchemaDialect::MongoDB, Renderer::Json),
-        "standard" => (SchemaDialect::Standard, Renderer::Json),
-        "json" => (SchemaDialect::Expanded, Renderer::Json),
-        "yaml" => (SchemaDialect::Expanded, Renderer::Yaml),
-        "table" => (SchemaDialect::Expanded, Renderer::Table),
-        _ => (SchemaDialect::Expanded, Renderer::Json), // default: expanded + json
+        "json" | "expanded" => Ok(Renderer::Json),
+        "yaml" => Ok(Renderer::Yaml),
+        "table" => Ok(Renderer::Table),
+        "mongodb" | "standard" => Err(anyhow!(
+            "The '{format}' schema dialect is no longer supported. \
+             The only output kind is 'expanded'. \
+             Use -f json (default), -f yaml, or -f table to choose the renderer."
+        )),
+        other => Err(anyhow!(
+            "Unknown format '{other}'. Valid renderers: json (default), yaml, table."
+        )),
     }
 }
 

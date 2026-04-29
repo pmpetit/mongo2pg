@@ -5,7 +5,7 @@
 
 use bson::{doc, Bson};
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
-use mongo2pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
+use mongo2pg::converters::to_expanded_schema;
 use mongo2pg::stats::SchemaStats;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -149,91 +149,6 @@ fn test_alphabetical_sort_excluding_id() {
     assert_eq!(keys[1], "alpha");
     assert_eq!(keys[2], "beta");
     assert_eq!(keys[3], "zoo");
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// MongoDB JSON Schema converter tests
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[test]
-fn test_mongodb_schema_bson_type() {
-    let docs = vec![doc! { "_id": 1, "name": "Alice" }];
-    let schema = analyze_docs(&docs);
-    let value = to_mongodb_schema(&schema);
-    assert_eq!(value["bsonType"], "object");
-    assert!(value["properties"]["name"]["bsonType"].is_string());
-}
-
-#[test]
-fn test_mongodb_schema_required_for_all_present() {
-    let docs = vec![
-        doc! { "_id": 1, "name": "Alice" },
-        doc! { "_id": 2, "name": "Bob" },
-    ];
-    let schema = analyze_docs(&docs);
-    let value = to_mongodb_schema(&schema);
-    let required = value["required"].as_array().expect("required should be array");
-    let req_names: Vec<&str> = required
-        .iter()
-        .filter_map(|v| v.as_str())
-        .collect();
-    assert!(req_names.contains(&"_id"));
-    assert!(req_names.contains(&"name"));
-}
-
-#[test]
-fn test_mongodb_schema_any_of_for_multiple_types() {
-    let docs = vec![
-        doc! { "_id": 1, "mixed": "hello" },
-        doc! { "_id": 2, "mixed": 42_i32 },
-    ];
-    let schema = analyze_docs(&docs);
-    let value = to_mongodb_schema(&schema);
-    let mixed = &value["properties"]["mixed"];
-    assert!(
-        mixed.get("anyOf").is_some() || mixed.get("bsonType").is_some(),
-        "multi-type field should use anyOf or bsonType"
-    );
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Standard JSON Schema converter tests
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[test]
-fn test_json_schema_has_schema_key() {
-    let docs = vec![doc! { "_id": 1 }];
-    let schema = analyze_docs(&docs);
-    let value = to_json_schema(&schema);
-    assert_eq!(
-        value["$schema"],
-        "https://json-schema.org/draft/2020-12/schema"
-    );
-}
-
-#[test]
-fn test_json_schema_has_defs() {
-    let docs = vec![doc! { "_id": 1 }];
-    let schema = analyze_docs(&docs);
-    let value = to_json_schema(&schema);
-    assert!(value["$defs"].is_object(), "$defs should be present");
-    assert!(value["$defs"]["ObjectId"].is_object());
-}
-
-#[test]
-fn test_json_schema_string_type() {
-    let docs = vec![doc! { "_id": 1, "label": "hello" }];
-    let schema = analyze_docs(&docs);
-    let value = to_json_schema(&schema);
-    assert_eq!(value["properties"]["label"]["type"], "string");
-}
-
-#[test]
-fn test_json_schema_number_type() {
-    let docs = vec![doc! { "_id": 1, "score": 42_i32 }];
-    let schema = analyze_docs(&docs);
-    let value = to_json_schema(&schema);
-    assert_eq!(value["properties"]["score"]["type"], "number");
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
