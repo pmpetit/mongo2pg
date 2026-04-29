@@ -149,3 +149,7 @@ Tests cover:
 ## License
 
 Apache-2.0 – see [LICENSE](LICENSE).
+
+## Disclaimer
+
+This project is not affiliated with, endorsed by, or software from MongoDB, Inc. or the PostgreSQL Global Development Group. "MongoDB" and "PostgreSQL" are trademarks of their respective owners.
