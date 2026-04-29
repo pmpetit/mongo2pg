@@ -8,7 +8,6 @@
 //!   -n, --number <N>       Number of documents to sample [default: 1000]
 //!   -f, --format <FMT>     Output renderer: json (default), yaml, table
 //!   -s, --stats            Print statistics to stderr
-//!   -t, --semantic-types   Enable semantic-type detection (e.g., email)
 //!       --values           Collect sample values (default)
 //!       --no-values        Disable sample-value collection
 //!       --sampling         Use $sample aggregation (default)
@@ -23,8 +22,7 @@ use clap::Parser;
 use futures::TryStreamExt;
 use mongodb::{Client, options::ClientOptions};
 use mongo2pg::analyzer::Analyzer;
-use mongo2pg::converters::to_expanded_schema;
-use mongo2pg::semantic_types::SemanticDetector;
+use mongo2pg::converters::{to_expanded_schema, to_json_schema, to_mongodb_schema};
 use mongo2pg::stats::format_stats;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -56,10 +54,6 @@ struct Args {
     /// Print statistics to stderr
     #[arg(short = 's', long = "stats", default_value_t = false)]
     stats: bool,
-
-    /// Enable semantic-type detection
-    #[arg(short = 't', long = "semantic-types", default_value_t = false)]
-    semantic_types: bool,
 
     /// Collect sample values (default: true)
     #[arg(long = "values", default_value_t = true, action = clap::ArgAction::SetTrue)]
@@ -101,12 +95,7 @@ async fn main() -> Result<()> {
     let collection = db.collection::<bson::Document>(coll_name);
 
     // Build analyzer
-    let detector = if args.semantic_types {
-        Some(SemanticDetector::new())
-    } else {
-        None
-    };
-    let mut analyzer = Analyzer::new(collect_values, detector);
+    let mut analyzer = Analyzer::new(collect_values);
 
     // Sample documents
     if use_sampling {

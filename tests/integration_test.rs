@@ -14,7 +14,7 @@ use mongo2pg::stats::SchemaStats;
 
 /// Build a small in-memory schema by feeding documents through the analyzer.
 fn analyze_docs(docs: &[bson::Document]) -> CollectionSchema {
-    let mut analyzer = Analyzer::new(true, None);
+    let mut analyzer = Analyzer::new(true);
     for doc in docs {
         analyzer.process_document(doc);
     }
@@ -254,41 +254,4 @@ fn test_stats_branch_count() {
     let schema = analyze_docs(&docs);
     let stats = SchemaStats::compute(&schema);
     assert_eq!(stats.branch, 4); // _id, a, b, c
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Semantic types tests
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[test]
-fn test_semantic_type_email_detected() {
-    use mongo2pg::semantic_types::SemanticDetector;
-    let det = SemanticDetector::new();
-    let values = vec![
-        "alice@example.com",
-        "bob@company.org",
-        "carol@test.net",
-        "dave@foo.io",
-    ];
-    let result = det.detect(&values);
-    assert_eq!(result, Some("Email".to_owned()));
-}
-
-#[test]
-fn test_semantic_type_with_analyzer() {
-    use mongo2pg::semantic_types::SemanticDetector;
-    let docs: Vec<bson::Document> = (0..10)
-        .map(|i| doc! { "_id": i, "email": format!("user{i}@example.com") })
-        .collect();
-    let mut analyzer = Analyzer::new(true, Some(SemanticDetector::new()));
-    for d in &docs {
-        analyzer.process_document(d);
-    }
-    let schema = analyzer.finish();
-    let email_field = schema.object.get("email").expect("email field missing");
-    assert_eq!(
-        email_field.semantic_type.as_deref(),
-        Some("Email"),
-        "email field should have semantic type Email"
-    );
 }

@@ -35,7 +35,6 @@ There is also a **cost dimension**: managed MongoDB clusters can cost up to **~1
 - **Probabilistic schema inference** – tracks per-field counts, type distributions, and probabilities
 - **Expanded output** – extended JSON Schema with `x-bsonType`, `x-metadata`, `x-sampleValues`
 - **Stats** – width / depth / branch counts printed to stderr with `--stats`
-- **Semantic type detection** – e.g. detects email fields with `--semantic-types`
 - **Reservoir sampling** of field values (100 samples for strings/binary/code, 10 000 otherwise)
 - **Output renderers**: JSON (default), YAML, ASCII table
 
@@ -74,7 +73,6 @@ Options:
                           yaml   – expanded schema as YAML
                           table  – ASCII table of top-level fields
   -s, --stats           Print width/depth/branch stats to stderr
-  -t, --semantic-types  Enable semantic-type detection (email, …)
       --values          Collect and include sample values [default]
       --no-values       Disable sample-value collection
       --sampling        Use $sample aggregation [default]
@@ -95,8 +93,8 @@ mongo2pg mongodb://localhost:27017 mydb.users -n 500 -f yaml
 # Expanded schema + stats on stderr
 mongo2pg mongodb://localhost:27017 mydb.orders --stats
 
-# YAML output with semantic-type detection
-mongo2pg mongodb://localhost:27017 mydb.customers -f yaml -t
+# YAML output
+mongo2pg mongodb://localhost:27017 mydb.customers -f yaml
 
 # ASCII table of top-level fields
 mongo2pg mongodb://localhost:27017 mydb.products -f table
@@ -114,7 +112,7 @@ use mongo2pg::analyzer::Analyzer;
 use mongo2pg::converters::to_expanded_schema;
 
 // Feed BSON documents (from any source)
-let mut analyzer = Analyzer::new(/*collect_values=*/true, /*semantic_detector=*/None);
+let mut analyzer = Analyzer::new(/*collect_values=*/true);
 for doc in my_documents {
     analyzer.process_document(&doc);
 }
@@ -142,7 +140,6 @@ Tests cover:
 - Reservoir value sampling
 - Expanded schema converter (`x-metadata`, `x-bsonType`, `x-sampleValues`)
 - Stats (width / depth / branch)
-- Semantic type detection (email)
 
 ---
 

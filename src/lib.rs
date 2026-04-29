@@ -9,5 +9,4 @@
 
 pub mod analyzer;
 pub mod converters;
-pub mod semantic_types;
 pub mod stats;

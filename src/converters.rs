@@ -88,10 +88,6 @@ fn field_to_expanded_schema(field: &FieldSchema, total_docs: u64) -> Value {
         }),
     );
 
-    if let Some(sem) = &field.semantic_type {
-        obj.insert("x-semanticType".into(), Value::String(sem.clone()));
-    }
-
     if non_undef.is_empty() {
         return Value::Object(obj);
     }
