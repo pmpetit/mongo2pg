@@ -78,6 +78,8 @@ jobs:
         name: Publish PR preview release
         needs: build
         runs-on: ubuntu-latest
+        env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         steps:
             - uses: actions/download-artifact@v4
               with:
@@ -96,16 +98,12 @@ jobs:
                   fi
 
             - name: Delete previous preview release (if any)
-              env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   TAG="${{ steps.tag.outputs.value }}"
                   gh release delete "$TAG" --repo ${{ github.repository }} --yes 2>/dev/null || true
                   gh api --method DELETE /repos/${{ github.repository }}/git/refs/tags/$TAG 2>/dev/null || true
 
             - name: Create preview release
-              env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   TAG="${{ steps.tag.outputs.value }}"
                   TITLE="${{ steps.tag.outputs.title }}"

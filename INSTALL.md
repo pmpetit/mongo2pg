@@ -184,3 +184,203 @@ When a field holds more than one BSON type across documents, the schema uses `an
 `Undefined` is a synthetic type injected for documents where the field was absent. Its `prob` is `1 - (presence_count / total_sampled)`.
 
 Mixed-type fields are the trickiest to migrate: you will need to decide whether to cast to a single type, split into multiple columns, or use a `jsonb` column in PostgreSQL.
+
+---
+
+## Tutorial: run mongo2pg against MongoDB sample datasets
+
+This tutorial walks you through starting a local MongoDB instance with Docker, loading the official MongoDB sample datasets, and running `mongo2pg` against each collection.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) installed and running
+- `mongo2pg` installed (see above)
+- `git` and `bash`
+
+---
+
+### Step 1 — Start MongoDB in Docker
+
+```bash
+docker run --name mongodb -d \
+  -p 2717:27017 \
+  -e MONGO_INITDB_ROOT_USERNAME=user \
+  -e MONGO_INITDB_ROOT_PASSWORD=pass \
+  mongodb/mongodb-community-server
+```
+
+Verify it is running:
+
+```bash
+docker ps | grep mongodb
+```
+
+---
+
+### Step 2 — Import the sample datasets
+
+Clone the sample dataset repository and run its import script:
+
+```bash
+git clone https://github.com/neelabalan/mongodb-sample-dataset
+cd mongodb-sample-dataset
+```
+
+The `start.sh` script uses `mongoimport` to load the data. It expects the MongoDB tools to be available. If you do not have `mongoimport` installed locally, run it inside the container:
+
+```bash
+# Copy the datasets into the container
+docker cp . mongodb:/tmp/mongodb-sample-dataset
+
+# Run the import from inside the container
+docker exec -it mongodb bash -c "
+  cd /tmp/mongodb-sample-dataset &&
+  bash start.sh 'mongodb://user:pass@localhost:27017/?authSource=admin'
+"
+```
+
+If `mongoimport` is available locally, you can pass the URI directly:
+
+```bash
+bash start.sh 'mongodb://user:pass@localhost:2717/?authSource=admin'
+```
+
+---
+
+### Step 3 — Run mongo2pg against each collection
+
+The URI for all commands below is:
+
+```
+mongodb://user:pass@localhost:2717/?authSource=admin
+```
+
+#### sample_airbnb
+
+```bash
+# 5 555 documents – deeply nested, good stress test
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_airbnb.listingsAndReviews --no-output
+```
+
+#### sample_analytics
+
+```bash
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_analytics.accounts --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_analytics.customers --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_analytics.transactions --no-output
+```
+
+#### sample_geospatial
+
+```bash
+# 11 095 documents – flat structure, good PostgreSQL candidate
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_geospatial.shipwrecks --no-output
+```
+
+#### sample_mflix
+
+```bash
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_mflix.comments --no-output
+
+# 23 539 movies – mixed types, arrays, nested objects
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_mflix.movies --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_mflix.theaters --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_mflix.users --no-output
+```
+
+#### sample_supplies
+
+```bash
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_supplies.sales --no-output
+```
+
+#### sample_training
+
+```bash
+# companies – 9 500 docs, very wide and nested
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_training.companies --no-output
+
+# grades – 100 000 docs, use --percent for a quick sample
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_training.grades -p 5 --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_training.inspections --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_training.routes --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_training.trips --no-output
+
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_training.zips --no-output
+```
+
+#### sample_weatherdata
+
+```bash
+# 10 000 documents – nested measurement objects
+mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  sample_weatherdata.data --no-output
+```
+
+---
+
+### Step 4 — Save schemas to files
+
+To keep the inferred schemas for later analysis:
+
+```bash
+URI="mongodb://user:pass@localhost:2717/?authSource=admin"
+mkdir -p schemas
+
+for ns in \
+  sample_airbnb.listingsAndReviews \
+  sample_analytics.accounts \
+  sample_analytics.customers \
+  sample_analytics.transactions \
+  sample_geospatial.shipwrecks \
+  sample_mflix.comments \
+  sample_mflix.movies \
+  sample_mflix.theaters \
+  sample_mflix.users \
+  sample_supplies.sales \
+  sample_training.companies \
+  sample_training.grades \
+  sample_training.inspections \
+  sample_training.routes \
+  sample_training.trips \
+  sample_training.zips \
+  sample_weatherdata.data
+do
+  filename=$(echo "$ns" | tr '.' '_')
+  echo "→ $ns"
+  mongo2pg "$URI" "$ns" 2>schemas/${filename}.stats.txt > schemas/${filename}.json
+done
+```
+
+Each collection produces two files: `<db>_<collection>.json` (the schema) and `<db>_<collection>.stats.txt` (the stats lines).
+
+---
+
+### Step 5 — Tear down
+
+```bash
+docker stop mongodb && docker rm mongodb
+```
