@@ -4,6 +4,28 @@ A Rust library and CLI tool for **MongoDB schema inference and conversion**. It 
 
 ---
 
+## Motivation
+
+In teams without a dedicated DBA, MongoDB is sometimes chosen for the wrong reasons:
+
+- **"MongoDB doesn't need data modelling"** – In reality, every non-trivial application benefits from a well-thought-out data model. Skipping this step in MongoDB typically leads to inconsistent documents, duplicated data, and increasingly painful application code.
+- **"MongoDB lets you avoid managing relations and constraints"** – Relations don't disappear; they just move into application code, where they are harder to enforce and easier to get wrong.
+
+MongoDB *does* have genuinely good use-cases, and it is an excellent choice when:
+
+- Documents are naturally self-contained and deeply nested (e.g. event logs, content management, product catalogues with highly variable attributes).
+- Schema flexibility is a real requirement, not just a convenience (e.g. rapid prototyping, heterogeneous data ingestion, IoT telemetry).
+- You need horizontal write-scaling or geo-distributed deployments that map naturally to MongoDB's sharding model.
+- You are storing large volumes of time-series or unstructured data where a document model genuinely fits.
+
+In practice, however, some MongoDB databases end up looking surprisingly relational: collections reference each other with manual foreign keys, data is normalised across collections, and documents have very shallow nesting with only scalar fields at the top level. These databases would be a natural fit for PostgreSQL and its mature relational tooling.
+
+There is also a **cost dimension**: managed MongoDB clusters can cost up to **~10× more** than equivalent PostgreSQL deployments for comparable workloads. Being able to detect databases that do not actually need MongoDB's document model — and that could migrate to PostgreSQL without significant re-design — can therefore lead to substantial infrastructure savings.
+
+`mongo2pg` helps you make that assessment quickly: it samples a collection, infers its probabilistic schema, and surfaces the structural metrics (depth, width, branching factor) that reveal whether a collection is a good migration candidate.
+
+---
+
 ## Features
 
 - **MongoDB sampling** – connects to any MongoDB URI, samples documents via `$sample` (default) or sequential `find/limit`
