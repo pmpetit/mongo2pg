@@ -1,6 +1,6 @@
 # mongo2pg
 
-A Rust library and CLI tool for **MongoDB schema inference and conversion**. It samples documents from a MongoDB collection, infers a probabilistic schema, and exports it in multiple JSON Schema dialects.
+A Rust library and CLI tool for **MongoDB schema inference**. It samples documents from a MongoDB collection, infers a probabilistic schema, and exports it in the **expanded** JSON Schema dialect.
 
 ---
 
@@ -33,14 +33,11 @@ There is also a **cost dimension**: managed MongoDB clusters can cost up to **~1
 
 - **MongoDB sampling** – connects to any MongoDB URI, samples documents via `$sample` (default) or sequential `find/limit`
 - **Probabilistic schema inference** – tracks per-field counts, type distributions, and probabilities
-- **Three output formats**:
-  - `expanded` (default) – extended JSON Schema with `x-bsonType`, `x-metadata`, `x-sampleValues`
-  - `mongodb` – MongoDB JSON Schema dialect (`bsonType`, `properties`, `required`, `anyOf`)
-  - `standard` – JSON Schema draft 2020-12 (`$schema`, `$defs`)
+- **Expanded output** – extended JSON Schema with `x-bsonType`, `x-metadata`, `x-sampleValues`
 - **Stats** – width / depth / branch counts printed to stderr with `--stats`
 - **Semantic type detection** – e.g. detects email fields with `--semantic-types`
 - **Reservoir sampling** of field values (100 samples for strings/binary/code, 10 000 otherwise)
-- **Output renderers**: JSON, YAML, ASCII table
+- **Output renderers**: JSON (default), YAML, ASCII table
 
 ---
 
@@ -72,13 +69,10 @@ Arguments:
 
 Options:
   -n, --number <N>      Number of documents to sample [default: 1000]
-  -f, --format <FMT>    Output format [default: expanded]
-                          expanded  – x-bsonType + x-metadata + x-sampleValues
-                          mongodb   – MongoDB JSON Schema (bsonType)
-                          standard  – JSON Schema draft 2020-12
-                          json      – expanded rendered as JSON
-                          yaml      – expanded rendered as YAML
-                          table     – ASCII table of top-level fields
+  -f, --format <FMT>    Output renderer [default: json]
+                          json   – expanded schema as pretty-printed JSON
+                          yaml   – expanded schema as YAML
+                          table  – ASCII table of top-level fields
   -s, --stats           Print width/depth/branch stats to stderr
   -t, --semantic-types  Enable semantic-type detection (email, …)
       --values          Collect and include sample values [default]
@@ -95,11 +89,11 @@ Options:
 # Infer schema in expanded format (default), pretty-printed JSON
 mongo2pg mongodb://localhost:27017 mydb.users
 
-# MongoDB JSON Schema dialect, sample 500 docs
-mongo2pg mongodb://localhost:27017 mydb.users -n 500 -f mongodb
+# Sample 500 docs, YAML output
+mongo2pg mongodb://localhost:27017 mydb.users -n 500 -f yaml
 
-# Standard JSON Schema + stats on stderr
-mongo2pg mongodb://localhost:27017 mydb.orders -f standard --stats
+# Expanded schema + stats on stderr
+mongo2pg mongodb://localhost:27017 mydb.orders --stats
 
 # YAML output with semantic-type detection
 mongo2pg mongodb://localhost:27017 mydb.customers -f yaml -t
@@ -117,7 +111,7 @@ mongo2pg mongodb://localhost:27017 mydb.events --no-sampling --no-values
 
 ```rust
 use mongo2pg::analyzer::Analyzer;
-use mongo2pg::converters::{to_expanded_schema, to_mongodb_schema, to_json_schema};
+use mongo2pg::converters::to_expanded_schema;
 
 // Feed BSON documents (from any source)
 let mut analyzer = Analyzer::new(/*collect_values=*/true, /*semantic_detector=*/None);
@@ -126,10 +120,8 @@ for doc in my_documents {
 }
 let schema = analyzer.finish();
 
-// Convert to desired dialect
-let expanded  = to_expanded_schema(&schema);
-let mongo_js  = to_mongodb_schema(&schema);
-let standard  = to_json_schema(&schema);
+// Convert to expanded dialect
+let expanded = to_expanded_schema(&schema);
 
 println!("{}", serde_json::to_string_pretty(&expanded).unwrap());
 ```
@@ -148,8 +140,7 @@ Tests cover:
 - Implicit `Undefined` injection for optional fields
 - Nested object and array schema
 - Reservoir value sampling
-- All three schema converters (MongoDB, standard, expanded)
-- `x-metadata`, `x-bsonType`, `x-sampleValues` presence in expanded output
+- Expanded schema converter (`x-metadata`, `x-bsonType`, `x-sampleValues`)
 - Stats (width / depth / branch)
 - Semantic type detection (email)
 
