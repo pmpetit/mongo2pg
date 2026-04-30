@@ -107,27 +107,6 @@ mongo2pg mongodb://localhost:27017 mydb.events --no-sampling --no-values
 
 ---
 
-## Library Usage
-
-```rust
-use mongo2pg::analyzer::Analyzer;
-use mongo2pg::converters::to_expanded_schema;
-
-// Feed BSON documents (from any source)
-let mut analyzer = Analyzer::new(/*collect_values=*/true);
-for doc in my_documents {
-    analyzer.process_document(&doc);
-}
-let schema = analyzer.finish();
-
-// Convert to expanded dialect
-let expanded = to_expanded_schema(&schema);
-
-println!("{}", serde_json::to_string_pretty(&expanded).unwrap());
-```
-
----
-
 ## Running Tests
 
 ```bash

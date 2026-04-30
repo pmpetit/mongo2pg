@@ -141,6 +141,7 @@ mod tests {
             TypeSchema {
                 count: 3,
                 probability: 1.0,
+                ndistinct: None,
                 object: None,
                 array: None,
                 values: None,

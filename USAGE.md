@@ -133,13 +133,10 @@ Collections with high depth, high width, or many low-probability fields represen
 
 ---
 
-### JSON schema (stdout)
-
 The JSON output is **not** JSON Schema. It is a compact tree that describes:
 
 - document/array nesting (`object`, `array`)
-- field presence frequency (`count`, `probability`)
-- per-field observed BSON types (`types`), including `Undefined` for “field missing”
+- field presence frequency (`count`, `probability`)- per-field cardinality or average array length (`ndistinct`)- per-field observed BSON types (`types`), including `Undefined` for “field missing”
 
 At the root:
 
@@ -166,14 +163,33 @@ Example:
 }
 ```
 
-#### Types: `types` and `probability`
+#### Types: `types`, `probability`, and `ndistinct`
 
 For each BSON type observed for a field:
 
 - `types.<BsonType>.count`: number of documents where the field had that BSON type
 - `types.<BsonType>.probability`: proportion within the field occurrences (sums to `1.0` across all types)
+- `types.<BsonType>.ndistinct` *(scalar types only)*: number of distinct values observed for that type (capped at 1 000). Absent for `Object` types (meaningless for sub-documents).
+- `types.<BsonType>.values` *(when `--no-values` is not set)*: up to **20** reservoir-sampled values for that type.
 
 `Undefined` is included when the field is absent. Its `count` is `parent.count - field.count`.
+
+Example for a scalar type:
+
+```json
+"_id": {
+  "count": 1000,
+  "probability": 1.0,
+  "types": {
+    "ObjectId": {
+      "count": 1000,
+      "probability": 1.0,
+      "ndistinct": 1000.0,
+      "values": [ "572bb823...", "572bb822...", "..." ]
+    }
+  }
+}
+```
 
 #### Nested objects: `object`
 
@@ -208,7 +224,8 @@ The item schema has the same shape (it can have `types`, and when items are obje
 Notes about array metrics:
 
 - `array.count` is the **total number of array items** seen across all documents.
-- `array.probability` is the **average items per parent object** (so it can be > 1.0).
+- `array.probability` is the **average items per array occurrence** (can be > 1.0).
+- `types.Array.ndistinct` is the **average number of array elements per document** across all sampled documents (total items ÷ total docs). This is analogous to PostgreSQL's `n_distinct` when positive.
 
 Example:
 
@@ -222,7 +239,7 @@ Example:
       "probability": 1.0,
       "array": {
         "count": 121402,
-        "probability": 21.854545454545455,
+        "probability": 0.854545454545455,
         "types": {
           "String": { "count": 121402, "probability": 1.0 }
         }

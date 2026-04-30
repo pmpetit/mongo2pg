@@ -119,13 +119,13 @@ fn type_to_expanded_schema(type_name: &str, ts: &TypeSchema, total_docs: u64) ->
     }
 
     obj.insert("x-bsonType".into(), Value::String(type_name.to_owned()));
-    obj.insert(
-        "x-metadata".into(),
-        json!({
-            "count": ts.count,
-            "prob": ts.probability,
-        }),
-    );
+    let mut meta = serde_json::Map::new();
+    meta.insert("count".into(), json!(ts.count));
+    meta.insert("prob".into(), json!(ts.probability));
+    if let Some(nd) = ts.ndistinct {
+        meta.insert("ndistinct".into(), json!(nd));
+    }
+    obj.insert("x-metadata".into(), Value::Object(meta));
 
     if let Some(values) = &ts.values {
         if !values.is_empty() {

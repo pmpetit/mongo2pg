@@ -10,7 +10,7 @@
 //!   `String`, `Binary`, `JavaScriptCode`, `JavaScriptCodeWithScope`, and 10 000
 //!   for all other types.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bson::Bson;
 use indexmap::IndexMap;
@@ -73,6 +73,10 @@ pub struct TypeSchema {
     pub count: u64,
     /// `count / field.count` – probability of this type given the field exists.
     pub probability: f64,
+    /// Average number of array elements per document (only set when `type_name == "Array"`).
+    /// Equivalent to PostgreSQL `n_distinct` when positive: an absolute average cardinality.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ndistinct: Option<f64>,
     /// Sub-document schema (present when `type_name == "Object"`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object: Option<IndexMap<String, FieldSchema>>,
@@ -122,11 +126,16 @@ impl ValueReservoir {
     }
 }
 
+/// Maximum number of distinct values tracked per type before we stop counting.
+const DISTINCT_CAP: usize = 1_000;
+
 struct TypeAcc {
     count: u64,
     nested_object: Option<ObjectAcc>,
     array_items: Option<Box<FieldAcc>>,
     values: Option<ValueReservoir>,
+    /// Distinct serialized values seen for scalar types (capped at [`DISTINCT_CAP`]).
+    distinct_values: HashSet<String>,
 }
 
 impl TypeAcc {
@@ -142,6 +151,7 @@ impl TypeAcc {
             nested_object: None,
             array_items: None,
             values,
+            distinct_values: HashSet::new(),
         }
     }
 }
@@ -170,10 +180,16 @@ impl FieldAcc {
             .or_insert_with(|| TypeAcc::new(type_name, self.collect_values));
         acc.count += 1;
 
-        // Collect sample value
-        if let Some(reservoir) = acc.values.as_mut() {
-            if let Some(v) = bson_to_json_value(bson) {
-                reservoir.add(v);
+        // Collect sample value and track distinct values for scalar types.
+        if let Some(v) = bson_to_json_value(bson) {
+            if let Some(reservoir) = acc.values.as_mut() {
+                reservoir.add(v.clone());
+            }
+            // Track distinct values for non-Object, non-Array types.
+            if acc.distinct_values.len() < DISTINCT_CAP {
+                if let Ok(s) = serde_json::to_string(&v) {
+                    acc.distinct_values.insert(s);
+                }
             }
         }
 
@@ -314,6 +330,7 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
         let undef_schema = TypeSchema {
             count: undefined_count,
             probability: undefined_count as f64 / total_docs as f64,
+            ndistinct: None,
             object: None,
             array: None,
             values: None,
@@ -351,19 +368,51 @@ fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSche
         0.0
     };
 
+    // Compute ndistinct:
+    // - Array:  average number of elements per document (avg cardinality).
+    // - Object: None (ndistinct is meaningless for sub-documents).
+    // - Scalar: number of distinct values observed (capped at DISTINCT_CAP).
+    let has_object = ta.nested_object.is_some();
+    let has_array = ta.array_items.is_some();
+
     let object = ta
         .nested_object
         .map(|nested| build_field_map(nested, ta.count));
 
+    let ndistinct = if has_array {
+        ta.array_items.as_ref().map(|items_fa| {
+            if total_docs > 0 {
+                items_fa.count as f64 / total_docs as f64
+            } else {
+                0.0
+            }
+        })
+    } else if has_object {
+        None
+    } else {
+        Some(ta.distinct_values.len() as f64)
+    };
+
+    // For the items FieldSchema, use ta.count (number of array occurrences) as the
+    // denominator so that items.probability = avg elements per array occurrence.
+    let array_count = ta.count;
     let array = ta
         .array_items
-        .map(|items_fa| Box::new(build_field_schema(*items_fa, total_docs)));
+        .map(|items_fa| Box::new(build_field_schema(*items_fa, array_count)));
 
-    let values = ta.values.map(|r| r.into_values()).filter(|v| !v.is_empty());
+    let values = ta
+        .values
+        .map(|r| {
+            let mut v = r.into_values();
+            v.truncate(20);
+            v
+        })
+        .filter(|v| !v.is_empty());
 
     TypeSchema {
         count: ta.count,
         probability,
+        ndistinct,
         object,
         array,
         values,
