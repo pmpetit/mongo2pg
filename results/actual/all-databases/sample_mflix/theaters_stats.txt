@@ -1,5 +1,0 @@
-Documents sampled : 1564
-Width (top-level fields): 3
-Depth (max nesting)     : 4
-Branch (total fields)   : 13
-Top-level types         : _id:ObjectId, location:Object, theaterId:Number

@@ -1,5 +1,0 @@
-Documents sampled : 66985
-Width (top-level fields): 7
-Depth (max nesting)     : 2
-Branch (total fields)   : 11
-Top-level types         : _id:ObjectId, airline:Object, airplane:String, codeshare:String, dst_airport:String, src_airport:String, stops:Number

@@ -1,5 +1,0 @@
-Documents sampled : 5555
-Width (top-level fields): 42
-Depth (max nesting)     : 4
-Branch (total fields)   : 93
-Top-level types         : _id:String, access:String, accommodates:Number, address:Object, amenities:Array, availability:Object, bathrooms:Decimal128, bed_type:String, bedrooms:Number, beds:Number, calendar_last_scraped:Date, cancellation_policy:String, cleaning_fee:Decimal128, description:String, extra_people:Decimal128, first_review:Date, guests_included:Decimal128, host:Object, house_rules:String, images:Object, interaction:String, last_review:Date, last_scraped:Date, listing_url:String, maximum_nights:String, minimum_nights:String, monthly_price:Decimal128, name:String, neighborhood_overview:String, notes:String, number_of_reviews:Number, price:Decimal128, property_type:String, review_scores:Object, reviews:Array, reviews_per_month:Number, room_type:String, security_deposit:Decimal128, space:String, summary:String, transit:String, weekly_price:Decimal128
