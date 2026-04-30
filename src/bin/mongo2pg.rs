@@ -76,22 +76,6 @@ struct InferArgs {
     #[arg(short = 'p', long = "percent", conflicts_with = "number", value_parser = clap::value_parser!(f64))]
     percent: Option<f64>,
 
-    /// Collect sample values (default: true)
-    #[arg(long = "values", default_value_t = true, action = clap::ArgAction::SetTrue)]
-    values: bool,
-
-    /// Disable sample-value collection
-    #[arg(long = "no-values", action = clap::ArgAction::SetTrue)]
-    no_values: bool,
-
-    /// Use $sample aggregation (default: true)
-    #[arg(long = "sampling", default_value_t = true, action = clap::ArgAction::SetTrue)]
-    sampling: bool,
-
-    /// Use sequential find/limit instead of $sample
-    #[arg(long = "no-sampling", action = clap::ArgAction::SetTrue)]
-    no_sampling: bool,
-
     /// Suppress schema output to stdout
     #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
     no_output: bool,
@@ -150,9 +134,6 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
-    let collect_values = !args.no_values;
-    let use_sampling = !args.no_sampling;
-
     let (db_name, coll_name) = parse_namespace(&args.namespace)?;
 
     let client_options = ClientOptions::parse(&args.uri)
@@ -178,29 +159,15 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         (args.number, None)
     };
 
-    let mut analyzer = Analyzer::new(collect_values);
+    let mut analyzer = Analyzer::new(true);
 
-    if use_sampling {
-        let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
-        let mut cursor = collection
-            .aggregate(pipeline)
-            .await
-            .context("Failed to run $sample aggregation")?;
-        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
-            analyzer.process_document(&doc);
-        }
-    } else {
-        let find_opts = mongodb::options::FindOptions::builder()
-            .limit(sample_size as i64)
-            .build();
-        let mut cursor = collection
-            .find(doc! {})
-            .with_options(find_opts)
-            .await
-            .context("Failed to run find")?;
-        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
-            analyzer.process_document(&doc);
-        }
+    let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
+    let mut cursor = collection
+        .aggregate(pipeline)
+        .await
+        .context("Failed to run $sample aggregation")?;
+    while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
+        analyzer.process_document(&doc);
     }
 
     let mut schema = analyzer.finish();

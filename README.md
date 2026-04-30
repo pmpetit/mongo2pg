@@ -61,8 +61,12 @@ cargo build --release
 
 ## CLI Usage
 
+`mongo2pg` has two subcommands. Running it without a subcommand defaults to `infer`.
+
+### `infer` – sample a collection and output its JSON Schema
+
 ```
-mongo2pg <URI> <DB.COLLECTION> [OPTIONS]
+mongo2pg [infer] <URI> <DB.COLLECTION> [OPTIONS]
 
 Arguments:
   <URI>            MongoDB connection URI (e.g. mongodb://localhost:27017)
@@ -70,39 +74,45 @@ Arguments:
 
 Options:
   -n, --number <N>      Number of documents to sample [default: 1000]
-  -f, --format <FMT>    Output renderer [default: json]
-                          json   – expanded schema as pretty-printed JSON
-                          yaml   – expanded schema as YAML
-                          table  – ASCII table of top-level fields
-  -s, --stats           Print width/depth/branch stats to stderr
-      --values          Collect and include sample values [default]
-      --no-values       Disable sample-value collection
-      --sampling        Use $sample aggregation [default]
-      --no-sampling     Use sequential find/limit instead of $sample
+                          (mutually exclusive with --percent)
+  -p, --percent <PCT>   Percentage of the collection to sample, e.g. 10 for 10%
+                          (mutually exclusive with --number)
+      --no-output       Suppress schema output to stdout
   -h, --help            Print help
   -V, --version         Print version
+```
+
+### `to-pg` – convert an inferred schema to PostgreSQL DDL
+
+```
+mongo2pg to-pg <SCHEMA_FILE> [OPTIONS]
+
+Arguments:
+  <SCHEMA_FILE>    Path to a schema JSON file produced by `mongo2pg infer`
+
+Options:
+  -t, --table <NAME>    Root table name (defaults to the schema file stem)
+  -h, --help            Print help
 ```
 
 ### Examples
 
 ```bash
-# Infer schema in expanded format (default), pretty-printed JSON
+# Infer schema (pretty-printed JSON to stdout)
 mongo2pg mongodb://localhost:27017 mydb.users
 
-# Sample 500 docs, YAML output
-mongo2pg mongodb://localhost:27017 mydb.users -n 500 -f yaml
+# Sample 500 docs
+mongo2pg mongodb://localhost:27017 mydb.users -n 500
 
-# Expanded schema + stats on stderr
-mongo2pg mongodb://localhost:27017 mydb.orders --stats
+# Sample 10% of the collection
+mongo2pg mongodb://localhost:27017 mydb.users -p 10
 
-# YAML output
-mongo2pg mongodb://localhost:27017 mydb.customers -f yaml
+# Infer schema and pipe directly to to-pg
+mongo2pg mongodb://localhost:27017 mydb.orders > orders.json
+mongo2pg to-pg orders.json --table orders
 
-# ASCII table of top-level fields
-mongo2pg mongodb://localhost:27017 mydb.products -f table
-
-# No sampling (sequential scan), no value collection
-mongo2pg mongodb://localhost:27017 mydb.events --no-sampling --no-values
+# Suppress schema output (e.g. when only interested in side-effects)
+mongo2pg mongodb://localhost:27017 mydb.logs --no-output
 ```
 
 ---
