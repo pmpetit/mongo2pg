@@ -127,7 +127,7 @@ A collection is typically easy to migrate to PostgreSQL when:
 - `Depth` is 1 or 2 (flat or only one level of nesting)
 - `Width` is stable and small (< 20 fields)
 - Per-level branch counts drop quickly (little nesting)
-- Field presence proportions are close to 1.0 (fields are present in most documents)
+- Field presence probabilities are close to 1.0 (fields are present in most documents)
 
 Collections with high depth, high width, or many low-probability fields represent schema flexibility that is harder to map to a fixed relational model.
 
@@ -138,7 +138,7 @@ Collections with high depth, high width, or many low-probability fields represen
 The JSON output is **not** JSON Schema. It is a compact tree that describes:
 
 - document/array nesting (`object`, `array`)
-- field presence frequency (`count`, `prop_in_object`)
+- field presence frequency (`count`, `probability`)
 - per-field observed BSON types (`types`), including `Undefined` for “field missing”
 
 At the root:
@@ -146,19 +146,19 @@ At the root:
 - `count` is the number of documents analysed.
 - `object` contains the top-level fields.
 
-#### Field stats: `count` and `prop_in_object`
+#### Field stats: `count` and `probability`
 
 For any field under an `object`:
 
 - `count`: number of documents where the field exists
-- `prop_in_object`: `count / parent.count` (so `1.0` means “always present”)
+- `probability`: `count / parent.count` (so `1.0` means “always present”)
 
 Example:
 
 ```json
 "bedrooms": {
   "count": 5550,
-  "prop_in_object": 0.9990999099909991,
+  "probability": 0.9990999099909991,
   "types": {
     "Number": { "count": 5550, "prop_in_types": 1.0 },
     "Undefined": { "count": 5, "prop_in_types": 0.0009000900090009 }
@@ -182,7 +182,7 @@ If a type is `Object`, it contains an `object` member describing sub-fields:
 ```json
 "address": {
   "count": 5555,
-  "prop_in_object": 1.0,
+  "probability": 1.0,
   "types": {
     "Object": {
       "count": 5555,
@@ -190,7 +190,7 @@ If a type is `Object`, it contains an `object` member describing sub-fields:
       "object": {
         "country": {
           "count": 5555,
-          "prop_in_object": 1.0,
+          "probability": 1.0,
           "types": { "String": { "count": 5555, "prop_in_types": 1.0 } }
         }
       }
@@ -208,21 +208,21 @@ The item schema has the same shape (it can have `types`, and when items are obje
 Notes about array metrics:
 
 - `array.count` is the **total number of array items** seen across all documents.
-- `array.prop_in_object` is the **average items per parent object** (so it can be > 1.0).
+- `array.probability` is the **average items per parent object** (so it can be > 1.0).
 
 Example:
 
 ```json
 "amenities": {
   "count": 5555,
-  "prop_in_object": 1.0,
+  "probability": 1.0,
   "types": {
     "Array": {
       "count": 5555,
       "prop_in_types": 1.0,
       "array": {
         "count": 121402,
-        "prop_in_object": 21.854545454545455,
+        "probability": 21.854545454545455,
         "types": {
           "String": { "count": 121402, "prop_in_types": 1.0 }
         }
