@@ -116,8 +116,8 @@ Top-level types         : _id:ObjectId  name:String  address:Object  …
 | **Documents in collection** | Total documents in the collection (from MongoDB metadata, fast estimate). |
 | **Documents sampled** | How many documents were actually analysed. A higher number gives more reliable probabilities. |
 | **Width** | Number of distinct top-level field names. A large width (> 30–40) often signals a denormalised or poorly modelled collection. |
-| **Depth** | Maximum nesting level. Top-level fields are depth 1. An array containing an object with a field counts as depth 2. Depth > 3–4 suggests a heavily nested document model that may be hard to flatten into relations. |
-| **Branch (per level)** | Number of distinct fields at each nesting level. `L1:12  L2:8` means 12 fields at the top level and 8 fields inside nested objects one level down. A sharp drop-off (e.g. `L1:5  L2:50`) may indicate polymorphic sub-documents. |
+| **Depth** | Maximum nesting level. Top-level fields are depth 1. An array containing an object with a field counts as depth 2. Depth > 3–4 suggests a heavily nested document model that may be hard to flatten. |
+| **Branch (per level)** | Number of distinct fields at each nesting level. `L1:12  L2:8` means 12 fields at the top level and 8 fields inside nested objects one level down. A sharp drop-off (e.g. `L1:40 L2:5`) indicates most data is flat. |
 | **Top-level types** | The dominant BSON type for each top-level field, useful for a quick sanity check. |
 
 **What makes a good migration candidate?**
@@ -127,7 +127,7 @@ A collection is typically easy to migrate to PostgreSQL when:
 - `Depth` is 1 or 2 (flat or only one level of nesting)
 - `Width` is stable and small (< 20 fields)
 - Per-level branch counts drop quickly (little nesting)
-- Field `probability` values are close to 1.0 (fields are present in most documents)
+- Field presence proportions are close to 1.0 (fields are present in most documents)
 
 Collections with high depth, high width, or many low-probability fields represent schema flexibility that is harder to map to a fixed relational model.
 
@@ -135,57 +135,102 @@ Collections with high depth, high width, or many low-probability fields represen
 
 ### JSON schema (stdout)
 
-The JSON output follows an extended JSON Schema dialect with three extra keywords:
+The JSON output is **not** JSON Schema. It is a compact tree that describes:
 
-#### `x-bsonType`
+- document/array nesting (`object`, `array`)
+- field presence frequency (`count`, `prop_in_object`)
+- per-field observed BSON types (`types`), including `Undefined` for “field missing”
 
-The original BSON type name (e.g. `"ObjectId"`, `"Date"`, `"Decimal128"`). Standard JSON Schema `type` only covers JSON primitives; `x-bsonType` preserves the MongoDB type fidelity.
+At the root:
+
+- `count` is the number of documents analysed.
+- `object` contains the top-level fields.
+
+#### Field stats: `count` and `prop_in_object`
+
+For any field under an `object`:
+
+- `count`: number of documents where the field exists
+- `prop_in_object`: `count / parent.count` (so `1.0` means “always present”)
+
+Example:
 
 ```json
-"_id": {
-  "x-bsonType": "ObjectId",
-  "x-metadata": { "count": 1000, "prob": 1.0 }
+"bedrooms": {
+  "count": 5550,
+  "prop_in_object": 0.9990999099909991,
+  "types": {
+    "Number": { "count": 5550, "prop_in_types": 1.0 },
+    "Undefined": { "count": 5, "prop_in_types": 0.0009000900090009 }
+  }
 }
 ```
 
-#### `x-metadata`
+#### Types: `types` and `prop_in_types`
 
-Per-field statistics:
+For each BSON type observed for a field:
 
-| Key | Description |
-|---|---|
-| `count` | Number of sampled documents in which this field was present. |
-| `prob` | `count / total_sampled` — probability the field exists in a document. A value of `1.0` means it was present in every sampled document; `0.5` means it was present in half. Fields with low probability are optional and will need a nullable column in PostgreSQL. |
+- `types.<BsonType>.count`: number of documents where the field had that BSON type
+- `types.<BsonType>.prop_in_types`: proportion within the field occurrences (sums to `1.0` across all types)
 
-#### `x-sampleValues`
+`Undefined` is included when the field is absent. Its `count` is `parent.count - field.count`.
 
-A reservoir sample of up to 100 values (strings, binary, code) or 10 000 values (all other types) observed during sampling. Useful to spot unexpected values or confirm a field's real content before choosing a PostgreSQL column type.
+#### Nested objects: `object`
+
+If a type is `Object`, it contains an `object` member describing sub-fields:
 
 ```json
-"status": {
-  "x-bsonType": "String",
-  "x-metadata": { "count": 998, "prob": 0.998 },
-  "x-sampleValues": ["active", "inactive", "pending", "active", "active"]
+"address": {
+  "count": 5555,
+  "prop_in_object": 1.0,
+  "types": {
+    "Object": {
+      "count": 5555,
+      "prop_in_types": 1.0,
+      "object": {
+        "country": {
+          "count": 5555,
+          "prop_in_object": 1.0,
+          "types": { "String": { "count": 5555, "prop_in_types": 1.0 } }
+        }
+      }
+    }
+  }
 }
 ```
 
-#### `anyOf` — mixed-type fields
+#### Arrays: `array`
 
-When a field holds more than one BSON type across documents, the schema uses `anyOf` to list all observed types. Each branch has its own `x-bsonType` and `x-metadata`:
+If a type is `Array`, it contains an `array` member that describes the array items.
+
+The item schema has the same shape (it can have `types`, and when items are objects, an `object`).
+
+Notes about array metrics:
+
+- `array.count` is the **total number of array items** seen across all documents.
+- `array.prop_in_object` is the **average items per parent object** (so it can be > 1.0).
+
+Example:
 
 ```json
-"legacy_id": {
-  "anyOf": [
-    { "x-bsonType": "String",  "x-metadata": { "count": 750, "prob": 0.75 } },
-    { "x-bsonType": "Number",  "x-metadata": { "count": 200, "prob": 0.20 } },
-    { "x-bsonType": "Undefined", "x-metadata": { "count": 50, "prob": 0.05 } }
-  ]
+"amenities": {
+  "count": 5555,
+  "prop_in_object": 1.0,
+  "types": {
+    "Array": {
+      "count": 5555,
+      "prop_in_types": 1.0,
+      "array": {
+        "count": 121402,
+        "prop_in_object": 21.854545454545455,
+        "types": {
+          "String": { "count": 121402, "prop_in_types": 1.0 }
+        }
+      }
+    }
+  }
 }
 ```
-
-`Undefined` is a synthetic type injected for documents where the field was absent. Its `prob` is `1 - (presence_count / total_sampled)`.
-
-Mixed-type fields are the trickiest to migrate: you will need to decide whether to cast to a single type, split into multiple columns, or use a `jsonb` column in PostgreSQL.
 
 ---
 
