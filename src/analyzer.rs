@@ -72,7 +72,7 @@ pub struct TypeSchema {
     /// Number of documents where this field had this type.
     pub count: u64,
     /// `count / field.count` – probability of this type given the field exists.
-    pub prop_in_types: f64,
+    pub probability: f64,
     /// Sub-document schema (present when `type_name == "Object"`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object: Option<IndexMap<String, FieldSchema>>,
@@ -313,7 +313,7 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
     if undefined_count > 0 {
         let undef_schema = TypeSchema {
             count: undefined_count,
-            prop_in_types: undefined_count as f64 / total_docs as f64,
+            probability: undefined_count as f64 / total_docs as f64,
             object: None,
             array: None,
             values: None,
@@ -345,7 +345,7 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
 }
 
 fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSchema {
-    let prop_in_types = if field_count > 0 {
+    let probability = if field_count > 0 {
         ta.count as f64 / field_count as f64
     } else {
         0.0
@@ -363,7 +363,7 @@ fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSche
 
     TypeSchema {
         count: ta.count,
-        prop_in_types,
+        probability,
         object,
         array,
         values,

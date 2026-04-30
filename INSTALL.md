@@ -160,18 +160,18 @@ Example:
   "count": 5550,
   "probability": 0.9990999099909991,
   "types": {
-    "Number": { "count": 5550, "prop_in_types": 1.0 },
-    "Undefined": { "count": 5, "prop_in_types": 0.0009000900090009 }
+    "Number": { "count": 5550, "probability": 1.0 },
+    "Undefined": { "count": 5, "probability": 0.0009000900090009 }
   }
 }
 ```
 
-#### Types: `types` and `prop_in_types`
+#### Types: `types` and `probability`
 
 For each BSON type observed for a field:
 
 - `types.<BsonType>.count`: number of documents where the field had that BSON type
-- `types.<BsonType>.prop_in_types`: proportion within the field occurrences (sums to `1.0` across all types)
+- `types.<BsonType>.probability`: proportion within the field occurrences (sums to `1.0` across all types)
 
 `Undefined` is included when the field is absent. Its `count` is `parent.count - field.count`.
 
@@ -186,12 +186,12 @@ If a type is `Object`, it contains an `object` member describing sub-fields:
   "types": {
     "Object": {
       "count": 5555,
-      "prop_in_types": 1.0,
+      "probability": 1.0,
       "object": {
         "country": {
           "count": 5555,
           "probability": 1.0,
-          "types": { "String": { "count": 5555, "prop_in_types": 1.0 } }
+          "types": { "String": { "count": 5555, "probability": 1.0 } }
         }
       }
     }
@@ -219,12 +219,12 @@ Example:
   "types": {
     "Array": {
       "count": 5555,
-      "prop_in_types": 1.0,
+      "probability": 1.0,
       "array": {
         "count": 121402,
         "probability": 21.854545454545455,
         "types": {
-          "String": { "count": 121402, "prop_in_types": 1.0 }
+          "String": { "count": 121402, "probability": 1.0 }
         }
       }
     }
@@ -318,6 +318,13 @@ The --no-output option removes the `json` output and keep only statistics on col
 # 5 555 documents – deeply nested, good stress test
 mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
   sample_airbnb.listingsAndReviews --no-output
+
+Documents in collection : 5555
+Documents sampled       : 1000
+Width (top-level fields): 42
+Depth (max nesting)     : 4
+Branch (per level)      : L1:42  L2:40  L3:10  L4:1
+Top-level types         : _id:String, access:String, accommodates:Number, address:Object, amenities:Array, availability:Object, bathrooms:Decimal128, bed_type:String, bedrooms:Number, beds:Number, calendar_last_scraped:Date, cancellation_policy:String, cleaning_fee:Decimal128, description:String, extra_people:Decimal128, first_review:Date, guests_included:Decimal128, host:Object, house_rules:String, images:Object, interaction:String, last_review:Date, last_scraped:Date, listing_url:String, maximum_nights:String, minimum_nights:String, monthly_price:Decimal128, name:String, neighborhood_overview:String, notes:String, number_of_reviews:Number, price:Decimal128, property_type:String, review_scores:Object, reviews:Array, reviews_per_month:Number, room_type:String, security_deposit:Decimal128, space:String, summary:String, transit:String, weekly_price:Decimal128  
 ```
 
 #### sample_analytics
@@ -326,87 +333,40 @@ mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
 mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
   sample_analytics.accounts --no-output
 
+Documents in collection : 1746
+Documents sampled       : 1000
+Width (top-level fields): 4
+Depth (max nesting)     : 2
+Branch (per level)      : L1:4  L2:1
+Top-level types         : _id:ObjectId, account_id:Number, limit:Number, products:Array  
+
 mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
   sample_analytics.customers --no-output
 
+Documents in collection : 500
+Documents sampled       : 500
+Width (top-level fields): 9
+Depth (max nesting)     : 4
+Branch (per level)      : L1:9  L2:457  L3:1824  L4:456
+Top-level types         : _id:ObjectId, accounts:Array, active:Boolean, address:String, birthdate:Date, email:String, name:String, tier_and_details:Object, username:String
+
 mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
   sample_analytics.transactions --no-output
+
+Documents in collection : 1746
+Documents sampled       : 1000
+Width (top-level fields): 6
+Depth (max nesting)     : 3
+Branch (per level)      : L1:6  L2:1  L3:6
+Top-level types         : _id:ObjectId, account_id:Number, bucket_end_date:Date, bucket_start_date:Date, transaction_count:Number, transactions:Array  
 ```
-
-#### sample_geospatial
-
-```bash
-# 11 095 documents – flat structure, good PostgreSQL candidate
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_geospatial.shipwrecks --no-output
-```
-
-#### sample_mflix
-
-```bash
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_mflix.comments --no-output
-
-# 23 539 movies – mixed types, arrays, nested objects
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_mflix.movies --no-output
-
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_mflix.theaters --no-output
-
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_mflix.users --no-output
-```
-
-#### sample_supplies
-
-```bash
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_supplies.sales --no-output
-```
-
-#### sample_training
-
-```bash
-# companies – 9 500 docs, very wide and nested
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_training.companies --no-output
-
-# grades – 100 000 docs, use --percent for a quick sample
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_training.grades -p 5 --no-output
-
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_training.inspections --no-output
-
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_training.routes --no-output
-
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_training.trips --no-output
-
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_training.zips --no-output
-```
-
-#### sample_weatherdata
-
-```bash
-# 10 000 documents – nested measurement objects
-mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_weatherdata.data --no-output
-```
-
----
 
 ### Step 4 — Save schemas to files
 
-To keep the inferred schemas for later analysis or create the postgres ddl.
+To keep the infessrred schemas for later analysis or create the postgres ddl.
 
 ```bash
-cd target
 URI="mongodb://user:pass@localhost:2717/?authSource=admin"
-mkdir -p schemas
 
 for ns in \
   sample_airbnb.listingsAndReviews \
@@ -429,7 +389,7 @@ for ns in \
 do
   filename=$(echo "$ns" | tr '.' '_')
   echo "→ $ns"
-  mongo2pg "$URI" "$ns" 2>schemas/${filename}.stats.txt > schemas/${filename}.json
+  mongo2pg "$URI" "$ns" 2>${filename}.stats.txt > ${filename}.json
 done
 ```
 
@@ -461,7 +421,7 @@ for ns in \
 do
   filename=$(echo "$ns" | tr '.' '_')
   echo "→ $ns"
-  mongo2pg to-pg schemas/${filename}.json > schemas/${filename}.sql
+  mongo2pg to-pg ${filename}.json > ${filename}.sql
 done
 ```
 

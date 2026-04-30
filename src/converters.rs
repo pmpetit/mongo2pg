@@ -123,7 +123,7 @@ fn type_to_expanded_schema(type_name: &str, ts: &TypeSchema, total_docs: u64) ->
         "x-metadata".into(),
         json!({
             "count": ts.count,
-            "prob": ts.prop_in_types,
+            "prob": ts.probability,
         }),
     );
 

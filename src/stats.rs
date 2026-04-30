@@ -140,7 +140,7 @@ mod tests {
             "String".to_owned(),
             TypeSchema {
                 count: 3,
-                prop_in_types: 1.0,
+                probability: 1.0,
                 object: None,
                 array: None,
                 values: None,

@@ -22,7 +22,6 @@ use bson::doc;
 use clap::{Parser, Subcommand};
 use futures::TryStreamExt;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
-use mongo2pg::converters::to_expanded_schema;
 use mongo2pg::stats::format_stats;
 use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
@@ -96,12 +95,6 @@ struct InferArgs {
     /// Suppress schema output to stdout
     #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
     no_output: bool,
-
-    /// Output the extended JSON Schema dialect (x-bsonType, x-metadata, x-sampleValues)
-    /// instead of the raw CollectionSchema JSON. Use this for human inspection;
-    /// the raw format is required by `mongo2pg to-pg`.
-    #[arg(long = "expanded", action = clap::ArgAction::SetTrue)]
-    expanded: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -229,13 +222,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         }
     }
 
-    let value = to_expanded_schema(&schema);
     if !args.no_output {
-        if args.expanded {
-            println!("{}", serde_json::to_string_pretty(&value)?);
-        } else {
-            println!("{}", serde_json::to_string_pretty(&schema)?);
-        }
+        println!("{}", serde_json::to_string_pretty(&schema)?);
     }
     Ok(())
 }
