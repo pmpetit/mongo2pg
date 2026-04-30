@@ -32,7 +32,7 @@ pub fn to_expanded_schema(schema: &CollectionSchema) -> Value {
     let mut root = Map::new();
     root.insert("type".into(), json!("object"));
 
-    let props = object_to_expanded_properties(&schema.object, schema.count);
+    let props = object_to_expanded_properties(&schema.object, schema.sampled);
     root.insert("properties".into(), Value::Object(props));
 
     let required: Vec<Value> = schema
@@ -48,7 +48,10 @@ pub fn to_expanded_schema(schema: &CollectionSchema) -> Value {
         root.insert("required".into(), Value::Array(required));
     }
 
-    root.insert("x-metadata".into(), json!({ "count": schema.count }));
+    root.insert(
+        "x-metadata".into(),
+        json!({ "count": schema.count, "sampled": schema.sampled }),
+    );
 
     Value::Object(root)
 }
@@ -76,7 +79,6 @@ fn field_to_expanded_schema(field: &FieldSchema, total_docs: u64) -> Value {
     obj.insert(
         "x-metadata".into(),
         json!({
-            "count": field.count,
             "prob": field.probability,
         }),
     );
@@ -120,7 +122,6 @@ fn type_to_expanded_schema(type_name: &str, ts: &TypeSchema, total_docs: u64) ->
 
     obj.insert("x-bsonType".into(), Value::String(type_name.to_owned()));
     let mut meta = serde_json::Map::new();
-    meta.insert("count".into(), json!(ts.count));
     meta.insert("prob".into(), json!(ts.probability));
     if let Some(nd) = ts.ndistinct {
         meta.insert("ndistinct".into(), json!(nd));
@@ -135,7 +136,7 @@ fn type_to_expanded_schema(type_name: &str, ts: &TypeSchema, total_docs: u64) ->
 
     if type_name == TYPE_OBJECT {
         if let Some(nested) = &ts.object {
-            let props = object_to_expanded_properties(nested, ts.count);
+            let props = object_to_expanded_properties(nested, total_docs);
             obj.insert("properties".into(), Value::Object(props));
 
             let required: Vec<Value> = nested

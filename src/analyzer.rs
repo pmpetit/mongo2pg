@@ -49,8 +49,10 @@ pub const TYPE_UNDEFINED: &str = "Undefined";
 /// Top-level schema for a sampled collection.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectionSchema {
-    /// Number of documents sampled.
+    /// Total number of documents in the collection.
     pub count: u64,
+    /// Number of documents actually sampled and analysed.
+    pub sampled: u64,
     /// Field schemas, ordered: `_id` first then case-insensitive alphabetical.
     pub object: IndexMap<String, FieldSchema>,
 }
@@ -58,8 +60,6 @@ pub struct CollectionSchema {
 /// Schema for a single field (across all observed documents).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldSchema {
-    /// Number of documents that contained this field.
-    pub count: u64,
     /// `count / total_docs` – probability the field is present.
     pub probability: f64,
     /// Type distribution for this field.
@@ -69,8 +69,6 @@ pub struct FieldSchema {
 /// Schema for one BSON type within a field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeSchema {
-    /// Number of documents where this field had this type.
-    pub count: u64,
     /// `count / field.count` – probability of this type given the field exists.
     pub probability: f64,
     /// Average number of array elements per document (only set when `type_name == "Array"`).
@@ -136,6 +134,8 @@ struct TypeAcc {
     values: Option<ValueReservoir>,
     /// Distinct serialized values seen for scalar types (capped at [`DISTINCT_CAP`]).
     distinct_values: HashSet<String>,
+    /// First 20 distinct values in order of first appearance (scalar types only).
+    first_distinct_values: Vec<serde_json::Value>,
 }
 
 impl TypeAcc {
@@ -152,6 +152,7 @@ impl TypeAcc {
             array_items: None,
             values,
             distinct_values: HashSet::new(),
+            first_distinct_values: Vec::new(),
         }
     }
 }
@@ -188,7 +189,10 @@ impl FieldAcc {
             // Track distinct values for non-Object, non-Array types.
             if acc.distinct_values.len() < DISTINCT_CAP {
                 if let Ok(s) = serde_json::to_string(&v) {
-                    acc.distinct_values.insert(s);
+                    let is_new = acc.distinct_values.insert(s);
+                    if is_new && acc.first_distinct_values.len() < 20 {
+                        acc.first_distinct_values.push(v);
+                    }
                 }
             }
         }
@@ -270,6 +274,7 @@ impl Analyzer {
         let object = build_field_map(self.root, total);
         CollectionSchema {
             count: total,
+            sampled: total,
             object,
         }
     }
@@ -328,7 +333,6 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
     let undefined_count = total_docs.saturating_sub(field_count);
     if undefined_count > 0 {
         let undef_schema = TypeSchema {
-            count: undefined_count,
             probability: undefined_count as f64 / total_docs as f64,
             ndistinct: None,
             object: None,
@@ -354,11 +358,7 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
         types.insert(k, v);
     }
 
-    FieldSchema {
-        count: field_count,
-        probability,
-        types,
-    }
+    FieldSchema { probability, types }
 }
 
 fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSchema {
@@ -400,17 +400,22 @@ fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSche
         .array_items
         .map(|items_fa| Box::new(build_field_schema(*items_fa, array_count)));
 
-    let values = ta
-        .values
-        .map(|r| {
-            let mut v = r.into_values();
-            v.truncate(20);
-            v
-        })
-        .filter(|v| !v.is_empty());
+    // For scalar types, output the first 20 distinct values in order of first appearance.
+    // For Object/Array types (where bson_to_json_value returns None), fall back to
+    // the reservoir samples (truncated to 20).
+    let values = if !ta.first_distinct_values.is_empty() {
+        Some(ta.first_distinct_values).filter(|v| !v.is_empty())
+    } else {
+        ta.values
+            .map(|r| {
+                let mut v = r.into_values();
+                v.truncate(20);
+                v
+            })
+            .filter(|v| !v.is_empty())
+    };
 
     TypeSchema {
-        count: ta.count,
         probability,
         ndistinct,
         object,

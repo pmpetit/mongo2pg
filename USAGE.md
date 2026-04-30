@@ -380,7 +380,7 @@ Top-level types         : _id:ObjectId, account_id:Number, bucket_end_date:Date,
 
 ### Step 4 — Save schemas to files
 
-To keep the infessrred schemas for later analysis or create the postgres ddl.
+To keep the inferred schemas for later analysis or create the postgres ddl.
 
 ```bash
 URI="mongodb://user:pass@localhost:2717/?authSource=admin"

@@ -116,8 +116,8 @@ fn top_level_type_summary(schema: &CollectionSchema) -> String {
                 .iter()
                 .filter(|(t, _)| t.as_str() != crate::analyzer::TYPE_UNDEFINED)
                 .max_by(|(_, a), (_, b)| {
-                    a.count
-                        .partial_cmp(&b.count)
+                    a.probability
+                        .partial_cmp(&b.probability)
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .map(|(t, _)| t.as_str())
@@ -139,7 +139,6 @@ mod tests {
         types.insert(
             "String".to_owned(),
             TypeSchema {
-                count: 3,
                 probability: 1.0,
                 ndistinct: None,
                 object: None,
@@ -151,12 +150,15 @@ mod tests {
         object.insert(
             "name".to_owned(),
             FieldSchema {
-                count: 3,
                 probability: 1.0,
                 types,
             },
         );
-        CollectionSchema { count: 3, object }
+        CollectionSchema {
+            count: 3,
+            sampled: 3,
+            object,
+        }
     }
 
     #[test]
