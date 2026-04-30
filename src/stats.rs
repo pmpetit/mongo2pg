@@ -98,7 +98,7 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
     };
     vec![
         total_line,
-        format!("Documents sampled       : {}", schema.count),
+        format!("Documents sampled       : {}", schema.sampled),
         format!("Width (top-level fields): {}", s.width),
         format!("Depth (max nesting)     : {}", s.depth),
         format!("Branch (per level)      : {}", branch_by_level),
