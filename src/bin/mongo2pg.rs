@@ -203,7 +203,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         }
     }
 
-    let schema = analyzer.finish();
+    let mut schema = analyzer.finish();
 
     {
         let total_docs = if let Some(t) = known_total {
@@ -214,6 +214,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .await
                 .context("Failed to get document count")?
         };
+        schema.count = total_docs;
         let stats_lines = format_stats(&schema, Some(total_docs));
         let stderr = io::stderr();
         let mut handle = stderr.lock();
