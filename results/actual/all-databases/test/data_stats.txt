@@ -1,5 +1,0 @@
-Documents sampled : 3
-Width (top-level fields): 4
-Depth (max nesting)     : 1
-Branch (total fields)   : 4
-Top-level types         : _id:Number, active:Boolean, name:String, score:Number

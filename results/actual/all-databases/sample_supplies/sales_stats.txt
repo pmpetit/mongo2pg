@@ -1,5 +1,0 @@
-Documents sampled : 5000
-Width (top-level fields): 7
-Depth (max nesting)     : 4
-Branch (total fields)   : 17
-Top-level types         : _id:ObjectId, couponUsed:Boolean, customer:Object, items:Array, purchaseMethod:String, saleDate:Date, storeLocation:String

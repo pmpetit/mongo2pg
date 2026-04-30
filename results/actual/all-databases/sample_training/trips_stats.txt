@@ -1,5 +1,0 @@
-Documents sampled : 10000
-Width (top-level fields): 14
-Depth (max nesting)     : 3
-Branch (total fields)   : 20
-Top-level types         : _id:ObjectId, bikeid:Number, birth year:Number, end station id:Number, end station location:Object, end station name:String, gender:Number, start station id:Number, start station location:Object, start station name:String, start time:Date, stop time:Date, tripduration:Number, usertype:String

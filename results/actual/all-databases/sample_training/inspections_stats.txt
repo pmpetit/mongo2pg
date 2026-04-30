@@ -1,5 +1,0 @@
-Documents sampled : 80047
-Width (top-level fields): 8
-Depth (max nesting)     : 2
-Branch (total fields)   : 12
-Top-level types         : _id:ObjectId, address:Object, business_name:String, certificate_number:Number, date:String, id:String, result:String, sector:String

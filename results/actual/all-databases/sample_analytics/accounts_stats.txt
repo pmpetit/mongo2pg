@@ -1,5 +1,0 @@
-Documents sampled : 1746
-Width (top-level fields): 4
-Depth (max nesting)     : 2
-Branch (total fields)   : 5
-Top-level types         : _id:ObjectId, account_id:Number, limit:Number, products:Array

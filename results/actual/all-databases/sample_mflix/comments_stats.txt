@@ -1,5 +1,0 @@
-Documents sampled : 50304
-Width (top-level fields): 6
-Depth (max nesting)     : 1
-Branch (total fields)   : 6
-Top-level types         : _id:ObjectId, date:Date, email:String, movie_id:ObjectId, name:String, text:String
