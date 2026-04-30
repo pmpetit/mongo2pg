@@ -61,7 +61,7 @@ pub struct FieldSchema {
     /// Number of documents that contained this field.
     pub count: u64,
     /// `count / total_docs` – probability the field is present.
-    pub prop_in_object: f64,
+    pub probability: f64,
     /// Type distribution for this field.
     pub types: IndexMap<String, TypeSchema>,
 }
@@ -263,10 +263,7 @@ impl Analyzer {
 // Schema-building helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn build_field_map(
-    acc: ObjectAcc,
-    total_docs: u64,
-) -> IndexMap<String, FieldSchema> {
+fn build_field_map(acc: ObjectAcc, total_docs: u64) -> IndexMap<String, FieldSchema> {
     let mut entries: Vec<(String, FieldSchema)> = acc
         .fields
         .into_iter()
@@ -294,12 +291,9 @@ fn build_field_map(
     map
 }
 
-fn build_field_schema(
-    fa: FieldAcc,
-    total_docs: u64,
-) -> FieldSchema {
+fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
     let field_count = fa.count;
-    let prop_in_object = if total_docs > 0 {
+    let probability = if total_docs > 0 {
         field_count as f64 / total_docs as f64
     } else {
         0.0
@@ -345,29 +339,25 @@ fn build_field_schema(
 
     FieldSchema {
         count: field_count,
-        prop_in_object,
+        probability,
         types,
     }
 }
 
-fn build_type_schema(
-    ta: TypeAcc,
-    field_count: u64,
-    total_docs: u64,
-) -> TypeSchema {
+fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSchema {
     let prop_in_types = if field_count > 0 {
         ta.count as f64 / field_count as f64
     } else {
         0.0
     };
 
-    let object = ta.nested_object.map(|nested| {
-        build_field_map(nested, ta.count)
-    });
+    let object = ta
+        .nested_object
+        .map(|nested| build_field_map(nested, ta.count));
 
-    let array = ta.array_items.map(|items_fa| {
-        Box::new(build_field_schema(*items_fa, total_docs))
-    });
+    let array = ta
+        .array_items
+        .map(|items_fa| Box::new(build_field_schema(*items_fa, total_docs)));
 
     let values = ta.values.map(|r| r.into_values()).filter(|v| !v.is_empty());
 
@@ -448,8 +438,7 @@ pub fn bson_to_json_value(bson: &Bson) -> Option<serde_json::Value> {
             Some(serde_json::Value::Object(map))
         }
         Bson::Array(arr) => {
-            let vals: Vec<serde_json::Value> =
-                arr.iter().filter_map(bson_to_json_value).collect();
+            let vals: Vec<serde_json::Value> = arr.iter().filter_map(bson_to_json_value).collect();
             Some(serde_json::Value::Array(vals))
         }
         _ => None,

@@ -40,9 +40,7 @@ fn test_basic_field_count() {
 
 #[test]
 fn test_id_sorted_first() {
-    let docs = vec![
-        doc! { "zebra": "z", "_id": 1, "apple": "a" },
-    ];
+    let docs = vec![doc! { "zebra": "z", "_id": 1, "apple": "a" }];
     let schema = analyze_docs(&docs);
     let keys: Vec<&str> = schema.object.keys().map(|s: &String| s.as_str()).collect();
     assert_eq!(keys[0], "_id", "_id must be the first key");
@@ -69,16 +67,19 @@ fn test_decimal128_distinct_from_number() {
     let docs = vec![doc! { "_id": 1, "amount": Bson::Decimal128(d128) }];
     let schema = analyze_docs(&docs);
     let amount = schema.object.get("amount").expect("amount missing");
-    assert!(amount.types.contains_key("Decimal128"), "Decimal128 must be its own type");
-    assert!(!amount.types.contains_key("Number"), "Decimal128 must NOT be 'Number'");
+    assert!(
+        amount.types.contains_key("Decimal128"),
+        "Decimal128 must be its own type"
+    );
+    assert!(
+        !amount.types.contains_key("Number"),
+        "Decimal128 must NOT be 'Number'"
+    );
 }
 
 #[test]
 fn test_undefined_injected_for_missing_fields() {
-    let docs = vec![
-        doc! { "_id": 1, "optional": "present" },
-        doc! { "_id": 2 },
-    ];
+    let docs = vec![doc! { "_id": 1, "optional": "present" }, doc! { "_id": 2 }];
     let schema = analyze_docs(&docs);
     let field = schema.object.get("optional").expect("optional missing");
     assert!(
@@ -88,7 +89,7 @@ fn test_undefined_injected_for_missing_fields() {
 }
 
 #[test]
-fn test_prop_in_object_computed_correctly() {
+fn test_probability_computed_correctly() {
     let docs = vec![
         doc! { "_id": 1, "x": 1 },
         doc! { "_id": 2, "x": 2 },
@@ -98,9 +99,9 @@ fn test_prop_in_object_computed_correctly() {
     let x = schema.object.get("x").unwrap();
     let expected = 2.0 / 3.0;
     assert!(
-        (x.prop_in_object - expected).abs() < 1e-9,
-        "prop_in_object should be {expected} but was {}",
-        x.prop_in_object
+        (x.probability - expected).abs() < 1e-9,
+        "probability should be {expected} but was {}",
+        x.probability
     );
 }
 
@@ -113,7 +114,10 @@ fn test_nested_object_schema() {
     let schema = analyze_docs(&docs);
     let address = schema.object.get("address").expect("address missing");
     let obj_type = address.types.get("Object").expect("Object type missing");
-    let nested = obj_type.object.as_ref().expect("nested object schema missing");
+    let nested = obj_type
+        .object
+        .as_ref()
+        .expect("nested object schema missing");
     assert!(nested.contains_key("city"), "nested city field missing");
     assert!(nested.contains_key("zip"), "nested zip field missing");
 }
@@ -125,7 +129,10 @@ fn test_array_type() {
     let tags = schema.object.get("tags").expect("tags missing");
     assert!(tags.types.contains_key("Array"), "Array type expected");
     let arr_type = tags.types.get("Array").unwrap();
-    assert!(arr_type.array.is_some(), "array items schema should be present");
+    assert!(
+        arr_type.array.is_some(),
+        "array items schema should be present"
+    );
 }
 
 #[test]
@@ -136,7 +143,10 @@ fn test_sample_values_collected() {
     let schema = analyze_docs(&docs);
     let name = schema.object.get("name").unwrap();
     let str_type = name.types.get("String").unwrap();
-    let values = str_type.values.as_ref().expect("values should be collected");
+    let values = str_type
+        .values
+        .as_ref()
+        .expect("values should be collected");
     assert!(!values.is_empty(), "should have sampled values");
 }
 
@@ -245,7 +255,10 @@ fn test_stats_depth_nested() {
     }];
     let schema = analyze_docs(&docs);
     let stats = SchemaStats::compute(&schema);
-    assert!(stats.depth >= 3, "depth should be at least 3 for triple-nested doc");
+    assert!(
+        stats.depth >= 3,
+        "depth should be at least 3 for triple-nested doc"
+    );
 }
 
 #[test]

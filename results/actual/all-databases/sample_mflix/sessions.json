@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 1,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 1,
@@ -13,7 +13,7 @@
     },
     "jwt": {
       "count": 1,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 1,
@@ -23,7 +23,7 @@
     },
     "user_id": {
       "count": 1,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 1,

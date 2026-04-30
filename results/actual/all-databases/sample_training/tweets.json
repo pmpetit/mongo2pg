@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 24832,
@@ -13,7 +13,7 @@
     },
     "contributors": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 24832,
@@ -23,7 +23,7 @@
     },
     "coordinates": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 24673,
@@ -35,14 +35,14 @@
           "object": {
             "coordinates": {
               "count": 159,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 159,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 318,
-                    "prop_in_object": 2.0,
+                    "probability": 2.0,
                     "types": {
                       "Number": {
                         "count": 318,
@@ -55,7 +55,7 @@
             },
             "type": {
               "count": 159,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 159,
@@ -69,7 +69,7 @@
     },
     "created_at": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 24832,
@@ -79,7 +79,7 @@
     },
     "entities": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 24832,
@@ -87,14 +87,14 @@
           "object": {
             "hashtags": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 24832,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 4185,
-                    "prop_in_object": 0.1685325386597938,
+                    "probability": 0.1685325386597938,
                     "types": {
                       "Object": {
                         "count": 4185,
@@ -102,14 +102,14 @@
                         "object": {
                           "indices": {
                             "count": 4185,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Array": {
                                 "count": 4185,
                                 "prop_in_types": 1.0,
                                 "array": {
                                   "count": 8370,
-                                  "prop_in_object": 2.0,
+                                  "probability": 2.0,
                                   "types": {
                                     "Number": {
                                       "count": 8370,
@@ -122,7 +122,7 @@
                           },
                           "text": {
                             "count": 4185,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 4185,
@@ -143,14 +143,14 @@
             },
             "urls": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 24832,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 5325,
-                    "prop_in_object": 0.214441043814433,
+                    "probability": 0.214441043814433,
                     "types": {
                       "Object": {
                         "count": 5325,
@@ -158,7 +158,7 @@
                         "object": {
                           "expanded_url": {
                             "count": 5325,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 5224,
@@ -172,14 +172,14 @@
                           },
                           "indices": {
                             "count": 5325,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Array": {
                                 "count": 5325,
                                 "prop_in_types": 1.0,
                                 "array": {
                                   "count": 10650,
-                                  "prop_in_object": 2.0,
+                                  "probability": 2.0,
                                   "types": {
                                     "Number": {
                                       "count": 10650,
@@ -192,7 +192,7 @@
                           },
                           "url": {
                             "count": 5325,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 5325,
@@ -213,14 +213,14 @@
             },
             "user_mentions": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 24832,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 16341,
-                    "prop_in_object": 0.6580621778350515,
+                    "probability": 0.6580621778350515,
                     "types": {
                       "Object": {
                         "count": 16341,
@@ -228,7 +228,7 @@
                         "object": {
                           "id": {
                             "count": 16341,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Number": {
                                 "count": 16341,
@@ -238,14 +238,14 @@
                           },
                           "indices": {
                             "count": 16341,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Array": {
                                 "count": 16341,
                                 "prop_in_types": 1.0,
                                 "array": {
                                   "count": 32682,
-                                  "prop_in_object": 2.0,
+                                  "probability": 2.0,
                                   "types": {
                                     "Number": {
                                       "count": 32682,
@@ -258,7 +258,7 @@
                           },
                           "name": {
                             "count": 16341,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 16341,
@@ -268,7 +268,7 @@
                           },
                           "screen_name": {
                             "count": 16341,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 16341,
@@ -293,7 +293,7 @@
     },
     "favorited": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Boolean": {
           "count": 24832,
@@ -303,7 +303,7 @@
     },
     "geo": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 24673,
@@ -315,14 +315,14 @@
           "object": {
             "coordinates": {
               "count": 159,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 159,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 318,
-                    "prop_in_object": 2.0,
+                    "probability": 2.0,
                     "types": {
                       "Number": {
                         "count": 318,
@@ -335,7 +335,7 @@
             },
             "type": {
               "count": 159,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 159,
@@ -349,7 +349,7 @@
     },
     "id": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 24832,
@@ -359,7 +359,7 @@
     },
     "in_reply_to_screen_name": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 16716,
@@ -373,7 +373,7 @@
     },
     "in_reply_to_status_id": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 18042,
@@ -387,7 +387,7 @@
     },
     "in_reply_to_user_id": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 16716,
@@ -401,7 +401,7 @@
     },
     "place": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 24645,
@@ -413,7 +413,7 @@
           "object": {
             "attributes": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Object": {
                   "count": 187,
@@ -421,7 +421,7 @@
                   "object": {
                     "street_address": {
                       "count": 10,
-                      "prop_in_object": 0.053475935828877004,
+                      "probability": 0.053475935828877004,
                       "types": {
                         "String": {
                           "count": 10,
@@ -439,7 +439,7 @@
             },
             "bounding_box": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Object": {
                   "count": 187,
@@ -447,28 +447,28 @@
                   "object": {
                     "coordinates": {
                       "count": 187,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Array": {
                           "count": 187,
                           "prop_in_types": 1.0,
                           "array": {
                             "count": 187,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Array": {
                                 "count": 187,
                                 "prop_in_types": 1.0,
                                 "array": {
                                   "count": 748,
-                                  "prop_in_object": 4.0,
+                                  "probability": 4.0,
                                   "types": {
                                     "Array": {
                                       "count": 748,
                                       "prop_in_types": 1.0,
                                       "array": {
                                         "count": 1496,
-                                        "prop_in_object": 8.0,
+                                        "probability": 8.0,
                                         "types": {
                                           "Number": {
                                             "count": 1496,
@@ -487,7 +487,7 @@
                     },
                     "type": {
                       "count": 187,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 187,
@@ -501,7 +501,7 @@
             },
             "country": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 187,
@@ -511,7 +511,7 @@
             },
             "country_code": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 187,
@@ -521,7 +521,7 @@
             },
             "full_name": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 187,
@@ -531,7 +531,7 @@
             },
             "id": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 187,
@@ -541,7 +541,7 @@
             },
             "name": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 187,
@@ -551,7 +551,7 @@
             },
             "place_type": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 187,
@@ -561,7 +561,7 @@
             },
             "url": {
               "count": 187,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 187,
@@ -575,7 +575,7 @@
     },
     "retweet_count": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 24832,
@@ -585,7 +585,7 @@
     },
     "retweeted": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Boolean": {
           "count": 24832,
@@ -595,7 +595,7 @@
     },
     "retweeted_status": {
       "count": 2045,
-      "prop_in_object": 0.08235341494845361,
+      "probability": 0.08235341494845361,
       "types": {
         "Object": {
           "count": 2045,
@@ -603,14 +603,14 @@
           "object": {
             "contributors": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 1,
                   "prop_in_types": 0.0004889975550122249,
                   "array": {
                     "count": 1,
-                    "prop_in_object": 0.0004889975550122249,
+                    "probability": 0.0004889975550122249,
                     "types": {
                       "Number": {
                         "count": 1,
@@ -631,7 +631,7 @@
             },
             "coordinates": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 2044,
@@ -643,14 +643,14 @@
                   "object": {
                     "coordinates": {
                       "count": 1,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Array": {
                           "count": 1,
                           "prop_in_types": 1.0,
                           "array": {
                             "count": 2,
-                            "prop_in_object": 2.0,
+                            "probability": 2.0,
                             "types": {
                               "Number": {
                                 "count": 2,
@@ -663,7 +663,7 @@
                     },
                     "type": {
                       "count": 1,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 1,
@@ -677,7 +677,7 @@
             },
             "created_at": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 2045,
@@ -687,7 +687,7 @@
             },
             "entities": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Object": {
                   "count": 2045,
@@ -695,14 +695,14 @@
                   "object": {
                     "hashtags": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Array": {
                           "count": 2045,
                           "prop_in_types": 1.0,
                           "array": {
                             "count": 778,
-                            "prop_in_object": 0.380440097799511,
+                            "probability": 0.380440097799511,
                             "types": {
                               "Object": {
                                 "count": 778,
@@ -710,14 +710,14 @@
                                 "object": {
                                   "indices": {
                                     "count": 778,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "Array": {
                                         "count": 778,
                                         "prop_in_types": 1.0,
                                         "array": {
                                           "count": 1556,
-                                          "prop_in_object": 2.0,
+                                          "probability": 2.0,
                                           "types": {
                                             "Number": {
                                               "count": 1556,
@@ -730,7 +730,7 @@
                                   },
                                   "text": {
                                     "count": 778,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "String": {
                                         "count": 778,
@@ -751,14 +751,14 @@
                     },
                     "urls": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Array": {
                           "count": 2045,
                           "prop_in_types": 1.0,
                           "array": {
                             "count": 627,
-                            "prop_in_object": 0.30660146699266505,
+                            "probability": 0.30660146699266505,
                             "types": {
                               "Object": {
                                 "count": 627,
@@ -766,7 +766,7 @@
                                 "object": {
                                   "expanded_url": {
                                     "count": 627,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "Null": {
                                         "count": 614,
@@ -780,14 +780,14 @@
                                   },
                                   "indices": {
                                     "count": 627,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "Array": {
                                         "count": 627,
                                         "prop_in_types": 1.0,
                                         "array": {
                                           "count": 1254,
-                                          "prop_in_object": 2.0,
+                                          "probability": 2.0,
                                           "types": {
                                             "Number": {
                                               "count": 1254,
@@ -800,7 +800,7 @@
                                   },
                                   "url": {
                                     "count": 627,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "String": {
                                         "count": 627,
@@ -821,14 +821,14 @@
                     },
                     "user_mentions": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Array": {
                           "count": 2045,
                           "prop_in_types": 1.0,
                           "array": {
                             "count": 1087,
-                            "prop_in_object": 0.5315403422982885,
+                            "probability": 0.5315403422982885,
                             "types": {
                               "Object": {
                                 "count": 1087,
@@ -836,7 +836,7 @@
                                 "object": {
                                   "id": {
                                     "count": 1087,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "Number": {
                                         "count": 1087,
@@ -846,14 +846,14 @@
                                   },
                                   "indices": {
                                     "count": 1087,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "Array": {
                                         "count": 1087,
                                         "prop_in_types": 1.0,
                                         "array": {
                                           "count": 2174,
-                                          "prop_in_object": 2.0,
+                                          "probability": 2.0,
                                           "types": {
                                             "Number": {
                                               "count": 2174,
@@ -866,7 +866,7 @@
                                   },
                                   "name": {
                                     "count": 1087,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "String": {
                                         "count": 1087,
@@ -876,7 +876,7 @@
                                   },
                                   "screen_name": {
                                     "count": 1087,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "String": {
                                         "count": 1087,
@@ -901,7 +901,7 @@
             },
             "favorited": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 2045,
@@ -911,7 +911,7 @@
             },
             "geo": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 2044,
@@ -923,14 +923,14 @@
                   "object": {
                     "coordinates": {
                       "count": 1,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Array": {
                           "count": 1,
                           "prop_in_types": 1.0,
                           "array": {
                             "count": 2,
-                            "prop_in_object": 2.0,
+                            "probability": 2.0,
                             "types": {
                               "Number": {
                                 "count": 2,
@@ -943,7 +943,7 @@
                     },
                     "type": {
                       "count": 1,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 1,
@@ -957,7 +957,7 @@
             },
             "id": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 2045,
@@ -967,7 +967,7 @@
             },
             "in_reply_to_screen_name": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 1870,
@@ -981,7 +981,7 @@
             },
             "in_reply_to_status_id": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 1936,
@@ -995,7 +995,7 @@
             },
             "in_reply_to_user_id": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 1870,
@@ -1009,7 +1009,7 @@
             },
             "place": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 2043,
@@ -1021,7 +1021,7 @@
                   "object": {
                     "attributes": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Object": {
                           "count": 2,
@@ -1032,7 +1032,7 @@
                     },
                     "bounding_box": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Object": {
                           "count": 2,
@@ -1040,28 +1040,28 @@
                           "object": {
                             "coordinates": {
                               "count": 2,
-                              "prop_in_object": 1.0,
+                              "probability": 1.0,
                               "types": {
                                 "Array": {
                                   "count": 2,
                                   "prop_in_types": 1.0,
                                   "array": {
                                     "count": 2,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "Array": {
                                         "count": 2,
                                         "prop_in_types": 1.0,
                                         "array": {
                                           "count": 8,
-                                          "prop_in_object": 4.0,
+                                          "probability": 4.0,
                                           "types": {
                                             "Array": {
                                               "count": 8,
                                               "prop_in_types": 1.0,
                                               "array": {
                                                 "count": 16,
-                                                "prop_in_object": 8.0,
+                                                "probability": 8.0,
                                                 "types": {
                                                   "Number": {
                                                     "count": 16,
@@ -1080,7 +1080,7 @@
                             },
                             "type": {
                               "count": 2,
-                              "prop_in_object": 1.0,
+                              "probability": 1.0,
                               "types": {
                                 "String": {
                                   "count": 2,
@@ -1094,7 +1094,7 @@
                     },
                     "country": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2,
@@ -1104,7 +1104,7 @@
                     },
                     "country_code": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2,
@@ -1114,7 +1114,7 @@
                     },
                     "full_name": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2,
@@ -1124,7 +1124,7 @@
                     },
                     "id": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2,
@@ -1134,7 +1134,7 @@
                     },
                     "name": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2,
@@ -1144,7 +1144,7 @@
                     },
                     "place_type": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2,
@@ -1154,7 +1154,7 @@
                     },
                     "url": {
                       "count": 2,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2,
@@ -1168,7 +1168,7 @@
             },
             "retweet_count": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 2045,
@@ -1178,7 +1178,7 @@
             },
             "retweeted": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 2045,
@@ -1188,7 +1188,7 @@
             },
             "source": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 2045,
@@ -1198,7 +1198,7 @@
             },
             "text": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 2045,
@@ -1208,7 +1208,7 @@
             },
             "truncated": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 2045,
@@ -1218,7 +1218,7 @@
             },
             "user": {
               "count": 2045,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Object": {
                   "count": 2045,
@@ -1226,7 +1226,7 @@
                   "object": {
                     "contributors_enabled": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 2045,
@@ -1236,7 +1236,7 @@
                     },
                     "created_at": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1246,7 +1246,7 @@
                     },
                     "description": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 13,
@@ -1260,7 +1260,7 @@
                     },
                     "favourites_count": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Number": {
                           "count": 2045,
@@ -1270,7 +1270,7 @@
                     },
                     "follow_request_sent": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 2045,
@@ -1280,7 +1280,7 @@
                     },
                     "followers_count": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Number": {
                           "count": 2045,
@@ -1290,7 +1290,7 @@
                     },
                     "following": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 2045,
@@ -1300,7 +1300,7 @@
                     },
                     "friends_count": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Number": {
                           "count": 2045,
@@ -1310,7 +1310,7 @@
                     },
                     "geo_enabled": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 2045,
@@ -1320,7 +1320,7 @@
                     },
                     "id": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Number": {
                           "count": 2045,
@@ -1330,7 +1330,7 @@
                     },
                     "lang": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1340,7 +1340,7 @@
                     },
                     "listed_count": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Number": {
                           "count": 2045,
@@ -1350,7 +1350,7 @@
                     },
                     "location": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 13,
@@ -1364,7 +1364,7 @@
                     },
                     "name": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1374,7 +1374,7 @@
                     },
                     "notifications": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 2045,
@@ -1384,7 +1384,7 @@
                     },
                     "profile_background_color": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1394,7 +1394,7 @@
                     },
                     "profile_background_image_url": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1404,7 +1404,7 @@
                     },
                     "profile_background_tile": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 2045,
@@ -1414,7 +1414,7 @@
                     },
                     "profile_image_url": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1424,7 +1424,7 @@
                     },
                     "profile_link_color": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1434,7 +1434,7 @@
                     },
                     "profile_sidebar_border_color": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1444,7 +1444,7 @@
                     },
                     "profile_sidebar_fill_color": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1454,7 +1454,7 @@
                     },
                     "profile_text_color": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1464,7 +1464,7 @@
                     },
                     "profile_use_background_image": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 2045,
@@ -1474,7 +1474,7 @@
                     },
                     "protected": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 2045,
@@ -1484,7 +1484,7 @@
                     },
                     "screen_name": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 2045,
@@ -1494,7 +1494,7 @@
                     },
                     "show_all_inline_media": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 2045,
@@ -1504,7 +1504,7 @@
                     },
                     "statuses_count": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Number": {
                           "count": 2045,
@@ -1514,7 +1514,7 @@
                     },
                     "time_zone": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 229,
@@ -1528,7 +1528,7 @@
                     },
                     "url": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 512,
@@ -1542,7 +1542,7 @@
                     },
                     "utc_offset": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Null": {
                           "count": 229,
@@ -1556,7 +1556,7 @@
                     },
                     "verified": {
                       "count": 2045,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 2045,
@@ -1578,7 +1578,7 @@
     },
     "source": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 24832,
@@ -1588,7 +1588,7 @@
     },
     "text": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 24832,
@@ -1598,7 +1598,7 @@
     },
     "truncated": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Boolean": {
           "count": 24832,
@@ -1608,7 +1608,7 @@
     },
     "user": {
       "count": 24832,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 24832,
@@ -1616,7 +1616,7 @@
           "object": {
             "contributors_enabled": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 24832,
@@ -1626,7 +1626,7 @@
             },
             "created_at": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1636,7 +1636,7 @@
             },
             "description": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 896,
@@ -1650,7 +1650,7 @@
             },
             "favourites_count": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 24832,
@@ -1660,7 +1660,7 @@
             },
             "follow_request_sent": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 24832,
@@ -1670,7 +1670,7 @@
             },
             "followers_count": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 24832,
@@ -1680,7 +1680,7 @@
             },
             "following": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 24832,
@@ -1690,7 +1690,7 @@
             },
             "friends_count": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 24832,
@@ -1700,7 +1700,7 @@
             },
             "geo_enabled": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 24832,
@@ -1710,7 +1710,7 @@
             },
             "id": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 24832,
@@ -1720,7 +1720,7 @@
             },
             "lang": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1730,7 +1730,7 @@
             },
             "listed_count": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 24832,
@@ -1740,7 +1740,7 @@
             },
             "location": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 867,
@@ -1754,7 +1754,7 @@
             },
             "name": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1764,7 +1764,7 @@
             },
             "notifications": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 24832,
@@ -1774,7 +1774,7 @@
             },
             "profile_background_color": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1784,7 +1784,7 @@
             },
             "profile_background_image_url": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1794,7 +1794,7 @@
             },
             "profile_background_tile": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 24832,
@@ -1804,7 +1804,7 @@
             },
             "profile_image_url": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1814,7 +1814,7 @@
             },
             "profile_link_color": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1824,7 +1824,7 @@
             },
             "profile_sidebar_border_color": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1834,7 +1834,7 @@
             },
             "profile_sidebar_fill_color": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1844,7 +1844,7 @@
             },
             "profile_text_color": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1854,7 +1854,7 @@
             },
             "profile_use_background_image": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 24832,
@@ -1864,7 +1864,7 @@
             },
             "protected": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 24832,
@@ -1874,7 +1874,7 @@
             },
             "screen_name": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 24832,
@@ -1884,7 +1884,7 @@
             },
             "show_all_inline_media": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 24832,
@@ -1894,7 +1894,7 @@
             },
             "statuses_count": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 24832,
@@ -1904,7 +1904,7 @@
             },
             "time_zone": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 4473,
@@ -1918,7 +1918,7 @@
             },
             "url": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 11067,
@@ -1932,7 +1932,7 @@
             },
             "utc_offset": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 4475,
@@ -1946,7 +1946,7 @@
             },
             "verified": {
               "count": 24832,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 24832,

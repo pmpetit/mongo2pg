@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 11095,
@@ -13,7 +13,7 @@
     },
     "chart": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -23,14 +23,14 @@
     },
     "coordinates": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 11095,
           "prop_in_types": 1.0,
           "array": {
             "count": 22190,
-            "prop_in_object": 2.0,
+            "probability": 2.0,
             "types": {
               "Number": {
                 "count": 22190,
@@ -43,7 +43,7 @@
     },
     "depth": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 2577,
@@ -57,7 +57,7 @@
     },
     "feature_type": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -67,7 +67,7 @@
     },
     "gp_quality": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -77,7 +77,7 @@
     },
     "history": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -87,7 +87,7 @@
     },
     "latdec": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 11095,
@@ -97,7 +97,7 @@
     },
     "londec": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 11095,
@@ -107,7 +107,7 @@
     },
     "quasou": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -117,7 +117,7 @@
     },
     "recrd": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -127,7 +127,7 @@
     },
     "sounding_type": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -137,7 +137,7 @@
     },
     "vesslterms": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,
@@ -147,7 +147,7 @@
     },
     "watlev": {
       "count": 11095,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 11095,

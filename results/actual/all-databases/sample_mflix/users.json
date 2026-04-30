@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 185,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 185,
@@ -13,7 +13,7 @@
     },
     "email": {
       "count": 185,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 185,
@@ -23,7 +23,7 @@
     },
     "name": {
       "count": 185,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 185,
@@ -33,7 +33,7 @@
     },
     "password": {
       "count": 185,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 185,
@@ -43,7 +43,7 @@
     },
     "preferences": {
       "count": 1,
-      "prop_in_object": 0.005405405405405406,
+      "probability": 0.005405405405405406,
       "types": {
         "Object": {
           "count": 1,

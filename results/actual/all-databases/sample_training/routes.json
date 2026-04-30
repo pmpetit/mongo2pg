@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 66985,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 66985,
@@ -13,7 +13,7 @@
     },
     "airline": {
       "count": 66985,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 66985,
@@ -21,7 +21,7 @@
           "object": {
             "alias": {
               "count": 66985,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 66985,
@@ -31,7 +31,7 @@
             },
             "iata": {
               "count": 66985,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 66985,
@@ -41,7 +41,7 @@
             },
             "id": {
               "count": 66985,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 66985,
@@ -51,7 +51,7 @@
             },
             "name": {
               "count": 66985,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 66985,
@@ -65,7 +65,7 @@
     },
     "airplane": {
       "count": 66985,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 31598,
@@ -79,7 +79,7 @@
     },
     "codeshare": {
       "count": 66985,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 66985,
@@ -89,7 +89,7 @@
     },
     "dst_airport": {
       "count": 66985,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 40,
@@ -103,7 +103,7 @@
     },
     "src_airport": {
       "count": 66985,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 43,
@@ -117,7 +117,7 @@
     },
     "stops": {
       "count": 66985,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 66985,

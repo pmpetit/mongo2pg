@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 3,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 3,
@@ -13,7 +13,7 @@
     },
     "active": {
       "count": 2,
-      "prop_in_object": 0.6666666666666666,
+      "probability": 0.6666666666666666,
       "types": {
         "Boolean": {
           "count": 2,
@@ -27,14 +27,14 @@
     },
     "orders": {
       "count": 3,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 3,
           "prop_in_types": 1.0,
           "array": {
             "count": 4,
-            "prop_in_object": 1.3333333333333333,
+            "probability": 1.3333333333333333,
             "types": {
               "Object": {
                 "count": 4,
@@ -42,7 +42,7 @@
                 "object": {
                   "price": {
                     "count": 1,
-                    "prop_in_object": 0.25,
+                    "probability": 0.25,
                     "types": {
                       "Number": {
                         "count": 1,
@@ -56,7 +56,7 @@
                   },
                   "qty": {
                     "count": 4,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Number": {
                         "count": 4,
@@ -66,7 +66,7 @@
                   },
                   "sku": {
                     "count": 4,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 4,
@@ -83,7 +83,7 @@
     },
     "profile": {
       "count": 3,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 3,
@@ -91,7 +91,7 @@
           "object": {
             "age": {
               "count": 2,
-              "prop_in_object": 0.6666666666666666,
+              "probability": 0.6666666666666666,
               "types": {
                 "Number": {
                   "count": 2,
@@ -105,7 +105,7 @@
             },
             "email": {
               "count": 3,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 3,
@@ -119,7 +119,7 @@
     },
     "score": {
       "count": 1,
-      "prop_in_object": 0.3333333333333333,
+      "probability": 0.3333333333333333,
       "types": {
         "Number": {
           "count": 1,
@@ -133,14 +133,14 @@
     },
     "tags": {
       "count": 2,
-      "prop_in_object": 0.6666666666666666,
+      "probability": 0.6666666666666666,
       "types": {
         "Array": {
           "count": 2,
           "prop_in_types": 1.0,
           "array": {
             "count": 3,
-            "prop_in_object": 1.0,
+            "probability": 1.0,
             "types": {
               "String": {
                 "count": 3,

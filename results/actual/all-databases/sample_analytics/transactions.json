@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 1746,
@@ -13,7 +13,7 @@
     },
     "account_id": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 1746,
@@ -23,7 +23,7 @@
     },
     "bucket_end_date": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 1746,
@@ -33,7 +33,7 @@
     },
     "bucket_start_date": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 1746,
@@ -43,7 +43,7 @@
     },
     "transaction_count": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 1746,
@@ -53,14 +53,14 @@
     },
     "transactions": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 1746,
           "prop_in_types": 1.0,
           "array": {
             "count": 88119,
-            "prop_in_object": 50.46907216494845,
+            "probability": 50.46907216494845,
             "types": {
               "Object": {
                 "count": 88119,
@@ -68,7 +68,7 @@
                 "object": {
                   "amount": {
                     "count": 88119,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Number": {
                         "count": 88119,
@@ -78,7 +78,7 @@
                   },
                   "date": {
                     "count": 88119,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Date": {
                         "count": 88119,
@@ -88,7 +88,7 @@
                   },
                   "price": {
                     "count": 88119,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 88119,
@@ -98,7 +98,7 @@
                   },
                   "symbol": {
                     "count": 88119,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 88119,
@@ -108,7 +108,7 @@
                   },
                   "total": {
                     "count": 88119,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 88119,
@@ -118,7 +118,7 @@
                   },
                   "transaction_code": {
                     "count": 88119,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 88119,

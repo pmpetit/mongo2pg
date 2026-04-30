@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 80047,
@@ -13,7 +13,7 @@
     },
     "address": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 80047,
@@ -21,7 +21,7 @@
           "object": {
             "city": {
               "count": 80047,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 80047,
@@ -31,7 +31,7 @@
             },
             "number": {
               "count": 80047,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 77371,
@@ -45,7 +45,7 @@
             },
             "street": {
               "count": 80047,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 2,
@@ -59,7 +59,7 @@
             },
             "zip": {
               "count": 80047,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 79888,
@@ -77,7 +77,7 @@
     },
     "business_name": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 80047,
@@ -87,7 +87,7 @@
     },
     "certificate_number": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 79894,
@@ -101,7 +101,7 @@
     },
     "date": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 80047,
@@ -111,7 +111,7 @@
     },
     "id": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 80047,
@@ -121,7 +121,7 @@
     },
     "result": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 80047,
@@ -131,7 +131,7 @@
     },
     "sector": {
       "count": 80047,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 80047,

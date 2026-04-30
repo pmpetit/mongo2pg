@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 1746,
@@ -13,7 +13,7 @@
     },
     "account_id": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 1746,
@@ -23,7 +23,7 @@
     },
     "limit": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 1746,
@@ -33,14 +33,14 @@
     },
     "products": {
       "count": 1746,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 1746,
           "prop_in_types": 1.0,
           "array": {
             "count": 5383,
-            "prop_in_object": 3.0830469644902636,
+            "probability": 3.0830469644902636,
             "types": {
               "String": {
                 "count": 5383,

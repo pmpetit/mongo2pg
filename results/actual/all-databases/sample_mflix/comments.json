@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 50304,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 50304,
@@ -13,7 +13,7 @@
     },
     "date": {
       "count": 50304,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 50304,
@@ -23,7 +23,7 @@
     },
     "email": {
       "count": 50304,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 50304,
@@ -33,7 +33,7 @@
     },
     "movie_id": {
       "count": 50304,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 50304,
@@ -43,7 +43,7 @@
     },
     "name": {
       "count": 50304,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 50304,
@@ -53,7 +53,7 @@
     },
     "text": {
       "count": 50304,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 50304,

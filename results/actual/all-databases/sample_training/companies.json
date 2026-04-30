@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 9500,
@@ -13,7 +13,7 @@
     },
     "acquisition": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 8174,
@@ -25,7 +25,7 @@
           "object": {
             "acquired_day": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 210,
@@ -39,7 +39,7 @@
             },
             "acquired_month": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 36,
@@ -53,7 +53,7 @@
             },
             "acquired_year": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 9,
@@ -67,7 +67,7 @@
             },
             "acquiring_company": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Object": {
                   "count": 1326,
@@ -75,7 +75,7 @@
                   "object": {
                     "name": {
                       "count": 1326,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 1326,
@@ -85,7 +85,7 @@
                     },
                     "permalink": {
                       "count": 1326,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 1326,
@@ -99,7 +99,7 @@
             },
             "price_amount": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 903,
@@ -113,7 +113,7 @@
             },
             "price_currency_code": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 1326,
@@ -123,7 +123,7 @@
             },
             "source_description": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 19,
@@ -137,7 +137,7 @@
             },
             "source_url": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 19,
@@ -151,7 +151,7 @@
             },
             "term_code": {
               "count": 1326,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 980,
@@ -169,14 +169,14 @@
     },
     "acquisitions": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 2335,
-            "prop_in_object": 0.24578947368421053,
+            "probability": 0.24578947368421053,
             "types": {
               "Object": {
                 "count": 2335,
@@ -184,7 +184,7 @@
                 "object": {
                   "acquired_day": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 258,
@@ -198,7 +198,7 @@
                   },
                   "acquired_month": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 37,
@@ -212,7 +212,7 @@
                   },
                   "acquired_year": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 6,
@@ -226,7 +226,7 @@
                   },
                   "company": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Object": {
                         "count": 2335,
@@ -234,7 +234,7 @@
                         "object": {
                           "name": {
                             "count": 2335,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 2335,
@@ -244,7 +244,7 @@
                           },
                           "permalink": {
                             "count": 2335,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 2335,
@@ -258,7 +258,7 @@
                   },
                   "price_amount": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 1673,
@@ -272,7 +272,7 @@
                   },
                   "price_currency_code": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 2335,
@@ -282,7 +282,7 @@
                   },
                   "source_description": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 17,
@@ -296,7 +296,7 @@
                   },
                   "source_url": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 17,
@@ -310,7 +310,7 @@
                   },
                   "term_code": {
                     "count": 2335,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 1883,
@@ -335,7 +335,7 @@
     },
     "alias_list": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 5023,
@@ -349,7 +349,7 @@
     },
     "blog_feed_url": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 1041,
@@ -363,7 +363,7 @@
     },
     "blog_url": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 980,
@@ -377,7 +377,7 @@
     },
     "category_code": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 1407,
@@ -391,14 +391,14 @@
     },
     "competitions": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 7096,
-            "prop_in_object": 0.7469473684210526,
+            "probability": 0.7469473684210526,
             "types": {
               "Object": {
                 "count": 7096,
@@ -406,7 +406,7 @@
                 "object": {
                   "competitor": {
                     "count": 7096,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Object": {
                         "count": 7096,
@@ -414,7 +414,7 @@
                         "object": {
                           "name": {
                             "count": 7096,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 7096,
@@ -424,7 +424,7 @@
                           },
                           "permalink": {
                             "count": 7096,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 7096,
@@ -449,7 +449,7 @@
     },
     "created_at": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 2,
@@ -463,7 +463,7 @@
     },
     "crunchbase_url": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 9500,
@@ -473,7 +473,7 @@
     },
     "deadpooled_day": {
       "count": 9499,
-      "prop_in_object": 0.9998947368421053,
+      "probability": 0.9998947368421053,
       "types": {
         "Null": {
           "count": 9163,
@@ -491,7 +491,7 @@
     },
     "deadpooled_month": {
       "count": 9499,
-      "prop_in_object": 0.9998947368421053,
+      "probability": 0.9998947368421053,
       "types": {
         "Null": {
           "count": 9099,
@@ -509,7 +509,7 @@
     },
     "deadpooled_url": {
       "count": 9499,
-      "prop_in_object": 0.9998947368421053,
+      "probability": 0.9998947368421053,
       "types": {
         "Null": {
           "count": 8946,
@@ -527,7 +527,7 @@
     },
     "deadpooled_year": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 9020,
@@ -541,7 +541,7 @@
     },
     "description": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 3294,
@@ -555,7 +555,7 @@
     },
     "email_address": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 1024,
@@ -569,14 +569,14 @@
     },
     "external_links": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 5932,
-            "prop_in_object": 0.624421052631579,
+            "probability": 0.624421052631579,
             "types": {
               "Object": {
                 "count": 5932,
@@ -584,7 +584,7 @@
                 "object": {
                   "external_url": {
                     "count": 5932,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 5932,
@@ -594,7 +594,7 @@
                   },
                   "title": {
                     "count": 5932,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 5932,
@@ -615,7 +615,7 @@
     },
     "founded_day": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 6718,
@@ -629,7 +629,7 @@
     },
     "founded_month": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 5508,
@@ -643,7 +643,7 @@
     },
     "founded_year": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 2849,
@@ -657,14 +657,14 @@
     },
     "funding_rounds": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 6037,
-            "prop_in_object": 0.6354736842105263,
+            "probability": 0.6354736842105263,
             "types": {
               "Object": {
                 "count": 6037,
@@ -672,7 +672,7 @@
                 "object": {
                   "funded_day": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 403,
@@ -686,7 +686,7 @@
                   },
                   "funded_month": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 178,
@@ -700,7 +700,7 @@
                   },
                   "funded_year": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 74,
@@ -714,7 +714,7 @@
                   },
                   "id": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Number": {
                         "count": 6037,
@@ -724,14 +724,14 @@
                   },
                   "investments": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Array": {
                         "count": 6037,
                         "prop_in_types": 1.0,
                         "array": {
                           "count": 12230,
-                          "prop_in_object": 2.0258406493291368,
+                          "probability": 2.0258406493291368,
                           "types": {
                             "Object": {
                               "count": 12230,
@@ -739,7 +739,7 @@
                               "object": {
                                 "company": {
                                   "count": 12230,
-                                  "prop_in_object": 1.0,
+                                  "probability": 1.0,
                                   "types": {
                                     "Null": {
                                       "count": 11553,
@@ -751,7 +751,7 @@
                                       "object": {
                                         "name": {
                                           "count": 677,
-                                          "prop_in_object": 1.0,
+                                          "probability": 1.0,
                                           "types": {
                                             "String": {
                                               "count": 677,
@@ -761,7 +761,7 @@
                                         },
                                         "permalink": {
                                           "count": 677,
-                                          "prop_in_object": 1.0,
+                                          "probability": 1.0,
                                           "types": {
                                             "String": {
                                               "count": 677,
@@ -775,7 +775,7 @@
                                 },
                                 "financial_org": {
                                   "count": 12230,
-                                  "prop_in_object": 1.0,
+                                  "probability": 1.0,
                                   "types": {
                                     "Null": {
                                       "count": 2036,
@@ -787,7 +787,7 @@
                                       "object": {
                                         "name": {
                                           "count": 10194,
-                                          "prop_in_object": 1.0,
+                                          "probability": 1.0,
                                           "types": {
                                             "String": {
                                               "count": 10194,
@@ -797,7 +797,7 @@
                                         },
                                         "permalink": {
                                           "count": 10194,
-                                          "prop_in_object": 1.0,
+                                          "probability": 1.0,
                                           "types": {
                                             "String": {
                                               "count": 10194,
@@ -811,7 +811,7 @@
                                 },
                                 "person": {
                                   "count": 12230,
-                                  "prop_in_object": 1.0,
+                                  "probability": 1.0,
                                   "types": {
                                     "Null": {
                                       "count": 10871,
@@ -823,7 +823,7 @@
                                       "object": {
                                         "first_name": {
                                           "count": 1359,
-                                          "prop_in_object": 1.0,
+                                          "probability": 1.0,
                                           "types": {
                                             "String": {
                                               "count": 1359,
@@ -833,7 +833,7 @@
                                         },
                                         "last_name": {
                                           "count": 1359,
-                                          "prop_in_object": 1.0,
+                                          "probability": 1.0,
                                           "types": {
                                             "String": {
                                               "count": 1359,
@@ -843,7 +843,7 @@
                                         },
                                         "permalink": {
                                           "count": 1359,
-                                          "prop_in_object": 1.0,
+                                          "probability": 1.0,
                                           "types": {
                                             "String": {
                                               "count": 1359,
@@ -864,7 +864,7 @@
                   },
                   "raised_amount": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 571,
@@ -878,7 +878,7 @@
                   },
                   "raised_currency_code": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 425,
@@ -892,7 +892,7 @@
                   },
                   "round_code": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 6037,
@@ -902,7 +902,7 @@
                   },
                   "source_description": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 87,
@@ -916,7 +916,7 @@
                   },
                   "source_url": {
                     "count": 6037,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 29,
@@ -941,7 +941,7 @@
     },
     "homepage_url": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 977,
@@ -955,7 +955,7 @@
     },
     "image": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 1357,
@@ -967,7 +967,7 @@
           "object": {
             "attribution": {
               "count": 8142,
-              "prop_in_object": 0.9998771951369274,
+              "probability": 0.9998771951369274,
               "types": {
                 "Null": {
                   "count": 8142,
@@ -981,28 +981,28 @@
             },
             "available_sizes": {
               "count": 8143,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 8143,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 24429,
-                    "prop_in_object": 3.0,
+                    "probability": 3.0,
                     "types": {
                       "Array": {
                         "count": 24429,
                         "prop_in_types": 1.0,
                         "array": {
                           "count": 48858,
-                          "prop_in_object": 6.0,
+                          "probability": 6.0,
                           "types": {
                             "Array": {
                               "count": 24429,
                               "prop_in_types": 0.5,
                               "array": {
                                 "count": 48858,
-                                "prop_in_object": 6.0,
+                                "probability": 6.0,
                                 "types": {
                                   "Number": {
                                     "count": 48858,
@@ -1029,14 +1029,14 @@
     },
     "investments": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 1100,
-            "prop_in_object": 0.11578947368421053,
+            "probability": 0.11578947368421053,
             "types": {
               "Object": {
                 "count": 1100,
@@ -1044,7 +1044,7 @@
                 "object": {
                   "funding_round": {
                     "count": 1100,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Object": {
                         "count": 1100,
@@ -1052,7 +1052,7 @@
                         "object": {
                           "company": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Object": {
                                 "count": 1100,
@@ -1060,7 +1060,7 @@
                                 "object": {
                                   "name": {
                                     "count": 1100,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "String": {
                                         "count": 1100,
@@ -1070,7 +1070,7 @@
                                   },
                                   "permalink": {
                                     "count": 1100,
-                                    "prop_in_object": 1.0,
+                                    "probability": 1.0,
                                     "types": {
                                       "String": {
                                         "count": 1100,
@@ -1084,7 +1084,7 @@
                           },
                           "funded_day": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 99,
@@ -1098,7 +1098,7 @@
                           },
                           "funded_month": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 19,
@@ -1112,7 +1112,7 @@
                           },
                           "funded_year": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 6,
@@ -1126,7 +1126,7 @@
                           },
                           "raised_amount": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 241,
@@ -1140,7 +1140,7 @@
                           },
                           "raised_currency_code": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 78,
@@ -1154,7 +1154,7 @@
                           },
                           "round_code": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 1100,
@@ -1164,7 +1164,7 @@
                           },
                           "source_description": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 6,
@@ -1178,7 +1178,7 @@
                           },
                           "source_url": {
                             "count": 1100,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "Null": {
                                 "count": 5,
@@ -1207,7 +1207,7 @@
     },
     "ipo": {
       "count": 9499,
-      "prop_in_object": 0.9998947368421053,
+      "probability": 0.9998947368421053,
       "types": {
         "Null": {
           "count": 9304,
@@ -1219,7 +1219,7 @@
           "object": {
             "pub_day": {
               "count": 195,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 79,
@@ -1233,7 +1233,7 @@
             },
             "pub_month": {
               "count": 195,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 74,
@@ -1247,7 +1247,7 @@
             },
             "pub_year": {
               "count": 195,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 70,
@@ -1261,7 +1261,7 @@
             },
             "stock_symbol": {
               "count": 195,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 195,
@@ -1271,7 +1271,7 @@
             },
             "valuation_amount": {
               "count": 195,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Null": {
                   "count": 165,
@@ -1285,7 +1285,7 @@
             },
             "valuation_currency_code": {
               "count": 195,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 195,
@@ -1303,14 +1303,14 @@
     },
     "milestones": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 3636,
-            "prop_in_object": 0.38273684210526315,
+            "probability": 0.38273684210526315,
             "types": {
               "Object": {
                 "count": 3636,
@@ -1318,7 +1318,7 @@
                 "object": {
                   "description": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 3636,
@@ -1328,7 +1328,7 @@
                   },
                   "id": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Number": {
                         "count": 3636,
@@ -1338,7 +1338,7 @@
                   },
                   "source_description": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 3636,
@@ -1348,7 +1348,7 @@
                   },
                   "source_text": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 2731,
@@ -1362,7 +1362,7 @@
                   },
                   "source_url": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 3636,
@@ -1372,7 +1372,7 @@
                   },
                   "stoneable": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Object": {
                         "count": 3636,
@@ -1380,7 +1380,7 @@
                         "object": {
                           "name": {
                             "count": 3636,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 3636,
@@ -1390,7 +1390,7 @@
                           },
                           "permalink": {
                             "count": 3636,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 3636,
@@ -1404,7 +1404,7 @@
                   },
                   "stoneable_type": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 3636,
@@ -1414,7 +1414,7 @@
                   },
                   "stoned_acquirer": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 3636,
@@ -1424,7 +1424,7 @@
                   },
                   "stoned_day": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 423,
@@ -1438,7 +1438,7 @@
                   },
                   "stoned_month": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 109,
@@ -1452,7 +1452,7 @@
                   },
                   "stoned_value": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 3636,
@@ -1462,7 +1462,7 @@
                   },
                   "stoned_value_type": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 3636,
@@ -1472,7 +1472,7 @@
                   },
                   "stoned_year": {
                     "count": 3636,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Number": {
                         "count": 3636,
@@ -1493,7 +1493,7 @@
     },
     "name": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 9500,
@@ -1503,7 +1503,7 @@
     },
     "number_of_employees": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 5052,
@@ -1517,14 +1517,14 @@
     },
     "offices": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 8324,
-            "prop_in_object": 0.8762105263157894,
+            "probability": 0.8762105263157894,
             "types": {
               "Object": {
                 "count": 8324,
@@ -1532,7 +1532,7 @@
                 "object": {
                   "address1": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 93,
@@ -1546,7 +1546,7 @@
                   },
                   "address2": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 185,
@@ -1560,7 +1560,7 @@
                   },
                   "city": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 37,
@@ -1574,7 +1574,7 @@
                   },
                   "country_code": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 8324,
@@ -1584,7 +1584,7 @@
                   },
                   "description": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 907,
@@ -1598,7 +1598,7 @@
                   },
                   "latitude": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 2936,
@@ -1612,7 +1612,7 @@
                   },
                   "longitude": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 2936,
@@ -1626,7 +1626,7 @@
                   },
                   "state_code": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 3301,
@@ -1640,7 +1640,7 @@
                   },
                   "zip_code": {
                     "count": 8324,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 84,
@@ -1665,7 +1665,7 @@
     },
     "overview": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 1005,
@@ -1679,14 +1679,14 @@
     },
     "partners": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 69,
-            "prop_in_object": 0.007263157894736842,
+            "probability": 0.007263157894736842,
             "types": {
               "Object": {
                 "count": 69,
@@ -1694,7 +1694,7 @@
                 "object": {
                   "homepage_url": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 69,
@@ -1704,7 +1704,7 @@
                   },
                   "link_1_name": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 9,
@@ -1718,7 +1718,7 @@
                   },
                   "link_1_url": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 9,
@@ -1732,7 +1732,7 @@
                   },
                   "link_2_name": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 55,
@@ -1746,7 +1746,7 @@
                   },
                   "link_2_url": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 55,
@@ -1760,7 +1760,7 @@
                   },
                   "link_3_name": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 67,
@@ -1774,7 +1774,7 @@
                   },
                   "link_3_url": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 67,
@@ -1788,7 +1788,7 @@
                   },
                   "partner_name": {
                     "count": 69,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 69,
@@ -1809,7 +1809,7 @@
     },
     "permalink": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 9500,
@@ -1819,7 +1819,7 @@
     },
     "phone_number": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 1033,
@@ -1833,14 +1833,14 @@
     },
     "products": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 5905,
-            "prop_in_object": 0.621578947368421,
+            "probability": 0.621578947368421,
             "types": {
               "Object": {
                 "count": 5905,
@@ -1848,7 +1848,7 @@
                 "object": {
                   "name": {
                     "count": 5905,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 5905,
@@ -1858,7 +1858,7 @@
                   },
                   "permalink": {
                     "count": 5905,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 5905,
@@ -1879,14 +1879,14 @@
     },
     "providerships": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 1300,
-            "prop_in_object": 0.1368421052631579,
+            "probability": 0.1368421052631579,
             "types": {
               "Object": {
                 "count": 1300,
@@ -1894,7 +1894,7 @@
                 "object": {
                   "is_past": {
                     "count": 1300,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Boolean": {
                         "count": 1286,
@@ -1908,7 +1908,7 @@
                   },
                   "provider": {
                     "count": 1300,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Object": {
                         "count": 1300,
@@ -1916,7 +1916,7 @@
                         "object": {
                           "name": {
                             "count": 1300,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 1300,
@@ -1926,7 +1926,7 @@
                           },
                           "permalink": {
                             "count": 1300,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 1300,
@@ -1940,7 +1940,7 @@
                   },
                   "title": {
                     "count": 1300,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 1300,
@@ -1961,14 +1961,14 @@
     },
     "relationships": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 46553,
-            "prop_in_object": 4.900315789473685,
+            "probability": 4.900315789473685,
             "types": {
               "Object": {
                 "count": 46553,
@@ -1976,7 +1976,7 @@
                 "object": {
                   "is_past": {
                     "count": 46553,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Boolean": {
                         "count": 46194,
@@ -1990,7 +1990,7 @@
                   },
                   "person": {
                     "count": 46553,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Object": {
                         "count": 46553,
@@ -1998,7 +1998,7 @@
                         "object": {
                           "first_name": {
                             "count": 46553,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 46553,
@@ -2008,7 +2008,7 @@
                           },
                           "last_name": {
                             "count": 46553,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 46553,
@@ -2018,7 +2018,7 @@
                           },
                           "permalink": {
                             "count": 46553,
-                            "prop_in_object": 1.0,
+                            "probability": 1.0,
                             "types": {
                               "String": {
                                 "count": 46553,
@@ -2032,7 +2032,7 @@
                   },
                   "title": {
                     "count": 46553,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 46553,
@@ -2049,14 +2049,14 @@
     },
     "screenshots": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 5651,
-            "prop_in_object": 0.594842105263158,
+            "probability": 0.594842105263158,
             "types": {
               "Object": {
                 "count": 5651,
@@ -2064,7 +2064,7 @@
                 "object": {
                   "attribution": {
                     "count": 5651,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Null": {
                         "count": 5651,
@@ -2074,28 +2074,28 @@
                   },
                   "available_sizes": {
                     "count": 5651,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Array": {
                         "count": 5651,
                         "prop_in_types": 1.0,
                         "array": {
                           "count": 16953,
-                          "prop_in_object": 3.0,
+                          "probability": 3.0,
                           "types": {
                             "Array": {
                               "count": 16953,
                               "prop_in_types": 1.0,
                               "array": {
                                 "count": 33906,
-                                "prop_in_object": 6.0,
+                                "probability": 6.0,
                                 "types": {
                                   "Array": {
                                     "count": 16953,
                                     "prop_in_types": 0.5,
                                     "array": {
                                       "count": 33906,
-                                      "prop_in_object": 6.0,
+                                      "probability": 6.0,
                                       "types": {
                                         "Number": {
                                           "count": 33906,
@@ -2129,7 +2129,7 @@
     },
     "tag_list": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 2060,
@@ -2143,7 +2143,7 @@
     },
     "total_money_raised": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 9500,
@@ -2153,7 +2153,7 @@
     },
     "twitter_username": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Null": {
           "count": 3786,
@@ -2167,7 +2167,7 @@
     },
     "updated_at": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 9500,
@@ -2177,14 +2177,14 @@
     },
     "video_embeds": {
       "count": 9500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 9500,
           "prop_in_types": 1.0,
           "array": {
             "count": 1623,
-            "prop_in_object": 0.1708421052631579,
+            "probability": 0.1708421052631579,
             "types": {
               "Object": {
                 "count": 1623,
@@ -2192,7 +2192,7 @@
                 "object": {
                   "description": {
                     "count": 1623,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 1623,
@@ -2202,7 +2202,7 @@
                   },
                   "embed_code": {
                     "count": 1623,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 1623,

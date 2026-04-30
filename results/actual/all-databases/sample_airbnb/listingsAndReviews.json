@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -13,7 +13,7 @@
     },
     "access": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -23,7 +23,7 @@
     },
     "accommodates": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 5555,
@@ -33,7 +33,7 @@
     },
     "address": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 5555,
@@ -41,7 +41,7 @@
           "object": {
             "country": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -51,7 +51,7 @@
             },
             "country_code": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -61,7 +61,7 @@
             },
             "government_area": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -71,7 +71,7 @@
             },
             "location": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Object": {
                   "count": 5555,
@@ -79,14 +79,14 @@
                   "object": {
                     "coordinates": {
                       "count": 5555,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Array": {
                           "count": 5555,
                           "prop_in_types": 1.0,
                           "array": {
                             "count": 11110,
-                            "prop_in_object": 2.0,
+                            "probability": 2.0,
                             "types": {
                               "Number": {
                                 "count": 11110,
@@ -99,7 +99,7 @@
                     },
                     "is_location_exact": {
                       "count": 5555,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "Boolean": {
                           "count": 5555,
@@ -109,7 +109,7 @@
                     },
                     "type": {
                       "count": 5555,
-                      "prop_in_object": 1.0,
+                      "probability": 1.0,
                       "types": {
                         "String": {
                           "count": 5555,
@@ -123,7 +123,7 @@
             },
             "market": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -133,7 +133,7 @@
             },
             "street": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -143,7 +143,7 @@
             },
             "suburb": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -157,14 +157,14 @@
     },
     "amenities": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 5555,
           "prop_in_types": 1.0,
           "array": {
             "count": 121402,
-            "prop_in_object": 21.854545454545455,
+            "probability": 21.854545454545455,
             "types": {
               "String": {
                 "count": 121402,
@@ -177,7 +177,7 @@
     },
     "availability": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 5555,
@@ -185,7 +185,7 @@
           "object": {
             "availability_30": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5555,
@@ -195,7 +195,7 @@
             },
             "availability_365": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5555,
@@ -205,7 +205,7 @@
             },
             "availability_60": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5555,
@@ -215,7 +215,7 @@
             },
             "availability_90": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5555,
@@ -229,7 +229,7 @@
     },
     "bathrooms": {
       "count": 5545,
-      "prop_in_object": 0.9981998199819982,
+      "probability": 0.9981998199819982,
       "types": {
         "Decimal128": {
           "count": 5545,
@@ -243,7 +243,7 @@
     },
     "bed_type": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -253,7 +253,7 @@
     },
     "bedrooms": {
       "count": 5550,
-      "prop_in_object": 0.9990999099909991,
+      "probability": 0.9990999099909991,
       "types": {
         "Number": {
           "count": 5550,
@@ -267,7 +267,7 @@
     },
     "beds": {
       "count": 5542,
-      "prop_in_object": 0.9976597659765977,
+      "probability": 0.9976597659765977,
       "types": {
         "Number": {
           "count": 5542,
@@ -281,7 +281,7 @@
     },
     "calendar_last_scraped": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 5555,
@@ -291,7 +291,7 @@
     },
     "cancellation_policy": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -301,7 +301,7 @@
     },
     "cleaning_fee": {
       "count": 4024,
-      "prop_in_object": 0.7243924392439244,
+      "probability": 0.7243924392439244,
       "types": {
         "Decimal128": {
           "count": 4024,
@@ -315,7 +315,7 @@
     },
     "description": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -325,7 +325,7 @@
     },
     "extra_people": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Decimal128": {
           "count": 5555,
@@ -335,7 +335,7 @@
     },
     "first_review": {
       "count": 4167,
-      "prop_in_object": 0.7501350135013501,
+      "probability": 0.7501350135013501,
       "types": {
         "Date": {
           "count": 4167,
@@ -349,7 +349,7 @@
     },
     "guests_included": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Decimal128": {
           "count": 5555,
@@ -359,7 +359,7 @@
     },
     "host": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 5555,
@@ -367,7 +367,7 @@
           "object": {
             "host_about": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -377,7 +377,7 @@
             },
             "host_has_profile_pic": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 5555,
@@ -387,7 +387,7 @@
             },
             "host_id": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -397,7 +397,7 @@
             },
             "host_identity_verified": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 5555,
@@ -407,7 +407,7 @@
             },
             "host_is_superhost": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Boolean": {
                   "count": 5555,
@@ -417,7 +417,7 @@
             },
             "host_listings_count": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5555,
@@ -427,7 +427,7 @@
             },
             "host_location": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -437,7 +437,7 @@
             },
             "host_name": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -447,7 +447,7 @@
             },
             "host_neighbourhood": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -457,7 +457,7 @@
             },
             "host_picture_url": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -467,7 +467,7 @@
             },
             "host_response_rate": {
               "count": 4167,
-              "prop_in_object": 0.7501350135013501,
+              "probability": 0.7501350135013501,
               "types": {
                 "Number": {
                   "count": 4167,
@@ -481,7 +481,7 @@
             },
             "host_response_time": {
               "count": 4167,
-              "prop_in_object": 0.7501350135013501,
+              "probability": 0.7501350135013501,
               "types": {
                 "String": {
                   "count": 4167,
@@ -495,7 +495,7 @@
             },
             "host_thumbnail_url": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -505,7 +505,7 @@
             },
             "host_total_listings_count": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5555,
@@ -515,7 +515,7 @@
             },
             "host_url": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -525,14 +525,14 @@
             },
             "host_verifications": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 5555,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 27600,
-                    "prop_in_object": 4.968496849684969,
+                    "probability": 4.968496849684969,
                     "types": {
                       "String": {
                         "count": 27600,
@@ -549,7 +549,7 @@
     },
     "house_rules": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -559,7 +559,7 @@
     },
     "images": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 5555,
@@ -567,7 +567,7 @@
           "object": {
             "medium_url": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -577,7 +577,7 @@
             },
             "picture_url": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -587,7 +587,7 @@
             },
             "thumbnail_url": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -597,7 +597,7 @@
             },
             "xl_picture_url": {
               "count": 5555,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5555,
@@ -611,7 +611,7 @@
     },
     "interaction": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -621,7 +621,7 @@
     },
     "last_review": {
       "count": 4167,
-      "prop_in_object": 0.7501350135013501,
+      "probability": 0.7501350135013501,
       "types": {
         "Date": {
           "count": 4167,
@@ -635,7 +635,7 @@
     },
     "last_scraped": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 5555,
@@ -645,7 +645,7 @@
     },
     "listing_url": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -655,7 +655,7 @@
     },
     "maximum_nights": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -665,7 +665,7 @@
     },
     "minimum_nights": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -675,7 +675,7 @@
     },
     "monthly_price": {
       "count": 656,
-      "prop_in_object": 0.11809180918091809,
+      "probability": 0.11809180918091809,
       "types": {
         "Decimal128": {
           "count": 656,
@@ -689,7 +689,7 @@
     },
     "name": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -699,7 +699,7 @@
     },
     "neighborhood_overview": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -709,7 +709,7 @@
     },
     "notes": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -719,7 +719,7 @@
     },
     "number_of_reviews": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 5555,
@@ -729,7 +729,7 @@
     },
     "price": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Decimal128": {
           "count": 5555,
@@ -739,7 +739,7 @@
     },
     "property_type": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -749,7 +749,7 @@
     },
     "review_scores": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 5555,
@@ -757,7 +757,7 @@
           "object": {
             "review_scores_accuracy": {
               "count": 4079,
-              "prop_in_object": 0.7342934293429343,
+              "probability": 0.7342934293429343,
               "types": {
                 "Number": {
                   "count": 4079,
@@ -771,7 +771,7 @@
             },
             "review_scores_checkin": {
               "count": 4080,
-              "prop_in_object": 0.7344734473447345,
+              "probability": 0.7344734473447345,
               "types": {
                 "Number": {
                   "count": 4080,
@@ -785,7 +785,7 @@
             },
             "review_scores_cleanliness": {
               "count": 4082,
-              "prop_in_object": 0.7348334833483349,
+              "probability": 0.7348334833483349,
               "types": {
                 "Number": {
                   "count": 4082,
@@ -799,7 +799,7 @@
             },
             "review_scores_communication": {
               "count": 4081,
-              "prop_in_object": 0.7346534653465346,
+              "probability": 0.7346534653465346,
               "types": {
                 "Number": {
                   "count": 4081,
@@ -813,7 +813,7 @@
             },
             "review_scores_location": {
               "count": 4081,
-              "prop_in_object": 0.7346534653465346,
+              "probability": 0.7346534653465346,
               "types": {
                 "Number": {
                   "count": 4081,
@@ -827,7 +827,7 @@
             },
             "review_scores_rating": {
               "count": 4081,
-              "prop_in_object": 0.7346534653465346,
+              "probability": 0.7346534653465346,
               "types": {
                 "Number": {
                   "count": 4081,
@@ -841,7 +841,7 @@
             },
             "review_scores_value": {
               "count": 4080,
-              "prop_in_object": 0.7344734473447345,
+              "probability": 0.7344734473447345,
               "types": {
                 "Number": {
                   "count": 4080,
@@ -859,14 +859,14 @@
     },
     "reviews": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 5555,
           "prop_in_types": 1.0,
           "array": {
             "count": 149792,
-            "prop_in_object": 26.965256525652567,
+            "probability": 26.965256525652567,
             "types": {
               "Object": {
                 "count": 149792,
@@ -874,7 +874,7 @@
                 "object": {
                   "_id": {
                     "count": 149792,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 149792,
@@ -884,7 +884,7 @@
                   },
                   "comments": {
                     "count": 149784,
-                    "prop_in_object": 0.999946592608417,
+                    "probability": 0.999946592608417,
                     "types": {
                       "String": {
                         "count": 149784,
@@ -898,7 +898,7 @@
                   },
                   "date": {
                     "count": 149792,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Date": {
                         "count": 149792,
@@ -908,7 +908,7 @@
                   },
                   "listing_id": {
                     "count": 149792,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 149792,
@@ -918,7 +918,7 @@
                   },
                   "reviewer_id": {
                     "count": 149792,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 149792,
@@ -928,7 +928,7 @@
                   },
                   "reviewer_name": {
                     "count": 149791,
-                    "prop_in_object": 0.9999933240760521,
+                    "probability": 0.9999933240760521,
                     "types": {
                       "String": {
                         "count": 149791,
@@ -949,7 +949,7 @@
     },
     "reviews_per_month": {
       "count": 94,
-      "prop_in_object": 0.01692169216921692,
+      "probability": 0.01692169216921692,
       "types": {
         "Number": {
           "count": 94,
@@ -963,7 +963,7 @@
     },
     "room_type": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -973,7 +973,7 @@
     },
     "security_deposit": {
       "count": 3471,
-      "prop_in_object": 0.6248424842484248,
+      "probability": 0.6248424842484248,
       "types": {
         "Decimal128": {
           "count": 3471,
@@ -987,7 +987,7 @@
     },
     "space": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -997,7 +997,7 @@
     },
     "summary": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -1007,7 +1007,7 @@
     },
     "transit": {
       "count": 5555,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5555,
@@ -1017,7 +1017,7 @@
     },
     "weekly_price": {
       "count": 714,
-      "prop_in_object": 0.12853285328532854,
+      "probability": 0.12853285328532854,
       "types": {
         "Decimal128": {
           "count": 714,

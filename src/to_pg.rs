@@ -629,7 +629,7 @@ fn process_fields(
 
         // A field is nullable when it has a Null/Undefined type OR when it is
         // absent in some documents (prob < 1.0).
-        let nullable = non_null.len() < field.types.len() || field.prop_in_object < 1.0;
+        let nullable = non_null.len() < field.types.len() || field.probability < 1.0;
 
         if non_null.is_empty() {
             // Field is always null/undefined – omit from DDL.

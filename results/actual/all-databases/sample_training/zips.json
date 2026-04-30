@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 29470,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 29470,
@@ -13,7 +13,7 @@
     },
     "city": {
       "count": 29470,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 29470,
@@ -23,7 +23,7 @@
     },
     "loc": {
       "count": 29470,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 29470,
@@ -31,7 +31,7 @@
           "object": {
             "x": {
               "count": 29470,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 29470,
@@ -41,7 +41,7 @@
             },
             "y": {
               "count": 29470,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 29470,
@@ -55,7 +55,7 @@
     },
     "pop": {
       "count": 29470,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 29470,
@@ -65,7 +65,7 @@
     },
     "state": {
       "count": 29470,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 29470,
@@ -75,7 +75,7 @@
     },
     "zip": {
       "count": 29470,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 29470,

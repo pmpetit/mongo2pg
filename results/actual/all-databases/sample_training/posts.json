@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 500,
@@ -13,7 +13,7 @@
     },
     "author": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 500,
@@ -23,7 +23,7 @@
     },
     "body": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 500,
@@ -33,14 +33,14 @@
     },
     "comments": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 500,
           "prop_in_types": 1.0,
           "array": {
             "count": 25000,
-            "prop_in_object": 50.0,
+            "probability": 50.0,
             "types": {
               "Object": {
                 "count": 25000,
@@ -48,7 +48,7 @@
                 "object": {
                   "author": {
                     "count": 25000,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 25000,
@@ -58,7 +58,7 @@
                   },
                   "body": {
                     "count": 25000,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 25000,
@@ -68,7 +68,7 @@
                   },
                   "email": {
                     "count": 25000,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 25000,
@@ -85,7 +85,7 @@
     },
     "date": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 500,
@@ -95,7 +95,7 @@
     },
     "permalink": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 500,
@@ -105,14 +105,14 @@
     },
     "tags": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 500,
           "prop_in_types": 1.0,
           "array": {
             "count": 5000,
-            "prop_in_object": 10.0,
+            "probability": 10.0,
             "types": {
               "String": {
                 "count": 5000,
@@ -125,7 +125,7 @@
     },
     "title": {
       "count": 500,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 500,

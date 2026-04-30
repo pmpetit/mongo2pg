@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 10000,
@@ -13,7 +13,7 @@
     },
     "bikeid": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 10000,
@@ -23,7 +23,7 @@
     },
     "birth year": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 8011,
@@ -37,7 +37,7 @@
     },
     "end station id": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 10000,
@@ -47,7 +47,7 @@
     },
     "end station location": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 10000,
@@ -55,14 +55,14 @@
           "object": {
             "coordinates": {
               "count": 10000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 10000,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 20000,
-                    "prop_in_object": 2.0,
+                    "probability": 2.0,
                     "types": {
                       "Number": {
                         "count": 20000,
@@ -75,7 +75,7 @@
             },
             "type": {
               "count": 10000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 10000,
@@ -89,7 +89,7 @@
     },
     "end station name": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 10000,
@@ -99,7 +99,7 @@
     },
     "gender": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 10000,
@@ -109,7 +109,7 @@
     },
     "start station id": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 10000,
@@ -119,7 +119,7 @@
     },
     "start station location": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 10000,
@@ -127,14 +127,14 @@
           "object": {
             "coordinates": {
               "count": 10000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Array": {
                   "count": 10000,
                   "prop_in_types": 1.0,
                   "array": {
                     "count": 20000,
-                    "prop_in_object": 2.0,
+                    "probability": 2.0,
                     "types": {
                       "Number": {
                         "count": 20000,
@@ -147,7 +147,7 @@
             },
             "type": {
               "count": 10000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 10000,
@@ -161,7 +161,7 @@
     },
     "start station name": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 10000,
@@ -171,7 +171,7 @@
     },
     "start time": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 10000,
@@ -181,7 +181,7 @@
     },
     "stop time": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 10000,
@@ -191,7 +191,7 @@
     },
     "tripduration": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 10000,
@@ -201,7 +201,7 @@
     },
     "usertype": {
       "count": 10000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 10000,

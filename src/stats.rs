@@ -151,7 +151,7 @@ mod tests {
             "name".to_owned(),
             FieldSchema {
                 count: 3,
-                prop_in_object: 1.0,
+                probability: 1.0,
                 types,
             },
         );

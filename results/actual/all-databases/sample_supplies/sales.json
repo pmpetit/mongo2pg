@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 5000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "ObjectId": {
           "count": 5000,
@@ -13,7 +13,7 @@
     },
     "couponUsed": {
       "count": 5000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Boolean": {
           "count": 5000,
@@ -23,7 +23,7 @@
     },
     "customer": {
       "count": 5000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Object": {
           "count": 5000,
@@ -31,7 +31,7 @@
           "object": {
             "age": {
               "count": 5000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5000,
@@ -41,7 +41,7 @@
             },
             "email": {
               "count": 5000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5000,
@@ -51,7 +51,7 @@
             },
             "gender": {
               "count": 5000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 5000,
@@ -61,7 +61,7 @@
             },
             "satisfaction": {
               "count": 5000,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "Number": {
                   "count": 5000,
@@ -75,14 +75,14 @@
     },
     "items": {
       "count": 5000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Array": {
           "count": 5000,
           "prop_in_types": 1.0,
           "array": {
             "count": 27438,
-            "prop_in_object": 5.4876,
+            "probability": 5.4876,
             "types": {
               "Object": {
                 "count": 27438,
@@ -90,7 +90,7 @@
                 "object": {
                   "name": {
                     "count": 27438,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "String": {
                         "count": 27438,
@@ -100,7 +100,7 @@
                   },
                   "price": {
                     "count": 27438,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Decimal128": {
                         "count": 27438,
@@ -110,7 +110,7 @@
                   },
                   "quantity": {
                     "count": 27438,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Number": {
                         "count": 27438,
@@ -120,14 +120,14 @@
                   },
                   "tags": {
                     "count": 27438,
-                    "prop_in_object": 1.0,
+                    "probability": 1.0,
                     "types": {
                       "Array": {
                         "count": 27438,
                         "prop_in_types": 1.0,
                         "array": {
                           "count": 84627,
-                          "prop_in_object": 3.084299147168161,
+                          "probability": 3.084299147168161,
                           "types": {
                             "String": {
                               "count": 84627,
@@ -147,7 +147,7 @@
     },
     "purchaseMethod": {
       "count": 5000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5000,
@@ -157,7 +157,7 @@
     },
     "saleDate": {
       "count": 5000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Date": {
           "count": 5000,
@@ -167,7 +167,7 @@
     },
     "storeLocation": {
       "count": 5000,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "String": {
           "count": 5000,

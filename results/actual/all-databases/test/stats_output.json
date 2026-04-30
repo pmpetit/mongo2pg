@@ -3,7 +3,7 @@
   "object": {
     "_id": {
       "count": 3,
-      "prop_in_object": 1.0,
+      "probability": 1.0,
       "types": {
         "Number": {
           "count": 3,
@@ -13,7 +13,7 @@
     },
     "active": {
       "count": 2,
-      "prop_in_object": 0.6666666666666666,
+      "probability": 0.6666666666666666,
       "types": {
         "Boolean": {
           "count": 2,
@@ -27,7 +27,7 @@
     },
     "profile": {
       "count": 2,
-      "prop_in_object": 0.6666666666666666,
+      "probability": 0.6666666666666666,
       "types": {
         "Object": {
           "count": 2,
@@ -35,7 +35,7 @@
           "object": {
             "age": {
               "count": 1,
-              "prop_in_object": 0.5,
+              "probability": 0.5,
               "types": {
                 "Number": {
                   "count": 1,
@@ -49,7 +49,7 @@
             },
             "email": {
               "count": 2,
-              "prop_in_object": 1.0,
+              "probability": 1.0,
               "types": {
                 "String": {
                   "count": 2,
@@ -67,7 +67,7 @@
     },
     "score": {
       "count": 1,
-      "prop_in_object": 0.3333333333333333,
+      "probability": 0.3333333333333333,
       "types": {
         "Number": {
           "count": 1,
@@ -81,14 +81,14 @@
     },
     "tags": {
       "count": 1,
-      "prop_in_object": 0.3333333333333333,
+      "probability": 0.3333333333333333,
       "types": {
         "Array": {
           "count": 1,
           "prop_in_types": 1.0,
           "array": {
             "count": 2,
-            "prop_in_object": 0.6666666666666666,
+            "probability": 0.6666666666666666,
             "types": {
               "String": {
                 "count": 2,

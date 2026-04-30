@@ -10,10 +10,10 @@ use indexmap::IndexMap;
 use serde_json::{json, Map, Value};
 
 use crate::analyzer::{
-    CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_BOOLEAN, TYPE_DATE,
-    TYPE_DECIMAL128, TYPE_NULL, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX,
-    TYPE_STRING, TYPE_SYMBOL, TYPE_TIMESTAMP, TYPE_UNDEFINED, TYPE_BINARY, TYPE_CODE,
-    TYPE_CODE_W_SCOPE, TYPE_DBPOINTER, TYPE_MAXKEY, TYPE_MINKEY,
+    CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_BINARY, TYPE_BOOLEAN, TYPE_CODE,
+    TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_MAXKEY, TYPE_MINKEY,
+    TYPE_NULL, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX, TYPE_STRING, TYPE_SYMBOL,
+    TYPE_TIMESTAMP, TYPE_UNDEFINED,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -39,8 +39,7 @@ pub fn to_expanded_schema(schema: &CollectionSchema) -> Value {
         .object
         .iter()
         .filter(|(_, f)| {
-            (f.prop_in_object - 1.0).abs() < f64::EPSILON
-                && !f.types.contains_key(TYPE_UNDEFINED)
+            (f.probability - 1.0).abs() < f64::EPSILON && !f.types.contains_key(TYPE_UNDEFINED)
         })
         .map(|(name, _)| Value::String(name.clone()))
         .collect();
@@ -49,10 +48,7 @@ pub fn to_expanded_schema(schema: &CollectionSchema) -> Value {
         root.insert("required".into(), Value::Array(required));
     }
 
-    root.insert(
-        "x-metadata".into(),
-        json!({ "count": schema.count }),
-    );
+    root.insert("x-metadata".into(), json!({ "count": schema.count }));
 
     Value::Object(root)
 }
@@ -63,10 +59,7 @@ fn object_to_expanded_properties(
 ) -> Map<String, Value> {
     let mut props = Map::new();
     for (name, field) in fields {
-        props.insert(
-            name.clone(),
-            field_to_expanded_schema(field, total_docs),
-        );
+        props.insert(name.clone(), field_to_expanded_schema(field, total_docs));
     }
     props
 }
@@ -84,7 +77,7 @@ fn field_to_expanded_schema(field: &FieldSchema, total_docs: u64) -> Value {
         "x-metadata".into(),
         json!({
             "count": field.count,
-            "prob": field.prop_in_object,
+            "prob": field.probability,
         }),
     );
 
@@ -148,7 +141,7 @@ fn type_to_expanded_schema(type_name: &str, ts: &TypeSchema, total_docs: u64) ->
             let required: Vec<Value> = nested
                 .iter()
                 .filter(|(_, f)| {
-                    (f.prop_in_object - 1.0).abs() < f64::EPSILON
+                    (f.probability - 1.0).abs() < f64::EPSILON
                         && !f.types.contains_key(TYPE_UNDEFINED)
                 })
                 .map(|(n, _)| Value::String(n.clone()))
