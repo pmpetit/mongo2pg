@@ -15,14 +15,17 @@
 //! Converts a schema JSON file produced by `infer` into PostgreSQL DDL.
 
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use bson::doc;
 use clap::{Parser, Subcommand};
 use futures::TryStreamExt;
+use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
-use mongo2pg::stats::format_stats;
+use mongo2pg::report::{collect_rows, render_html};
+use mongo2pg::schema_diagram::{load_tables, render_schema_html};
+use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
 
@@ -53,15 +56,22 @@ enum Command {
     Infer(InferArgs),
     /// Convert a schema JSON file to PostgreSQL DDL CREATE TABLE statements
     ToPg(ToPgArgs),
+    /// Initialize a new migration project directory structure
+    Init(InitArgs),
+    /// Generate an HTML migration report from inferred collection stats
+    Report(ReportArgs),
 }
 
 #[derive(Parser, Debug)]
 struct InferArgs {
-    /// MongoDB connection URI (e.g. mongodb://localhost:27017)
-    uri: String,
+    /// MongoDB connection URI (e.g. mongodb://localhost:27017) – required unless -c is given
+    #[arg(required_unless_present = "config")]
+    uri: Option<String>,
 
-    /// Namespace in the form <db>.<collection>
-    namespace: String,
+    /// Namespace: either <db>.<collection> to infer one collection,
+    /// or just <db> to infer all collections in the database – required unless -c is given
+    #[arg(required_unless_present = "config")]
+    namespace: Option<String>,
 
     /// Number of documents to sample (mutually exclusive with --percent)
     #[arg(
@@ -79,16 +89,81 @@ struct InferArgs {
     /// Suppress schema output to stdout
     #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
     no_output: bool,
+
+    /// Write <name>.json and <name>.stats.txt into <output_dir>/<name>/ for each collection
+    #[arg(short = 'o', long = "output-dir", conflicts_with = "config")]
+    output_dir: Option<PathBuf>,
+
+    /// Path to a .conf file (created by `mongo2pg init`) to derive the output directory
+    #[arg(short = 'c', long = "config", conflicts_with = "output_dir")]
+    config: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug)]
 struct ToPgArgs {
-    /// Path to a schema JSON file produced by `mongo2pg infer`
-    schema_file: PathBuf,
+    /// Optional collection name; if omitted all collections under source/collections/ are processed
+    collection: Option<String>,
 
-    /// Root table name (defaults to the schema file stem)
+    /// Root table name (only valid with a single collection name)
     #[arg(short = 't', long = "table")]
     table: Option<String>,
+
+    /// Path to the project config file (.conf) – derives source/collections and schema/tables paths
+    #[arg(short = 'c', long = "config", conflicts_with = "output_dir")]
+    config: Option<PathBuf>,
+
+    /// Directory to write the SQL file(s) into (overrides -c)
+    #[arg(short = 'o', long = "output-dir", conflicts_with = "config")]
+    output_dir: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug)]
+struct InitArgs {
+    /// Base directory under which the project folder will be created
+    #[arg(long)]
+    project_base: PathBuf,
+
+    /// Name of the project (becomes a sub-folder inside project_base)
+    #[arg(long)]
+    project_name: String,
+
+    /// MongoDB connection URI to store in the project config
+    #[arg(long)]
+    uri: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+struct ReportArgs {
+    /// Path to the project config file (.conf) – derives source/collections and output paths
+    #[arg(short = 'c', long = "config", conflicts_with_all = ["collections_dir", "output"])]
+    config: Option<PathBuf>,
+
+    /// Path to the source/collections directory (overrides -c)
+    #[arg(long = "collections-dir", conflicts_with = "config")]
+    collections_dir: Option<PathBuf>,
+
+    /// Where to write the HTML report (default: reports/<namespace>.html or report.html)
+    #[arg(short = 'o', long = "output")]
+    output: Option<PathBuf>,
+
+    /// Database / namespace label shown in the report header
+    #[arg(short = 'n', long = "namespace", default_value = "")]
+    namespace: String,
+}
+
+#[derive(Parser, Debug)]
+struct SchemaArgs {
+    /// Path to the project config file (.conf) – derives schema/tables and reports paths
+    #[arg(short = 'c', long = "config", conflicts_with = "tables_dir")]
+    config: Option<PathBuf>,
+
+    /// Directory containing the SQL DDL files (overrides -c)
+    #[arg(long = "tables-dir", conflicts_with = "config")]
+    tables_dir: Option<PathBuf>,
+
+    /// Where to write the HTML diagram (default: reports/<project_name>.schema.html)
+    #[arg(short = 'o', long = "output")]
+    output: Option<PathBuf>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -100,7 +175,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Some(Command::Init(args)) => run_init(args),
         Some(Command::ToPg(args)) => run_to_pg(args),
+        Some(Command::Report(args)) => run_report(args),
         Some(Command::Infer(args)) => run_infer(args).await,
         None => run_infer(cli.infer.expect("clap ensures args are present")).await,
     }
@@ -111,21 +188,70 @@ async fn main() -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn run_to_pg(args: ToPgArgs) -> Result<()> {
-    let content = std::fs::read_to_string(&args.schema_file)
-        .with_context(|| format!("Failed to read {}", args.schema_file.display()))?;
+    // Resolve collections source dir and SQL output dir
+    let (collections_dir, output_dir) = if let Some(ref conf) = args.config {
+        let (base_dir, project_dir, _, _) = read_conf(conf)?;
+        let cols = base_dir
+            .join(&project_dir)
+            .join("source")
+            .join("collections");
+        let sql_out = base_dir.join(&project_dir).join("schema").join("tables");
+        (cols, sql_out)
+    } else {
+        let dir = args
+            .output_dir
+            .clone()
+            .ok_or_else(|| anyhow!("Provide -c <config> or -o <output-dir>"))?;
+        (dir.clone(), dir)
+    };
 
-    let schema: CollectionSchema = serde_json::from_str(&content)
-        .context("Failed to parse schema JSON – make sure the file was produced by mongo2pg")?;
+    // Collect the JSON files to process
+    let json_files: Vec<(String, PathBuf)> = if let Some(ref name) = args.collection {
+        let json = collections_dir.join(name).join(format!("{name}.json"));
+        vec![(name.clone(), json)]
+    } else {
+        let mut entries: Vec<(String, PathBuf)> = std::fs::read_dir(&collections_dir)
+            .with_context(|| format!("Cannot read {}", collections_dir.display()))?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let json = e.path().join(format!("{name}.json"));
+                if json.exists() {
+                    Some((name, json))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        entries
+    };
 
-    let table_name = args.table.unwrap_or_else(|| {
-        args.schema_file
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("collection")
-            .to_owned()
-    });
+    if json_files.is_empty() {
+        eprintln!(
+            "No JSON schema files found in {}",
+            collections_dir.display()
+        );
+        return Ok(());
+    }
 
-    println!("{}", schema_to_ddl(&schema, &table_name));
+    std::fs::create_dir_all(&output_dir)
+        .with_context(|| format!("Failed to create directory {}", output_dir.display()))?;
+
+    for (name, json_path) in &json_files {
+        let table_name = args.table.as_deref().unwrap_or(name);
+        let content = std::fs::read_to_string(json_path)
+            .with_context(|| format!("Failed to read {}", json_path.display()))?;
+        let schema: CollectionSchema = serde_json::from_str(&content)
+            .with_context(|| format!("Failed to parse {}", json_path.display()))?;
+        let ddl = schema_to_ddl(&schema, table_name);
+        let sql_path = output_dir.join(format!("{table_name}.sql"));
+        std::fs::write(&sql_path, &ddl)
+            .with_context(|| format!("Failed to write {}", sql_path.display()))?;
+        println!("SQL written to {}", sql_path.display());
+    }
+
     Ok(())
 }
 
@@ -134,12 +260,83 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
-    let (db_name, coll_name) = parse_namespace(&args.namespace)?;
+    // Resolve URI and namespace, reading conf file if -c was given
+    let (resolved_uri, effective_output_dir, conf_namespace) = if let Some(ref conf) = args.config {
+        let (base_dir, project_dir, conf_uri, conf_ns) = read_conf(conf)?;
+        let uri = args.uri.clone().or(conf_uri).ok_or_else(|| {
+            anyhow!("No URI provided: pass it as an argument or add URI to the config file")
+        })?;
+        let out_dir = args.output_dir.clone().unwrap_or_else(|| {
+            base_dir
+                .join(&project_dir)
+                .join("source")
+                .join("collections")
+        });
+        (uri, Some(out_dir), conf_ns)
+    } else {
+        let uri = args
+            .uri
+            .clone()
+            .expect("clap ensures uri is present when -c is absent");
+        (uri, args.output_dir.clone(), None)
+    };
 
-    let client_options = ClientOptions::parse(&args.uri)
+    let namespace = args
+        .namespace
+        .clone()
+        .or(conf_namespace)
+        .ok_or_else(|| {
+            anyhow!("No namespace provided: pass <db> or <db>.<collection> as an argument or add NAMESPACE to the config file")
+        })?;
+
+    let client_options = ClientOptions::parse(&resolved_uri)
         .await
         .context("Failed to parse MongoDB URI")?;
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
+
+    let args = InferArgs {
+        uri: Some(resolved_uri),
+        namespace: Some(namespace.clone()),
+        output_dir: effective_output_dir,
+        config: None,
+        ..args
+    };
+
+    if namespace.contains('.') {
+        // Single collection: <db>.<collection>
+        let (db_name, coll_name) = parse_namespace(&namespace)?;
+        let schema = infer_collection(&client, db_name, coll_name, &args).await?;
+        if !args.no_output {
+            println!("{}", serde_json::to_string_pretty(&schema)?);
+        }
+    } else {
+        // Whole database: infer every collection
+        let db = client.database(&namespace);
+        let coll_names = db
+            .list_collection_names()
+            .await
+            .context("Failed to list collections")?;
+
+        let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+        for coll_name in &coll_names {
+            let schema = infer_collection(&client, &namespace, coll_name, &args).await?;
+            all_schemas.insert(coll_name.clone(), schema);
+        }
+        if !args.no_output {
+            println!("{}", serde_json::to_string_pretty(&all_schemas)?);
+        }
+    }
+    Ok(())
+}
+
+/// Infer the schema for a single collection, print stats to stderr, and optionally write output files.
+async fn infer_collection(
+    client: &Client,
+    db_name: &str,
+    coll_name: &str,
+    args: &InferArgs,
+) -> Result<CollectionSchema> {
+    let output_dir = args.output_dir.as_deref();
     let db = client.database(db_name);
     let collection = db.collection::<bson::Document>(coll_name);
 
@@ -165,34 +362,190 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     let mut cursor = collection
         .aggregate(pipeline)
         .await
-        .context("Failed to run $sample aggregation")?;
+        .with_context(|| format!("Failed to run $sample aggregation on {db_name}.{coll_name}"))?;
     while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
         analyzer.process_document(&doc);
     }
 
     let mut schema = analyzer.finish();
+    let total_docs = if let Some(t) = known_total {
+        t
+    } else {
+        collection
+            .estimated_document_count()
+            .await
+            .context("Failed to get document count")?
+    };
+    schema.count = total_docs;
+    let output_dir = output_dir; // rebind to keep borrow checker happy
 
-    {
-        let total_docs = if let Some(t) = known_total {
-            t
+    let stats_lines = format_stats(&schema, Some(total_docs));
+
+    let stderr = io::stderr();
+    let mut handle = stderr.lock();
+    writeln!(handle, "[{db_name}.{coll_name}]")?;
+    for line in &stats_lines {
+        writeln!(handle, "{line}")?;
+    }
+    drop(handle);
+
+    if let Some(out_dir) = output_dir {
+        write_collection_files(out_dir, coll_name, &schema, &stats_lines)
+            .with_context(|| format!("Failed to write output files for {coll_name}"))?;
+    }
+
+    Ok(schema)
+}
+
+/// Write `<dir>/<name>/<name>.json`, `<dir>/<name>/<name>.stats.txt`, and `<dir>/<name>/<name>.stats.yaml`.
+fn write_collection_files(
+    base: &Path,
+    coll_name: &str,
+    schema: &CollectionSchema,
+    stats_lines: &[String],
+) -> Result<()> {
+    let dir = base.join(coll_name);
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+
+    let json_path = dir.join(format!("{coll_name}.json"));
+    std::fs::write(&json_path, serde_json::to_string_pretty(schema)?)
+        .with_context(|| format!("Failed to write {}", json_path.display()))?;
+
+    let stats_path = dir.join(format!("{coll_name}.stats.txt"));
+    std::fs::write(&stats_path, stats_lines.join("\n") + "\n")
+        .with_context(|| format!("Failed to write {}", stats_path.display()))?;
+
+    let yaml_stats = stats_to_yaml(schema, Some(schema.count));
+    let yaml_path = dir.join(format!("{coll_name}.stats.yaml"));
+    std::fs::write(&yaml_path, serde_yaml::to_string(&yaml_stats)?)
+        .with_context(|| format!("Failed to write {}", yaml_path.display()))?;
+
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// `init` subcommand
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn run_init(args: InitArgs) -> Result<()> {
+    let project_root = args.project_base.join(&args.project_name);
+
+    let dirs = [
+        project_root.join("schema").join("tables"),
+        project_root.join("source").join("collections"),
+        project_root.join("data"),
+        project_root.join("config"),
+        project_root.join("reports"),
+    ];
+
+    for dir in &dirs {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+    }
+
+    let conf_path = project_root
+        .join("config")
+        .join(format!("{}.conf", args.project_name));
+    let conf_content = format!(
+        "BASE_DIR = {}\nPROJECT_DIR = {}\n{}",
+        args.project_base.display(),
+        args.project_name,
+        args.uri
+            .as_deref()
+            .map(|u| format!("URI = {}\n", u))
+            .unwrap_or_default(),
+    );
+    std::fs::write(&conf_path, conf_content)
+        .with_context(|| format!("Failed to write {}", conf_path.display()))?;
+
+    println!(
+        "Project '{}' initialised at {}",
+        args.project_name,
+        project_root.display()
+    );
+    for dir in &dirs {
+        println!("  {}", dir.display());
+    }
+    println!("  {}", conf_path.display());
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// `report` subcommand
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn run_report(args: ReportArgs) -> Result<()> {
+    // Resolve collections dir and namespace from -c or explicit flags
+    let (collections_dir, namespace, default_output_dir) = if let Some(ref conf) = args.config {
+        let (base_dir, project_dir, _, conf_ns) = read_conf(conf)?;
+        let ns = args.namespace.clone();
+        let ns = if ns.is_empty() {
+            conf_ns.unwrap_or_else(|| project_dir.clone())
         } else {
-            collection
-                .estimated_document_count()
-                .await
-                .context("Failed to get document count")?
+            ns
         };
-        schema.count = total_docs;
-        let stats_lines = format_stats(&schema, Some(total_docs));
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        for line in stats_lines {
-            writeln!(handle, "{line}")?;
+        let cols_dir = base_dir
+            .join(&project_dir)
+            .join("source")
+            .join("collections");
+        let out_dir = base_dir.join(&project_dir).join("reports");
+        (cols_dir, ns, Some((out_dir, project_dir)))
+    } else {
+        let dir = args
+            .collections_dir
+            .clone()
+            .ok_or_else(|| anyhow!("Provide --collections-dir or -c <config>"))?;
+        (dir, args.namespace.clone(), None)
+    };
+
+    let rows = collect_rows(&collections_dir)?;
+    if rows.is_empty() {
+        eprintln!(
+            "No .stats.yaml files found in {}",
+            collections_dir.display()
+        );
+        return Ok(());
+    }
+
+    let html = render_html(&rows, &namespace);
+
+    let output_path = if let Some(ref o) = args.output {
+        o.clone()
+    } else if let Some((ref dir, ref project_name)) = default_output_dir {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("Failed to create reports dir {}", dir.display()))?;
+        dir.join(format!("{project_name}.html"))
+    } else {
+        PathBuf::from("report.html")
+    };
+
+    std::fs::write(&output_path, &html)
+        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+    println!("Report written to {}", output_path.display());
+
+    // Also generate the schema ERD diagram if SQL tables exist
+    if let Some((ref reports_dir, ref project_name)) = default_output_dir {
+        let tables_dir = reports_dir
+            .parent()
+            .unwrap_or(reports_dir)
+            .join("schema")
+            .join("tables");
+        if tables_dir.is_dir() {
+            match load_tables(&tables_dir) {
+                Ok(tables) if !tables.is_empty() => {
+                    let schema_html = render_schema_html(&tables, project_name);
+                    let schema_path = reports_dir.join(format!("{project_name}.schema.html"));
+                    std::fs::write(&schema_path, &schema_html)
+                        .with_context(|| format!("Failed to write {}", schema_path.display()))?;
+                    println!("Schema diagram written to {}", schema_path.display());
+                }
+                Ok(_) => {}
+                Err(e) => eprintln!("Warning: could not generate schema diagram: {e}"),
+            }
         }
     }
 
-    if !args.no_output {
-        println!("{}", serde_json::to_string_pretty(&schema)?);
-    }
     Ok(())
 }
 
@@ -205,4 +558,33 @@ fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
         .find('.')
         .ok_or_else(|| anyhow!("Namespace must be in the form <db>.<collection>, got: {ns}"))?;
     Ok((&ns[..dot], &ns[dot + 1..]))
+}
+
+/// Parse a `.conf` file produced by `mongo2pg init` and return `(BASE_DIR, PROJECT_DIR, URI?, NAMESPACE?)`.
+fn read_conf(path: &Path) -> Result<(PathBuf, String, Option<String>, Option<String>)> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read config file {}", path.display()))?;
+
+    let mut base_dir: Option<PathBuf> = None;
+    let mut project_dir: Option<String> = None;
+    let mut uri: Option<String> = None;
+    let mut namespace: Option<String> = None;
+
+    for line in content.lines() {
+        if let Some((key, val)) = line.split_once('=') {
+            match key.trim() {
+                "BASE_DIR" => base_dir = Some(PathBuf::from(val.trim())),
+                "PROJECT_DIR" => project_dir = Some(val.trim().to_owned()),
+                "URI" => uri = Some(val.trim().to_owned()),
+                "NAMESPACE" => namespace = Some(val.trim().to_owned()),
+                _ => {}
+            }
+        }
+    }
+
+    let base_dir = base_dir.ok_or_else(|| anyhow!("BASE_DIR not found in {}", path.display()))?;
+    let project_dir =
+        project_dir.ok_or_else(|| anyhow!("PROJECT_DIR not found in {}", path.display()))?;
+
+    Ok((base_dir, project_dir, uri, namespace))
 }

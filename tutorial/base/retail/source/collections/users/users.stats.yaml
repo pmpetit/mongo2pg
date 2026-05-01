@@ -1,0 +1,20 @@
+documents_in_collection: 4
+documents_sampled: 4
+width_top_level: 8
+width_max: 8
+width_max_level: 1
+depth_max: 3
+branch_total: 20
+branch_per_level:
+  L1: 8
+  L2: 6
+  L3: 6
+top_level_types:
+  _id: ObjectId
+  address: Object
+  email: String
+  lastRecommendations: Array
+  name: String
+  surname: String
+  type: String
+  version: Number
