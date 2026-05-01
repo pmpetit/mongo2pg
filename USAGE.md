@@ -76,12 +76,6 @@ mongo2pg "mongodb://localhost:27017" mydb.mycollection --no-output
 mongo2pg "mongodb://user:pass@host:27017" mydb.orders > orders-schema.json
 ```
 
-### Use sequential scan instead of `$sample` (faster on small collections)
-
-```bash
-mongo2pg "mongodb://localhost:27017" mydb.mycollection --no-sampling -n 2000
-```
-
 ### Disable sample-value collection (smaller output)
 
 ```bash
