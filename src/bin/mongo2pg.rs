@@ -582,14 +582,18 @@ fn run_report(args: ReportArgs) -> Result<()> {
         (dir, args.namespace.clone(), None)
     };
 
-    let rows = collect_rows(&collections_dir)?;
-    if rows.is_empty() {
-        eprintln!(
-            "No .stats.yaml files found in {}",
-            collections_dir.display()
-        );
-        return Ok(());
-    }
+    // Resolve tables dir for the PG tables count column (only when using a conf file)
+    let tables_dir_for_report: Option<std::path::PathBuf> =
+        default_output_dir.as_ref().map(|(reports_dir, _)| {
+            reports_dir
+                .parent()
+                .unwrap_or(reports_dir)
+                .join("schema")
+                .join("tables")
+        });
+    let tables_dir_opt = tables_dir_for_report.as_deref().filter(|p| p.is_dir());
+
+    let rows = collect_rows(&collections_dir, tables_dir_opt)?;
 
     let html = render_html(&rows, &namespace);
 

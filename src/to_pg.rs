@@ -773,7 +773,7 @@ fn render_table(table: &Table) -> String {
     let mut defs: Vec<String> = table.columns.iter().map(render_column).collect();
     if let Some((fk_col, ref_table, ref_col)) = &table.parent_ref {
         defs.push(format!(
-            "    FOREIGN KEY ({fk_col}) REFERENCES {ref_table} ({ref_col})"
+            "    FOREIGN KEY ({fk_col}) REFERENCES {ref_table} ({ref_col}) DEFERRABLE INITIALLY DEFERRED"
         ));
     }
     let body = defs.join(",\n");
