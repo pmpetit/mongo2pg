@@ -447,3 +447,175 @@ done
 ```bash
 docker stop mongodb && docker rm mongodb
 ```
+
+---
+
+# Project-based workflow
+
+`mongo2pg` provides four subcommands that mirror the [ora2pg](https://ora2pg.darold.net/) migration-project approach:
+
+```
+init   → create project structure + config file
+infer  → sample MongoDB, infer schemas, write output files
+to-pg  → convert inferred schemas to PostgreSQL DDL
+report → generate HTML stats report and ERD diagram
+```
+
+---
+
+## `init` – create a migration project
+
+```
+mongo2pg init --project-base <DIR> --project-name <NAME> [--uri <URI>]
+```
+
+Creates the project directory tree and writes a config file:
+
+```
+<project-base>/<project-name>/
+    config/<project-name>.conf   ← BASE_DIR, PROJECT_DIR, URI, NAMESPACE
+    schema/
+        tables/                  ← generated SQL DDL files go here
+    source/
+        collections/             ← inferred JSON schemas + stats go here
+    data/
+    reports/                     ← HTML reports go here
+```
+
+**Options**
+
+| Flag | Description |
+|---|---|
+| `--project-base <DIR>` | Parent directory that will contain the project folder |
+| `--project-name <NAME>` | Name of the project (becomes the sub-directory name) |
+| `--uri <URI>` | MongoDB connection URI – written into the config file |
+
+---
+
+## `infer` – sample a MongoDB collection and infer its schema
+
+```
+mongo2pg [infer] [URI] [NAMESPACE] [OPTIONS]
+mongo2pg [infer] -c <CONFIG> [NAMESPACE] [OPTIONS]
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `[URI]` | MongoDB connection URI – required unless `-c` is given |
+| `[NAMESPACE]` | `<db>.<collection>` for a single collection, or just `<db>` for all collections in the database. Can also be set via `NAMESPACE` in the config file. |
+
+**Options**
+
+| Flag | Description |
+|---|---|
+| `-n, --number <N>` | Number of documents to sample (default: 1000) |
+| `-p, --percent <PCT>` | Percentage of the collection to sample |
+| `-c, --config <FILE>` | Project config file – derives URI and output paths automatically |
+| `-o, --output-dir <DIR>` | Write output files into `<dir>/<collection>/` |
+| `--no-output` | Suppress JSON schema output to stdout |
+
+When `-c` or `-o` is given, each collection produces three files:
+
+```
+source/collections/<name>/
+    <name>.json          ← inferred schema (JSON)
+    <name>.stats.txt     ← human-readable stats
+    <name>.stats.yaml    ← structured stats (consumed by report)
+```
+
+---
+
+## `to-pg` – convert inferred schemas to PostgreSQL DDL
+
+```
+mongo2pg to-pg [COLLECTION] [OPTIONS]
+```
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `[COLLECTION]` | Optional collection name; omit to process all collections |
+
+**Options**
+
+| Flag | Description |
+|---|---|
+| `-c, --config <FILE>` | Project config file – reads `source/collections/`, writes `schema/tables/` |
+| `-o, --output-dir <DIR>` | Directory to write `.sql` files into (overrides `-c`) |
+| `-t, --table <NAME>` | Table name override (single collection only) |
+
+Reads `source/collections/<name>/<name>.json` and writes `schema/tables/<name>.sql`.
+
+---
+
+## `report` – generate HTML reports
+
+```
+mongo2pg report [OPTIONS]
+```
+
+**Options**
+
+| Flag | Description |
+|---|---|
+| `-c, --config <FILE>` | Project config file |
+| `--collections-dir <DIR>` | Path to `source/collections/` (overrides `-c`) |
+| `-o, --output <FILE>` | Output path for the HTML report |
+| `-n, --namespace <NS>` | Label shown in the report header |
+
+Produces two files in `reports/`:
+
+| File | Description |
+|---|---|
+| `<project>.html` | Collection stats report (documents, depth, width, field counts) |
+| `<project>.schema.html` | Entity-relationship diagram generated from `schema/tables/*.sql` |
+
+---
+
+## Typical workflow
+
+```bash
+# 1. Create the project
+mongo2pg init --project-base /app/migration --project-name retail \
+  --uri "mongodb://user:pass@localhost:27017"
+
+# 2. Optionally edit config to add the default namespace:
+#    NAMESPACE = retail
+#    /app/migration/retail/config/retail.conf
+
+# 3. Infer all collection schemas
+mongo2pg infer -c /app/migration/retail/config/retail.conf
+
+# 4. Generate PostgreSQL DDL
+mongo2pg to-pg -c /app/migration/retail/config/retail.conf
+
+# 5. Generate HTML reports + ERD diagram
+mongo2pg report -c /app/migration/retail/config/retail.conf
+```
+
+---
+
+## Examples
+
+```bash
+# Infer a single collection (stdout only)
+mongo2pg mongodb://localhost:27017 mydb.users
+
+# Infer all collections in a database, saving output files
+mongo2pg infer mongodb://localhost:27017 mydb -o source/collections
+
+# Sample 10 % of documents
+mongo2pg infer mongodb://localhost:27017 mydb.orders -p 10
+
+# Convert all inferred schemas to SQL (project-based)
+mongo2pg to-pg -c config/retail.conf
+
+# Convert a single collection only
+mongo2pg to-pg -c config/retail.conf products
+
+# Generate reports
+mongo2pg report -c config/retail.conf
+```
