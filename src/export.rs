@@ -1,0 +1,528 @@
+//! Export MongoDB collection data to gzipped CSV files.
+//!
+//! For each collection, reads the generated SQL DDL from `schema/tables/<name>.sql`
+//! to determine the table structure, then streams all documents from MongoDB and
+//! writes one gzipped CSV file per SQL table into `data/<name>/`.
+//!
+//! Nested arrays and objects are expanded across child tables exactly as
+//! `to_pg` generated them, so the CSV files can be loaded directly into
+//! PostgreSQL with `\COPY`.
+
+use std::collections::HashMap;
+use std::io::Write;
+use std::path::Path;
+
+use anyhow::{Context, Result};
+use bson::Bson;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use futures::TryStreamExt;
+use mongodb::Client;
+
+use crate::schema_diagram::{parse_sql, Table as SqlTable};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Sanitize  (mirrors to_pg::sanitize so we can reverse-map SQL columns → Mongo fields)
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn is_pg_reserved(s: &str) -> bool {
+    matches!(
+        s,
+        "all"
+            | "analyse"
+            | "analyze"
+            | "and"
+            | "any"
+            | "array"
+            | "as"
+            | "asc"
+            | "asymmetric"
+            | "authorization"
+            | "binary"
+            | "both"
+            | "case"
+            | "cast"
+            | "check"
+            | "collate"
+            | "collation"
+            | "column"
+            | "concurrently"
+            | "constraint"
+            | "create"
+            | "cross"
+            | "current_catalog"
+            | "current_date"
+            | "current_role"
+            | "current_schema"
+            | "current_time"
+            | "current_timestamp"
+            | "current_user"
+            | "default"
+            | "deferrable"
+            | "desc"
+            | "distinct"
+            | "do"
+            | "else"
+            | "end"
+            | "except"
+            | "false"
+            | "fetch"
+            | "for"
+            | "foreign"
+            | "freeze"
+            | "from"
+            | "full"
+            | "grant"
+            | "group"
+            | "having"
+            | "ilike"
+            | "in"
+            | "initially"
+            | "inner"
+            | "intersect"
+            | "into"
+            | "is"
+            | "isnull"
+            | "join"
+            | "lateral"
+            | "leading"
+            | "left"
+            | "like"
+            | "limit"
+            | "localtime"
+            | "localtimestamp"
+            | "natural"
+            | "not"
+            | "notnull"
+            | "null"
+            | "offset"
+            | "on"
+            | "only"
+            | "or"
+            | "order"
+            | "outer"
+            | "overlaps"
+            | "placing"
+            | "primary"
+            | "references"
+            | "returning"
+            | "right"
+            | "select"
+            | "session_user"
+            | "similar"
+            | "some"
+            | "symmetric"
+            | "system_user"
+            | "table"
+            | "tablesample"
+            | "then"
+            | "to"
+            | "trailing"
+            | "true"
+            | "union"
+            | "unique"
+            | "user"
+            | "using"
+            | "variadic"
+            | "verbose"
+            | "when"
+            | "where"
+            | "window"
+            | "with"
+    )
+}
+
+fn sanitize(name: &str) -> String {
+    let s: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+        format!("_{s}")
+    } else {
+        s
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BSON → CSV string
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn bson_to_string(val: &Bson) -> String {
+    match val {
+        Bson::ObjectId(oid) => oid.to_hex(),
+        Bson::String(s) => s.clone(),
+        Bson::Int32(n) => n.to_string(),
+        Bson::Int64(n) => n.to_string(),
+        Bson::Double(d) => d.to_string(),
+        Bson::Boolean(b) => b.to_string(),
+        Bson::DateTime(dt) => format_millis(dt.timestamp_millis()),
+        Bson::Decimal128(d) => d.to_string(),
+        Bson::Timestamp(ts) => ts.time.to_string(),
+        Bson::Null | Bson::Undefined => String::new(),
+        // For complex / uncommon types fall back to BSON extended-JSON representation.
+        other => serde_json::to_string(other).unwrap_or_default(),
+    }
+}
+
+/// Format a Unix-millisecond timestamp as `YYYY-MM-DDTHH:MM:SS.mmmZ`.
+///
+/// Uses Howard Hinnant's civil-calendar algorithm (public domain) to avoid
+/// pulling in extra feature flags from the `chrono` crate.
+fn format_millis(ms: i64) -> String {
+    let secs = ms.div_euclid(1000);
+    let ms_part = ms.rem_euclid(1000) as u32;
+
+    let days = secs.div_euclid(86400) as i32;
+    let time = secs.rem_euclid(86400) as u32;
+    let (h, mi, s) = (time / 3600, (time % 3600) / 60, time % 60);
+
+    // Gregorian date from days-since-epoch (Hinnant's civil.h)
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if mo <= 2 { y + 1 } else { y };
+
+    format!(
+        "{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{ms_part:03}Z",
+        mo = mo as u32,
+        d = d as u32,
+    )
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CSV escaping
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_owned()
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Table tree (mirrors the hierarchy created by to_pg)
+// ──────────────────────────────────────────────────────────────────────────────
+
+struct TableNode {
+    /// SQL table name
+    sql_name: String,
+    /// Column names in declaration order (from SQL)
+    columns: Vec<String>,
+    /// Primary-key column name (always `"id"`)
+    pk_col: String,
+    /// FK column pointing to the parent table (`None` for root tables)
+    fk_col: Option<String>,
+    /// MongoDB field name at the current document level that yields this table's data.
+    /// Empty for the root table.
+    mongo_field: String,
+    /// `true` when this child table represents a scalar array
+    /// (has exactly 3 columns: pk, fk, `value`).
+    is_scalar_array: bool,
+    children: Vec<TableNode>,
+}
+
+fn build_tree(sql_tables: &[SqlTable]) -> Vec<TableNode> {
+    let names: std::collections::HashSet<&str> =
+        sql_tables.iter().map(|t| t.name.as_str()).collect();
+
+    // Map each child table to its parent (first FK that points to a table in this file)
+    let mut parent_of: HashMap<&str, &str> = HashMap::new();
+    for t in sql_tables {
+        for fk in &t.foreign_keys {
+            if names.contains(fk.to_table.as_str()) {
+                parent_of.insert(&t.name, &fk.to_table);
+                break;
+            }
+        }
+    }
+
+    // Invert: parent → children
+    let mut children_of: HashMap<&str, Vec<&SqlTable>> = HashMap::new();
+    for t in sql_tables {
+        if let Some(&par) = parent_of.get(t.name.as_str()) {
+            children_of.entry(par).or_default().push(t);
+        }
+    }
+
+    // Root = no parent
+    sql_tables
+        .iter()
+        .filter(|t| !parent_of.contains_key(t.name.as_str()))
+        .map(|r| build_node(r, None, &children_of))
+        .collect()
+}
+
+fn build_node(
+    sql_t: &SqlTable,
+    parent_name: Option<&str>,
+    children_of: &HashMap<&str, Vec<&SqlTable>>,
+) -> TableNode {
+    // The MongoDB field name is the suffix after stripping "<parent>_" from the table name.
+    let mongo_field = match parent_name {
+        Some(p) => sql_t
+            .name
+            .strip_prefix(&format!("{p}_"))
+            .unwrap_or(&sql_t.name)
+            .to_owned(),
+        None => String::new(),
+    };
+
+    let pk_col = sql_t
+        .columns
+        .iter()
+        .find(|c| c.primary_key)
+        .map(|c| c.name.clone())
+        .unwrap_or_else(|| "id".to_owned());
+
+    let fk_col = sql_t.foreign_keys.first().map(|fk| fk.from_col.clone());
+
+    let columns: Vec<String> = sql_t.columns.iter().map(|c| c.name.clone()).collect();
+
+    // A scalar-array child has exactly: pk, fk, value  (3 columns total)
+    let is_scalar_array =
+        fk_col.is_some() && columns.len() == 3 && columns.iter().any(|c| c == "value");
+
+    let children: Vec<TableNode> = children_of
+        .get(sql_t.name.as_str())
+        .map(|cs| {
+            cs.iter()
+                .map(|child_sql| build_node(child_sql, Some(&sql_t.name), children_of))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    TableNode {
+        sql_name: sql_t.name.clone(),
+        columns,
+        pk_col,
+        fk_col,
+        mongo_field,
+        is_scalar_array,
+        children,
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BSON field lookup
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Find `sql_col` in a BSON document.
+///
+/// Tries an exact-name match first, then falls back to comparing sanitized names
+/// so that e.g. `"invoiceId"` in MongoDB matches the `"invoiceid"` SQL column.
+fn find_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bson> {
+    if let Some(v) = doc.get(sql_col) {
+        return Some(v);
+    }
+    for (key, val) in doc.iter() {
+        if sanitize(key) == sql_col {
+            return Some(val);
+        }
+    }
+    None
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Row extraction  (recursive, depth-first)
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn extract_rows(
+    val: &Bson,
+    node: &TableNode,
+    parent_id: Option<&str>,
+    is_root: bool,
+    all_rows: &mut HashMap<String, Vec<Vec<String>>>,
+    counters: &mut HashMap<String, u64>,
+) {
+    let doc = match val {
+        Bson::Document(d) => d,
+        _ => return,
+    };
+
+    // Assign an ID for this row.
+    let my_id: String = if is_root {
+        // Root table: _id → id
+        doc.get("_id").map(bson_to_string).unwrap_or_default()
+    } else {
+        let c = counters.entry(node.sql_name.clone()).or_insert(0);
+        *c += 1;
+        c.to_string()
+    };
+
+    // Build the row by iterating SQL columns in order.
+    let row: Vec<String> = node
+        .columns
+        .iter()
+        .map(|col| {
+            if col == &node.pk_col {
+                my_id.clone()
+            } else if Some(col) == node.fk_col.as_ref() {
+                parent_id.unwrap_or("").to_owned()
+            } else {
+                find_mongo_field(doc, col)
+                    .map(bson_to_string)
+                    .unwrap_or_default()
+            }
+        })
+        .collect();
+
+    all_rows.entry(node.sql_name.clone()).or_default().push(row);
+
+    // Recurse into child tables.
+    for child in &node.children {
+        match find_mongo_field(doc, &child.mongo_field) {
+            Some(Bson::Array(arr)) => {
+                if child.is_scalar_array {
+                    // One row per scalar element.
+                    for item in arr {
+                        let child_id = {
+                            let c = counters.entry(child.sql_name.clone()).or_insert(0);
+                            *c += 1;
+                            c.to_string()
+                        };
+                        let child_row: Vec<String> = child
+                            .columns
+                            .iter()
+                            .map(|col| {
+                                if col == &child.pk_col {
+                                    child_id.clone()
+                                } else if Some(col) == child.fk_col.as_ref() {
+                                    my_id.clone()
+                                } else if col == "value" {
+                                    bson_to_string(item)
+                                } else {
+                                    String::new()
+                                }
+                            })
+                            .collect();
+                        all_rows
+                            .entry(child.sql_name.clone())
+                            .or_default()
+                            .push(child_row);
+                    }
+                } else {
+                    // One row per document element.
+                    for item in arr {
+                        extract_rows(item, child, Some(&my_id), false, all_rows, counters);
+                    }
+                }
+            }
+            Some(doc_val @ Bson::Document(_)) => {
+                // Embedded 1:1 object.
+                extract_rows(doc_val, child, Some(&my_id), false, all_rows, counters);
+            }
+            _ => {} // field absent or unexpected type – skip
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Public API
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Export a single MongoDB collection to gzipped CSV files.
+///
+/// One `.csv.gz` file is written per SQL table (root + all child tables) into
+/// `<data_dir>/<coll_name>/`.  The SQL schema is read from
+/// `<tables_dir>/<coll_name>.sql`.
+///
+/// Returns the list of file paths that were written.
+pub async fn export_collection(
+    client: &Client,
+    db_name: &str,
+    coll_name: &str,
+    tables_dir: &Path,
+    data_dir: &Path,
+) -> Result<Vec<String>> {
+    let sql_path = tables_dir.join(format!("{coll_name}.sql"));
+    if !sql_path.exists() {
+        return Err(anyhow::anyhow!(
+            "SQL schema not found: {} – run `to-pg` first",
+            sql_path.display()
+        ));
+    }
+
+    let sql = std::fs::read_to_string(&sql_path)
+        .with_context(|| format!("Cannot read {}", sql_path.display()))?;
+
+    let sql_tables = parse_sql(&sql);
+    if sql_tables.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No CREATE TABLE statements found in {}",
+            sql_path.display()
+        ));
+    }
+
+    let roots = build_tree(&sql_tables);
+
+    // Stream all documents from the collection.
+    let db = client.database(db_name);
+    let collection = db.collection::<bson::Document>(coll_name);
+    let mut cursor = collection
+        .find(bson::doc! {})
+        .await
+        .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
+
+    let mut all_rows: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+    let mut counters: HashMap<String, u64> = HashMap::new();
+
+    while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
+        let bson_val = Bson::Document(doc);
+        for root in &roots {
+            extract_rows(&bson_val, root, None, true, &mut all_rows, &mut counters);
+        }
+    }
+
+    // Write one .csv.gz per SQL table.
+    let out_dir = data_dir.join(coll_name);
+    std::fs::create_dir_all(&out_dir)
+        .with_context(|| format!("Cannot create {}", out_dir.display()))?;
+
+    let mut written: Vec<String> = Vec::new();
+
+    for sql_t in &sql_tables {
+        let columns: Vec<String> = sql_t.columns.iter().map(|c| c.name.clone()).collect();
+        let rows = all_rows.get(&sql_t.name).cloned().unwrap_or_default();
+
+        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+        let file = std::fs::File::create(&csv_path)
+            .with_context(|| format!("Cannot create {}", csv_path.display()))?;
+        let mut gz = GzEncoder::new(file, Compression::default());
+
+        // Header row
+        let header: Vec<String> = columns.iter().map(|c| csv_escape(c)).collect();
+        writeln!(gz, "{}", header.join(","))
+            .with_context(|| format!("Write error for {}", csv_path.display()))?;
+
+        // Data rows
+        for row in &rows {
+            let line: Vec<String> = row.iter().map(|v| csv_escape(v)).collect();
+            writeln!(gz, "{}", line.join(","))
+                .with_context(|| format!("Write error for {}", csv_path.display()))?;
+        }
+
+        gz.finish()
+            .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
+
+        eprintln!("  {} rows → {}", rows.len(), csv_path.display());
+        written.push(csv_path.display().to_string());
+    }
+
+    Ok(written)
+}

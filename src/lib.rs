@@ -9,6 +9,7 @@
 
 pub mod analyzer;
 pub mod converters;
+pub mod export;
 pub mod report;
 pub mod schema_diagram;
 pub mod stats;
