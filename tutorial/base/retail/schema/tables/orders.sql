@@ -14,7 +14,7 @@ CREATE TABLE orders_products (
     code TEXT NOT NULL,
     description TEXT NOT NULL,
     name TEXT NOT NULL,
-    FOREIGN KEY (orders_id) REFERENCES orders (id)
+    FOREIGN KEY (orders_id) REFERENCES orders (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE orders_status_history (
@@ -22,14 +22,14 @@ CREATE TABLE orders_status_history (
     orders_id UUID NOT NULL,
     status TEXT NOT NULL,
     timestamp BIGINT NOT NULL,
-    FOREIGN KEY (orders_id) REFERENCES orders (id)
+    FOREIGN KEY (orders_id) REFERENCES orders (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE orders_products_image (
     id BIGSERIAL PRIMARY KEY,
     orders_products_id BIGINT NOT NULL,
     url TEXT NOT NULL,
-    FOREIGN KEY (orders_products_id) REFERENCES orders_products (id)
+    FOREIGN KEY (orders_products_id) REFERENCES orders_products (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE orders_products_price (
@@ -37,5 +37,5 @@ CREATE TABLE orders_products_price (
     orders_products_id BIGINT NOT NULL,
     amount INTEGER NOT NULL,
     currency TEXT,
-    FOREIGN KEY (orders_products_id) REFERENCES orders_products (id)
+    FOREIGN KEY (orders_products_id) REFERENCES orders_products (id) DEFERRABLE INITIALLY DEFERRED
 );

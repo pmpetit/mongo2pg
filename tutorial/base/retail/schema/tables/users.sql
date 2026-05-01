@@ -15,7 +15,7 @@ CREATE TABLE users_address (
     cp TEXT NOT NULL,
     state TEXT NOT NULL,
     street_and_number TEXT NOT NULL,
-    FOREIGN KEY (users_id) REFERENCES users (id)
+    FOREIGN KEY (users_id) REFERENCES users (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE users_lastrecommendations (
@@ -27,5 +27,5 @@ CREATE TABLE users_lastrecommendations (
     price INTEGER NOT NULL,
     productid TEXT NOT NULL,
     vectorsearchscore DOUBLE PRECISION NOT NULL,
-    FOREIGN KEY (users_id) REFERENCES users (id)
+    FOREIGN KEY (users_id) REFERENCES users (id) DEFERRABLE INITIALLY DEFERRED
 );

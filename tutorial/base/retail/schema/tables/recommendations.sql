@@ -12,14 +12,14 @@ CREATE TABLE recommendations_items (
     name TEXT NOT NULL,
     productid TEXT NOT NULL,
     vectorsearchscore DOUBLE PRECISION NOT NULL,
-    FOREIGN KEY (recommendations_id) REFERENCES recommendations (id)
+    FOREIGN KEY (recommendations_id) REFERENCES recommendations (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE recommendations_items_image (
     id BIGSERIAL PRIMARY KEY,
     recommendations_items_id BIGINT NOT NULL,
     url TEXT NOT NULL,
-    FOREIGN KEY (recommendations_items_id) REFERENCES recommendations_items (id)
+    FOREIGN KEY (recommendations_items_id) REFERENCES recommendations_items (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE recommendations_items_price (
@@ -27,5 +27,5 @@ CREATE TABLE recommendations_items_price (
     recommendations_items_id BIGINT NOT NULL,
     amount INTEGER NOT NULL,
     currency TEXT NOT NULL,
-    FOREIGN KEY (recommendations_items_id) REFERENCES recommendations_items (id)
+    FOREIGN KEY (recommendations_items_id) REFERENCES recommendations_items (id) DEFERRABLE INITIALLY DEFERRED
 );

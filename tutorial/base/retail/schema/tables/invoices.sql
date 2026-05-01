@@ -15,14 +15,14 @@ CREATE TABLE invoices_items (
     code TEXT NOT NULL,
     description TEXT NOT NULL,
     name TEXT NOT NULL,
-    FOREIGN KEY (invoices_id) REFERENCES invoices (id)
+    FOREIGN KEY (invoices_id) REFERENCES invoices (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_metadata (
     id BIGSERIAL PRIMARY KEY,
     invoices_id UUID NOT NULL,
     retrievedat TEXT NOT NULL,
-    FOREIGN KEY (invoices_id) REFERENCES invoices (id)
+    FOREIGN KEY (invoices_id) REFERENCES invoices (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_recommendations (
@@ -34,14 +34,14 @@ CREATE TABLE invoices_recommendations (
     price INTEGER NOT NULL,
     productid TEXT NOT NULL,
     vectorsearchscore DOUBLE PRECISION NOT NULL,
-    FOREIGN KEY (invoices_id) REFERENCES invoices (id)
+    FOREIGN KEY (invoices_id) REFERENCES invoices (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_items_image (
     id BIGSERIAL PRIMARY KEY,
     invoices_items_id BIGINT NOT NULL,
     url TEXT NOT NULL,
-    FOREIGN KEY (invoices_items_id) REFERENCES invoices_items (id)
+    FOREIGN KEY (invoices_items_id) REFERENCES invoices_items (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_items_price (
@@ -49,7 +49,7 @@ CREATE TABLE invoices_items_price (
     invoices_items_id BIGINT NOT NULL,
     amount INTEGER NOT NULL,
     currency TEXT,
-    FOREIGN KEY (invoices_items_id) REFERENCES invoices_items (id)
+    FOREIGN KEY (invoices_items_id) REFERENCES invoices_items (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_metadata_creditcardprocessing (
@@ -57,7 +57,7 @@ CREATE TABLE invoices_metadata_creditcardprocessing (
     invoices_metadata_id BIGINT NOT NULL,
     approvalcode TEXT NOT NULL,
     transactionid TEXT NOT NULL,
-    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id)
+    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_metadata_erpdetails (
@@ -69,7 +69,7 @@ CREATE TABLE invoices_metadata_erpdetails (
     subtotal DOUBLE PRECISION NOT NULL,
     totalamount INTEGER NOT NULL,
     totaltax DOUBLE PRECISION NOT NULL,
-    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id)
+    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_metadata_frauddetection (
@@ -77,7 +77,7 @@ CREATE TABLE invoices_metadata_frauddetection (
     invoices_metadata_id BIGINT NOT NULL,
     riskscore INTEGER NOT NULL,
     status TEXT NOT NULL,
-    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id)
+    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE invoices_metadata_loyaltyrewards (
@@ -85,5 +85,5 @@ CREATE TABLE invoices_metadata_loyaltyrewards (
     invoices_metadata_id BIGINT NOT NULL,
     pointsearned INTEGER NOT NULL,
     tier TEXT NOT NULL,
-    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id)
+    FOREIGN KEY (invoices_metadata_id) REFERENCES invoices_metadata (id) DEFERRABLE INITIALLY DEFERRED
 );

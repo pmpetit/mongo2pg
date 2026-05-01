@@ -16,7 +16,7 @@ CREATE TABLE products_image (
     id BIGSERIAL PRIMARY KEY,
     products_id UUID NOT NULL,
     url TEXT NOT NULL,
-    FOREIGN KEY (products_id) REFERENCES products (id)
+    FOREIGN KEY (products_id) REFERENCES products (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE products_price (
@@ -24,12 +24,12 @@ CREATE TABLE products_price (
     products_id UUID NOT NULL,
     amount INTEGER NOT NULL,
     currency TEXT NOT NULL,
-    FOREIGN KEY (products_id) REFERENCES products (id)
+    FOREIGN KEY (products_id) REFERENCES products (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE products_vai_text_embedding (
     id BIGSERIAL PRIMARY KEY,
     products_id UUID NOT NULL,
     value DOUBLE PRECISION NOT NULL,
-    FOREIGN KEY (products_id) REFERENCES products (id)
+    FOREIGN KEY (products_id) REFERENCES products (id) DEFERRABLE INITIALLY DEFERRED
 );
