@@ -38,24 +38,7 @@ Just as tool exist to migrate from relational databases to document stores, a to
 - **Expanded output** – extended JSON Schema with `x-bsonType`, `x-metadata`, `x-sampleValues`
 - **Stats** – width / depth / branch counts printed to stderr with `--stats`
 - **Reservoir sampling** of field values (100 samples for strings/binary/code, 10 000 otherwise)
-- **Output renderers**: JSON (default), YAML, ASCII table
-
----
-
-## Installation
-
-```bash
-cargo install --path .
-```
-
-Or build from source:
-
-```bash
-git clone https://github.com/pmpetit/mongo2pg
-cd mongo2pg
-cargo build --release
-# Binary at: ./target/release/mongo2pg
-```
+- **Output renderers**: JSON (default), YAML, ASCII 
 
 ---
 
