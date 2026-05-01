@@ -1,0 +1,135 @@
+{
+  "count": 6,
+  "sampled": 6,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "ndistinct": 6.0,
+          "values": [
+            "65a545fb4a8f64e8f88fb896",
+            "671ffd201ec726b417352704",
+            "671ffeb41ec726b417352705",
+            "65a545fb4a8f64e8f88fb897",
+            "662a127ad31c9091c4feab45",
+            "671fffa61ec726b417352706"
+          ]
+        }
+      }
+    },
+    "city": {
+      "probability": 0.6666666666666666,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "ndistinct": 4.0,
+          "values": [
+            "Guadalajara",
+            "Rogers",
+            "Ciudad de mexico",
+            "Brisbane"
+          ]
+        },
+        "Undefined": {
+          "probability": 0.3333333333333333
+        }
+      }
+    },
+    "country": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "ndistinct": 4.0,
+          "values": [
+            "Spain",
+            "Mexico",
+            "USA",
+            "Australia"
+          ]
+        }
+      }
+    },
+    "cp": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "ndistinct": 6.0,
+          "values": [
+            "62240",
+            "44030",
+            " AR 72756",
+            "62350",
+            "62340",
+            "QLD 4000"
+          ]
+        }
+      }
+    },
+    "name": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "ndistinct": 6.0,
+          "values": [
+            "Bogatell Store",
+            "Treasures Store",
+            "Vintage Vibes",
+            "Glòries Store",
+            ".localMX Store",
+            "Goodies Alley"
+          ]
+        }
+      }
+    },
+    "state": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "ndistinct": 5.0,
+          "values": [
+            "Barcelona",
+            "Jalisco",
+            "Arkansas",
+            "Ciudad de mexico",
+            "Queensland"
+          ]
+        }
+      }
+    },
+    "street_and_number": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "ndistinct": 6.0,
+          "values": [
+            "Las ramblas 20",
+            "Av. Lázaro Cárdenas 305",
+            "1000 W Main St",
+            "las Ramblas 42",
+            "Reforma 28",
+            "221-243 George St"
+          ]
+        }
+      }
+    },
+    "type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "ndistinct": 1.0,
+          "values": [
+            "store"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,7 @@
 //! Schema statistics helpers: width, depth, and branch count.
 
+use serde::Serialize;
+
 use crate::analyzer::{CollectionSchema, FieldSchema};
 
 /// Summary statistics for a [`CollectionSchema`].
@@ -7,6 +9,10 @@ use crate::analyzer::{CollectionSchema, FieldSchema};
 pub struct SchemaStats {
     /// Number of top-level fields.
     pub width: usize,
+    /// Maximum number of fields at any single nesting level.
+    pub max_width: usize,
+    /// The nesting level (1-based) where max_width was observed.
+    pub max_width_level: usize,
     /// Maximum nesting depth (top-level fields are depth 1).
     pub depth: usize,
     /// Total number of fields across all nesting levels.
@@ -31,8 +37,18 @@ impl SchemaStats {
             total_branch += b;
         }
 
+        let (max_width, max_width_level) = level_counts
+            .iter()
+            .copied()
+            .enumerate()
+            .max_by_key(|&(_, c)| c)
+            .map(|(i, c)| (c, i + 1))
+            .unwrap_or((width, 1));
+
         SchemaStats {
             width,
+            max_width,
+            max_width_level,
             depth: max_depth,
             branch: total_branch,
             branches_by_level: level_counts,
@@ -99,7 +115,10 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
     vec![
         total_line,
         format!("Documents sampled       : {}", schema.sampled),
-        format!("Width (top-level fields): {}", s.width),
+        format!(
+            "Width (top-level / max)  : {} / {} (L{})",
+            s.width, s.max_width, s.max_width_level
+        ),
         format!("Depth (max nesting)     : {}", s.depth),
         format!("Branch (per level)      : {}", branch_by_level),
         format!("Top-level types         : {}", type_summary),
@@ -126,6 +145,66 @@ fn top_level_type_summary(schema: &CollectionSchema) -> String {
         })
         .collect();
     parts.join(", ")
+}
+
+/// Structured stats suitable for YAML serialisation.
+#[derive(Debug, Serialize)]
+pub struct StatsYaml {
+    pub documents_in_collection: serde_yaml::Value,
+    pub documents_sampled: u64,
+    pub width_top_level: usize,
+    pub width_max: usize,
+    pub width_max_level: usize,
+    pub depth_max: usize,
+    pub branch_total: usize,
+    pub branch_per_level: indexmap::IndexMap<String, usize>,
+    pub top_level_types: indexmap::IndexMap<String, String>,
+}
+
+/// Build a [`StatsYaml`] from a schema.
+pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> StatsYaml {
+    let s = SchemaStats::compute(schema);
+
+    let branch_per_level: indexmap::IndexMap<String, usize> = s
+        .branches_by_level
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| (format!("L{}", i + 1), c))
+        .collect();
+
+    let top_level_types: indexmap::IndexMap<String, String> = schema
+        .object
+        .iter()
+        .map(|(name, field)| {
+            let dominant = field
+                .types
+                .iter()
+                .filter(|(t, _)| t.as_str() != crate::analyzer::TYPE_UNDEFINED)
+                .max_by(|(_, a), (_, b)| {
+                    a.probability
+                        .partial_cmp(&b.probability)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(t, _)| t.clone())
+                .unwrap_or_else(|| "?".to_owned());
+            (name.clone(), dominant)
+        })
+        .collect();
+
+    StatsYaml {
+        documents_in_collection: match total_docs {
+            Some(n) => serde_yaml::Value::Number(n.into()),
+            None => serde_yaml::Value::String("unknown".to_owned()),
+        },
+        documents_sampled: schema.sampled,
+        width_top_level: s.width,
+        width_max: s.max_width,
+        width_max_level: s.max_width_level,
+        depth_max: s.depth,
+        branch_total: s.branch,
+        branch_per_level,
+        top_level_types,
+    }
 }
 
 #[cfg(test)]

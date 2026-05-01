@@ -27,7 +27,7 @@ There is also a **cost dimension**: managed MongoDB clusters can cost up to **~1
 
 Just as tool exist to migrate from relational databases to document stores, a tool to support the reverse journey — from document to relational — should exist too.
 
-> **Inspiration:** This project is inspired by [`mongodb-schema`](https://github.com/mongodb-js/mongodb-schema), with modifications to the values that are output.
+> **Inspiration:** This project is inspired by [`mongodb-schema`](https://github.com/mongodb-js/mongodb-schema), with modifications to the values that are output. The overall migration-project workflow (init → analyse → convert → report) is inspired by the [ora2pg](https://ora2pg.darold.net/) approach to Oracle → PostgreSQL migrations.
 
 ---
 
@@ -44,58 +44,21 @@ Just as tool exist to migrate from relational databases to document stores, a to
 
 ## CLI Usage
 
-`mongo2pg` has two subcommands. Running it without a subcommand defaults to `infer`.
+See **[USAGE.md](USAGE.md)** for the full command reference and workflow.
 
-### `infer` – sample a collection and output its JSON Schema
+The migration-project workflow (init → analyse → convert → report) is inspired by the [ora2pg](https://ora2pg.darold.net/) approach to Oracle → PostgreSQL migrations.
 
-```
-mongo2pg [infer] <URI> <DB.COLLECTION> [OPTIONS]
-
-Arguments:
-  <URI>            MongoDB connection URI (e.g. mongodb://localhost:27017)
-  <DB.COLLECTION>  Namespace in the form <db>.<collection>
-
-Options:
-  -n, --number <N>      Number of documents to sample [default: 1000]
-                          (mutually exclusive with --percent)
-  -p, --percent <PCT>   Percentage of the collection to sample, e.g. 10 for 10%
-                          (mutually exclusive with --number)
-      --no-output       Suppress schema output to stdout
-  -h, --help            Print help
-  -V, --version         Print version
-```
-
-### `to-pg` – convert an inferred schema to PostgreSQL DDL
-
-```
-mongo2pg to-pg <SCHEMA_FILE> [OPTIONS]
-
-Arguments:
-  <SCHEMA_FILE>    Path to a schema JSON file produced by `mongo2pg infer`
-
-Options:
-  -t, --table <NAME>    Root table name (defaults to the schema file stem)
-  -h, --help            Print help
-```
-
-### Examples
+Quick start:
 
 ```bash
-# Infer schema (pretty-printed JSON to stdout)
-mongo2pg mongodb://localhost:27017 mydb.users
+# 1. Create a project
+mongo2pg init --project-base /app/migration --project-name retail \
+  --uri "mongodb://user:pass@localhost:27017"
 
-# Sample 500 docs
-mongo2pg mongodb://localhost:27017 mydb.users -n 500
-
-# Sample 10% of the collection
-mongo2pg mongodb://localhost:27017 mydb.users -p 10
-
-# Infer schema and pipe directly to to-pg
-mongo2pg mongodb://localhost:27017 mydb.orders > orders.json
-mongo2pg to-pg orders.json --table orders
-
-# Suppress schema output (e.g. when only interested in side-effects)
-mongo2pg mongodb://localhost:27017 mydb.logs --no-output
+# 2. Infer schemas, generate SQL, generate reports
+mongo2pg infer  -c /app/migration/retail/config/retail.conf
+mongo2pg to-pg  -c /app/migration/retail/config/retail.conf
+mongo2pg report -c /app/migration/retail/config/retail.conf
 ```
 
 ---
