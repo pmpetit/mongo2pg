@@ -280,14 +280,93 @@ Open them in any browser to explore the database structure.
 
 ---
 
+## Step 7 – Export data to gzipped CSV
+
+```bash
+mongo2pg export -c results/base/retail/config/retail.conf
+```
+
+`export` streams every document from MongoDB, expands nested arrays and objects
+into child tables (following the same hierarchy that `to-pg` generated), and
+writes one `.csv.gz` file per SQL table into `data/<collection_name>/`.
+
+### Output layout
+
+```
+data/
+├── carts/
+│   ├── carts.csv.gz
+│   └── carts_products.csv.gz
+├── invoices/
+│   ├── invoices.csv.gz
+│   ├── invoices_items.csv.gz
+│   ├── invoices_items_image.csv.gz
+│   ├── invoices_items_price.csv.gz
+│   ├── invoices_metadata.csv.gz
+│   ├── invoices_metadata_creditcardprocessing.csv.gz
+│   ├── invoices_metadata_erpdetails.csv.gz
+│   ├── invoices_metadata_frauddetection.csv.gz
+│   ├── invoices_metadata_loyaltyrewards.csv.gz
+│   └── invoices_recommendations.csv.gz
+├── locations/
+│   └── locations.csv.gz
+├── orders/
+│   ├── orders.csv.gz
+│   ├── orders_products.csv.gz
+│   ├── orders_products_image.csv.gz
+│   ├── orders_products_price.csv.gz
+│   └── orders_status_history.csv.gz
+├── products/
+│   ├── products.csv.gz
+│   ├── products_image.csv.gz
+│   ├── products_price.csv.gz
+│   └── products_vai_text_embedding.csv.gz
+├── recommendations/
+│   ├── recommendations.csv.gz
+│   ├── recommendations_items.csv.gz
+│   ├── recommendations_items_image.csv.gz
+│   └── recommendations_items_price.csv.gz
+└── users/
+    ├── users.csv.gz
+    ├── users_address.csv.gz
+    └── users_lastrecommendations.csv.gz
+```
+
+### Loading into PostgreSQL
+
+The CSV header row matches the SQL column names exactly, so you can load them
+directly with `\COPY`:
+
+```sql
+\COPY products           FROM PROGRAM 'gunzip -c products.csv.gz'           CSV HEADER;
+\COPY products_image     FROM PROGRAM 'gunzip -c products_image.csv.gz'     CSV HEADER;
+\COPY products_price     FROM PROGRAM 'gunzip -c products_price.csv.gz'     CSV HEADER;
+
+\COPY orders             FROM PROGRAM 'gunzip -c orders.csv.gz'             CSV HEADER;
+\COPY orders_products    FROM PROGRAM 'gunzip -c orders_products.csv.gz'    CSV HEADER;
+\COPY orders_status_history FROM PROGRAM 'gunzip -c orders_status_history.csv.gz' CSV HEADER;
+```
+
+Load parent tables before child tables to satisfy foreign-key constraints.
+
+---
+
 ## Resulting project tree
 
-After all four commands the project directory looks like this:
+After all five commands the project directory looks like this:
 
 ```
 results/base/retail/
 ├── config/
 │   └── retail.conf
+├── data/
+│   ├── carts/        ← carts.csv.gz, carts_products.csv.gz
+│   ├── invoices/     ← invoices.csv.gz + 9 child table files
+│   ├── locations/    ← locations.csv.gz
+│   ├── orders/       ← orders.csv.gz + 4 child table files
+│   ├── products/     ← products.csv.gz + 3 child table files
+│   ├── recommendations/ ← recommendations.csv.gz + 3 child table files
+│   └── users/        ← users.csv.gz + 2 child table files
 ├── reports/
 │   ├── retail.html
 │   └── retail.schema.html
