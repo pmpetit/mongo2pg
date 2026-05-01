@@ -38,7 +38,7 @@ Just as tool exist to migrate from relational databases to document stores, a to
 - **Expanded output** – extended JSON Schema with `x-bsonType`, `x-metadata`, `x-sampleValues`
 - **Stats** – width / depth / branch counts printed to stderr with `--stats`
 - **Reservoir sampling** of field values (100 samples for strings/binary/code, 10 000 otherwise)
-- **Output renderers**: JSON (default), YAML, ASCII 
+- **Output renderers**: JSON (default), YAML, ASCII
 
 ---
 
@@ -55,9 +55,10 @@ Quick start:
 mongo2pg init --project-base /app/migration --project-name retail \
   --uri "mongodb://user:pass@localhost:27017"
 
-# 2. Infer schemas, generate SQL, generate reports
+# 2. Infer schemas, generate SQL, export data, generate reports
 mongo2pg infer  -c /app/migration/retail/config/retail.conf
 mongo2pg to-pg  -c /app/migration/retail/config/retail.conf
+mongo2pg export -c /app/migration/retail/config/retail.conf
 mongo2pg report -c /app/migration/retail/config/retail.conf
 ```
 

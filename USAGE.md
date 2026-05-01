@@ -545,6 +545,53 @@ Reads `source/collections/<name>/<name>.json` and writes `schema/tables/<name>.s
 
 ---
 
+## `export` – export MongoDB data to gzipped CSV files
+
+```
+mongo2pg export [COLLECTION] [OPTIONS]
+```
+
+For each collection, reads the corresponding `schema/tables/<name>.sql` to understand
+the table hierarchy, then streams **all documents** from MongoDB and writes one
+`.csv.gz` file per SQL table into `data/<collection_name>/`.
+
+Nested arrays and objects are expanded across child tables exactly as `to-pg` modelled
+them, so the CSV files can be loaded directly into PostgreSQL with `\COPY`.
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `[COLLECTION]` | Optional collection name; omit to export all collections found in `schema/tables/` |
+
+**Options**
+
+| Flag | Description |
+|---|---|
+| `-c, --config <FILE>` | Project config file – derives URI, database name, `schema/tables/` and `data/` paths |
+| `-o, --output-dir <DIR>` | Override the output directory for CSV files (default: `<project>/data/`) |
+
+**Output layout**
+
+```
+data/
+└── orders/
+    ├── orders.csv.gz
+    ├── orders_products.csv.gz
+    ├── orders_products_image.csv.gz
+    ├── orders_products_price.csv.gz
+    └── orders_status_history.csv.gz
+```
+
+**Loading into PostgreSQL**
+
+```sql
+\COPY orders FROM PROGRAM 'gunzip -c orders.csv.gz' CSV HEADER;
+\COPY orders_products FROM PROGRAM 'gunzip -c orders_products.csv.gz' CSV HEADER;
+```
+
+---
+
 ## `report` – generate HTML reports
 
 ```
@@ -586,7 +633,10 @@ mongo2pg infer -c /app/migration/retail/config/retail.conf
 # 4. Generate PostgreSQL DDL
 mongo2pg to-pg -c /app/migration/retail/config/retail.conf
 
-# 5. Generate HTML reports + ERD diagram
+# 5. Export data to gzipped CSV files
+mongo2pg export -c /app/migration/retail/config/retail.conf
+
+# 6. Generate HTML reports + ERD diagram
 mongo2pg report -c /app/migration/retail/config/retail.conf
 ```
 
@@ -612,4 +662,13 @@ mongo2pg to-pg -c config/retail.conf products
 
 # Generate reports
 mongo2pg report -c config/retail.conf
+
+# Export all collections to gzipped CSV
+mongo2pg export -c config/retail.conf
+
+# Export a single collection
+mongo2pg export -c config/retail.conf orders
+
+# Export to a custom output directory
+mongo2pg export -c config/retail.conf -o /tmp/csv
 ```

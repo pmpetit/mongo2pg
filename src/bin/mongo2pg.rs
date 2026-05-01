@@ -23,6 +23,7 @@ use clap::{Parser, Subcommand};
 use futures::TryStreamExt;
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
+use mongo2pg::export::export_collection;
 use mongo2pg::report::{collect_rows, render_html};
 use mongo2pg::schema_diagram::{load_tables, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
@@ -60,6 +61,8 @@ enum Command {
     Init(InitArgs),
     /// Generate an HTML migration report from inferred collection stats
     Report(ReportArgs),
+    /// Export MongoDB data to gzipped CSV files (one per SQL table)
+    Export(ExportArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -166,6 +169,20 @@ struct SchemaArgs {
     output: Option<PathBuf>,
 }
 
+#[derive(Parser, Debug)]
+struct ExportArgs {
+    /// Optional collection name; if omitted all collections in schema/tables/ are exported
+    collection: Option<String>,
+
+    /// Path to the project config file (.conf) – derives URI, db, schema/tables and data/ paths
+    #[arg(short = 'c', long = "config")]
+    config: Option<PathBuf>,
+
+    /// Override the output directory for CSV files (default: <project>/data/)
+    #[arg(short = 'o', long = "output-dir")]
+    output_dir: Option<PathBuf>,
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ──────────────────────────────────────────────────────────────────────────────
@@ -178,6 +195,7 @@ async fn main() -> Result<()> {
         Some(Command::Init(args)) => run_init(args),
         Some(Command::ToPg(args)) => run_to_pg(args),
         Some(Command::Report(args)) => run_report(args),
+        Some(Command::Export(args)) => run_export(args).await,
         Some(Command::Infer(args)) => run_infer(args).await,
         None => run_infer(cli.infer.expect("clap ensures args are present")).await,
     }
@@ -468,6 +486,71 @@ fn run_init(args: InitArgs) -> Result<()> {
         println!("  {}", dir.display());
     }
     println!("  {}", conf_path.display());
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// `export` subcommand
+// ──────────────────────────────────────────────────────────────────────────────
+
+async fn run_export(args: ExportArgs) -> Result<()> {
+    let conf = args
+        .config
+        .as_ref()
+        .ok_or_else(|| anyhow!("Provide -c <config>"))?;
+
+    let (base_dir, project_dir, conf_uri, conf_ns) = read_conf(conf)?;
+    let uri = conf_uri.ok_or_else(|| anyhow!("No URI in config file"))?;
+    let db_name = conf_ns.ok_or_else(|| anyhow!("No NAMESPACE in config file"))?;
+
+    let project_root = base_dir.join(&project_dir);
+    let tables_dir = project_root.join("schema").join("tables");
+    let data_dir = args
+        .output_dir
+        .clone()
+        .unwrap_or_else(|| project_root.join("data"));
+
+    let client_options = ClientOptions::parse(&uri)
+        .await
+        .context("Failed to parse MongoDB URI")?;
+    let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
+
+    // Determine which collections to export
+    let collections: Vec<String> = if let Some(name) = args.collection.clone() {
+        vec![name]
+    } else {
+        let mut names: Vec<String> = std::fs::read_dir(&tables_dir)
+            .with_context(|| format!("Cannot read {}", tables_dir.display()))?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("sql"))
+            .filter_map(|e| {
+                e.path()
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_owned())
+            })
+            .collect();
+        names.sort();
+        names
+    };
+
+    if collections.is_empty() {
+        eprintln!("No SQL schema files found in {}", tables_dir.display());
+        return Ok(());
+    }
+
+    for coll_name in &collections {
+        eprintln!("[{db_name}.{coll_name}]");
+        match export_collection(&client, &db_name, coll_name, &tables_dir, &data_dir).await {
+            Ok(files) => {
+                for f in files {
+                    println!("{f}");
+                }
+            }
+            Err(e) => eprintln!("  warning: {e}"),
+        }
+    }
+
     Ok(())
 }
 
