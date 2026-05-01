@@ -19,7 +19,7 @@ MongoDB *does* have genuinely good use-cases, and it is an excellent choice when
 - You need horizontal write-scaling or geo-distributed deployments that map naturally to MongoDB's sharding model.
 - You are storing large volumes of time-series or unstructured data where a document model genuinely fits.
 
-In practice, however, some MongoDB databases end up looking surprisingly relational: collections reference each other with manual foreign keys, data is normalised across collections, and documents have very shallow nesting with only scalar fields at the top level. These databases would be a natural fit for PostgreSQL and its mature relational tooling.
+In practice, however, some MongoDB databases end up looking surprisingly relational: collections reference each other with manual foreign keys, data is normalised across collections, and documents have very shallow nesting with only scalar fields at the top level. These databases would be a natural fit for PostgreSQL and its mature relational tooling. Also consider that sometimes, instead of creating a mongo with 3 documents or postgres with 3 rows, a .env file is enough.
 
 There is also a **cost dimension**: managed MongoDB clusters can cost up to **~10× more** than equivalent PostgreSQL deployments for comparable workloads. Being able to detect databases that do not actually need MongoDB's document model — and that could migrate to PostgreSQL without significant re-design — can therefore lead to substantial infrastructure savings.
 
