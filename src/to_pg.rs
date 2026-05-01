@@ -195,10 +195,9 @@ fn fk_scalar_type(pg_type: &str) -> &str {
 /// Returns `true` when every sampled value is a finite whole number.
 fn all_values_are_whole(values: &[serde_json::Value]) -> bool {
     !values.is_empty()
-        && values.iter().all(|v| {
-            v.as_f64()
-                .map_or(false, |f| f.is_finite() && f == f.floor())
-        })
+        && values
+            .iter()
+            .all(|v| v.as_f64().is_some_and(|f| f.is_finite() && f == f.floor()))
 }
 
 /// Returns a narrow integer PG type when every sampled value is a numeric string.
@@ -208,7 +207,7 @@ fn numeric_string_pg_type(values: &[serde_json::Value]) -> Option<&'static str> 
     }
     if values
         .iter()
-        .all(|v| v.as_str().map_or(false, |s| s.parse::<i64>().is_ok()))
+        .all(|v| v.as_str().is_some_and(|s| s.parse::<i64>().is_ok()))
     {
         let max = values
             .iter()
@@ -224,7 +223,7 @@ fn numeric_string_pg_type(values: &[serde_json::Value]) -> Option<&'static str> 
     }
     if values
         .iter()
-        .all(|v| v.as_str().map_or(false, |s| s.parse::<f64>().is_ok()))
+        .all(|v| v.as_str().is_some_and(|s| s.parse::<f64>().is_ok()))
     {
         return Some("DOUBLE PRECISION");
     }
@@ -236,7 +235,7 @@ fn numeric_string_pg_type(values: &[serde_json::Value]) -> Option<&'static str> 
 fn all_dates_are_date_only(values: &[serde_json::Value]) -> bool {
     !values.is_empty()
         && values.iter().all(|v| {
-            v.as_str().map_or(false, |s| {
+            v.as_str().is_some_and(|s| {
                 let norm = s.replace(".000Z", "Z").replace(".000+00:00", "Z");
                 norm.ends_with("T00:00:00Z")
             })
@@ -349,7 +348,7 @@ fn pk_type_for_id(non_null: &[(&str, &TypeSchema)]) -> String {
         if !values.is_empty()
             && values
                 .iter()
-                .all(|v| v.as_str().map_or(false, |s| s.parse::<i64>().is_ok()))
+                .all(|v| v.as_str().is_some_and(|s| s.parse::<i64>().is_ok()))
         {
             return "BIGSERIAL".to_owned();
         }
@@ -639,9 +638,10 @@ fn process_fields(
         // ── Single pure Object ────────────────────────────────────────────────
         if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
             let ts = non_null[0].1;
-            let is_hex = ts.object.as_ref().map_or(false, |sf| {
-                !sf.is_empty() && sf.keys().all(|k| is_hex_keyed_name(k))
-            });
+            let is_hex = ts
+                .object
+                .as_ref()
+                .is_some_and(|sf| !sf.is_empty() && sf.keys().all(|k| is_hex_keyed_name(k)));
 
             if is_hex {
                 // Map document (dynamic hex keys)

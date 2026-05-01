@@ -5,7 +5,6 @@
 
 use bson::{doc, Bson};
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
-use mongo2pg::converters::to_expanded_schema;
 use mongo2pg::stats::SchemaStats;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -159,80 +158,6 @@ fn test_alphabetical_sort_excluding_id() {
     assert_eq!(keys[1], "alpha");
     assert_eq!(keys[2], "beta");
     assert_eq!(keys[3], "zoo");
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Expanded JSON Schema converter tests
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[test]
-fn test_expanded_has_x_bson_type() {
-    let docs = vec![doc! { "_id": 1, "name": "Alice" }];
-    let schema = analyze_docs(&docs);
-    let value = to_expanded_schema(&schema);
-    let name_prop = &value["properties"]["name"];
-    assert!(
-        name_prop.get("x-bsonType").is_some(),
-        "expanded schema should have x-bsonType"
-    );
-}
-
-#[test]
-fn test_expanded_has_x_metadata() {
-    let docs = vec![doc! { "_id": 1, "score": 99_i32 }];
-    let schema = analyze_docs(&docs);
-    let value = to_expanded_schema(&schema);
-    assert!(
-        value["x-metadata"]["count"].is_number(),
-        "root x-metadata.count should be a number"
-    );
-    let score_prop = &value["properties"]["score"];
-    assert!(
-        score_prop["x-metadata"]["count"].is_number(),
-        "field x-metadata.count should be a number"
-    );
-    assert!(
-        score_prop["x-metadata"]["prob"].is_number(),
-        "field x-metadata.prob should be a number"
-    );
-}
-
-#[test]
-fn test_expanded_has_x_sample_values() {
-    let docs: Vec<bson::Document> = (0..5)
-        .map(|i| doc! { "_id": i, "tag": format!("t{i}") })
-        .collect();
-    let schema = analyze_docs(&docs);
-    let value = to_expanded_schema(&schema);
-    let tag_prop = &value["properties"]["tag"];
-    assert!(
-        tag_prop.get("x-sampleValues").is_some(),
-        "expanded schema should include x-sampleValues for string fields"
-    );
-    let samples = tag_prop["x-sampleValues"].as_array().unwrap();
-    assert!(!samples.is_empty());
-}
-
-#[test]
-fn test_expanded_no_schema_keyword() {
-    let docs = vec![doc! { "_id": 1 }];
-    let schema = analyze_docs(&docs);
-    let value = to_expanded_schema(&schema);
-    assert!(
-        value.get("$schema").is_none(),
-        "expanded format should not have $schema"
-    );
-}
-
-#[test]
-fn test_expanded_objectid_ref() {
-    use bson::oid::ObjectId;
-    let docs = vec![doc! { "_id": ObjectId::new() }];
-    let schema = analyze_docs(&docs);
-    let value = to_expanded_schema(&schema);
-    // _id has ObjectId type → x-bsonType should be "ObjectId"
-    let id_prop = &value["properties"]["_id"];
-    assert_eq!(id_prop["x-bsonType"], "ObjectId");
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

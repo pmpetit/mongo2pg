@@ -1,6 +1,6 @@
 # mongo2pg
 
-A Rust library and CLI tool for **MongoDB schema inference**. It samples documents from a MongoDB collection, infers a probabilistic schema, and exports it in the **expanded** JSON Schema dialect.
+A Rust library and CLI tool for **MongoDB schema inference and migration**. It samples documents from a MongoDB collection, infers a probabilistic schema, generates PostgreSQL DDL, exports data to gzipped CSV files, and produces HTML reports.
 
 ---
 
@@ -21,7 +21,7 @@ MongoDB *does* have genuinely good use-cases, and it is an excellent choice when
 
 In practice, however, some MongoDB databases end up looking surprisingly relational: collections reference each other with manual foreign keys, data is normalised across collections, and documents have very shallow nesting with only scalar fields at the top level. These databases would be a natural fit for PostgreSQL and its mature relational tooling. Also consider that sometimes, instead of creating a mongo with 3 documents or postgres with 3 rows, a .env file is enough.
 
-There is also a **cost dimension**: managed MongoDB clusters can cost up to **~10× more** than equivalent PostgreSQL deployments for comparable workloads. Being able to detect databases that do not actually need MongoDB's document model — and that could migrate to PostgreSQL without significant re-design — can therefore lead to substantial infrastructure savings.
+There is also a **cost dimension**: managed MongoDB clusters costs more than its equivalent PostgreSQL for comparable workloads. Being able to detect databases that do not actually need MongoDB's document model — and that could migrate to PostgreSQL without significant re-design — can therefore lead to substantial infrastructure savings.
 
 `mongo2pg` helps you make that assessment quickly: it samples a collection, infers its probabilistic schema, and surfaces the structural metrics (depth, width, branching factor) that reveal whether a collection is a good migration candidate.
 
@@ -35,10 +35,11 @@ Just as tool exist to migrate from relational databases to document stores, a to
 
 - **MongoDB sampling** – connects to any MongoDB URI, samples documents via `$sample` (default) or sequential `find/limit`
 - **Probabilistic schema inference** – tracks per-field counts, type distributions, and probabilities
-- **Expanded output** – extended JSON Schema with `x-bsonType`, `x-metadata`, `x-sampleValues`
-- **Stats** – width / depth / branch counts printed to stderr with `--stats`
-- **Reservoir sampling** of field values (100 samples for strings/binary/code, 10 000 otherwise)
-- **Output renderers**: JSON (default), YAML, ASCII
+- **PostgreSQL DDL generation** – flattens nested objects and arrays into child tables with FK constraints
+- **Data export** – streams full collections to gzipped CSV files, one per generated SQL table
+- **Stats** – width / depth / branch counts per collection
+- **Reservoir sampling** of field values for type-narrowing heuristics
+- **HTML reports** – collection stats overview and entity-relationship diagram
 
 ---
 
@@ -77,7 +78,6 @@ Tests cover:
 - Implicit `Undefined` injection for optional fields
 - Nested object and array schema
 - Reservoir value sampling
-- Expanded schema converter (`x-metadata`, `x-bsonType`, `x-sampleValues`)
 - Stats (width / depth / branch)
 
 ---
