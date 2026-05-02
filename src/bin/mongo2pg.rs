@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use bson::doc;
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use futures::TryStreamExt;
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
@@ -29,6 +29,20 @@ use mongo2pg::schema_diagram::{load_tables, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Shared args
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// MongoDB URI argument shared across commands that connect to MongoDB.
+/// When `-c` is also provided, this overrides the URI stored in the config file.
+#[derive(Args, Debug, Clone)]
+struct UriArg {
+    /// MongoDB connection URI (e.g. mongodb://localhost:27017) – required unless -c is given;
+    /// overrides the URI stored in the config file when -c is also provided
+    #[arg(long = "uri", required_unless_present = "config")]
+    uri: Option<String>,
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI definition
@@ -67,23 +81,17 @@ enum Command {
 
 #[derive(Parser, Debug)]
 struct InferArgs {
-    /// MongoDB connection URI (e.g. mongodb://localhost:27017) – required unless -c is given
-    #[arg(required_unless_present = "config")]
-    uri: Option<String>,
+    #[command(flatten)]
+    mongo: UriArg,
 
     /// Namespace: either <db>.<collection> to infer one collection,
     /// or just <db> to infer all collections in the database – required unless -c is given
-    #[arg(required_unless_present = "config")]
+    #[arg(long = "namespace", required_unless_present = "config")]
     namespace: Option<String>,
 
-    /// Number of documents to sample (mutually exclusive with --percent)
-    #[arg(
-        short = 'n',
-        long = "number",
-        default_value_t = 1000,
-        conflicts_with = "percent"
-    )]
-    number: u64,
+    /// Number of documents to sample (mutually exclusive with --percent); default 1000
+    #[arg(short = 'n', long = "number", conflicts_with = "percent")]
+    number: Option<u64>,
 
     /// Percentage of the collection to sample, e.g. 10 for 10% (mutually exclusive with --number)
     #[arg(short = 'p', long = "percent", conflicts_with = "number", value_parser = clap::value_parser!(f64))]
@@ -104,6 +112,9 @@ struct InferArgs {
 
 #[derive(Parser, Debug)]
 struct ToPgArgs {
+    #[command(flatten)]
+    mongo: UriArg,
+
     /// Optional collection name; if omitted all collections under source/collections/ are processed
     collection: Option<String>,
 
@@ -137,6 +148,9 @@ struct InitArgs {
 
 #[derive(Parser, Debug)]
 struct ReportArgs {
+    #[command(flatten)]
+    mongo: UriArg,
+
     /// Path to the project config file (.conf) – derives source/collections and output paths
     #[arg(short = 'c', long = "config", conflicts_with_all = ["collections_dir", "output"])]
     config: Option<PathBuf>,
@@ -156,6 +170,9 @@ struct ReportArgs {
 
 #[derive(Parser, Debug)]
 struct SchemaArgs {
+    #[command(flatten)]
+    mongo: UriArg,
+
     /// Path to the project config file (.conf) – derives schema/tables and reports paths
     #[arg(short = 'c', long = "config", conflicts_with = "tables_dir")]
     config: Option<PathBuf>,
@@ -177,6 +194,9 @@ struct ExportArgs {
     /// Path to the project config file (.conf) – derives URI, db, schema/tables and data/ paths
     #[arg(short = 'c', long = "config")]
     config: Option<PathBuf>,
+
+    #[command(flatten)]
+    mongo: UriArg,
 
     /// Override the output directory for CSV files (default: <project>/data/)
     #[arg(short = 'o', long = "output-dir")]
@@ -208,7 +228,8 @@ async fn main() -> Result<()> {
 fn run_to_pg(args: ToPgArgs) -> Result<()> {
     // Resolve collections source dir and SQL output dir
     let (collections_dir, output_dir) = if let Some(ref conf) = args.config {
-        let (base_dir, project_dir, _, _) = read_conf(conf)?;
+        let c = read_conf(conf)?;
+        let (base_dir, project_dir) = (c.base_dir, c.project_dir);
         let cols = base_dir
             .join(&project_dir)
             .join("source")
@@ -278,26 +299,28 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
-    // Resolve URI and namespace, reading conf file if -c was given
-    let (resolved_uri, effective_output_dir, conf_namespace) = if let Some(ref conf) = args.config {
-        let (base_dir, project_dir, conf_uri, conf_ns) = read_conf(conf)?;
-        let uri = args.uri.clone().or(conf_uri).ok_or_else(|| {
-            anyhow!("No URI provided: pass it as an argument or add URI to the config file")
-        })?;
-        let out_dir = args.output_dir.clone().unwrap_or_else(|| {
-            base_dir
-                .join(&project_dir)
-                .join("source")
-                .join("collections")
-        });
-        (uri, Some(out_dir), conf_ns)
-    } else {
-        let uri = args
-            .uri
-            .clone()
-            .expect("clap ensures uri is present when -c is absent");
-        (uri, args.output_dir.clone(), None)
-    };
+    // Resolve URI, namespace, number, and percent – reading conf file if -c was given
+    let (resolved_uri, effective_output_dir, conf_namespace, conf_number, conf_percent) =
+        if let Some(ref conf) = args.config {
+            let c = read_conf(conf)?;
+            let uri = args.mongo.uri.clone().or(c.uri).ok_or_else(|| {
+                anyhow!("No URI provided: pass it as an argument or add URI to the config file")
+            })?;
+            let out_dir = args.output_dir.clone().unwrap_or_else(|| {
+                c.base_dir
+                    .join(&c.project_dir)
+                    .join("source")
+                    .join("collections")
+            });
+            (uri, Some(out_dir), c.namespace, c.number, c.percent)
+        } else {
+            let uri = args
+                .mongo
+                .uri
+                .clone()
+                .expect("clap ensures uri is present when -c is absent");
+            (uri, args.output_dir.clone(), None, None, None)
+        };
 
     let namespace = args
         .namespace
@@ -312,10 +335,18 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         .context("Failed to parse MongoDB URI")?;
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
 
+    // CLI takes priority over conf for number/percent; then fall back to default 1000
+    let resolved_number = args.number.or(conf_number);
+    let resolved_percent = args.percent.or(conf_percent);
+
     let args = InferArgs {
-        uri: Some(resolved_uri),
+        mongo: UriArg {
+            uri: Some(resolved_uri),
+        },
         namespace: Some(namespace.clone()),
         output_dir: effective_output_dir,
+        number: resolved_number,
+        percent: resolved_percent,
         config: None,
         ..args
     };
@@ -371,7 +402,7 @@ async fn infer_collection(
         let n = ((total as f64 * pct / 100.0).ceil() as u64).max(1);
         (n, Some(total))
     } else {
-        (args.number, None)
+        (args.number.unwrap_or(1000), None)
     };
 
     let mut analyzer = Analyzer::new(true);
@@ -466,13 +497,14 @@ fn run_init(args: InitArgs) -> Result<()> {
         .join("config")
         .join(format!("{}.conf", args.project_name));
     let conf_content = format!(
-        "BASE_DIR = {}\nPROJECT_DIR = {}\n{}",
+        "BASE_DIR = {}\nPROJECT_DIR = {}\n{}{}\n# NUMBER = 1000\n# PERCENT = 10\n",
         args.project_base.display(),
         args.project_name,
         args.uri
             .as_deref()
             .map(|u| format!("URI = {}\n", u))
-            .unwrap_or_default(),
+            .unwrap_or_else(|| "# URI = mongodb://localhost:27017\n".to_owned()),
+        format!("# NAMESPACE = {}\n", args.project_name),
     );
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;
@@ -499,11 +531,18 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .as_ref()
         .ok_or_else(|| anyhow!("Provide -c <config>"))?;
 
-    let (base_dir, project_dir, conf_uri, conf_ns) = read_conf(conf)?;
-    let uri = conf_uri.ok_or_else(|| anyhow!("No URI in config file"))?;
-    let db_name = conf_ns.ok_or_else(|| anyhow!("No NAMESPACE in config file"))?;
+    let c = read_conf(conf)?;
+    let uri = args
+        .mongo
+        .uri
+        .clone()
+        .or(c.uri)
+        .ok_or_else(|| anyhow!("No URI provided: pass --uri or add URI to the config file"))?;
+    let db_name = c
+        .namespace
+        .ok_or_else(|| anyhow!("No NAMESPACE in config file"))?;
 
-    let project_root = base_dir.join(&project_dir);
+    let project_root = c.base_dir.join(&c.project_dir);
     let tables_dir = project_root.join("schema").join("tables");
     let data_dir = args
         .output_dir
@@ -561,19 +600,20 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 fn run_report(args: ReportArgs) -> Result<()> {
     // Resolve collections dir and namespace from -c or explicit flags
     let (collections_dir, namespace, default_output_dir) = if let Some(ref conf) = args.config {
-        let (base_dir, project_dir, _, conf_ns) = read_conf(conf)?;
+        let c = read_conf(conf)?;
         let ns = args.namespace.clone();
         let ns = if ns.is_empty() {
-            conf_ns.unwrap_or_else(|| project_dir.clone())
+            c.namespace.unwrap_or_else(|| c.project_dir.clone())
         } else {
             ns
         };
-        let cols_dir = base_dir
-            .join(&project_dir)
+        let cols_dir = c
+            .base_dir
+            .join(&c.project_dir)
             .join("source")
             .join("collections");
-        let out_dir = base_dir.join(&project_dir).join("reports");
-        (cols_dir, ns, Some((out_dir, project_dir)))
+        let out_dir = c.base_dir.join(&c.project_dir).join("reports");
+        (cols_dir, ns, Some((out_dir, c.project_dir)))
     } else {
         let dir = args
             .collections_dir
@@ -647,8 +687,18 @@ fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
     Ok((&ns[..dot], &ns[dot + 1..]))
 }
 
-/// Parse a `.conf` file produced by `mongo2pg init` and return `(BASE_DIR, PROJECT_DIR, URI?, NAMESPACE?)`.
-fn read_conf(path: &Path) -> Result<(PathBuf, String, Option<String>, Option<String>)> {
+/// Values parsed from a `.conf` file produced by `mongo2pg init`.
+struct ConfData {
+    base_dir: PathBuf,
+    project_dir: String,
+    uri: Option<String>,
+    namespace: Option<String>,
+    number: Option<u64>,
+    percent: Option<f64>,
+}
+
+/// Parse a `.conf` file produced by `mongo2pg init`.
+fn read_conf(path: &Path) -> Result<ConfData> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file {}", path.display()))?;
 
@@ -656,6 +706,8 @@ fn read_conf(path: &Path) -> Result<(PathBuf, String, Option<String>, Option<Str
     let mut project_dir: Option<String> = None;
     let mut uri: Option<String> = None;
     let mut namespace: Option<String> = None;
+    let mut number: Option<u64> = None;
+    let mut percent: Option<f64> = None;
 
     for line in content.lines() {
         if let Some((key, val)) = line.split_once('=') {
@@ -664,6 +716,8 @@ fn read_conf(path: &Path) -> Result<(PathBuf, String, Option<String>, Option<Str
                 "PROJECT_DIR" => project_dir = Some(val.trim().to_owned()),
                 "URI" => uri = Some(val.trim().to_owned()),
                 "NAMESPACE" => namespace = Some(val.trim().to_owned()),
+                "NUMBER" => number = val.trim().parse().ok(),
+                "PERCENT" => percent = val.trim().parse().ok(),
                 _ => {}
             }
         }
@@ -673,5 +727,12 @@ fn read_conf(path: &Path) -> Result<(PathBuf, String, Option<String>, Option<Str
     let project_dir =
         project_dir.ok_or_else(|| anyhow!("PROJECT_DIR not found in {}", path.display()))?;
 
-    Ok((base_dir, project_dir, uri, namespace))
+    Ok(ConfData {
+        base_dir,
+        project_dir,
+        uri,
+        namespace,
+        number,
+        percent,
+    })
 }
