@@ -38,7 +38,6 @@ Just as tool exist to migrate from relational databases to document stores, a to
 - **PostgreSQL DDL generation** – flattens nested objects and arrays into child tables with FK constraints
 - **Data export** – streams full collections to gzipped CSV files, one per generated SQL table
 - **Stats** – width / depth / branch counts per collection
-- **Reservoir sampling** of field values for type-narrowing heuristics
 - **HTML reports** – collection stats overview and entity-relationship diagram
 
 ---
