@@ -396,3 +396,7 @@ results/base/retail/
 you can see a diagram
 
 ![alt text](schema_diagram.png)
+
+Example of report, with the corresponding pg tables created.
+
+![alt text](report.png)
