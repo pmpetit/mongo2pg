@@ -10,9 +10,9 @@
           "sampled": 4,
           "ndistinct": 4.0,
           "values": [
-            "682b77d26684614c29d14fef",
             "682b79076684614c29d14ff1",
             "682b73a36684614c29d14fee",
+            "682b77d26684614c29d14fef",
             "682b78746684614c29d14ff0"
           ]
         }
@@ -26,9 +26,9 @@
           "sampled": 4,
           "ndistinct": 4.0,
           "values": [
-            "2025-05-19 18:26:26.362 +00:00:00",
             "2025-05-19 18:31:35.669 +00:00:00",
             "2025-05-19 18:08:35.135 +00:00:00",
+            "2025-05-19 18:26:26.362 +00:00:00",
             "2025-05-19 18:29:08.995 +00:00:00"
           ]
         }
@@ -42,9 +42,9 @@
           "sampled": 4,
           "ndistinct": 4.0,
           "values": [
-            "682b77d26b1445af06f99129",
             "682b79076b1445af06f9912b",
             "682b73a26b1445af06f99128",
+            "682b77d26b1445af06f99129",
             "682b78746b1445af06f9912a"
           ]
         }
@@ -73,10 +73,10 @@
                         "ndistinct": 5.0,
                         "values": [
                           "AmazonBasics",
-                          "Amazon Brand - Solimo",
-                          "AmazonCommercial",
                           "Whole Paws",
-                          "Amazon Collection"
+                          "Amazon Collection",
+                          "Amazon Brand - Solimo",
+                          "AmazonCommercial"
                         ]
                       }
                     }
@@ -96,26 +96,26 @@
                                 "sampled": 80,
                                 "ndistinct": 76.0,
                                 "values": [
-                                  "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg",
-                                  "https://m.media-amazon.com/images/I/71C-47og3IL.jpg",
-                                  "https://m.media-amazon.com/images/I/81rCRzd7OKL.jpg",
-                                  "https://m.media-amazon.com/images/I/71UfKIVpQbL.jpg",
-                                  "https://m.media-amazon.com/images/I/61w4fs2ESyL.jpg",
-                                  "https://m.media-amazon.com/images/I/810lMEAN3TL.jpg",
-                                  "https://m.media-amazon.com/images/I/51bZ4xREiBL.jpg",
-                                  "https://m.media-amazon.com/images/I/810INGS6m0L.jpg",
-                                  "https://m.media-amazon.com/images/I/81-sJRhEapL.jpg",
-                                  "https://m.media-amazon.com/images/I/71kXj0gj9BL.jpg",
-                                  "https://m.media-amazon.com/images/I/71FSaBzcBUL.jpg",
-                                  "https://m.media-amazon.com/images/I/91uQDR-+s8L.jpg",
-                                  "https://m.media-amazon.com/images/I/5131duvzyJL.jpg",
-                                  "https://m.media-amazon.com/images/I/71Ss1jEI0cL.jpg",
+                                  "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg",
+                                  "https://m.media-amazon.com/images/I/7100j+VbybL.jpg",
+                                  "https://m.media-amazon.com/images/I/91b9m11p66L.jpg",
+                                  "https://m.media-amazon.com/images/I/61k+2yyQf-L.jpg",
+                                  "https://m.media-amazon.com/images/I/61ZQCeXeWbL.jpg",
+                                  "https://m.media-amazon.com/images/I/61UVrvXNYdL.jpg",
+                                  "https://m.media-amazon.com/images/I/61MvMxT+yTL.jpg",
+                                  "https://m.media-amazon.com/images/I/813D6acTpRL.jpg",
+                                  "https://m.media-amazon.com/images/I/91z3DklrOdL.jpg",
+                                  "https://m.media-amazon.com/images/I/81j0-ItVJ7L.jpg",
+                                  "https://m.media-amazon.com/images/I/81YXRsJQvYL.jpg",
+                                  "https://m.media-amazon.com/images/I/81gcEh7n6kL.jpg",
+                                  "https://m.media-amazon.com/images/I/61ZpOn3vM9L.jpg",
+                                  "https://m.media-amazon.com/images/I/A1K+v-ZI2hL.jpg",
                                   "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
-                                  "https://m.media-amazon.com/images/I/71r-Yywi2rL.jpg",
-                                  "https://m.media-amazon.com/images/I/91pjCjZJu7L.jpg",
-                                  "https://m.media-amazon.com/images/I/81SYWl+N1qL.jpg",
-                                  "https://m.media-amazon.com/images/I/71lgQURhrbL.jpg",
-                                  "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
+                                  "https://m.media-amazon.com/images/I/81GUeFHKIAL.jpg",
+                                  "https://m.media-amazon.com/images/I/91nboUQK2ML.jpg",
+                                  "https://m.media-amazon.com/images/I/61tVo4YgneL.jpg",
+                                  "https://m.media-amazon.com/images/I/41r7475mqgL.jpg",
+                                  "https://m.media-amazon.com/images/I/91ll1KBBxOL.jpg"
                                 ]
                               }
                             }
@@ -123,64 +123,64 @@
                         },
                         "values": [
                           {
-                            "url": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71C-47og3IL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/7100j+VbybL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/81rCRzd7OKL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/91b9m11p66L.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71UfKIVpQbL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/61k+2yyQf-L.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/61w4fs2ESyL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/61ZQCeXeWbL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/810lMEAN3TL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/61UVrvXNYdL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/51bZ4xREiBL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/61MvMxT+yTL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/810INGS6m0L.jpg"
+                            "url": "https://m.media-amazon.com/images/I/813D6acTpRL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/81-sJRhEapL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/91z3DklrOdL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71kXj0gj9BL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/81j0-ItVJ7L.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71FSaBzcBUL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/81YXRsJQvYL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/91uQDR-+s8L.jpg"
+                            "url": "https://m.media-amazon.com/images/I/81gcEh7n6kL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/5131duvzyJL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/61ZpOn3vM9L.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71Ss1jEI0cL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/A1K+v-ZI2hL.jpg"
                           },
                           {
                             "url": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71r-Yywi2rL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/81GUeFHKIAL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/91pjCjZJu7L.jpg"
+                            "url": "https://m.media-amazon.com/images/I/91nboUQK2ML.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/81SYWl+N1qL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/61tVo4YgneL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71lgQURhrbL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/41r7475mqgL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/91ll1KBBxOL.jpg"
                           }
                         ]
                       }
@@ -194,26 +194,26 @@
                         "sampled": 80,
                         "ndistinct": 80.0,
                         "values": [
-                          "AmazonBasics Combo Plastic Cutlery",
-                          "AmazonBasics 45-Piece Stainless Steel Satin Matte Flatware Set, Service for 8",
-                          "AmazonBasics Grill Tray with Tool Set,Spatula,Tongs,Basting brush",
-                          "AmazonBasics Tools 4-Piece Pliers Set",
-                          "AmazonBasics Bathroom Accessory Sets",
-                          "Amazon Brand - Solimo 24 Piece Stainless Steel Cutlery Set, Vintage (Contains: 6 Table Spoons, 6 Tea Spoons, 6 Forks, 6 Soup Spoons), Silver",
-                          "(Renewed) AmazonBasics 18-Piece Dinnerware Set - Soft Lines",
-                          "AmazonCommercial Stainless Steel Cooking Utensils, Set of 29 Utensils",
-                          "AmazonBasics - 8 Piece Non-Stick Cookware Set (without Induction Base)",
-                          "AmazonBasics 2-Piece Peeler Set, Soft Grip Handle, Grey and Green (Renewed)",
-                          "AmazonBasics Comfort Grip Utility Knife - Retractable 3-Position Locking Blade with 4 Replacement Blades",
-                          "AmazonBasics 12-Piece Melamine Dinnerware Set - Service for 4, Yellow Crackle Glaze",
-                          "AmazonBasics Toilet Bowl Brush and Holder",
-                          "AmazonBasics Stainless Steel Pizza Wheel and Cutter with Cover, Black Soft Grip Handle (Renewed)",
-                          "AmazonBasics 2\" Stiff Nylon Handle Putty Knife",
-                          "AmazonBasics Pliers Set with Durable Nylon Case - 5-Piece (8-Inch Diagonal, 8-Inch Combination, 8-Inch Long Nose, 8-Inch Groove Joint, 8-Inch Slip-Joint) (Renewed)",
-                          "AmazonBasics 2-Tier Sliding Basket Organizer",
-                          "AmazonBasics Locking Glass Food Storage Container",
-                          "AmazonBasics Groove Joint Pliers Set - 3-Piece (Renewed)",
-                          "AmazonBasics 1-1/4\" Chisel, Nylon Handle Putty Knife"
+                          "AmazonBasics - Pet Play Station Feeder",
+                          "AmazonBasics Pet House, Large",
+                          "AmazonBasics Foldable Metal Pet Exercise and Playpen, 42\"",
+                          "AmazonBasics Cuddler Pet Bed - Medium, Floral Print",
+                          "AmazonBasics Round Self Warming Pet Bed for Cat or Dog - 24 x 8 Inches",
+                          "AmazonBasics Water-Resistant Pet Bed - Oval, Royal Blue, 18.9 Inch",
+                          "AmazonBasics Water-Resistant Pet Bed - Rectangular, Teal, 25.6 Inch",
+                          "AmazonBasics Pet Carrier Kennel With Metal Wire Ventilation,23-Inch",
+                          "AmazonBasics Single-Door & Double-Door Folding Metal Dog or Pet Crate Kennel with Tray, 30 x 19 x 21 Inches",
+                          "AmazonBasics 8-Panel Plastic Pet Pen Fence Enclosure With Gate - 59 x 58 x 28 Inches, Grey",
+                          "AmazonBasics Memory Foam Dog Bed with Removable Washable Cover, 16-Inch x 22-Inch",
+                          "AmazonBasics Cat Tree with Cave - Large, Beige (Renewed)",
+                          "AmazonBasics Cat Scratcher Lounger - Oval, Large",
+                          "AmazonBasics Soft-Sided Pet Travel Carrier - Grey, Medium",
+                          "AmazonBasics Soft-Sided Pet Travel Carrier - Grey, Large",
+                          "AmazonBasics Cat Triple Scratching Posts (Renewed)",
+                          "AmazonBasics Small Elevated Cooling Pet Dog Cot Bed - 36 x 22 x 7.5 Inches, Green",
+                          "AmazonBasics Cat Tree - XX-Large, Grey (Renewed)",
+                          "AmazonBasics 100% Cornstarch Waste Bags (16 Rolls)",
+                          "WHOLE PAWS Whitefish & Sweet Potato Recipe Dog Food, 64 OZ"
                         ]
                       }
                     }
@@ -233,26 +233,26 @@
                                 "sampled": 80,
                                 "ndistinct": 57.0,
                                 "values": [
-                                  118,
-                                  86,
-                                  10,
-                                  74,
-                                  111,
-                                  93,
-                                  67,
-                                  72,
-                                  33,
-                                  91,
-                                  84,
-                                  43,
-                                  28,
-                                  18,
-                                  108,
-                                  13,
-                                  62,
-                                  96,
                                   50,
-                                  30
+                                  30,
+                                  49,
+                                  72,
+                                  39,
+                                  90,
+                                  24,
+                                  76,
+                                  60,
+                                  34,
+                                  69,
+                                  100,
+                                  91,
+                                  98,
+                                  110,
+                                  38,
+                                  96,
+                                  41,
+                                  53,
+                                  116
                                 ]
                               }
                             }
@@ -273,31 +273,15 @@
                         },
                         "values": [
                           {
-                            "amount": 118,
+                            "amount": 50,
                             "currency": "USD"
                           },
                           {
-                            "amount": 86,
+                            "amount": 30,
                             "currency": "USD"
                           },
                           {
-                            "amount": 10,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 74,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 111,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 93,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 67,
+                            "amount": 49,
                             "currency": "USD"
                           },
                           {
@@ -305,7 +289,35 @@
                             "currency": "USD"
                           },
                           {
-                            "amount": 33,
+                            "amount": 39,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 90,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 24,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 76,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 60,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 34,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 69,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 100,
                             "currency": "USD"
                           },
                           {
@@ -313,31 +325,15 @@
                             "currency": "USD"
                           },
                           {
-                            "amount": 84,
+                            "amount": 98,
                             "currency": "USD"
                           },
                           {
-                            "amount": 43,
+                            "amount": 110,
                             "currency": "USD"
                           },
                           {
-                            "amount": 28,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 18,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 108,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 13,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 62,
+                            "amount": 38,
                             "currency": "USD"
                           },
                           {
@@ -345,11 +341,15 @@
                             "currency": "USD"
                           },
                           {
-                            "amount": 50,
+                            "amount": 41,
                             "currency": "USD"
                           },
                           {
-                            "amount": 30,
+                            "amount": 53,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 116,
                             "currency": "USD"
                           }
                         ]
@@ -364,26 +364,26 @@
                         "sampled": 80,
                         "ndistinct": 80.0,
                         "values": [
-                          "67192b3f64d161905fbe7a5a",
-                          "67192b4164d161905fbe7e64",
-                          "67192b3f64d161905fbe7a84",
-                          "67192b3f64d161905fbe79ed",
-                          "67192b3f64d161905fbe79d9",
-                          "67192b4464d161905fbe898a",
-                          "67192b4464d161905fbe8845",
-                          "67192b3f64d161905fbe7b15",
-                          "67192b4264d161905fbe804e",
-                          "67192b4164d161905fbe7c07",
-                          "67192b4264d161905fbe82ae",
-                          "67192b4264d161905fbe803b",
-                          "67192b4264d161905fbe7fd1",
-                          "67192b4564d161905fbe8ba8",
-                          "67192b3f64d161905fbe7b61",
-                          "67192b3f64d161905fbe78e0",
-                          "67192b4164d161905fbe7c9f",
-                          "67192b4564d161905fbe8b5a",
-                          "67192b3f64d161905fbe7964",
-                          "67192b4364d161905fbe8491"
+                          "67192b3f64d161905fbe77e9",
+                          "67192b4364d161905fbe84ee",
+                          "67192b4464d161905fbe8969",
+                          "67192b4264d161905fbe810d",
+                          "67192b4364d161905fbe83be",
+                          "67192b4464d161905fbe8916",
+                          "67192b4164d161905fbe7ddb",
+                          "67192b4364d161905fbe8648",
+                          "67192b4464d161905fbe8af1",
+                          "67192b4164d161905fbe7cd0",
+                          "67192b4364d161905fbe85c0",
+                          "67192b4364d161905fbe83f7",
+                          "67192b4164d161905fbe7f2c",
+                          "67192b4364d161905fbe8645",
+                          "67192b4264d161905fbe82c8",
+                          "67192b4264d161905fbe8230",
+                          "67192b4364d161905fbe85b9",
+                          "67192b3f64d161905fbe780c",
+                          "67192b3f64d161905fbe79b1",
+                          "67192b3f64d161905fbe7aee"
                         ]
                       }
                     }
@@ -397,25 +397,25 @@
                         "ndistinct": 77.0,
                         "values": [
                           1.0,
-                          0.8933537006378174,
-                          0.8773636817932129,
-                          0.8745524287223816,
-                          0.8700612783432007,
-                          0.8669348955154419,
-                          0.8667609691619873,
-                          0.8617862462997437,
-                          0.8579095602035522,
-                          0.8575308322906494,
-                          0.8571140766143799,
-                          0.8554350137710571,
-                          0.8486881256103516,
-                          0.847941517829895,
-                          0.8465219736099243,
-                          0.844762921333313,
-                          0.8443998098373413,
-                          0.8440160751342773,
-                          0.8423045873641968,
-                          0.8421430587768555
+                          0.8805115222930908,
+                          0.8722970485687256,
+                          0.856462836265564,
+                          0.8559826016426086,
+                          0.8553478717803955,
+                          0.8489893078804016,
+                          0.8464508652687073,
+                          0.8460581302642822,
+                          0.8447016477584839,
+                          0.8399190306663513,
+                          0.8388804197311401,
+                          0.8341736793518066,
+                          0.8333920240402222,
+                          0.8312549591064453,
+                          0.8261364698410034,
+                          0.8241959810256958,
+                          0.8215769529342651,
+                          0.8186294436454773,
+                          0.8144474029541016
                         ]
                       }
                     }
@@ -423,532 +423,270 @@
                 },
                 "values": [
                   {
-                    "productId": "67192b3f64d161905fbe7a5a",
-                    "name": "AmazonBasics Combo Plastic Cutlery",
+                    "productId": "67192b3f64d161905fbe77e9",
+                    "name": "AmazonBasics - Pet Play Station Feeder",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 118,
+                      "amount": 50,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
                     },
                     "vectorSearchScore": 1.0
                   },
                   {
-                    "productId": "67192b4164d161905fbe7e64",
-                    "name": "AmazonBasics 45-Piece Stainless Steel Satin Matte Flatware Set, Service for 8",
+                    "productId": "67192b4364d161905fbe84ee",
+                    "name": "AmazonBasics Pet House, Large",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 86,
+                      "amount": 30,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/71C-47og3IL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/7100j+VbybL.jpg"
                     },
-                    "vectorSearchScore": 0.8933537006378174
+                    "vectorSearchScore": 0.8805115222930908
                   },
                   {
-                    "productId": "67192b3f64d161905fbe7a84",
-                    "name": "AmazonBasics Grill Tray with Tool Set,Spatula,Tongs,Basting brush",
+                    "productId": "67192b4464d161905fbe8969",
+                    "name": "AmazonBasics Foldable Metal Pet Exercise and Playpen, 42\"",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 10,
+                      "amount": 49,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/81rCRzd7OKL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/91b9m11p66L.jpg"
                     },
-                    "vectorSearchScore": 0.8773636817932129
+                    "vectorSearchScore": 0.8722970485687256
                   },
                   {
-                    "productId": "67192b3f64d161905fbe79ed",
-                    "name": "AmazonBasics Tools 4-Piece Pliers Set",
+                    "productId": "67192b4264d161905fbe810d",
+                    "name": "AmazonBasics Cuddler Pet Bed - Medium, Floral Print",
                     "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 74,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/71UfKIVpQbL.jpg"
-                    },
-                    "vectorSearchScore": 0.8745524287223816
-                  },
-                  {
-                    "productId": "67192b3f64d161905fbe79d9",
-                    "name": "AmazonBasics Bathroom Accessory Sets",
-                    "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 111,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/61w4fs2ESyL.jpg"
-                    },
-                    "vectorSearchScore": 0.8700612783432007
-                  },
-                  {
-                    "productId": "67192b4464d161905fbe898a",
-                    "name": "Amazon Brand - Solimo 24 Piece Stainless Steel Cutlery Set, Vintage (Contains: 6 Table Spoons, 6 Tea Spoons, 6 Forks, 6 Soup Spoons), Silver",
-                    "brand": "Amazon Brand - Solimo",
-                    "price": {
-                      "amount": 93,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/810lMEAN3TL.jpg"
-                    },
-                    "vectorSearchScore": 0.8669348955154419
-                  },
-                  {
-                    "productId": "67192b4464d161905fbe8845",
-                    "name": "(Renewed) AmazonBasics 18-Piece Dinnerware Set - Soft Lines",
-                    "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 67,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/51bZ4xREiBL.jpg"
-                    },
-                    "vectorSearchScore": 0.8667609691619873
-                  },
-                  {
-                    "productId": "67192b3f64d161905fbe7b15",
-                    "name": "AmazonCommercial Stainless Steel Cooking Utensils, Set of 29 Utensils",
-                    "brand": "AmazonCommercial",
                     "price": {
                       "amount": 72,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/810INGS6m0L.jpg"
+                      "url": "https://m.media-amazon.com/images/I/61k+2yyQf-L.jpg"
                     },
-                    "vectorSearchScore": 0.8617862462997437
+                    "vectorSearchScore": 0.856462836265564
                   },
                   {
-                    "productId": "67192b4264d161905fbe804e",
-                    "name": "AmazonBasics - 8 Piece Non-Stick Cookware Set (without Induction Base)",
+                    "productId": "67192b4364d161905fbe83be",
+                    "name": "AmazonBasics Round Self Warming Pet Bed for Cat or Dog - 24 x 8 Inches",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 33,
+                      "amount": 39,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/81-sJRhEapL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/61ZQCeXeWbL.jpg"
                     },
-                    "vectorSearchScore": 0.8579095602035522
+                    "vectorSearchScore": 0.8559826016426086
                   },
                   {
-                    "productId": "67192b4164d161905fbe7c07",
-                    "name": "AmazonBasics 2-Piece Peeler Set, Soft Grip Handle, Grey and Green (Renewed)",
+                    "productId": "67192b4464d161905fbe8916",
+                    "name": "AmazonBasics Water-Resistant Pet Bed - Oval, Royal Blue, 18.9 Inch",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 90,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/61UVrvXNYdL.jpg"
+                    },
+                    "vectorSearchScore": 0.8553478717803955
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7ddb",
+                    "name": "AmazonBasics Water-Resistant Pet Bed - Rectangular, Teal, 25.6 Inch",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 24,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/61MvMxT+yTL.jpg"
+                    },
+                    "vectorSearchScore": 0.8489893078804016
+                  },
+                  {
+                    "productId": "67192b4364d161905fbe8648",
+                    "name": "AmazonBasics Pet Carrier Kennel With Metal Wire Ventilation,23-Inch",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 76,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/813D6acTpRL.jpg"
+                    },
+                    "vectorSearchScore": 0.8464508652687073
+                  },
+                  {
+                    "productId": "67192b4464d161905fbe8af1",
+                    "name": "AmazonBasics Single-Door & Double-Door Folding Metal Dog or Pet Crate Kennel with Tray, 30 x 19 x 21 Inches",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 60,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/91z3DklrOdL.jpg"
+                    },
+                    "vectorSearchScore": 0.8460581302642822
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7cd0",
+                    "name": "AmazonBasics 8-Panel Plastic Pet Pen Fence Enclosure With Gate - 59 x 58 x 28 Inches, Grey",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 34,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/81j0-ItVJ7L.jpg"
+                    },
+                    "vectorSearchScore": 0.8447016477584839
+                  },
+                  {
+                    "productId": "67192b4364d161905fbe85c0",
+                    "name": "AmazonBasics Memory Foam Dog Bed with Removable Washable Cover, 16-Inch x 22-Inch",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 69,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/81YXRsJQvYL.jpg"
+                    },
+                    "vectorSearchScore": 0.8399190306663513
+                  },
+                  {
+                    "productId": "67192b4364d161905fbe83f7",
+                    "name": "AmazonBasics Cat Tree with Cave - Large, Beige (Renewed)",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 100,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/81gcEh7n6kL.jpg"
+                    },
+                    "vectorSearchScore": 0.8388804197311401
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7f2c",
+                    "name": "AmazonBasics Cat Scratcher Lounger - Oval, Large",
                     "brand": "AmazonBasics",
                     "price": {
                       "amount": 91,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/71kXj0gj9BL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/61ZpOn3vM9L.jpg"
                     },
-                    "vectorSearchScore": 0.8575308322906494
+                    "vectorSearchScore": 0.8341736793518066
                   },
                   {
-                    "productId": "67192b4264d161905fbe82ae",
-                    "name": "AmazonBasics Comfort Grip Utility Knife - Retractable 3-Position Locking Blade with 4 Replacement Blades",
+                    "productId": "67192b4364d161905fbe8645",
+                    "name": "AmazonBasics Soft-Sided Pet Travel Carrier - Grey, Medium",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 84,
+                      "amount": 98,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/71FSaBzcBUL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/A1K+v-ZI2hL.jpg"
                     },
-                    "vectorSearchScore": 0.8571140766143799
+                    "vectorSearchScore": 0.8333920240402222
                   },
                   {
-                    "productId": "67192b4264d161905fbe803b",
-                    "name": "AmazonBasics 12-Piece Melamine Dinnerware Set - Service for 4, Yellow Crackle Glaze",
+                    "productId": "67192b4264d161905fbe82c8",
+                    "name": "AmazonBasics Soft-Sided Pet Travel Carrier - Grey, Large",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 43,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/91uQDR-+s8L.jpg"
-                    },
-                    "vectorSearchScore": 0.8554350137710571
-                  },
-                  {
-                    "productId": "67192b4264d161905fbe7fd1",
-                    "name": "AmazonBasics Toilet Bowl Brush and Holder",
-                    "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 28,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/5131duvzyJL.jpg"
-                    },
-                    "vectorSearchScore": 0.8486881256103516
-                  },
-                  {
-                    "productId": "67192b4564d161905fbe8ba8",
-                    "name": "AmazonBasics Stainless Steel Pizza Wheel and Cutter with Cover, Black Soft Grip Handle (Renewed)",
-                    "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 28,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/71Ss1jEI0cL.jpg"
-                    },
-                    "vectorSearchScore": 0.847941517829895
-                  },
-                  {
-                    "productId": "67192b3f64d161905fbe7b61",
-                    "name": "AmazonBasics 2\" Stiff Nylon Handle Putty Knife",
-                    "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 18,
+                      "amount": 34,
                       "currency": "USD"
                     },
                     "image": {
                       "url": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg"
                     },
-                    "vectorSearchScore": 0.8465219736099243
+                    "vectorSearchScore": 0.8312549591064453
                   },
                   {
-                    "productId": "67192b3f64d161905fbe78e0",
-                    "name": "AmazonBasics Pliers Set with Durable Nylon Case - 5-Piece (8-Inch Diagonal, 8-Inch Combination, 8-Inch Long Nose, 8-Inch Groove Joint, 8-Inch Slip-Joint) (Renewed)",
+                    "productId": "67192b4264d161905fbe8230",
+                    "name": "AmazonBasics Cat Triple Scratching Posts (Renewed)",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 108,
+                      "amount": 110,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/71r-Yywi2rL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/81GUeFHKIAL.jpg"
                     },
-                    "vectorSearchScore": 0.844762921333313
+                    "vectorSearchScore": 0.8261364698410034
                   },
                   {
-                    "productId": "67192b4164d161905fbe7c9f",
-                    "name": "AmazonBasics 2-Tier Sliding Basket Organizer",
+                    "productId": "67192b4364d161905fbe85b9",
+                    "name": "AmazonBasics Small Elevated Cooling Pet Dog Cot Bed - 36 x 22 x 7.5 Inches, Green",
                     "brand": "AmazonBasics",
                     "price": {
-                      "amount": 13,
+                      "amount": 38,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/91pjCjZJu7L.jpg"
+                      "url": "https://m.media-amazon.com/images/I/91nboUQK2ML.jpg"
                     },
-                    "vectorSearchScore": 0.8443998098373413
+                    "vectorSearchScore": 0.8241959810256958
                   },
                   {
-                    "productId": "67192b4564d161905fbe8b5a",
-                    "name": "AmazonBasics Locking Glass Food Storage Container",
-                    "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 62,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/81SYWl+N1qL.jpg"
-                    },
-                    "vectorSearchScore": 0.8440160751342773
-                  },
-                  {
-                    "productId": "67192b3f64d161905fbe7964",
-                    "name": "AmazonBasics Groove Joint Pliers Set - 3-Piece (Renewed)",
-                    "brand": "AmazonBasics",
-                    "price": {
-                      "amount": 28,
-                      "currency": "USD"
-                    },
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/71lgQURhrbL.jpg"
-                    },
-                    "vectorSearchScore": 0.8423045873641968
-                  },
-                  {
-                    "productId": "67192b4364d161905fbe8491",
-                    "name": "AmazonBasics 1-1/4\" Chisel, Nylon Handle Putty Knife",
+                    "productId": "67192b3f64d161905fbe780c",
+                    "name": "AmazonBasics Cat Tree - XX-Large, Grey (Renewed)",
                     "brand": "AmazonBasics",
                     "price": {
                       "amount": 96,
                       "currency": "USD"
                     },
                     "image": {
-                      "url": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg"
+                      "url": "https://m.media-amazon.com/images/I/61tVo4YgneL.jpg"
                     },
-                    "vectorSearchScore": 0.8421430587768555
+                    "vectorSearchScore": 0.8215769529342651
+                  },
+                  {
+                    "productId": "67192b3f64d161905fbe79b1",
+                    "name": "AmazonBasics 100% Cornstarch Waste Bags (16 Rolls)",
+                    "brand": "AmazonBasics",
+                    "price": {
+                      "amount": 41,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/41r7475mqgL.jpg"
+                    },
+                    "vectorSearchScore": 0.8186294436454773
+                  },
+                  {
+                    "productId": "67192b3f64d161905fbe7aee",
+                    "name": "WHOLE PAWS Whitefish & Sweet Potato Recipe Dog Food, 64 OZ",
+                    "brand": "Whole Paws",
+                    "price": {
+                      "amount": 53,
+                      "currency": "USD"
+                    },
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/91ll1KBBxOL.jpg"
+                    },
+                    "vectorSearchScore": 0.8144474029541016
                   }
                 ]
               }
             }
           },
           "values": [
-            [
-              {
-                "productId": "67192b3f64d161905fbe7a5a",
-                "name": "AmazonBasics Combo Plastic Cutlery",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 118,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg"
-                },
-                "vectorSearchScore": 1.0
-              },
-              {
-                "productId": "67192b4164d161905fbe7e64",
-                "name": "AmazonBasics 45-Piece Stainless Steel Satin Matte Flatware Set, Service for 8",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 86,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71C-47og3IL.jpg"
-                },
-                "vectorSearchScore": 0.8933537006378174
-              },
-              {
-                "productId": "67192b3f64d161905fbe7a84",
-                "name": "AmazonBasics Grill Tray with Tool Set,Spatula,Tongs,Basting brush",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 10,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/81rCRzd7OKL.jpg"
-                },
-                "vectorSearchScore": 0.8773636817932129
-              },
-              {
-                "productId": "67192b3f64d161905fbe79ed",
-                "name": "AmazonBasics Tools 4-Piece Pliers Set",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 74,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71UfKIVpQbL.jpg"
-                },
-                "vectorSearchScore": 0.8745524287223816
-              },
-              {
-                "productId": "67192b3f64d161905fbe79d9",
-                "name": "AmazonBasics Bathroom Accessory Sets",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 111,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61w4fs2ESyL.jpg"
-                },
-                "vectorSearchScore": 0.8700612783432007
-              },
-              {
-                "productId": "67192b4464d161905fbe898a",
-                "name": "Amazon Brand - Solimo 24 Piece Stainless Steel Cutlery Set, Vintage (Contains: 6 Table Spoons, 6 Tea Spoons, 6 Forks, 6 Soup Spoons), Silver",
-                "brand": "Amazon Brand - Solimo",
-                "price": {
-                  "amount": 93,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/810lMEAN3TL.jpg"
-                },
-                "vectorSearchScore": 0.8669348955154419
-              },
-              {
-                "productId": "67192b4464d161905fbe8845",
-                "name": "(Renewed) AmazonBasics 18-Piece Dinnerware Set - Soft Lines",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 67,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/51bZ4xREiBL.jpg"
-                },
-                "vectorSearchScore": 0.8667609691619873
-              },
-              {
-                "productId": "67192b3f64d161905fbe7b15",
-                "name": "AmazonCommercial Stainless Steel Cooking Utensils, Set of 29 Utensils",
-                "brand": "AmazonCommercial",
-                "price": {
-                  "amount": 72,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/810INGS6m0L.jpg"
-                },
-                "vectorSearchScore": 0.8617862462997437
-              },
-              {
-                "productId": "67192b4264d161905fbe804e",
-                "name": "AmazonBasics - 8 Piece Non-Stick Cookware Set (without Induction Base)",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 33,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/81-sJRhEapL.jpg"
-                },
-                "vectorSearchScore": 0.8579095602035522
-              },
-              {
-                "productId": "67192b4164d161905fbe7c07",
-                "name": "AmazonBasics 2-Piece Peeler Set, Soft Grip Handle, Grey and Green (Renewed)",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 91,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71kXj0gj9BL.jpg"
-                },
-                "vectorSearchScore": 0.8575308322906494
-              },
-              {
-                "productId": "67192b4264d161905fbe82ae",
-                "name": "AmazonBasics Comfort Grip Utility Knife - Retractable 3-Position Locking Blade with 4 Replacement Blades",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 84,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71FSaBzcBUL.jpg"
-                },
-                "vectorSearchScore": 0.8571140766143799
-              },
-              {
-                "productId": "67192b4264d161905fbe803b",
-                "name": "AmazonBasics 12-Piece Melamine Dinnerware Set - Service for 4, Yellow Crackle Glaze",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 43,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/91uQDR-+s8L.jpg"
-                },
-                "vectorSearchScore": 0.8554350137710571
-              },
-              {
-                "productId": "67192b4264d161905fbe7fd1",
-                "name": "AmazonBasics Toilet Bowl Brush and Holder",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 28,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/5131duvzyJL.jpg"
-                },
-                "vectorSearchScore": 0.8486881256103516
-              },
-              {
-                "productId": "67192b4564d161905fbe8ba8",
-                "name": "AmazonBasics Stainless Steel Pizza Wheel and Cutter with Cover, Black Soft Grip Handle (Renewed)",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 28,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71Ss1jEI0cL.jpg"
-                },
-                "vectorSearchScore": 0.847941517829895
-              },
-              {
-                "productId": "67192b3f64d161905fbe7b61",
-                "name": "AmazonBasics 2\" Stiff Nylon Handle Putty Knife",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 18,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg"
-                },
-                "vectorSearchScore": 0.8465219736099243
-              },
-              {
-                "productId": "67192b3f64d161905fbe78e0",
-                "name": "AmazonBasics Pliers Set with Durable Nylon Case - 5-Piece (8-Inch Diagonal, 8-Inch Combination, 8-Inch Long Nose, 8-Inch Groove Joint, 8-Inch Slip-Joint) (Renewed)",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 108,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71r-Yywi2rL.jpg"
-                },
-                "vectorSearchScore": 0.844762921333313
-              },
-              {
-                "productId": "67192b4164d161905fbe7c9f",
-                "name": "AmazonBasics 2-Tier Sliding Basket Organizer",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 13,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/91pjCjZJu7L.jpg"
-                },
-                "vectorSearchScore": 0.8443998098373413
-              },
-              {
-                "productId": "67192b4564d161905fbe8b5a",
-                "name": "AmazonBasics Locking Glass Food Storage Container",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 62,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/81SYWl+N1qL.jpg"
-                },
-                "vectorSearchScore": 0.8440160751342773
-              },
-              {
-                "productId": "67192b3f64d161905fbe7964",
-                "name": "AmazonBasics Groove Joint Pliers Set - 3-Piece (Renewed)",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 28,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71lgQURhrbL.jpg"
-                },
-                "vectorSearchScore": 0.8423045873641968
-              },
-              {
-                "productId": "67192b4364d161905fbe8491",
-                "name": "AmazonBasics 1-1/4\" Chisel, Nylon Handle Putty Knife",
-                "brand": "AmazonBasics",
-                "price": {
-                  "amount": 96,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg"
-                },
-                "vectorSearchScore": 0.8421430587768555
-              }
-            ],
             [
               {
                 "productId": "67192b3f64d161905fbe77e9",
@@ -1475,6 +1213,268 @@
             ],
             [
               {
+                "productId": "67192b3f64d161905fbe7a5a",
+                "name": "AmazonBasics Combo Plastic Cutlery",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 118,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg"
+                },
+                "vectorSearchScore": 1.0
+              },
+              {
+                "productId": "67192b4164d161905fbe7e64",
+                "name": "AmazonBasics 45-Piece Stainless Steel Satin Matte Flatware Set, Service for 8",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 86,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71C-47og3IL.jpg"
+                },
+                "vectorSearchScore": 0.8933537006378174
+              },
+              {
+                "productId": "67192b3f64d161905fbe7a84",
+                "name": "AmazonBasics Grill Tray with Tool Set,Spatula,Tongs,Basting brush",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 10,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/81rCRzd7OKL.jpg"
+                },
+                "vectorSearchScore": 0.8773636817932129
+              },
+              {
+                "productId": "67192b3f64d161905fbe79ed",
+                "name": "AmazonBasics Tools 4-Piece Pliers Set",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 74,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71UfKIVpQbL.jpg"
+                },
+                "vectorSearchScore": 0.8745524287223816
+              },
+              {
+                "productId": "67192b3f64d161905fbe79d9",
+                "name": "AmazonBasics Bathroom Accessory Sets",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 111,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61w4fs2ESyL.jpg"
+                },
+                "vectorSearchScore": 0.8700612783432007
+              },
+              {
+                "productId": "67192b4464d161905fbe898a",
+                "name": "Amazon Brand - Solimo 24 Piece Stainless Steel Cutlery Set, Vintage (Contains: 6 Table Spoons, 6 Tea Spoons, 6 Forks, 6 Soup Spoons), Silver",
+                "brand": "Amazon Brand - Solimo",
+                "price": {
+                  "amount": 93,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/810lMEAN3TL.jpg"
+                },
+                "vectorSearchScore": 0.8669348955154419
+              },
+              {
+                "productId": "67192b4464d161905fbe8845",
+                "name": "(Renewed) AmazonBasics 18-Piece Dinnerware Set - Soft Lines",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 67,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/51bZ4xREiBL.jpg"
+                },
+                "vectorSearchScore": 0.8667609691619873
+              },
+              {
+                "productId": "67192b3f64d161905fbe7b15",
+                "name": "AmazonCommercial Stainless Steel Cooking Utensils, Set of 29 Utensils",
+                "brand": "AmazonCommercial",
+                "price": {
+                  "amount": 72,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/810INGS6m0L.jpg"
+                },
+                "vectorSearchScore": 0.8617862462997437
+              },
+              {
+                "productId": "67192b4264d161905fbe804e",
+                "name": "AmazonBasics - 8 Piece Non-Stick Cookware Set (without Induction Base)",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 33,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/81-sJRhEapL.jpg"
+                },
+                "vectorSearchScore": 0.8579095602035522
+              },
+              {
+                "productId": "67192b4164d161905fbe7c07",
+                "name": "AmazonBasics 2-Piece Peeler Set, Soft Grip Handle, Grey and Green (Renewed)",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 91,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71kXj0gj9BL.jpg"
+                },
+                "vectorSearchScore": 0.8575308322906494
+              },
+              {
+                "productId": "67192b4264d161905fbe82ae",
+                "name": "AmazonBasics Comfort Grip Utility Knife - Retractable 3-Position Locking Blade with 4 Replacement Blades",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 84,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71FSaBzcBUL.jpg"
+                },
+                "vectorSearchScore": 0.8571140766143799
+              },
+              {
+                "productId": "67192b4264d161905fbe803b",
+                "name": "AmazonBasics 12-Piece Melamine Dinnerware Set - Service for 4, Yellow Crackle Glaze",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 43,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/91uQDR-+s8L.jpg"
+                },
+                "vectorSearchScore": 0.8554350137710571
+              },
+              {
+                "productId": "67192b4264d161905fbe7fd1",
+                "name": "AmazonBasics Toilet Bowl Brush and Holder",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 28,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/5131duvzyJL.jpg"
+                },
+                "vectorSearchScore": 0.8486881256103516
+              },
+              {
+                "productId": "67192b4564d161905fbe8ba8",
+                "name": "AmazonBasics Stainless Steel Pizza Wheel and Cutter with Cover, Black Soft Grip Handle (Renewed)",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 28,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71Ss1jEI0cL.jpg"
+                },
+                "vectorSearchScore": 0.847941517829895
+              },
+              {
+                "productId": "67192b3f64d161905fbe7b61",
+                "name": "AmazonBasics 2\" Stiff Nylon Handle Putty Knife",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 18,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg"
+                },
+                "vectorSearchScore": 0.8465219736099243
+              },
+              {
+                "productId": "67192b3f64d161905fbe78e0",
+                "name": "AmazonBasics Pliers Set with Durable Nylon Case - 5-Piece (8-Inch Diagonal, 8-Inch Combination, 8-Inch Long Nose, 8-Inch Groove Joint, 8-Inch Slip-Joint) (Renewed)",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 108,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71r-Yywi2rL.jpg"
+                },
+                "vectorSearchScore": 0.844762921333313
+              },
+              {
+                "productId": "67192b4164d161905fbe7c9f",
+                "name": "AmazonBasics 2-Tier Sliding Basket Organizer",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 13,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/91pjCjZJu7L.jpg"
+                },
+                "vectorSearchScore": 0.8443998098373413
+              },
+              {
+                "productId": "67192b4564d161905fbe8b5a",
+                "name": "AmazonBasics Locking Glass Food Storage Container",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 62,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/81SYWl+N1qL.jpg"
+                },
+                "vectorSearchScore": 0.8440160751342773
+              },
+              {
+                "productId": "67192b3f64d161905fbe7964",
+                "name": "AmazonBasics Groove Joint Pliers Set - 3-Piece (Renewed)",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 28,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71lgQURhrbL.jpg"
+                },
+                "vectorSearchScore": 0.8423045873641968
+              },
+              {
+                "productId": "67192b4364d161905fbe8491",
+                "name": "AmazonBasics 1-1/4\" Chisel, Nylon Handle Putty Knife",
+                "brand": "AmazonBasics",
+                "price": {
+                  "amount": 96,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg"
+                },
+                "vectorSearchScore": 0.8421430587768555
+              }
+            ],
+            [
+              {
                 "productId": "67192b3f64d161905fbe77a5",
                 "name": "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
                 "brand": "AmazonBasics",
@@ -1747,9 +1747,9 @@
           "sampled": 4,
           "ndistinct": 4.0,
           "values": [
-            "66fe219d625d93a100528224",
             "671ff2451ec726b417352703",
             "65a546ae4a8f64e8f88fb89e",
+            "66fe219d625d93a100528224",
             "671ff0081ec726b417352702"
           ]
         }

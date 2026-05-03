@@ -6,7 +6,7 @@ CREATE TABLE listingsandreviews (
     availability JSONB NOT NULL,
     bathrooms NUMERIC,
     bed_type TEXT NOT NULL,
-    bedrooms INTEGER,
+    bedrooms INTEGER NOT NULL,
     beds INTEGER,
     calendar_last_scraped TIMESTAMP WITH TIME ZONE NOT NULL,
     cancellation_policy TEXT NOT NULL,
@@ -51,7 +51,7 @@ CREATE TABLE listingsandreviews_amenities (
 CREATE TABLE listingsandreviews_reviews (
     id BIGSERIAL PRIMARY KEY,
     listingsandreviews_id BIGINT NOT NULL,
-    comments TEXT NOT NULL,
+    comments TEXT,
     date TIMESTAMP WITH TIME ZONE NOT NULL,
     listing_id INTEGER NOT NULL,
     reviewer_id INTEGER NOT NULL,

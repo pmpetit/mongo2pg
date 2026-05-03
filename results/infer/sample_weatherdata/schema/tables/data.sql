@@ -37,16 +37,6 @@ CREATE TABLE data_dewpoint (
     FOREIGN KEY (data_id) REFERENCES data (id) DEFERRABLE INITIALLY DEFERRED
 );
 
-CREATE TABLE data_extremeairtemperature (
-    id BIGSERIAL PRIMARY KEY,
-    data_id UUID NOT NULL,
-    code VARCHAR(1) NOT NULL,
-    period DOUBLE PRECISION NOT NULL,
-    quantity INTEGER NOT NULL,
-    value DOUBLE PRECISION NOT NULL,
-    FOREIGN KEY (data_id) REFERENCES data (id) DEFERRABLE INITIALLY DEFERRED
-);
-
 CREATE TABLE data_liquidprecipitation (
     id BIGSERIAL PRIMARY KEY,
     data_id UUID NOT NULL,

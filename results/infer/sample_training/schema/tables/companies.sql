@@ -32,8 +32,8 @@ CREATE TABLE companies_acquisition (
     companies_id UUID NOT NULL,
     acquired_day INTEGER,
     acquired_month INTEGER,
-    acquired_year INTEGER NOT NULL,
-    price_amount BIGINT,
+    acquired_year INTEGER,
+    price_amount INTEGER,
     price_currency_code VARCHAR(3) NOT NULL,
     source_description TEXT,
     source_url TEXT,
@@ -49,8 +49,8 @@ CREATE TABLE companies_acquisitions (
     acquired_year INTEGER NOT NULL,
     price_amount INTEGER,
     price_currency_code VARCHAR(3) NOT NULL,
-    source_description TEXT NOT NULL,
-    source_url TEXT NOT NULL,
+    source_description TEXT,
+    source_url TEXT,
     term_code TEXT,
     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
 );
@@ -103,7 +103,7 @@ CREATE TABLE companies_ipo (
     pub_month INTEGER,
     pub_year INTEGER,
     stock_symbol TEXT NOT NULL,
-    valuation_amount INTEGER,
+    valuation_amount BIGINT,
     valuation_currency_code VARCHAR(3) NOT NULL,
     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
 );
@@ -142,12 +142,10 @@ CREATE TABLE companies_partners (
     id BIGSERIAL PRIMARY KEY,
     companies_id UUID NOT NULL,
     homepage_url TEXT NOT NULL,
-    link_1_name TEXT NOT NULL,
-    link_1_url TEXT NOT NULL,
+    link_1_name TEXT,
+    link_1_url TEXT,
     link_2_name TEXT,
     link_2_url TEXT,
-    link_3_name TEXT,
-    link_3_url TEXT,
     partner_name TEXT NOT NULL,
     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
 );
@@ -231,13 +229,13 @@ CREATE TABLE companies_investments_funding_round (
     id BIGSERIAL PRIMARY KEY,
     companies_investments_id BIGINT NOT NULL,
     funded_day INTEGER,
-    funded_month INTEGER,
-    funded_year INTEGER,
+    funded_month INTEGER NOT NULL,
+    funded_year INTEGER NOT NULL,
     raised_amount INTEGER,
     raised_currency_code VARCHAR(3),
     round_code TEXT NOT NULL,
     source_description TEXT,
-    source_url TEXT NOT NULL,
+    source_url TEXT,
     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
 );
 

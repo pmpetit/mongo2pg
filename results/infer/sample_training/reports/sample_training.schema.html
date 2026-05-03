@@ -66,7 +66,7 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_training</h1>
-    <small>Generated: 2026-05-03 16:36 UTC</small>
+    <small>Generated: 2026-05-03 16:41 UTC</small>
   </header>
   <div class="layout">
     <aside>
@@ -83,7 +83,7 @@
 <li><a href="#" onclick="return false">companies_ipo <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
 <li><a href="#" onclick="return false">companies_milestones <span class="badge">1 FK</span></a> <small>(11 cols)</small></li>
 <li><a href="#" onclick="return false">companies_offices <span class="badge">1 FK</span></a> <small>(11 cols)</small></li>
-<li><a href="#" onclick="return false">companies_partners <span class="badge">1 FK</span></a> <small>(10 cols)</small></li>
+<li><a href="#" onclick="return false">companies_partners <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
 <li><a href="#" onclick="return false">companies_products <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">companies_providerships <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">companies_relationships <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
@@ -112,7 +112,7 @@
 <li><a href="#" onclick="return false">posts_tags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">routes</a> <small>(6 cols)</small></li>
 <li><a href="#" onclick="return false">routes_airline <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
-<li><a href="#" onclick="return false">stories</a> <small>(13 cols)</small></li>
+<li><a href="#" onclick="return false">stories</a> <small>(12 cols)</small></li>
 <li><a href="#" onclick="return false">stories_container <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">stories_shorturl <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">stories_thumbnail <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
@@ -144,7 +144,7 @@
 <li><a href="#" onclick="return false">tweets_entities_user_mentions_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_place_bounding_box_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_retweeted_status_entities_hashtags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
-<li><a href="#" onclick="return false">tweets_retweeted_status_entities_urls <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities_urls <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_retweeted_status_entities_user_mentions <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_retweeted_status_entities_hashtags_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_retweeted_status_entities_urls_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
@@ -189,8 +189,8 @@ erDiagram
     UUID companies_id FK
     INTEGER acquired_day
     INTEGER acquired_month
-    INTEGER acquired_year "NOT NULL"
-    BIGINT price_amount
+    INTEGER acquired_year
+    INTEGER price_amount
     VARCHAR(3) price_currency_code "NOT NULL"
     TEXT source_description
     TEXT source_url
@@ -204,8 +204,8 @@ erDiagram
     INTEGER acquired_year "NOT NULL"
     INTEGER price_amount
     VARCHAR(3) price_currency_code "NOT NULL"
-    TEXT source_description "NOT NULL"
-    TEXT source_url "NOT NULL"
+    TEXT source_description
+    TEXT source_url
     TEXT term_code
   }
   companies_competitions {
@@ -246,7 +246,7 @@ erDiagram
     INTEGER pub_month
     INTEGER pub_year
     TEXT stock_symbol "NOT NULL"
-    INTEGER valuation_amount
+    BIGINT valuation_amount
     VARCHAR(3) valuation_currency_code "NOT NULL"
   }
   companies_milestones {
@@ -279,12 +279,10 @@ erDiagram
     BIGINT id PK
     UUID companies_id FK
     TEXT homepage_url "NOT NULL"
-    TEXT link_1_name "NOT NULL"
-    TEXT link_1_url "NOT NULL"
+    TEXT link_1_name
+    TEXT link_1_url
     TEXT link_2_name
     TEXT link_2_url
-    TEXT link_3_name
-    TEXT link_3_url
     TEXT partner_name "NOT NULL"
   }
   companies_products {
@@ -346,13 +344,13 @@ erDiagram
     BIGINT id PK
     BIGINT companies_investments_id FK
     INTEGER funded_day
-    INTEGER funded_month
-    INTEGER funded_year
+    INTEGER funded_month "NOT NULL"
+    INTEGER funded_year "NOT NULL"
     INTEGER raised_amount
     VARCHAR(3) raised_currency_code
     TEXT round_code "NOT NULL"
     TEXT source_description
-    TEXT source_url "NOT NULL"
+    TEXT source_url
   }
   companies_milestones_stoneable {
     BIGINT id PK
@@ -474,7 +472,6 @@ erDiagram
     INTEGER diggs "NOT NULL"
     TEXT href "NOT NULL"
     TEXT field_id "NOT NULL"
-    INTEGER inaccurate
     TEXT link "NOT NULL"
     TEXT media "NOT NULL"
     INTEGER promote_date "NOT NULL"
@@ -684,7 +681,7 @@ erDiagram
     BIGINT tweets_retweeted_status_id FK
     BOOLEAN contributors_enabled "NOT NULL"
     TEXT created_at "NOT NULL"
-    TEXT description "NOT NULL"
+    TEXT description
     INTEGER favourites_count "NOT NULL"
     INTEGER followers_count "NOT NULL"
     INTEGER friends_count "NOT NULL"
@@ -692,7 +689,7 @@ erDiagram
     INTEGER field_id "NOT NULL"
     TEXT lang "NOT NULL"
     INTEGER listed_count "NOT NULL"
-    TEXT location "NOT NULL"
+    TEXT location
     TEXT name "NOT NULL"
     TEXT profile_background_color "NOT NULL"
     TEXT profile_background_image_url "NOT NULL"
@@ -740,7 +737,6 @@ erDiagram
   tweets_retweeted_status_entities_urls {
     BIGINT id PK
     BIGINT tweets_retweeted_status_entities_id FK
-    TEXT expanded_url
     TEXT url "NOT NULL"
   }
   tweets_retweeted_status_entities_user_mentions {

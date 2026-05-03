@@ -1,13 +1,13 @@
 documents_in_collection: 23539
 documents_sampled: 1000
 width_top_level: 22
-width_max: 20.13
+width_max: 20.22
 width_max_level: 1
 depth_max: 3
-branch_total: 41.95
+branch_total: 42.11
 branch_per_level:
-  L1: 20.13
-  L2: 17.5
+  L1: 20.22
+  L2: 17.56
   L3: 4.33
 top_level_types:
   _id: ObjectId
@@ -33,5 +33,5 @@ top_level_types:
   writers: Array
   year: Number
 array_field_count: 6
-avg_fields_per_doc: 20.13
+avg_fields_per_doc: 20.22
 migrability_score: 8.59

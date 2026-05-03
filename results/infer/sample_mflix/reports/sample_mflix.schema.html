@@ -66,7 +66,7 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_mflix</h1>
-    <small>Generated: 2026-05-03 16:36 UTC</small>
+    <small>Generated: 2026-05-03 16:41 UTC</small>
   </header>
   <div class="layout">
     <aside>
@@ -152,8 +152,8 @@ erDiagram
     BIGINT id PK
     UUID movies_id FK
     INTEGER field_id "NOT NULL"
-    TEXT rating "NOT NULL"
-    TEXT votes "NOT NULL"
+    FLOAT rating "NOT NULL"
+    INTEGER votes "NOT NULL"
   }
   movies_languages {
     BIGINT id PK

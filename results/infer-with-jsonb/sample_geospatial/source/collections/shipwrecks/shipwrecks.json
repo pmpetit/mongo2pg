@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "578f6fa3df35c7fbdbaee4b6",
-            "578f6fa3df35c7fbdbaeebec",
-            "578f6fa3df35c7fbdbaef0fe",
-            "578f6fa3df35c7fbdbaee203",
-            "578f6fa3df35c7fbdbaedd6a",
-            "578f6fa3df35c7fbdbaef579",
-            "578f6fa3df35c7fbdbaeea5a",
-            "578f6fa3df35c7fbdbaeee65",
-            "578f6fa3df35c7fbdbaeeea3",
-            "578f6fa3df35c7fbdbaefd76",
-            "578f6fa3df35c7fbdbaedde3",
-            "578f6fa3df35c7fbdbaeeb21",
-            "578f6fa3df35c7fbdbaede74",
-            "578f6fa3df35c7fbdbaefa47",
-            "578f6fa3df35c7fbdbaedce2",
-            "578f6fa3df35c7fbdbaeff92",
-            "578f6fa3df35c7fbdbaeff42",
-            "578f6fa3df35c7fbdbaeef70",
-            "578f6fa3df35c7fbdbaf03a5",
-            "578f6fa3df35c7fbdbaefcb5"
+            "578f6fa3df35c7fbdbaee1d8",
+            "578f6fa3df35c7fbdbaf0292",
+            "578f6fa3df35c7fbdbaedab2",
+            "578f6fa3df35c7fbdbaedd06",
+            "578f6fa3df35c7fbdbaee1a1",
+            "578f6fa3df35c7fbdbaee4e4",
+            "578f6fa3df35c7fbdbaee1cd",
+            "578f6fa3df35c7fbdbaeecf8",
+            "578f6fa3df35c7fbdbaefec3",
+            "578f6fa3df35c7fbdbaedab7",
+            "578f6fa3df35c7fbdbaee3a1",
+            "578f6fa3df35c7fbdbaeec83",
+            "578f6fa3df35c7fbdbaefd23",
+            "578f6fa3df35c7fbdbaee033",
+            "578f6fa3df35c7fbdbaefb1c",
+            "578f6fa3df35c7fbdbaf0408",
+            "578f6fa3df35c7fbdbaef030",
+            "578f6fa3df35c7fbdbaf01ef",
+            "578f6fa3df35c7fbdbaeda8f",
+            "578f6fa3df35c7fbdbaef593"
           ]
         }
       }
@@ -40,28 +40,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 554.0,
+          "ndistinct": 546.0,
           "values": [
-            "US,US,graph,Chart 12281",
-            "US,US,graph,Chart 12365",
-            "US,US,graph,Chart 11528",
-            "US,US,graph,Chart 11339",
-            "US,US,graph,chart 11465",
-            "US,US,graph,Chart 12233",
-            "US,US,graph,Chart 12206",
-            "US,US,graph,Chart 12352",
-            "US,US,graph,Chart 11371",
-            "US,US,graph,Chart 11451",
-            "US,US,graph,Chart 12316",
-            "US,US,graph,Chart 11472",
-            "US,US,graph,Chart 11349",
-            "US,US,reprt,7thCGD,LNM 50/75",
-            "US,US,graph,Chart 11323",
-            "US,US,reprt,8thCGD,L-440/99,LNM 10/99",
-            "US,US,graph,Chart 12312",
-            "US,US,reprt,L-900/08",
-            "US,US,graph,chart 14862",
-            "US,US,graph,Chart 11427"
+            "US,US,graph,Chart 11350",
+            "US,US,graph,Chart 11366",
+            "US,US,graph,Chart 18660",
+            "US,US,graph,Chart 11406",
+            "US,US,graph,Chart 19461",
+            "US,US,graph,Chart 12278",
+            "US,US,graph,H-11601",
+            "US,US,graph,Chart 14804",
+            "US,US,graph,Chart 13272",
+            "US,US,graph,Chart 12366",
+            "US,US,graph,Chart 14869",
+            "US,US,graph,Chart 11487",
+            "US,US,graph,DD-20900",
+            "US,US,reprt,WN 48/12",
+            "US,US,graph,Chart 25667",
+            "US,US,graph,Chart 11330",
+            "US,US,graph,chart 18657",
+            "US,US,graph,Chart 12252",
+            "US,US,graph,Chart 18757",
+            "US,US,reprt,NGA,NM 29/04"
           ]
         }
       }
@@ -81,110 +81,110 @@
                 "sampled": 2000,
                 "ndistinct": 1000.0,
                 "values": [
-                  -76.4958546,
-                  39.2461272,
-                  -73.357868,
-                  40.898115,
-                  -79.7601601,
-                  32.7803765,
-                  -93.325492,
-                  30.09853,
-                  -80.237097,
-                  25.685674,
-                  -76.546162,
-                  38.0029254,
-                  -76.0482135,
-                  36.6156281,
-                  -73.3921989,
-                  40.6603806,
-                  -73.587566,
-                  40.5823915,
-                  -89.4166949,
-                  30.1018853
+                  -91.8302363,
+                  29.8368002,
+                  -89.6500676,
+                  28.6832265,
+                  -121.7311532,
+                  38.0147556,
+                  -84.1868864,
+                  30.076385,
+                  -175.739553,
+                  27.86493,
+                  -76.4567161,
+                  39.2881082,
+                  -91.6098338,
+                  29.752402,
+                  -74.0465266,
+                  40.549643,
+                  -77.288483,
+                  43.286648,
+                  -121.7871276,
+                  38.0592796
                 ]
               }
             }
           },
           "values": [
             [
-              -76.4958546,
-              39.2461272
+              -91.8302363,
+              29.8368002
             ],
             [
-              -73.357868,
-              40.898115
+              -89.6500676,
+              28.6832265
             ],
             [
-              -79.7601601,
-              32.7803765
+              -121.7311532,
+              38.0147556
             ],
             [
-              -93.325492,
-              30.09853
+              -84.1868864,
+              30.076385
             ],
             [
-              -80.237097,
-              25.685674
+              -175.739553,
+              27.86493
             ],
             [
-              -76.546162,
-              38.0029254
+              -76.4567161,
+              39.2881082
             ],
             [
-              -76.0482135,
-              36.6156281
+              -91.6098338,
+              29.752402
             ],
             [
-              -73.3921989,
-              40.6603806
+              -74.0465266,
+              40.549643
             ],
             [
-              -73.587566,
-              40.5823915
+              -77.288483,
+              43.286648
             ],
             [
-              -89.4166949,
-              30.1018853
+              -121.7871276,
+              38.0592796
             ],
             [
-              -80.2352168,
-              25.7211409
+              -71.0326062,
+              42.3833681
             ],
             [
-              -74.5566607,
-              39.3016187
+              -73.7443278,
+              40.8771523
             ],
             [
-              -80.079441,
-              27.018867
+              -83.335663,
+              45.198474
             ],
             [
-              -91.9011721,
-              29.1177855
+              -81.5671338,
+              29.7047217
             ],
             [
-              -82.9616762,
-              27.669911
+              -90.6579065,
+              28.9217169
             ],
             [
-              -94.4866476,
-              29.5116594
+              -97.6,
+              22.8833333
             ],
             [
-              -96.9110236,
-              27.3394195
+              -65.629052,
+              18.334187
             ],
             [
-              -75.376359,
-              39.8228888
+              -95.3832026,
+              28.3793747
             ],
             [
-              -125.7853391,
-              47.9990558
+              -122.193242,
+              38.0528467
             ],
             [
-              -82.642416,
-              43.84356
+              -77.265186,
+              37.3122799
             ]
           ]
         }
@@ -194,35 +194,35 @@
       "probability": 1.0,
       "types": {
         "Number": {
-          "probability": 0.219,
-          "sampled": 219,
-          "ndistinct": 95.0,
+          "probability": 0.231,
+          "sampled": 231,
+          "ndistinct": 110.0,
           "values": [
-            1.8,
-            37.1,
-            5.1,
-            0.3,
-            5.7,
-            8.2,
-            30.4,
-            7.9,
-            12.8,
-            8.5,
-            1.5,
-            11.8,
-            11.2,
-            17.9,
-            20.7,
             7.6,
             16.1,
-            20.4,
+            6,
+            62.1,
+            4.8,
+            19.5,
+            15.8,
+            3.9,
             12.4,
-            0.6
+            3.3,
+            3,
+            13.7,
+            12.8,
+            29.2,
+            4.5,
+            2.7,
+            0.9,
+            3.6,
+            5.4,
+            11.5
           ]
         },
         "String": {
-          "probability": 0.781,
-          "sampled": 781,
+          "probability": 0.769,
+          "sampled": 769,
           "ndistinct": 1.0,
           "values": [
             ""
@@ -266,28 +266,25 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 20.0,
+          "ndistinct": 17.0,
           "values": [
             "",
+            "Two Wrecks",
+            "Same as AWOIS #4187 \"Lenore.\"",
             "Wrecks",
-            "4.9 meters/16 feet pleasure craft",
-            "Target",
-            "35 - 40 feet S/V",
-            "Reported 1998",
+            "Vessel 32-35 FT Length",
             "Reported",
-            "Multiple Wrecks",
-            "Partially covered by mangrove",
-            "Explosives",
-            "reported",
-            "Uncovers",
-            "10.3 meters/34 feet sailing vessel",
-            "23.7 meters/78 feet Fishing Vessel",
-            "22.8 meters/75 feet F/V TAP OUT",
-            "Existance Reported",
-            "Navy Targets",
-            "Awash at mean lower low water",
-            "96.6 ft sailing vessel",
-            "114 ft TUG"
+            "Sunk vessel now completely submerged just north of ono island south of intercostal orange beach .al",
+            "Reported in 2012",
+            "sunken barge",
+            "Danger explosives",
+            "Barge",
+            "70 FT F/V",
+            "One of two positions",
+            "wrecks",
+            "Target",
+            "Masts",
+            "more than one"
           ]
         }
       }
@@ -300,26 +297,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            39.2461272,
-            40.898115,
-            32.7803765,
-            30.09853,
-            25.685674,
-            38.0029254,
-            36.6156281,
-            40.6603806,
-            40.5823915,
-            30.1018853,
-            25.7211409,
-            39.3016187,
-            27.018867,
-            29.1177855,
-            27.669911,
-            29.5116594,
-            27.3394195,
-            39.8228888,
-            47.9990558,
-            43.84356
+            29.8368002,
+            28.6832265,
+            38.0147556,
+            30.076385,
+            27.86493,
+            39.2881082,
+            29.752402,
+            40.549643,
+            43.286648,
+            38.0592796,
+            42.3833681,
+            40.8771523,
+            45.198474,
+            29.7047217,
+            28.9217169,
+            22.8833333,
+            18.334187,
+            28.3793747,
+            38.0528467,
+            37.3122799
           ]
         }
       }
@@ -332,26 +329,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            -76.4958546,
-            -73.357868,
-            -79.7601601,
-            -93.325492,
-            -80.237097,
-            -76.546162,
-            -76.0482135,
-            -73.3921989,
-            -73.587566,
-            -89.4166949,
-            -80.2352168,
-            -74.5566607,
-            -80.079441,
-            -91.9011721,
-            -82.9616762,
-            -94.4866476,
-            -96.9110236,
-            -75.376359,
-            -125.7853391,
-            -82.642416
+            -91.8302363,
+            -89.6500676,
+            -121.7311532,
+            -84.1868864,
+            -175.739553,
+            -76.4567161,
+            -91.6098338,
+            -74.0465266,
+            -77.288483,
+            -121.7871276,
+            -71.0326062,
+            -73.7443278,
+            -83.335663,
+            -81.5671338,
+            -90.6579065,
+            -97.6,
+            -65.629052,
+            -95.3832026,
+            -122.193242,
+            -77.265186
           ]
         }
       }
@@ -365,10 +362,10 @@
           "ndistinct": 6.0,
           "values": [
             "depth unknown",
-            "least depth known",
             "",
-            "least depth unknown, safe clearance at value shown",
+            "least depth known",
             "value reported (not confirmed)",
+            "least depth unknown, safe clearance at value shown",
             "depth known"
           ]
         }
@@ -396,8 +393,8 @@
           "ndistinct": 3.0,
           "values": [
             "",
-            "Wire-drag clearance, feet/fathoms",
-            "found by multi-beam"
+            "found by multi-beam",
+            "Wire-drag clearance, feet/fathoms"
           ]
         }
       }
@@ -408,15 +405,19 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 7.0,
+          "ndistinct": 11.0,
           "values": [
             "",
-            "CGD8 066-11",
-            "F/V Sea Angel",
-            "Lady D",
+            "Hyannis Harbor Wreck",
+            "Sagamore",
             "Moonlight Gambler 17.4 meters/57 feet",
-            "Mary M",
-            "12.8 meters/42 feet F/V Sand Dollar"
+            "Podunk Queen",
+            "Dick Sharpe",
+            "NAB 42",
+            "Wagon Train",
+            "3.0 meters/10 feet Skiff",
+            "Chovie Clipper",
+            "CGD8 289-08"
           ]
         }
       }
@@ -427,13 +428,14 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 5.0,
+          "ndistinct": 6.0,
           "values": [
             "always under water/submerged",
-            "covers and uncovers",
             "always dry",
+            "partly submerged at high water",
+            "covers and uncovers",
             "awash",
-            "partly submerged at high water"
+            ""
           ]
         }
       }

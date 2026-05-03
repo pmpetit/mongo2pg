@@ -1,6 +1,6 @@
 Documents in collection : 10000
 Documents sampled       : 1000
-Width (top-level / max)  : 27 / 22.3 (L1)
+Width (top-level / max)  : 26 / 22.3 (L1)
 Depth (max nesting)     : 2
 Branch (per level)      : L1:22.3  L2:2.9
-Top-level types         : _id:ObjectId, airTemperature:Object, atmosphericPressureChange:Object, atmosphericPressureObservation:Object, callLetters:String, dataSource:String, dewPoint:Object, elevation:Number, extremeAirTemperature:Array, liquidPrecipitation:Array, pastWeatherObservationManual:Array, position:Object, precipitationEstimatedObservation:Object, presentWeatherObservationManual:Array, pressure:Object, qualityControlProcess:String, seaSurfaceTemperature:Object, sections:Array, skyCondition:Object, skyConditionObservation:Object, skyCoverLayer:Array, st:String, ts:Date, type:String, visibility:Object, waveMeasurement:Object, wind:Object
+Top-level types         : _id:ObjectId, airTemperature:Object, atmosphericPressureChange:Object, atmosphericPressureObservation:Object, callLetters:String, dataSource:String, dewPoint:Object, elevation:Number, liquidPrecipitation:Array, pastWeatherObservationManual:Array, position:Object, precipitationEstimatedObservation:Object, presentWeatherObservationManual:Array, pressure:Object, qualityControlProcess:String, seaSurfaceTemperature:Object, sections:Array, skyCondition:Object, skyConditionObservation:Object, skyCoverLayer:Array, st:String, ts:Date, type:String, visibility:Object, waveMeasurement:Object, wind:Object

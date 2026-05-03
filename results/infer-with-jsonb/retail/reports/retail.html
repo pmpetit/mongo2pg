@@ -39,6 +39,7 @@
       box-shadow: 0 1px 4px rgba(0,0,0,.08);
     }
     thead { background: #2c3e50; color: white; }
+    th[title] { cursor: help; }
     th {
       padding: 0.75rem 1rem;
       text-align: left;
@@ -101,7 +102,7 @@
 </head>
 <body>
   <h1>mongo2pg – Migration Report</h1>
-  <p class="subtitle">Cluster: <strong>localhost:2717</strong> &nbsp;|&nbsp; Database: <strong>retail</strong> &nbsp;|&nbsp; Generated: 2026-05-03 16:03:44 UTC</p>
+  <p class="subtitle">Cluster: <strong>localhost:2717</strong> &nbsp;|&nbsp; Database: <strong>retail</strong> &nbsp;|&nbsp; Generated: 2026-05-03 16:42:23 UTC</p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">7</div></div>
@@ -125,7 +126,12 @@
     <strong>Complexity score</strong> per collection:
     <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
     DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
-    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.<br>
+    <strong>Width (top)</strong>: number of top-level fields in the collection schema.<br>
+    <strong>Width (max)</strong>: highest field count found at any single nesting level, with the level shown in parentheses (probability-weighted).<br>
+    <strong>Depth (max)</strong>: maximum nesting depth — top-level fields are depth 1, their sub-fields depth 2, etc.<br>
+    <strong>Fields (total)</strong>: expected number of fields a typical document in the collection
+    actually has, summed across all nesting levels (probability-weighted). Hover the value for the per-level breakdown.
   </p>
 
   <table>
@@ -134,10 +140,10 @@
         <th>Collection</th>
         <th class="num">Documents</th>
         <th class="num">Sampled</th>
-        <th class="num">Width (top)</th>
-        <th class="num">Width (max)</th>
-        <th class="num">Depth (max)</th>
-        <th class="num">Fields (total)</th>
+        <th class="num" title="Number of top-level fields in the collection schema">Width (top)</th>
+        <th class="num" title="Highest field count found at any single nesting level, with the level shown in parentheses (probability-weighted)">Width (max)</th>
+        <th class="num" title="Maximum nesting depth: top-level fields are depth 1, their sub-fields depth 2, etc.">Depth (max)</th>
+        <th class="num" title="Expected number of fields a typical document has, summed across all levels (probability-weighted). Hover a value for the per-level breakdown.">Fields (total)</th>
         <th class="num">Score</th>
         <th class="num">PG Tables</th>
       </tr>
@@ -152,7 +158,7 @@
           <td class="num">3</td>
           <td class="num">3.0 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">4.0</td>
+          <td class="num" title="Expected fields/doc by level — L1: 3.00  L2: 1.00">4.0</td>
           <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.00</span></td>
           <td class="num">2</td>
         </tr>
@@ -170,7 +176,7 @@
           <td class="num">9</td>
           <td class="num">9.0 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">11.0</td>
+          <td class="num" title="Expected fields/doc by level — L1: 9.00  L2: 2.00">11.0</td>
           <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">4.00</span></td>
           <td class="num">5</td>
         </tr>
@@ -188,7 +194,7 @@
           <td class="num">8</td>
           <td class="num">7.7 <span class="level">(L1)</span></td>
           <td class="num">1</td>
-          <td class="num">7.7</td>
+          <td class="num" title="Expected fields/doc by level — L1: 7.67">7.7</td>
           <td class="num"><span class="score-badge" style="color:#27ae60;font-weight:700">1.54</span></td>
           <td class="num">1</td>
         </tr>
@@ -206,7 +212,7 @@
           <td class="num">7</td>
           <td class="num">7.0 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">9.0</td>
+          <td class="num" title="Expected fields/doc by level — L1: 7.00  L2: 2.00">9.0</td>
           <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">4.00</span></td>
           <td class="num">5</td>
         </tr>
@@ -224,7 +230,7 @@
           <td class="num">14</td>
           <td class="num">12.4 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">13.4</td>
+          <td class="num" title="Expected fields/doc by level — L1: 12.43  L2: 1.00">13.4</td>
           <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.13</span></td>
           <td class="num">2</td>
         </tr>
@@ -242,7 +248,7 @@
           <td class="num">5</td>
           <td class="num">5.0 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">6.0</td>
+          <td class="num" title="Expected fields/doc by level — L1: 5.00  L2: 1.00">6.0</td>
           <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.00</span></td>
           <td class="num">4</td>
         </tr>
@@ -260,7 +266,7 @@
           <td class="num">8</td>
           <td class="num">7.2 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">8.2</td>
+          <td class="num" title="Expected fields/doc by level — L1: 7.25  L2: 1.00">8.2</td>
           <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.10</span></td>
           <td class="num">2</td>
         </tr>

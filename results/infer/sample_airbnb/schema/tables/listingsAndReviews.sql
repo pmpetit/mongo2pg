@@ -4,7 +4,7 @@ CREATE TABLE listingsandreviews (
     accommodates INTEGER NOT NULL,
     bathrooms NUMERIC,
     bed_type TEXT NOT NULL,
-    bedrooms INTEGER,
+    bedrooms INTEGER NOT NULL,
     beds INTEGER,
     calendar_last_scraped TIMESTAMP WITH TIME ZONE NOT NULL,
     cancellation_policy TEXT NOT NULL,

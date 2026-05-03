@@ -1,6 +1,6 @@
 Documents in collection : 9842
 Documents sampled       : 1000
-Width (top-level / max)  : 18 / 16.7 (L1)
+Width (top-level / max)  : 17 / 16.7 (L1)
 Depth (max nesting)     : 3
-Branch (per level)      : L1:16.7  L2:13.6  L3:2.0
-Top-level types         : _id:ObjectId, comments:Number, container:Object, description:String, diggs:Number, href:String, id:String, inaccurate:Number, link:String, media:String, promote_date:Number, shorturl:Array, status:String, submit_date:Number, thumbnail:Object, title:String, topic:Object, user:Object
+Branch (per level)      : L1:16.7  L2:13.5  L3:2.0
+Top-level types         : _id:ObjectId, comments:Number, container:Object, description:String, diggs:Number, href:String, id:String, link:String, media:String, promote_date:Number, shorturl:Array, status:String, submit_date:Number, thumbnail:Object, title:String, topic:Object, user:Object
