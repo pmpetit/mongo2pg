@@ -66,7 +66,7 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_training</h1>
-    <small>Generated: 2026-05-03 16:03 UTC</small>
+    <small>Generated: 2026-05-03 16:42 UTC</small>
   </header>
   <div class="layout">
     <aside>
@@ -105,7 +105,7 @@
 <li><a href="#" onclick="return false">posts_comments <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
 <li><a href="#" onclick="return false">posts_tags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">routes</a> <small>(7 cols)</small></li>
-<li><a href="#" onclick="return false">stories</a> <small>(19 cols)</small></li>
+<li><a href="#" onclick="return false">stories</a> <small>(16 cols)</small></li>
 <li><a href="#" onclick="return false">stories_shorturl <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">trips</a> <small>(14 cols)</small></li>
 <li><a href="#" onclick="return false">tweets</a> <small>(17 cols)</small></li>
@@ -152,10 +152,10 @@ erDiagram
     INTEGER acquired_day
     INTEGER acquired_month
     INTEGER acquired_year "NOT NULL"
-    BIGINT price_amount
+    INTEGER price_amount
     VARCHAR(3) price_currency_code "NOT NULL"
-    TEXT source_description "NOT NULL"
-    TEXT source_url "NOT NULL"
+    TEXT source_description
+    TEXT source_url
     TEXT term_code
   }
   companies_competitions {
@@ -384,14 +384,11 @@ erDiagram
     INTEGER diggs "NOT NULL"
     TEXT href "NOT NULL"
     TEXT field_id "NOT NULL"
-    INTEGER inaccurate
     TEXT link "NOT NULL"
     TEXT media "NOT NULL"
     INTEGER promote_date "NOT NULL"
     TEXT status "NOT NULL"
     INTEGER submit_date "NOT NULL"
-    INTEGER takedowndays
-    TEXT takedownuri
     JSONB thumbnail
     TEXT title "NOT NULL"
     JSONB topic "NOT NULL"

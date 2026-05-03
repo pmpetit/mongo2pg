@@ -158,7 +158,7 @@ CREATE TABLE tweets_retweeted_status__user (
     tweets_retweeted_status_id BIGINT NOT NULL,
     contributors_enabled BOOLEAN NOT NULL,
     created_at TEXT NOT NULL,
-    description TEXT NOT NULL,
+    description TEXT,
     favourites_count INTEGER NOT NULL,
     followers_count INTEGER NOT NULL,
     friends_count INTEGER NOT NULL,
@@ -166,7 +166,7 @@ CREATE TABLE tweets_retweeted_status__user (
     field_id INTEGER NOT NULL,
     lang TEXT NOT NULL,
     listed_count INTEGER NOT NULL,
-    location TEXT NOT NULL,
+    location TEXT,
     name TEXT NOT NULL,
     profile_background_color TEXT NOT NULL,
     profile_background_image_url TEXT NOT NULL,
@@ -226,7 +226,6 @@ CREATE TABLE tweets_retweeted_status_entities_hashtags (
 CREATE TABLE tweets_retweeted_status_entities_urls (
     id BIGSERIAL PRIMARY KEY,
     tweets_retweeted_status_entities_id BIGINT NOT NULL,
-    expanded_url TEXT,
     url TEXT NOT NULL,
     FOREIGN KEY (tweets_retweeted_status_entities_id) REFERENCES tweets_retweeted_status_entities (id) DEFERRABLE INITIALLY DEFERRED
 );

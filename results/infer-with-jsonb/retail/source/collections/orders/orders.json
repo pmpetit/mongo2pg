@@ -11,8 +11,8 @@
           "ndistinct": 4.0,
           "values": [
             "682b77d0463e7f2b09ed2b1d",
-            "682b73a0463e7f2b09ed2b1a",
             "682b7907463e7f2b09ed2b22",
+            "682b73a0463e7f2b09ed2b1a",
             "682b7873463e7f2b09ed2b1f"
           ]
         }
@@ -27,8 +27,8 @@
           "ndistinct": 4.0,
           "values": [
             "682b77d26b1445af06f99129",
-            "682b73a26b1445af06f99128",
             "682b79076b1445af06f9912b",
+            "682b73a26b1445af06f99128",
             "682b78746b1445af06f9912a"
           ]
         }
@@ -59,8 +59,8 @@
                         "values": [
                           "67192b3f64d161905fbe7a5a",
                           "67192b3f64d161905fbe79f8",
-                          "67192b4164d161905fbe7df3",
                           "67192b3f64d161905fbe77e9",
+                          "67192b4164d161905fbe7df3",
                           "67192b3f64d161905fbe77a5"
                         ]
                       }
@@ -103,8 +103,8 @@
                         "values": [
                           "",
                           "TQ53900",
-                          "R9AA2C150Q",
                           "16076",
+                          "R9AA2C150Q",
                           "FH-AZ037"
                         ]
                       }
@@ -140,8 +140,8 @@
                                 "values": [
                                   "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg",
                                   "https://m.media-amazon.com/images/I/71k8yp17P5L.jpg",
-                                  "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg",
                                   "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg",
+                                  "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg",
                                   "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg"
                                 ]
                               }
@@ -156,10 +156,10 @@
                             "url": "https://m.media-amazon.com/images/I/71k8yp17P5L.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
+                            "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
                           },
                           {
                             "url": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg"
@@ -178,8 +178,8 @@
                         "values": [
                           "AmazonBasics Combo Plastic Cutlery",
                           "AmazonBasics Shelby Door Lever - Entry - Oil Rubbed Bronze",
-                          "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
                           "AmazonBasics - Pet Play Station Feeder",
+                          "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
                           "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple"
                         ]
                       }
@@ -202,8 +202,8 @@
                                 "values": [
                                   118,
                                   49,
-                                  116,
                                   50,
+                                  116,
                                   63
                                 ]
                               }
@@ -241,11 +241,11 @@
                             "currency": null
                           },
                           {
-                            "amount": 116,
+                            "amount": 50,
                             "currency": null
                           },
                           {
-                            "amount": 50,
+                            "amount": 116,
                             "currency": null
                           },
                           {
@@ -290,21 +290,6 @@
                   },
                   {
                     "amount": 1,
-                    "brand": "Amazon Collection",
-                    "code": "R9AA2C150Q",
-                    "description": "",
-                    "_id": "67192b4164d161905fbe7df3",
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
-                    },
-                    "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
-                    "price": {
-                      "amount": 116,
-                      "currency": null
-                    }
-                  },
-                  {
-                    "amount": 1,
                     "brand": "AmazonBasics",
                     "code": "16076",
                     "description": "",
@@ -315,6 +300,21 @@
                     "name": "AmazonBasics - Pet Play Station Feeder",
                     "price": {
                       "amount": 50,
+                      "currency": null
+                    }
+                  },
+                  {
+                    "amount": 1,
+                    "brand": "Amazon Collection",
+                    "code": "R9AA2C150Q",
+                    "description": "",
+                    "_id": "67192b4164d161905fbe7df3",
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
+                    },
+                    "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
+                    "price": {
+                      "amount": 116,
                       "currency": null
                     }
                   },
@@ -373,23 +373,6 @@
             [
               {
                 "amount": 1,
-                "brand": "Amazon Collection",
-                "code": "R9AA2C150Q",
-                "description": "",
-                "_id": "67192b4164d161905fbe7df3",
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
-                },
-                "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
-                "price": {
-                  "amount": 116,
-                  "currency": null
-                }
-              }
-            ],
-            [
-              {
-                "amount": 1,
                 "brand": "AmazonBasics",
                 "code": "16076",
                 "description": "",
@@ -400,6 +383,23 @@
                 "name": "AmazonBasics - Pet Play Station Feeder",
                 "price": {
                   "amount": 50,
+                  "currency": null
+                }
+              }
+            ],
+            [
+              {
+                "amount": 1,
+                "brand": "Amazon Collection",
+                "code": "R9AA2C150Q",
+                "description": "",
+                "_id": "67192b4164d161905fbe7df3",
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
+                },
+                "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
+                "price": {
+                  "amount": 116,
                   "currency": null
                 }
               }
@@ -434,8 +434,8 @@
           "ndistinct": 4.0,
           "values": [
             "Av. Lázaro Cárdenas 305, Guadalajara 44030, Mexico",
-            "Calle de Londres 247, Mexico City 62240, Mexico",
             "45 Rue Laffitte, Parice 75009, France",
+            "Calle de Londres 247, Mexico City 62240, Mexico",
             "3 St James's Square, London SW1Y 4JU, UK"
           ]
         }
@@ -488,16 +488,16 @@
                           1747679194321,
                           1747679257629.0,
                           1747679267999,
-                          1747678112623.0,
-                          1747678122653,
-                          1747678132676,
-                          1747678142699,
-                          1747678152726,
                           1747679495007.0,
                           1747679505036,
                           1747679515060,
                           1747679525081,
                           1747679535108,
+                          1747678112623.0,
+                          1747678122653,
+                          1747678132676,
+                          1747678142699,
+                          1747678152726,
                           1747679347759.0,
                           1747679357788,
                           1747679367808,
@@ -527,26 +527,6 @@
                   },
                   {
                     "status": "In process",
-                    "timestamp": 1747678112623.0
-                  },
-                  {
-                    "status": "Ready for delivery",
-                    "timestamp": 1747678122653
-                  },
-                  {
-                    "status": "Picked up from warehouse",
-                    "timestamp": 1747678132676
-                  },
-                  {
-                    "status": "In Transit",
-                    "timestamp": 1747678142699
-                  },
-                  {
-                    "status": "Delivered",
-                    "timestamp": 1747678152726
-                  },
-                  {
-                    "status": "In process",
                     "timestamp": 1747679495007.0
                   },
                   {
@@ -564,6 +544,26 @@
                   {
                     "status": "Delivered",
                     "timestamp": 1747679535108
+                  },
+                  {
+                    "status": "In process",
+                    "timestamp": 1747678112623.0
+                  },
+                  {
+                    "status": "Ready for delivery",
+                    "timestamp": 1747678122653
+                  },
+                  {
+                    "status": "Picked up from warehouse",
+                    "timestamp": 1747678132676
+                  },
+                  {
+                    "status": "In Transit",
+                    "timestamp": 1747678142699
+                  },
+                  {
+                    "status": "Delivered",
+                    "timestamp": 1747678152726
                   },
                   {
                     "status": "In process",
@@ -611,28 +611,6 @@
             [
               {
                 "status": "In process",
-                "timestamp": 1747678112623.0
-              },
-              {
-                "status": "Ready for delivery",
-                "timestamp": 1747678122653
-              },
-              {
-                "status": "Picked up from warehouse",
-                "timestamp": 1747678132676
-              },
-              {
-                "status": "In Transit",
-                "timestamp": 1747678142699
-              },
-              {
-                "status": "Delivered",
-                "timestamp": 1747678152726
-              }
-            ],
-            [
-              {
-                "status": "In process",
                 "timestamp": 1747679495007.0
               },
               {
@@ -650,6 +628,28 @@
               {
                 "status": "Delivered",
                 "timestamp": 1747679535108
+              }
+            ],
+            [
+              {
+                "status": "In process",
+                "timestamp": 1747678112623.0
+              },
+              {
+                "status": "Ready for delivery",
+                "timestamp": 1747678122653
+              },
+              {
+                "status": "Picked up from warehouse",
+                "timestamp": 1747678132676
+              },
+              {
+                "status": "In Transit",
+                "timestamp": 1747678142699
+              },
+              {
+                "status": "Delivered",
+                "timestamp": 1747678152726
               }
             ],
             [
@@ -701,8 +701,8 @@
           "ndistinct": 4.0,
           "values": [
             "66fe219d625d93a100528224",
-            "65a546ae4a8f64e8f88fb89e",
             "671ff2451ec726b417352703",
+            "65a546ae4a8f64e8f88fb89e",
             "671ff0081ec726b417352702"
           ]
         }

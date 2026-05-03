@@ -1,12 +1,12 @@
 documents_in_collection: 9842
 documents_sampled: 1000
-width_top_level: 20
-width_max: 16.67
+width_top_level: 17
+width_max: 16.68
 width_max_level: 1
 depth_max: 2
-branch_total: 17.67
+branch_total: 17.68
 branch_per_level:
-  L1: 16.67
+  L1: 16.68
   L2: 1.0
 top_level_types:
   _id: ObjectId
@@ -16,19 +16,16 @@ top_level_types:
   diggs: Number
   href: String
   id: String
-  inaccurate: Number
   link: String
   media: String
   promote_date: Number
   shorturl: Array
   status: String
   submit_date: Number
-  takedowndays: Number
-  takedownuri: String
   thumbnail: Object
   title: String
   topic: Object
   user: Object
 array_field_count: 1
-avg_fields_per_doc: 16.67
-migrability_score: 3.2
+avg_fields_per_doc: 16.68
+migrability_score: 3.02

@@ -55,8 +55,8 @@ CREATE TABLE movies_imdb (
     id BIGSERIAL PRIMARY KEY,
     movies_id UUID NOT NULL,
     field_id INTEGER NOT NULL,
-    rating TEXT NOT NULL,
-    votes TEXT NOT NULL,
+    rating DOUBLE PRECISION NOT NULL,
+    votes INTEGER NOT NULL,
     FOREIGN KEY (movies_id) REFERENCES movies (id) DEFERRABLE INITIALLY DEFERRED
 );
 

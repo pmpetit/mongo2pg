@@ -66,7 +66,7 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_airbnb</h1>
-    <small>Generated: 2026-05-03 16:03 UTC</small>
+    <small>Generated: 2026-05-03 16:42 UTC</small>
   </header>
   <div class="layout">
     <aside>
@@ -88,7 +88,7 @@ erDiagram
     JSONB availability "NOT NULL"
     NUMERIC bathrooms
     TEXT bed_type "NOT NULL"
-    INTEGER bedrooms
+    INTEGER bedrooms "NOT NULL"
     INTEGER beds
     TIMESTAMP calendar_last_scraped "NOT NULL"
     TEXT cancellation_policy "NOT NULL"
@@ -130,7 +130,7 @@ erDiagram
   listingsandreviews_reviews {
     BIGINT id PK
     BIGINT listingsandreviews_id FK
-    TEXT comments "NOT NULL"
+    TEXT comments
     TIMESTAMP date "NOT NULL"
     INTEGER listing_id "NOT NULL"
     INTEGER reviewer_id "NOT NULL"

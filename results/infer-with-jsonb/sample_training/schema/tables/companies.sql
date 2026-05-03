@@ -36,10 +36,10 @@ CREATE TABLE companies_acquisitions (
     acquired_day INTEGER,
     acquired_month INTEGER,
     acquired_year INTEGER NOT NULL,
-    price_amount BIGINT,
+    price_amount INTEGER,
     price_currency_code VARCHAR(3) NOT NULL,
-    source_description TEXT NOT NULL,
-    source_url TEXT NOT NULL,
+    source_description TEXT,
+    source_url TEXT,
     term_code TEXT,
     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
 );

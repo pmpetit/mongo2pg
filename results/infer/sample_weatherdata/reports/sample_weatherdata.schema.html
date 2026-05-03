@@ -66,18 +66,17 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_weatherdata</h1>
-    <small>Generated: 2026-05-03 16:36 UTC</small>
+    <small>Generated: 2026-05-03 16:41 UTC</small>
   </header>
   <div class="layout">
     <aside>
-      <h2>Tables (44)</h2>
+      <h2>Tables (43)</h2>
       <ul>
         <li><a href="#" onclick="return false">data</a> <small>(8 cols)</small></li>
 <li><a href="#" onclick="return false">data_airtemperature <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">data_atmosphericpressurechange <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
 <li><a href="#" onclick="return false">data_atmosphericpressureobservation <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
 <li><a href="#" onclick="return false">data_dewpoint <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
-<li><a href="#" onclick="return false">data_extremeairtemperature <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
 <li><a href="#" onclick="return false">data_liquidprecipitation <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
 <li><a href="#" onclick="return false">data_pastweatherobservationmanual <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
 <li><a href="#" onclick="return false">data_position <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
@@ -149,14 +148,6 @@ erDiagram
     BIGINT id PK
     UUID data_id FK
     INTEGER quality "NOT NULL"
-    FLOAT value "NOT NULL"
-  }
-  data_extremeairtemperature {
-    BIGINT id PK
-    UUID data_id FK
-    VARCHAR(1) code "NOT NULL"
-    FLOAT period "NOT NULL"
-    INTEGER quantity "NOT NULL"
     FLOAT value "NOT NULL"
   }
   data_liquidprecipitation {
@@ -383,7 +374,6 @@ erDiagram
   data ||--o{ data_atmosphericpressurechange : "data_id"
   data ||--o{ data_atmosphericpressureobservation : "data_id"
   data ||--o{ data_dewpoint : "data_id"
-  data ||--o{ data_extremeairtemperature : "data_id"
   data ||--o{ data_liquidprecipitation : "data_id"
   data ||--o{ data_pastweatherobservationmanual : "data_id"
   data ||--o{ data_position : "data_id"

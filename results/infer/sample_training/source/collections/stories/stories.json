@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "4ba26d4a238d3ba3ca00083b",
-            "4ba273cf238d3ba3ca00124e",
-            "4ba26f19238d3ba3ca000b4b",
-            "4ba26a31238d3ba3ca0003b0",
-            "4ba27886238d3ba3ca001908",
-            "4ba273cf238d3ba3ca001225",
-            "4ba26af8238d3ba3ca0004f7",
-            "4ba28104238d3ba3ca0025d4",
-            "4ba27913238d3ba3ca0019ff",
-            "4ba2738c238d3ba3ca0011cd",
-            "4ba27fef238d3ba3ca0023f9",
-            "4ba27913238d3ba3ca0019ec",
-            "4ba26f19238d3ba3ca000b2e",
-            "4ba27ea0238d3ba3ca00221f",
-            "4ba271f8238d3ba3ca000f8c",
-            "4ba276b5238d3ba3ca00169f",
-            "4ba27e1a238d3ba3ca002135",
-            "4ba26f19238d3ba3ca000b1c",
-            "4ba2738c238d3ba3ca0011d2",
-            "4ba27303238d3ba3ca0010f0"
+            "4ba26c43238d3ba3ca0006cb",
+            "4ba278cc238d3ba3ca0019b3",
+            "4ba275ec238d3ba3ca00154c",
+            "4ba27957238d3ba3ca001a6c",
+            "4ba2773b238d3ba3ca00175b",
+            "4ba267dc238d3ba3ca00000c",
+            "4ba26b3b238d3ba3ca000522",
+            "4ba26a75238d3ba3ca0003f1",
+            "4ba26e0e238d3ba3ca0009be",
+            "4ba275a6238d3ba3ca0014ca",
+            "4ba27455238d3ba3ca0012d7",
+            "4ba27a25238d3ba3ca001b8d",
+            "4ba27d4c238d3ba3ca00205d",
+            "4ba27dd6238d3ba3ca00212b",
+            "4ba26e4f238d3ba3ca000a1b",
+            "4ba28148238d3ba3ca002614",
+            "4ba269ee238d3ba3ca000345",
+            "4ba270a7238d3ba3ca000d55",
+            "4ba27b30238d3ba3ca001d1c",
+            "4ba2751f238d3ba3ca001400"
           ]
         }
       }
@@ -40,28 +40,28 @@
         "Number": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 272.0,
+          "ndistinct": 280.0,
           "values": [
-            257,
             60,
-            116,
-            58,
-            175,
-            40,
-            221,
-            27,
-            24,
-            219,
-            57,
-            299,
-            112,
-            157,
-            21,
-            78,
+            53,
+            93,
+            19,
             54,
-            279,
-            29,
-            23
+            12,
+            25,
+            63,
+            80,
+            106,
+            45,
+            128,
+            267,
+            545,
+            46,
+            36,
+            108,
+            35,
+            68,
+            148
           ]
         }
       }
@@ -81,14 +81,14 @@
                   "sampled": 1000,
                   "ndistinct": 8.0,
                   "values": [
-                    "Offbeat",
+                    "Gaming",
                     "World & Business",
                     "Science",
-                    "Gaming",
-                    "Technology",
                     "Sports",
+                    "Entertainment",
+                    "Offbeat",
                     "Lifestyle",
-                    "Entertainment"
+                    "Technology"
                   ]
                 }
               }
@@ -101,14 +101,14 @@
                   "sampled": 1000,
                   "ndistinct": 8.0,
                   "values": [
-                    "offbeat",
+                    "gaming",
                     "world_business",
                     "science",
-                    "gaming",
-                    "technology",
                     "sports",
+                    "entertainment",
+                    "offbeat",
                     "lifestyle",
-                    "entertainment"
+                    "technology"
                   ]
                 }
               }
@@ -116,8 +116,8 @@
           },
           "values": [
             {
-              "name": "Offbeat",
-              "short_name": "offbeat"
+              "name": "Gaming",
+              "short_name": "gaming"
             },
             {
               "name": "World & Business",
@@ -128,24 +128,24 @@
               "short_name": "science"
             },
             {
-              "name": "Gaming",
-              "short_name": "gaming"
-            },
-            {
-              "name": "Technology",
-              "short_name": "technology"
-            },
-            {
               "name": "Sports",
               "short_name": "sports"
+            },
+            {
+              "name": "Entertainment",
+              "short_name": "entertainment"
+            },
+            {
+              "name": "Offbeat",
+              "short_name": "offbeat"
             },
             {
               "name": "Lifestyle",
               "short_name": "lifestyle"
             },
             {
-              "name": "Entertainment",
-              "short_name": "entertainment"
+              "name": "Technology",
+              "short_name": "technology"
             }
           ]
         }
@@ -157,28 +157,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 900.0,
+          "ndistinct": 916.0,
           "values": [
-            "As computers and automated systems increasingly take the jobs humans once held, entire professions are now extinct. ",
-            "The US must fix its growing debt problems or risk a new financial crisis, Thomas Hoenig, president of the Federal Reserve Bank of Kansas City, warned on Tuesday, adding a mounting deficit could spur inflation. “Without pre-emptive action, the US risks its next crisis,” Mr Hoenig said in a speech at the Pew-Peterson Commission on Budget Reform.",
-            "Ricks blindfolded her husband and led him to the basement, where she spun him around, told him to count to 100 and then began striking him with a hammer. ",
-            "The Magic Bean Shop: how Starbucks connects some of the richest and poorest countries globally -AND- The Fries that Bind Us: McDonald's Restaurants by Country.",
-            "Dad of the Year candidate, he of the priceless mug shot, blew a 4.0.",
-            "Hummingbirds are fast and hardly stand still, a fact that protects them from many a predator. Unfortunately for them, however, not from the praying mantis who is a study in patience.",
-            "The Large Hadron Collider must be shut down for a year starting in late 2011 to address design flaws, the BBC has learned.",
-            "A magnitude 7.0 earthquake struck the Caribbean nation, leaving huge swaths of Port-au-Prince in ruins, and thousands of people feared dead.",
-            "Orbiting the earth aboard the International Space Station, Expedition 9 scientists were chagrined to report a bevy of equipment and supply problems stemming from the behavior of an inquisitive raccoon Monday. ",
-            "James Burt is a Brisbane resident who is facing a $1.5M fine for illegally distributing his copy of Super Mario Bros. Wii, which he received six days earlier than the release date. Nintendo actually hired a P.I. to track Burt down, and they claim his copy has been downloaded “thousands of times” since it was uploaded. Is this verdict fair?",
-            "Clever DIYer Luke Anderson got an urge to do some building, and realized that his not-so-attractive router would fit nicely and might look rather sleek inside some Lego blocks, so he got building (which you can see in the time-lapse video above). His step-by-step guide contains Creative Commons licensed design documents and assembly images.",
-            "Clinical student was entering country to perform human rights research. FTA: ‘... we want you to know that this is a democratic country, and we respect other points of view. But we found things on your external hard drive that are very concerning.’ ",
-            "A slew of iPhone owners Santa Clara University are fed up with AT&T's poor reception on campus; so fed up that they have organized a \"day of complaint\" to push for better coverage. ",
-            "...",
-            "Computer scientists at Rutgers University have shown how a familiar type of personal computer security threat can now attack new generations of smart mobile devices. Coming up with a defense is next on the agenda",
-            "We fire off our suggestions for when the Big Daddies march to Hollywood.",
-            "Based completely on the London Underground, a Harvard scientist has released this simplified Milky Way map to display the 'vast and complex interconnections' of our galaxy.",
-            "Under the UK government's Digital Economy Bill copyright crackdown, universities, libraries and small businesses providing open Wi-Fi services would face the same penalties for copyright infringement as individual subscribers. This measure would make it impossible for small businesses and the like to offer open Wi-Fi access. ",
-            "Grease dog show makes you laugh - what better partner could you have.....",
-            "Jon Montgomery has a maple leaf and \"Canada\" tattooed above his heart. The redhead with the scruffy beard and penchant for speed, won the Olympic gold medal in men's skeleton on Friday night, snatching it away from Latvia's Martins Dukurs, who had been nearly flawless during three heats, but made a critical mistake within feet of the finish."
+            "You remember the Matrix Punchograph's and punch card's in Gnomeregan and always wondered what all that binary (01010101) really means?\r\nWell, here's the translation to them all.",
+            "Between the Toyota recall fiasco and another that may be brewing for the Chevy Cobalt, drivers have a lot on their mind these days. And while we're dedicated to keeping you up-to-date on the safety front, occasionally we like to take a quick time-out for some good news ... ",
+            "After a mere five weeks of being enacted, there is talk of having the NH gay marriage law repealed. Opponents of the law were hoping to keep the law at bay while the Republicans make an effort to become a majority in November. It is then that, if elected to a majority, they are expected to attempt the repeal of the law and ban gay marriage.",
+            "A different astronomy and space science\r\nrelated image is featured each day, along with a brief explanation.",
+            "No money, no opening ceremonies and maybe no really meaningful competition. It's not easy being a part of the U.S. Olympic Ski Jumping team. Not only will the cash-starved American squad miss the opening ceremony Friday night, they face the possibility of being eliminated from their first event before the Olympic cauldron is even lit. ",
+            "A new infrared image from NASA's Wide-field Infrared Survey Explorer, or WISE, shows a cosmic rosebud blossoming with new stars. The stars, called the Berkeley 59 cluster, are the blue dots to the right of the image center. They are ripening out of the dust cloud from which they formed, ...",
+            "Here are 8 celebrity autobiographies that we would probably read the first few pages of.",
+            "A New Jersey man with apocalyptic visions is accused of years of terrorizing his family, raping his five daughters and impregnating three, beating his children with wooden boards and even moving at one point to avoid child welfare investigators.",
+            "Despite advances in prevention and treatment, rates of HIV/AIDS in some parts of the U.S. are higher than those in sub-Saharan Africa. Rates of HIV among adults in Washington, D.C. now exceed 1 in 30 -- higher than reported rates in Ethiopia, Nigeria or Rwanda. In New York, rates are higher among blacks (1 in 40) and injection-drug users (1 in 8).",
+            "Hey, if you really want to make a tablet PC I'll buy, listen up.",
+            "In the midst of an argument over where he'd parked his Jeep, Virlyn Watson grabbed a bat, then threw it at the man he was arguing with. That man dodged the bat, then picked it up and beat Watson with it.",
+            "The Reagan administration's policy - treat Terrorists as criminals - is now deemed fringe Leftist.",
+            "Have you ever asked yourself how cold it would have to get to freeze an animal dead in it’s tracks?",
+            "NBC said Thursday it has reached a $45 million deal with Conan O'Brien for his exit from the Tonight Show, allowing Jay Leno to return to the late-night program he hosted for 17 years. Under the deal, which came seven months after O'Brien took the reins from Leno, O'Brien will get more than $33 million, NBC said. The rest will go to his staff.",
+            "Living a healthier lifestyle is not only good for you but will also mean lower health care expenses. It just needs a few simple changes in your daily routine. ",
+            "This awesome timelapse video captures the stars in the night sky over the Alps.",
+            "Ford's Crown Victoria-based police interceptor will finally end production late next year. This is its replacement &mdash; the 2012 Ford Police Interceptor. Other than the movie Robocop, it's the first time Ford's Taurus has served as a purpose-built patrol car.",
+            "These kinds of attacks, by these kinds of terrorists may not be as lethal as those on Sept. 11, 2001, but they can traumatize a population just as effectively.........................",
+            "Math is great. Not only is it the key to unlocking the mysteries of the universe, but it's also the best way for a janitor to get Minnie Driver to have sex with him",
+            "Adopting a vegetarian diet based around meat substitutes such as tofu can  cause more damage to the environment, according to a new study."
           ]
         }
       }
@@ -189,28 +189,28 @@
         "Number": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 524.0,
+          "ndistinct": 551.0,
           "values": [
-            1359,
-            231,
-            442,
-            328,
-            560,
-            375,
-            839,
-            272,
-            332,
-            383,
-            445,
-            593,
-            369,
-            606,
-            292,
-            366,
-            482,
-            991,
-            192,
-            400
+            539,
+            220,
+            329,
+            360,
+            296,
+            214,
+            424,
+            344,
+            387,
+            438,
+            303,
+            382,
+            1506,
+            2351,
+            388,
+            583,
+            304,
+            265,
+            530,
+            607
           ]
         }
       }
@@ -221,28 +221,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 951.0,
+          "ndistinct": 964.0,
           "values": [
-            "http://digg.com/people/The_Jobs_Of_Yesteryear_Obsolete_Occupations_W_Pics",
-            "http://digg.com/business_finance/The_Lone_Voice_of_Sanity_on_the_Federal_Reserve_Board",
-            "http://digg.com/people/Wife_blindfolded_husband_for_surprise_beat_him_with_hammer",
-            "http://digg.com/business_finance/Starbucks_and_McDonalds_Internationally_INFOGRAPHIC_PIC",
-            "http://digg.com/odd_stuff/Cops_catch_Dad_daughter_15_like_totally_sloshed_in_a_car",
-            "http://digg.com/odd_stuff/Praying_Mantis_Vs_Hummingbird_3",
-            "http://digg.com/general_sciences/LHC_fault_forces_2011_shutdown",
-            "http://digg.com/world_news/Devastating_Earthquake_Hits_Haiti_Pics",
-            "http://digg.com/comedy/Mischievous_Raccoon_Wreaks_Havoc_On_Space_Station",
-            "http://digg.com/gaming_news/Why_Doesn_t_the_Punishment_for_Game_Piracy_Fit_the_Crime",
-            "http://digg.com/design/Build_a_Router_Using_Lego_Blocks_DIY_Video",
-            "http://digg.com/world_news/Harvard_Law_student_detained_deported_by_Israel",
-            "http://digg.com/apple/iPhoners_Stage_Anti_AT_T_Protest_In_CA_Might_Get_Results",
-            "http://digg.com/odd_stuff/Stealing_Coffins_In_Haiti_PIC",
-            "http://digg.com/security/How_rootkits_are_threatening_smartphone_security",
-            "http://digg.com/gaming_news/What_We_Want_The_Bioshock_Movie",
-            "http://digg.com/space/Scientist_creates_Tube_map_of_the_Milky_Way_PIC",
-            "http://digg.com/tech_news/Open_Wi_Fi_Outlawed_in_Digital_Economy_Bill",
-            "http://digg.com/pets_animals/Grease_Dog_Show",
-            "http://digg.com/olympics/Canada_s_Montgomery_slides_to_gold_in_skeleton"
+            "http://digg.com/pc_games/World_of_Warcraft_Translating_the_gnomish_binary_0101010",
+            "http://digg.com/world_news/GM_Foundation_Gives_30_GMC_Sierras_To_Haiti_Relief_Efforts",
+            "http://digg.com/political_opinion/Repeal_of_New_Hampshire_Gay_Marriage_Law_Will_Be_Unlikely",
+            "http://digg.com/space/APOD_2010_February_3_P2010_A2_Unusual_Asteroid_Tail_Impl",
+            "http://digg.com/olympics/US_ski_jumpers_struggle_to_make_ends_meet",
+            "http://digg.com/space/WISE_Captures_a_Cosmic_Rose",
+            "http://digg.com/celebrity/8_Celebrity_Autobiographies_We_d_Like_To_See_PICS",
+            "http://digg.com/people/NJ_man_accused_of_raping_beating_5_daughters_2",
+            "http://digg.com/health/AIDS_Epidemic_in_Some_U_S_Cities_Worse_Than_Global_Hot_Spot",
+            "http://digg.com/gadgets/Top_10_Things_Missing_From_Tablet_PCs",
+            "http://digg.com/people/Man_Beaten_With_His_Own_Bat_After_Parking_Dispute",
+            "http://digg.com/political_opinion/Nostalgia_For_Bush_Cheney_Radicalism",
+            "http://digg.com/pets_animals/Coyote_Found_Frozen_Dead_In_His_Tracks_Literally",
+            "http://digg.com/television/Done_Deal_Conan_O_Brien_Seals_45M_Deal_to_Leave_Tonight",
+            "http://digg.com/health/10_Simple_Ways_to_Improve_Your_Health",
+            "http://digg.com/environment/Milky_Way_over_the_Alps_Stunning_Timelapse_VID",
+            "http://digg.com/autos/2012_Ford_Police_Interceptor_A_Taurus_WTF",
+            "http://digg.com/world_news/Al_Qaeda_s_Troubling_Focus_On_Americans_Smaller_Scale_Hits",
+            "http://digg.com/general_sciences/Colbert_Interviews_Mathemagician_Arthur_Benjamin_Video",
+            "http://digg.com/environment/Becoming_vegetarian_can_harm_the_environment_2"
           ]
         }
       }
@@ -251,75 +251,58 @@
       "probability": 1.0,
       "types": {
         "Number": {
-          "probability": 0.062,
-          "sampled": 62,
-          "ndistinct": 62.0,
+          "probability": 0.052,
+          "sampled": 52,
+          "ndistinct": 52.0,
           "values": [
-            19574243,
-            19774151,
-            19786188,
-            19308041,
-            19381551,
-            19795947,
-            18938946,
-            19932730,
-            19940390,
-            18692586,
-            19860748,
-            18915083,
-            19127440,
-            19870763,
-            19468099,
-            19945413,
-            18447173,
-            19942517,
-            19873759,
-            19746868
+            18974473,
+            18665931,
+            19739274,
+            19782458,
+            19889898,
+            19447669,
+            18927946,
+            19929607,
+            19700205,
+            19717557,
+            19802233,
+            19190364,
+            19771685,
+            19715690,
+            19498789,
+            18597262,
+            19891930,
+            19861101,
+            19888381,
+            18891256
           ]
         },
         "String": {
-          "probability": 0.938,
-          "sampled": 938,
-          "ndistinct": 895.0,
+          "probability": 0.948,
+          "sampled": 948,
+          "ndistinct": 915.0,
           "values": [
-            "19718919",
-            "19307306",
-            "19533064",
-            "19854590",
-            "19036423",
-            "19308203",
-            "19810524",
-            "18481122",
-            "18999508",
-            "19348226",
-            "18562470",
-            "18989061",
-            "19564183",
-            "18594813",
-            "19446938",
-            "19146959",
-            "18643180",
-            "19349910",
-            "19392686",
-            "19165924"
+            "19769069",
+            "19017332",
+            "19184177",
+            "19127121",
+            "19971578",
+            "19810819",
+            "19849266",
+            "19633427",
+            "19190939",
+            "19305193",
+            "18908741",
+            "18681794",
+            "19648379",
+            "18453121",
+            "19880285",
+            "19519474",
+            "18846226",
+            "19238140",
+            "19043603",
+            "19324922"
           ]
-        }
-      }
-    },
-    "inaccurate": {
-      "probability": 0.001,
-      "types": {
-        "Number": {
-          "probability": 1.0,
-          "sampled": 1,
-          "ndistinct": 1.0,
-          "values": [
-            1
-          ]
-        },
-        "Undefined": {
-          "probability": 0.999,
-          "sampled": 999
         }
       }
     },
@@ -329,28 +312,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 951.0,
+          "ndistinct": 964.0,
           "values": [
-            "http://www.npr.org/templates/story/story.php?storyId=124251060",
-            "http://www.ft.com/cms/s/0/c918b8dc-1b37-11df-953f-00144feab49a.html",
-            "http://www.sltrib.com/ci_14454828?source=most_viewed",
-            "http://www.princeton.edu/~ina/infographics/starbucks.html",
-            "http://wcco.com/local/police.drunk.dad.2.1470935.html",
-            "http://www.environmentalgraffiti.com/featured/praying-mantis-vs-hummingbird/20203",
-            "http://news.bbc.co.uk/2/hi/science/nature/8556621.stm",
-            "http://www.nytimes.com/slideshow/2010/01/13/world/20100113-HAITIQUAKE_index.html",
-            "http://www.theonion.com/content/node/30595",
-            "http://trueslant.com/tassi/2010/02/09/why-doesnt-the-punishment-for-game-piracy-fit-the-crime/",
-            "http://lifehacker.com/5449792/build-a-lego-router",
-            "http://www.hlrecord.org/news/harvard-law-student-detained-deported-by-israel-1.1090599",
-            "http://hothardware.com/News/iPhone-Owners-Stage-AntiATT-Demonstration-At-Santa-Clara-Might-Get-Results",
-            "http://inapcache.boston.com/universal/site_graphics/blogs/bigpicture/haiti_01_18/h31_21730303.jpg",
-            "http://www.youtube.com/watch?v=UZgf32wVTd4",
-            "http://movies.ign.com/articles/106/1068021p1.html",
-            "http://www.mailonsunday.co.uk/sciencetech/article-1244706/Mind-gap-Scientist-creates-intergalactic-tube-map-Milky-Way.html",
-            "http://news.zdnet.co.uk/communications/0,1000000085,40057470,00.htm?tag=mncol;txt",
-            "http://www.youtube.com/watch?v=gNiy_TxR6bg",
-            "http://wintergames.ap.org/story.aspx?st=id&id=6c48b3fde8364337a334943b6bedf3e7"
+            "http://www.masterofwarcraft.net/2010/03/translating-gnomish-binary-and.html",
+            "http://www.thecarconnection.com/marty-blog/1042276_gm-foundation-gives-30-gmc-sierras-to-haiti-relief-efforts",
+            "http://blogs.findlaw.com/law_and_life/2010/02/nh-gay-marriage-law-repeal-looks-unlikely-for-now.html",
+            "http://apod.nasa.gov/apod/ap100203.html",
+            "http://wintergames.ap.org/story.aspx?st=id&id=ff47334fbb034309a49e0c08a2a02b97",
+            "http://www.physorg.com/news187977528.html",
+            "http://www.holytaco.com/celebrity-autobiographies-wed-see",
+            "http://news.yahoo.com/s/ap/20100311/ap_on_re_us/us_father_rape_charges",
+            "http://www.aolnews.com/health/article/aids-epidemic-in-some-us-cities-worse-than-global-hot-spots/19378159",
+            "http://www.itworld.com/personal-tech/96298/top-ten-tablet-missing-ingredients",
+            "http://blogs.browardpalmbeach.com/juice/2010/02/man_beaten_bat_fort_lauderdale.php",
+            "http://www.salon.com/news/opinion/glenn_greenwald/2010/01/31/nostalgia",
+            "http://knucklesunited.com/2010/01/coyote-found-frozen-dead-in-his-tracks-literally/",
+            "http://www.msnbc.msn.com/id/34970662/ns/entertainment-television?gt1=43001",
+            "http://personaldividends.com/lifestyle/miranda/10-simple-ways-to-improve-your-health",
+            "http://www.vimeo.com/7853947",
+            "http://jalopnik.com/5491850/2012-ford-police-interceptor-the-crown-vics-robocop-replacement",
+            "http://www.boston.com/bostonglobe/editorial_opinion/editorials/articles/2010/02/25/al_qaedas_troubling_new_focus/",
+            "http://ccinsider.comedycentral.com/2010/01/28/colbert-puts-on-his-fun-face-for-mathemagician-arthur-benjamin/",
+            "http://www.telegraph.co.uk/earth/environment/climatechange/7219223/Becoming-vegetarian-can-harm-the-environment.html"
           ]
         }
       }
@@ -376,28 +359,28 @@
         "Number": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 945.0,
+          "ndistinct": 959.0,
           "values": [
-            1267889403,
-            1266432604,
-            1267296002,
-            1268377203,
-            1265487003,
-            1266450602,
-            1268240209,
-            1263456003,
-            1265290716,
-            1266529803,
-            1263783606,
-            1265300400,
-            1267313402,
-            1263995403,
-            1266949202,
-            1265823002,
-            1264169403,
-            1267323604,
-            1266526804,
-            1266692403
+            1268085605,
+            1265341803,
+            1265943604,
+            1265218204,
+            1265745002,
+            1268846402,
+            1268260803,
+            1268386804,
+            1267650004,
+            1265989202,
+            1266418202,
+            1265032871,
+            1264170603,
+            1264095600,
+            1267594203,
+            1263380028,
+            1268444389,
+            1267143603,
+            1264722002,
+            1266240301
           ]
         }
       }
@@ -422,28 +405,28 @@
                       "String": {
                         "probability": 1.0,
                         "sampled": 1000,
-                        "ndistinct": 951.0,
+                        "ndistinct": 964.0,
                         "values": [
-                          "http://digg.com/d31Kjn5",
-                          "http://digg.com/d31J0iA",
-                          "http://digg.com/d31JxRQ",
-                          "http://digg.com/d31LJ5K",
-                          "http://digg.com/d31HsF5",
-                          "http://digg.com/d31J0wd",
-                          "http://digg.com/d31L7ca",
-                          "http://digg.com/d31FXmc",
-                          "http://digg.com/d31Hidg",
-                          "http://digg.com/d31JBMA",
-                          "http://digg.com/d31Fswg",
-                          "http://digg.com/d31HfvB",
-                          "http://digg.com/d31K5XL",
-                          "http://digg.com/d31G1ML",
-                          "http://digg.com/d31Jb2I",
-                          "http://digg.com/d31IKzv",
-                          "http://digg.com/d31GDwS",
-                          "http://digg.com/d31K89b",
-                          "http://digg.com/d31JBnK",
-                          "http://digg.com/d31JMvG"
+                          "http://digg.com/d31Kwpx",
+                          "http://digg.com/d31HnHA",
+                          "http://digg.com/d31IUgD",
+                          "http://digg.com/d31Hc7t",
+                          "http://digg.com/d31IFpx",
+                          "http://digg.com/d31LnWE",
+                          "http://digg.com/d31L7hL",
+                          "http://digg.com/d31LHhS",
+                          "http://digg.com/d31KNYB",
+                          "http://digg.com/d31IWRH",
+                          "http://digg.com/d31J0A5",
+                          "http://digg.com/d31HL1h",
+                          "http://digg.com/d31GNzG",
+                          "http://digg.com/d31GJrP",
+                          "http://digg.com/d31KRRL",
+                          "http://digg.com/d31FQUz",
+                          "http://digg.com/d31LPll",
+                          "http://digg.com/d31JtuE",
+                          "http://digg.com/d31H4lO",
+                          "http://digg.com/d31Iiia"
                         ]
                       }
                     }
@@ -454,28 +437,28 @@
                       "Number": {
                         "probability": 1.0,
                         "sampled": 1000,
-                        "ndistinct": 899.0,
+                        "ndistinct": 914.0,
                         "values": [
-                          40851,
-                          568,
-                          5536,
-                          5021,
-                          14470,
-                          4349,
-                          15529,
-                          2474,
-                          2637,
-                          2420,
-                          4520,
-                          2907,
-                          2171,
-                          8467,
-                          1500,
-                          1828,
-                          5355,
-                          5211,
-                          1559,
-                          768
+                          6788,
+                          455,
+                          540,
+                          1303,
+                          1747,
+                          860,
+                          4718,
+                          1695,
+                          1405,
+                          4294,
+                          1983,
+                          1504,
+                          57581,
+                          24655,
+                          4058,
+                          5244,
+                          6027,
+                          773,
+                          5051,
+                          4796
                         ]
                       }
                     }
@@ -483,84 +466,84 @@
                 },
                 "values": [
                   {
-                    "short_url": "http://digg.com/d31Kjn5",
-                    "view_count": 40851
+                    "short_url": "http://digg.com/d31Kwpx",
+                    "view_count": 6788
                   },
                   {
-                    "short_url": "http://digg.com/d31J0iA",
-                    "view_count": 568
+                    "short_url": "http://digg.com/d31HnHA",
+                    "view_count": 455
                   },
                   {
-                    "short_url": "http://digg.com/d31JxRQ",
-                    "view_count": 5536
+                    "short_url": "http://digg.com/d31IUgD",
+                    "view_count": 540
                   },
                   {
-                    "short_url": "http://digg.com/d31LJ5K",
-                    "view_count": 5021
+                    "short_url": "http://digg.com/d31Hc7t",
+                    "view_count": 1303
                   },
                   {
-                    "short_url": "http://digg.com/d31HsF5",
-                    "view_count": 14470
+                    "short_url": "http://digg.com/d31IFpx",
+                    "view_count": 1747
                   },
                   {
-                    "short_url": "http://digg.com/d31J0wd",
-                    "view_count": 4349
+                    "short_url": "http://digg.com/d31LnWE",
+                    "view_count": 860
                   },
                   {
-                    "short_url": "http://digg.com/d31L7ca",
-                    "view_count": 15529
+                    "short_url": "http://digg.com/d31L7hL",
+                    "view_count": 4718
                   },
                   {
-                    "short_url": "http://digg.com/d31FXmc",
-                    "view_count": 2474
+                    "short_url": "http://digg.com/d31LHhS",
+                    "view_count": 1695
                   },
                   {
-                    "short_url": "http://digg.com/d31Hidg",
-                    "view_count": 2637
+                    "short_url": "http://digg.com/d31KNYB",
+                    "view_count": 1405
                   },
                   {
-                    "short_url": "http://digg.com/d31JBMA",
-                    "view_count": 2420
+                    "short_url": "http://digg.com/d31IWRH",
+                    "view_count": 4294
                   },
                   {
-                    "short_url": "http://digg.com/d31Fswg",
-                    "view_count": 4520
+                    "short_url": "http://digg.com/d31J0A5",
+                    "view_count": 1983
                   },
                   {
-                    "short_url": "http://digg.com/d31HfvB",
-                    "view_count": 2907
+                    "short_url": "http://digg.com/d31HL1h",
+                    "view_count": 1504
                   },
                   {
-                    "short_url": "http://digg.com/d31K5XL",
-                    "view_count": 2171
+                    "short_url": "http://digg.com/d31GNzG",
+                    "view_count": 57581
                   },
                   {
-                    "short_url": "http://digg.com/d31G1ML",
-                    "view_count": 8467
+                    "short_url": "http://digg.com/d31GJrP",
+                    "view_count": 24655
                   },
                   {
-                    "short_url": "http://digg.com/d31Jb2I",
-                    "view_count": 1500
+                    "short_url": "http://digg.com/d31KRRL",
+                    "view_count": 4058
                   },
                   {
-                    "short_url": "http://digg.com/d31IKzv",
-                    "view_count": 1828
+                    "short_url": "http://digg.com/d31FQUz",
+                    "view_count": 5244
                   },
                   {
-                    "short_url": "http://digg.com/d31GDwS",
-                    "view_count": 5355
+                    "short_url": "http://digg.com/d31LPll",
+                    "view_count": 6027
                   },
                   {
-                    "short_url": "http://digg.com/d31K89b",
-                    "view_count": 5211
+                    "short_url": "http://digg.com/d31JtuE",
+                    "view_count": 773
                   },
                   {
-                    "short_url": "http://digg.com/d31JBnK",
-                    "view_count": 1559
+                    "short_url": "http://digg.com/d31H4lO",
+                    "view_count": 5051
                   },
                   {
-                    "short_url": "http://digg.com/d31JMvG",
-                    "view_count": 768
+                    "short_url": "http://digg.com/d31Iiia",
+                    "view_count": 4796
                   }
                 ]
               }
@@ -569,122 +552,122 @@
           "values": [
             [
               {
-                "short_url": "http://digg.com/d31Kjn5",
-                "view_count": 40851
+                "short_url": "http://digg.com/d31Kwpx",
+                "view_count": 6788
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31J0iA",
-                "view_count": 568
+                "short_url": "http://digg.com/d31HnHA",
+                "view_count": 455
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31JxRQ",
-                "view_count": 5536
+                "short_url": "http://digg.com/d31IUgD",
+                "view_count": 540
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31LJ5K",
-                "view_count": 5021
+                "short_url": "http://digg.com/d31Hc7t",
+                "view_count": 1303
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31HsF5",
-                "view_count": 14470
+                "short_url": "http://digg.com/d31IFpx",
+                "view_count": 1747
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31J0wd",
-                "view_count": 4349
+                "short_url": "http://digg.com/d31LnWE",
+                "view_count": 860
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31L7ca",
-                "view_count": 15529
+                "short_url": "http://digg.com/d31L7hL",
+                "view_count": 4718
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31FXmc",
-                "view_count": 2474
+                "short_url": "http://digg.com/d31LHhS",
+                "view_count": 1695
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31Hidg",
-                "view_count": 2637
+                "short_url": "http://digg.com/d31KNYB",
+                "view_count": 1405
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31JBMA",
-                "view_count": 2420
+                "short_url": "http://digg.com/d31IWRH",
+                "view_count": 4294
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31Fswg",
-                "view_count": 4520
+                "short_url": "http://digg.com/d31J0A5",
+                "view_count": 1983
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31HfvB",
-                "view_count": 2907
+                "short_url": "http://digg.com/d31HL1h",
+                "view_count": 1504
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31K5XL",
-                "view_count": 2171
+                "short_url": "http://digg.com/d31GNzG",
+                "view_count": 57581
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31G1ML",
-                "view_count": 8467
+                "short_url": "http://digg.com/d31GJrP",
+                "view_count": 24655
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31Jb2I",
-                "view_count": 1500
+                "short_url": "http://digg.com/d31KRRL",
+                "view_count": 4058
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31IKzv",
-                "view_count": 1828
+                "short_url": "http://digg.com/d31FQUz",
+                "view_count": 5244
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31GDwS",
-                "view_count": 5355
+                "short_url": "http://digg.com/d31LPll",
+                "view_count": 6027
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31K89b",
-                "view_count": 5211
+                "short_url": "http://digg.com/d31JtuE",
+                "view_count": 773
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31JBnK",
-                "view_count": 1559
+                "short_url": "http://digg.com/d31H4lO",
+                "view_count": 5051
               }
             ],
             [
               {
-                "short_url": "http://digg.com/d31JMvG",
-                "view_count": 768
+                "short_url": "http://digg.com/d31Iiia",
+                "view_count": 4796
               }
             ]
           ]
@@ -710,49 +693,49 @@
         "Number": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 951.0,
+          "ndistinct": 963.0,
           "values": [
-            1267810990,
-            1266363068,
-            1267133034,
-            1268326920,
-            1265378129,
-            1266366027,
-            1268182348,
-            1263414934,
-            1265253475,
-            1266499330,
-            1263732028,
-            1265219189,
-            1267246702,
-            1263849694,
-            1266868836,
-            1265785553,
-            1264007638,
-            1267293786,
-            1266504592,
-            1266649177
+            1268051906,
+            1265310187,
+            1265903595,
+            1265173547,
+            1265723751,
+            1268776741,
+            1268184037,
+            1268314030,
+            1267530577,
+            1265920121,
+            1266356613,
+            1264955120,
+            1264126212,
+            1264082216,
+            1267571207,
+            1263326304,
+            1268412702,
+            1267096523,
+            1264702627,
+            1266100067
           ]
         }
       }
     },
     "thumbnail": {
-      "probability": 0.675,
+      "probability": 0.664,
       "types": {
         "Object": {
           "probability": 1.0,
-          "sampled": 675,
+          "sampled": 664,
           "object": {
             "contentType": {
               "probability": 1.0,
               "types": {
                 "String": {
                   "probability": 1.0,
-                  "sampled": 675,
+                  "sampled": 664,
                   "ndistinct": 3.0,
                   "values": [
-                    "image/jpeg",
                     "image/png",
+                    "image/jpeg",
                     "image/gif"
                   ]
                 }
@@ -763,7 +746,7 @@
               "types": {
                 "Number": {
                   "probability": 1.0,
-                  "sampled": 675,
+                  "sampled": 664,
                   "ndistinct": 1.0,
                   "values": [
                     80
@@ -776,29 +759,29 @@
               "types": {
                 "Number": {
                   "probability": 1.0,
-                  "sampled": 675,
-                  "ndistinct": 310.0,
+                  "sampled": 664,
+                  "ndistinct": 293.0,
                   "values": [
-                    800,
-                    131,
-                    170,
-                    392,
-                    250,
-                    652,
-                    354,
-                    105,
-                    683,
-                    429,
-                    512,
+                    508,
+                    600,
+                    610,
+                    750,
+                    174,
+                    337,
+                    237,
+                    150,
+                    739,
+                    360,
+                    333,
+                    400,
                     588,
+                    329,
+                    75,
+                    496,
+                    352,
                     288,
-                    309,
-                    198,
-                    180,
-                    106,
-                    299,
-                    130,
-                    768
+                    161,
+                    343
                   ]
                 }
               }
@@ -808,29 +791,29 @@
               "types": {
                 "Number": {
                   "probability": 1.0,
-                  "sampled": 675,
-                  "ndistinct": 219.0,
+                  "sampled": 664,
+                  "ndistinct": 215.0,
                   "values": [
-                    1246,
-                    175,
-                    226,
-                    600,
-                    247,
-                    929,
-                    240,
-                    110,
-                    990,
-                    634,
-                    422,
-                    1053,
-                    460,
-                    640,
-                    185,
-                    142,
+                    402,
+                    900,
+                    610,
                     500,
-                    130,
-                    1024,
-                    641
+                    240,
+                    449,
+                    298,
+                    225,
+                    200,
+                    1280,
+                    480,
+                    600,
+                    300,
+                    1053,
+                    584,
+                    100,
+                    337,
+                    490,
+                    512,
+                    459
                   ]
                 }
               }
@@ -840,29 +823,29 @@
               "types": {
                 "String": {
                   "probability": 1.0,
-                  "sampled": 675,
-                  "ndistinct": 647.0,
+                  "sampled": 664,
+                  "ndistinct": 640.0,
                   "values": [
-                    "http://digg.com/business_finance/Starbucks_and_McDonalds_Internationally_INFOGRAPHIC_PIC/t.jpg",
-                    "http://digg.com/odd_stuff/Cops_catch_Dad_daughter_15_like_totally_sloshed_in_a_car/t.jpg",
-                    "http://digg.com/general_sciences/LHC_fault_forces_2011_shutdown/t.jpg",
-                    "http://digg.com/world_news/Devastating_Earthquake_Hits_Haiti_Pics/t.jpg",
-                    "http://digg.com/comedy/Mischievous_Raccoon_Wreaks_Havoc_On_Space_Station/t.jpg",
-                    "http://digg.com/design/Build_a_Router_Using_Lego_Blocks_DIY_Video/t.png",
-                    "http://digg.com/world_news/Harvard_Law_student_detained_deported_by_Israel/t.jpg",
-                    "http://digg.com/apple/iPhoners_Stage_Anti_AT_T_Protest_In_CA_Might_Get_Results/t.jpg",
-                    "http://digg.com/odd_stuff/Stealing_Coffins_In_Haiti_PIC/t.jpg",
-                    "http://digg.com/space/Scientist_creates_Tube_map_of_the_Milky_Way_PIC/t.jpg",
-                    "http://digg.com/olympics/Canada_s_Montgomery_slides_to_gold_in_skeleton/t.jpg",
-                    "http://digg.com/odd_stuff/A_Boy_Named_Semen/t.jpg",
-                    "http://digg.com/food_drink/Red_Vines_vs_Twizzlers_A_Vitally_Sweet_Decision/t.jpg",
-                    "http://digg.com/educational/Universities_warn_of_meltdown/t.jpg",
-                    "http://digg.com/people/World_s_shortest_man_has_died_aged_21/t.jpg",
-                    "http://digg.com/design/Best_MIT_PhD_Homepage_Created_With_MS_Paint_Ever/t.gif",
-                    "http://digg.com/movies/And_BitTorrent_s_Oscar_Goes_Toh_District_9/t.png",
-                    "http://digg.com/general_sciences/Physicists_investigate_structural_properties_of_spider_webs/t.jpg",
-                    "http://digg.com/olympics/Winter_Olympic_Wipeouts_PICS/t.jpg",
-                    "http://digg.com/movies/Ten_Reasons_Why_Lost_Boys_Is_Cool_Videos/t.jpg"
+                    "http://digg.com/pc_games/World_of_Warcraft_Translating_the_gnomish_binary_0101010/t.png",
+                    "http://digg.com/space/APOD_2010_February_3_P2010_A2_Unusual_Asteroid_Tail_Impl/t.jpg",
+                    "http://digg.com/olympics/US_ski_jumpers_struggle_to_make_ends_meet/t.jpg",
+                    "http://digg.com/celebrity/8_Celebrity_Autobiographies_We_d_Like_To_See_PICS/t.jpg",
+                    "http://digg.com/people/Man_Beaten_With_His_Own_Bat_After_Parking_Dispute/t.jpg",
+                    "http://digg.com/pets_animals/Coyote_Found_Frozen_Dead_In_His_Tracks_Literally/t.jpg",
+                    "http://digg.com/television/Done_Deal_Conan_O_Brien_Seals_45M_Deal_to_Leave_Tonight/t.jpg",
+                    "http://digg.com/health/10_Simple_Ways_to_Improve_Your_Health/t.jpg",
+                    "http://digg.com/environment/Milky_Way_over_the_Alps_Stunning_Timelapse_VID/t.jpg",
+                    "http://digg.com/autos/2012_Ford_Police_Interceptor_A_Taurus_WTF/t.jpg",
+                    "http://digg.com/general_sciences/Colbert_Interviews_Mathemagician_Arthur_Benjamin_Video/t.jpg",
+                    "http://digg.com/movies/James_Cameron_Pissed_About_Avatar_Actors_Oscars_Snub/t.jpg",
+                    "http://digg.com/tennis/Serena_Williams_Studying_to_Become_Certified_Nail_Tech/t.jpg",
+                    "http://digg.com/odd_stuff/Definitely_NOT_Autoerotic_Asphyxiation/t.jpg",
+                    "http://digg.com/tech_news/Forget_the_iPad_Projection_Touchscreens_Are_Coming_Soon/t.jpg",
+                    "http://digg.com/general_sciences/Dinosaur_Death_Pits_Created_by_Giant_s_Footprints/t.jpg",
+                    "http://digg.com/apple/Skype_fixes_bugs_in_upgraded_iPhone_application/t.jpg",
+                    "http://digg.com/tech_news/Copy_And_Paste_PIC_2/t.jpg",
+                    "http://digg.com/tech_news/How_mobile_apps_enable_meaningful_human_relationships_VID/t.jpg",
+                    "http://digg.com/travel_places/Delta_s_Bereavement_Fare_Is_290_More_Than_A_Regular_Fare/t.jpg"
                   ]
                 }
               }
@@ -872,7 +855,7 @@
               "types": {
                 "Number": {
                   "probability": 1.0,
-                  "sampled": 675,
+                  "sampled": 664,
                   "ndistinct": 1.0,
                   "values": [
                     80
@@ -883,89 +866,105 @@
           },
           "values": [
             {
-              "originalheight": 800,
-              "originalwidth": 1246,
-              "src": "http://digg.com/business_finance/Starbucks_and_McDonalds_Internationally_INFOGRAPHIC_PIC/t.jpg",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/jpeg"
-            },
-            {
-              "originalheight": 131,
-              "originalwidth": 175,
-              "src": "http://digg.com/odd_stuff/Cops_catch_Dad_daughter_15_like_totally_sloshed_in_a_car/t.jpg",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/jpeg"
-            },
-            {
-              "originalheight": 170,
-              "originalwidth": 226,
-              "src": "http://digg.com/general_sciences/LHC_fault_forces_2011_shutdown/t.jpg",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/jpeg"
-            },
-            {
-              "originalheight": 392,
-              "originalwidth": 600,
-              "src": "http://digg.com/world_news/Devastating_Earthquake_Hits_Haiti_Pics/t.jpg",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/jpeg"
-            },
-            {
-              "originalheight": 250,
-              "originalwidth": 247,
-              "src": "http://digg.com/comedy/Mischievous_Raccoon_Wreaks_Havoc_On_Space_Station/t.jpg",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/jpeg"
-            },
-            {
-              "originalheight": 652,
-              "originalwidth": 929,
-              "src": "http://digg.com/design/Build_a_Router_Using_Lego_Blocks_DIY_Video/t.png",
+              "originalheight": 508,
+              "originalwidth": 402,
+              "src": "http://digg.com/pc_games/World_of_Warcraft_Translating_the_gnomish_binary_0101010/t.png",
               "height": 80,
               "width": 80,
               "contentType": "image/png"
             },
             {
-              "originalheight": 354,
+              "originalheight": 600,
+              "originalwidth": 900,
+              "src": "http://digg.com/space/APOD_2010_February_3_P2010_A2_Unusual_Asteroid_Tail_Impl/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 610,
+              "originalwidth": 610,
+              "src": "http://digg.com/olympics/US_ski_jumpers_struggle_to_make_ends_meet/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 750,
+              "originalwidth": 500,
+              "src": "http://digg.com/celebrity/8_Celebrity_Autobiographies_We_d_Like_To_See_PICS/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 174,
               "originalwidth": 240,
-              "src": "http://digg.com/world_news/Harvard_Law_student_detained_deported_by_Israel/t.jpg",
+              "src": "http://digg.com/people/Man_Beaten_With_His_Own_Bat_After_Parking_Dispute/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
-              "originalheight": 105,
-              "originalwidth": 110,
-              "src": "http://digg.com/apple/iPhoners_Stage_Anti_AT_T_Protest_In_CA_Might_Get_Results/t.jpg",
+              "originalheight": 337,
+              "originalwidth": 449,
+              "src": "http://digg.com/pets_animals/Coyote_Found_Frozen_Dead_In_His_Tracks_Literally/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
-              "originalheight": 683,
-              "originalwidth": 990,
-              "src": "http://digg.com/odd_stuff/Stealing_Coffins_In_Haiti_PIC/t.jpg",
+              "originalheight": 237,
+              "originalwidth": 298,
+              "src": "http://digg.com/television/Done_Deal_Conan_O_Brien_Seals_45M_Deal_to_Leave_Tonight/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
-              "originalheight": 429,
-              "originalwidth": 634,
-              "src": "http://digg.com/space/Scientist_creates_Tube_map_of_the_Milky_Way_PIC/t.jpg",
+              "originalheight": 150,
+              "originalwidth": 225,
+              "src": "http://digg.com/health/10_Simple_Ways_to_Improve_Your_Health/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
-              "originalheight": 512,
-              "originalwidth": 422,
-              "src": "http://digg.com/olympics/Canada_s_Montgomery_slides_to_gold_in_skeleton/t.jpg",
+              "originalheight": 150,
+              "originalwidth": 200,
+              "src": "http://digg.com/environment/Milky_Way_over_the_Alps_Stunning_Timelapse_VID/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 739,
+              "originalwidth": 1280,
+              "src": "http://digg.com/autos/2012_Ford_Police_Interceptor_A_Taurus_WTF/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 360,
+              "originalwidth": 480,
+              "src": "http://digg.com/general_sciences/Colbert_Interviews_Mathemagician_Arthur_Benjamin_Video/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 333,
+              "originalwidth": 600,
+              "src": "http://digg.com/movies/James_Cameron_Pissed_About_Avatar_Actors_Oscars_Snub/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 400,
+              "originalwidth": 300,
+              "src": "http://digg.com/tennis/Serena_Williams_Studying_to_Become_Certified_Nail_Tech/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
@@ -973,71 +972,55 @@
             {
               "originalheight": 588,
               "originalwidth": 1053,
-              "src": "http://digg.com/odd_stuff/A_Boy_Named_Semen/t.jpg",
+              "src": "http://digg.com/odd_stuff/Definitely_NOT_Autoerotic_Asphyxiation/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
-              "originalheight": 588,
-              "originalwidth": 1053,
-              "src": "http://digg.com/food_drink/Red_Vines_vs_Twizzlers_A_Vitally_Sweet_Decision/t.jpg",
+              "originalheight": 329,
+              "originalwidth": 584,
+              "src": "http://digg.com/tech_news/Forget_the_iPad_Projection_Touchscreens_Are_Coming_Soon/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
-              "originalheight": 170,
-              "originalwidth": 226,
-              "src": "http://digg.com/educational/Universities_warn_of_meltdown/t.jpg",
+              "originalheight": 75,
+              "originalwidth": 100,
+              "src": "http://digg.com/general_sciences/Dinosaur_Death_Pits_Created_by_Giant_s_Footprints/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 496,
+              "originalwidth": 337,
+              "src": "http://digg.com/apple/Skype_fixes_bugs_in_upgraded_iPhone_application/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 352,
+              "originalwidth": 490,
+              "src": "http://digg.com/tech_news/Copy_And_Paste_PIC_2/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
               "originalheight": 288,
-              "originalwidth": 460,
-              "src": "http://digg.com/people/World_s_shortest_man_has_died_aged_21/t.jpg",
+              "originalwidth": 512,
+              "src": "http://digg.com/tech_news/How_mobile_apps_enable_meaningful_human_relationships_VID/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
             },
             {
-              "originalheight": 309,
-              "originalwidth": 640,
-              "src": "http://digg.com/design/Best_MIT_PhD_Homepage_Created_With_MS_Paint_Ever/t.gif",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/gif"
-            },
-            {
-              "originalheight": 198,
-              "originalwidth": 185,
-              "src": "http://digg.com/movies/And_BitTorrent_s_Oscar_Goes_Toh_District_9/t.png",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/png"
-            },
-            {
-              "originalheight": 180,
+              "originalheight": 161,
               "originalwidth": 240,
-              "src": "http://digg.com/general_sciences/Physicists_investigate_structural_properties_of_spider_webs/t.jpg",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/jpeg"
-            },
-            {
-              "originalheight": 106,
-              "originalwidth": 142,
-              "src": "http://digg.com/olympics/Winter_Olympic_Wipeouts_PICS/t.jpg",
-              "height": 80,
-              "width": 80,
-              "contentType": "image/jpeg"
-            },
-            {
-              "originalheight": 299,
-              "originalwidth": 500,
-              "src": "http://digg.com/movies/Ten_Reasons_Why_Lost_Boys_Is_Cool_Videos/t.jpg",
+              "src": "http://digg.com/travel_places/Delta_s_Bereavement_Fare_Is_290_More_Than_A_Regular_Fare/t.jpg",
               "height": 80,
               "width": 80,
               "contentType": "image/jpeg"
@@ -1045,8 +1028,8 @@
           ]
         },
         "Undefined": {
-          "probability": 0.325,
-          "sampled": 325
+          "probability": 0.336,
+          "sampled": 336
         }
       }
     },
@@ -1056,28 +1039,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 951.0,
+          "ndistinct": 964.0,
           "values": [
-            "The Jobs Of Yesteryear: Obsolete Occupations (W/ Pics)",
-            "The Lone Voice of Sanity on the Federal Reserve Board",
-            "Wife blindfolded husband for surprise, beat him with hammer ",
-            "Starbucks and McDonalds Internationally - INFOGRAPHIC (PIC)",
-            "Cops catch Dad, daughter, 15, like totally sloshed in a car",
-            "Praying Mantis Vs Hummingbird",
-            "LHC fault forces 2011 shutdown",
-            "Devastating Earthquake Hits Haiti [Pics]",
-            "Mischievous Raccoon Wreaks Havoc On Space Station",
-            "Why Doesn't the Punishment for Game Piracy Fit the Crime?",
-            "Build a Router Using Lego Blocks (DIY Video)",
-            "Harvard Law student detained, deported by Israel",
-            "iPhoners Stage Anti-AT&T Protest In CA, Might Get Results",
-            "Stealing Coffins In Haiti (PIC)",
-            "How rootkits are threatening smartphone security",
-            "What We Want: The Bioshock Movie",
-            "Scientist creates Tube map of the Milky Way (PIC)",
-            "Open Wi-Fi 'Outlawed' in Digital Economy Bill ",
-            " Grease Dog Show ",
-            "Canada's Montgomery slides to gold in skeleton"
+            "World of Warcraft: Translating the gnomish binary (0101010)",
+            "GM Foundation Gives 30 GMC Sierras To Haiti Relief Efforts ",
+            "Repeal of New Hampshire Gay Marriage Law Will Be Unlikely",
+            "APOD: 2010 February 3 - P2010 A2: Unusual Asteroid Tail Impl",
+            "US ski jumpers struggle to make ends meet",
+            "WISE Captures a Cosmic Rose",
+            "8 Celebrity Autobiographies We'd Like To See (PICS)",
+            "NJ man accused of raping, beating 5 daughters ",
+            "AIDS Epidemic in Some U.S. Cities Worse Than Global Hot Spot",
+            "Top 10 Things Missing From Tablet PCs",
+            "Man Beaten With His Own Bat After Parking Dispute",
+            "Nostalgia For Bush/Cheney Radicalism",
+            "Coyote Found Frozen Dead In His Tracks, Literally",
+            "Done Deal: Conan O'Brien Seals $45M Deal to Leave 'Tonight'",
+            "10 Simple Ways to Improve Your Health",
+            "Milky Way over the Alps (Stunning Timelapse VID)",
+            "2012 Ford Police Interceptor: A Taurus... WTF?",
+            "Al Qaeda's Troubling  Focus On Americans -Smaller Scale Hits",
+            "Colbert Interviews Mathemagician Arthur Benjamin (Video)",
+            "Becoming vegetarian 'can harm the environment'"
           ]
         }
       }
@@ -1095,28 +1078,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 49.0,
+                  "ndistinct": 50.0,
                   "values": [
-                    "People",
-                    "Business & Finance",
-                    "Odd Stuff",
-                    "General Sciences",
+                    "PC Games",
                     "World News",
-                    "Comedy",
-                    "Gaming Industry News",
-                    "Design",
-                    "Apple",
-                    "Security",
+                    "Political Opinion",
                     "Space",
-                    "Tech Industry News",
-                    "Pets & Animals",
                     "Olympics",
-                    "Food & Drink",
-                    "Educational",
+                    "Celebrity",
+                    "People",
+                    "Health",
+                    "Gadgets",
+                    "Pets & Animals",
+                    "Television",
+                    "Environment",
+                    "Autos",
+                    "General Sciences",
                     "Movies",
-                    "PlayStation",
-                    "Hardware",
-                    "Basketball"
+                    "Tennis",
+                    "Odd Stuff",
+                    "Tech Industry News",
+                    "Security",
+                    "Apple"
                   ]
                 }
               }
@@ -1127,28 +1110,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 49.0,
+                  "ndistinct": 50.0,
                   "values": [
-                    "people",
-                    "business_finance",
-                    "odd_stuff",
-                    "general_sciences",
+                    "pc_games",
                     "world_news",
-                    "comedy",
-                    "gaming_news",
-                    "design",
-                    "apple",
-                    "security",
+                    "political_opinion",
                     "space",
-                    "tech_news",
-                    "pets_animals",
                     "olympics",
-                    "food_drink",
-                    "educational",
+                    "celebrity",
+                    "people",
+                    "health",
+                    "gadgets",
+                    "pets_animals",
+                    "television",
+                    "environment",
+                    "autos",
+                    "general_sciences",
                     "movies",
-                    "playstation",
-                    "hardware",
-                    "basketball"
+                    "tennis",
+                    "odd_stuff",
+                    "tech_news",
+                    "security",
+                    "apple"
                   ]
                 }
               }
@@ -1156,84 +1139,84 @@
           },
           "values": [
             {
-              "name": "People",
-              "short_name": "people"
-            },
-            {
-              "name": "Business & Finance",
-              "short_name": "business_finance"
-            },
-            {
-              "name": "Odd Stuff",
-              "short_name": "odd_stuff"
-            },
-            {
-              "name": "General Sciences",
-              "short_name": "general_sciences"
+              "name": "PC Games",
+              "short_name": "pc_games"
             },
             {
               "name": "World News",
               "short_name": "world_news"
             },
             {
-              "name": "Comedy",
-              "short_name": "comedy"
-            },
-            {
-              "name": "Gaming Industry News",
-              "short_name": "gaming_news"
-            },
-            {
-              "name": "Design",
-              "short_name": "design"
-            },
-            {
-              "name": "Apple",
-              "short_name": "apple"
-            },
-            {
-              "name": "Security",
-              "short_name": "security"
+              "name": "Political Opinion",
+              "short_name": "political_opinion"
             },
             {
               "name": "Space",
               "short_name": "space"
             },
             {
-              "name": "Tech Industry News",
-              "short_name": "tech_news"
+              "name": "Olympics",
+              "short_name": "olympics"
+            },
+            {
+              "name": "Celebrity",
+              "short_name": "celebrity"
+            },
+            {
+              "name": "People",
+              "short_name": "people"
+            },
+            {
+              "name": "Health",
+              "short_name": "health"
+            },
+            {
+              "name": "Gadgets",
+              "short_name": "gadgets"
             },
             {
               "name": "Pets & Animals",
               "short_name": "pets_animals"
             },
             {
-              "name": "Olympics",
-              "short_name": "olympics"
+              "name": "Television",
+              "short_name": "television"
             },
             {
-              "name": "Food & Drink",
-              "short_name": "food_drink"
+              "name": "Environment",
+              "short_name": "environment"
             },
             {
-              "name": "Educational",
-              "short_name": "educational"
+              "name": "Autos",
+              "short_name": "autos"
+            },
+            {
+              "name": "General Sciences",
+              "short_name": "general_sciences"
             },
             {
               "name": "Movies",
               "short_name": "movies"
             },
             {
-              "name": "PlayStation",
-              "short_name": "playstation"
+              "name": "Tennis",
+              "short_name": "tennis"
             },
             {
-              "name": "Hardware",
-              "short_name": "hardware"
+              "name": "Odd Stuff",
+              "short_name": "odd_stuff"
             },
             {
-              "name": "Basketball",
-              "short_name": "basketball"
+              "name": "Tech Industry News",
+              "short_name": "tech_news"
+            },
+            {
+              "name": "Security",
+              "short_name": "security"
+            },
+            {
+              "name": "Apple",
+              "short_name": "apple"
             }
           ]
         }
@@ -1247,38 +1230,38 @@
           "sampled": 1000,
           "object": {
             "fullname": {
-              "probability": 0.577,
+              "probability": 0.551,
               "types": {
                 "String": {
                   "probability": 1.0,
-                  "sampled": 577,
-                  "ndistinct": 188.0,
+                  "sampled": 551,
+                  "ndistinct": 194.0,
                   "values": [
-                    "Nam Nguyen",
-                    "Susan",
-                    "Ritu",
-                    "Louie Baur",
-                    "Andy",
-                    "Korzon",
-                    "Lt Gen Panda",
-                    "Kyle´s Cousin",
-                    "khushboo nagori",
+                    "Archive Digger",
+                    "Alex B.",
+                    "Scarlett Madison",
+                    "Gerald Weber",
+                    "Mebbin Joes",
+                    "Sick_ThankU4URPatience",
+                    "Lucas Mearian",
+                    "Phil Perspective",
+                    "Chip Patterson",
+                    "HAPPY ST. PATRICK\\'S DAY!!",
                     "Scott McIntyre",
-                    "Jonathan Nafarrete",
-                    "J",
-                    "Mr. Baby Man",
-                    "M I T Z A aka Mihai",
-                    "Daxxer",
-                    "aaron Edwards",
-                    "At SXSW...Digging as much as I can",
-                    "Nouman",
-                    "Back from vacation - Transition",
-                    "Oliver Wolcott"
+                    "vance heard",
+                    "Allen  Sentance Fisherman",
+                    "Irfan Polani",
+                    "Matthew Musick",
+                    "Nikhil ",
+                    "Hijack",
+                    "@FirstCuts",
+                    "CourageWolf",
+                    "Scott Tunstall"
                   ]
                 },
                 "Undefined": {
-                  "probability": 0.423,
-                  "sampled": 423
+                  "probability": 0.449,
+                  "sampled": 449
                 }
               }
             },
@@ -1288,28 +1271,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 332.0,
+                  "ndistinct": 346.0,
                   "values": [
-                    "http://digg.com/users/namslam/l.png",
-                    "http://digg.com/users/tvvitter/l.png",
-                    "http://digg.com/users/hdar3415/l.png",
-                    "http://digg.com/users/wbrns/l.png",
-                    "http://digg.com/users/nahsrocketeer75/l.png",
-                    "http://digg.com/users/ritubpant/l.png",
-                    "http://digg.com/img/udl.png",
-                    "http://digg.com/users/RandomEyes/l.png",
-                    "http://digg.com/users/louiebaur/l.png",
-                    "http://digg.com/users/duphregne79/l.png",
-                    "http://digg.com/users/korzon/l.png",
-                    "http://digg.com/users/LtGenPanda/l.png",
-                    "http://digg.com/users/Ricochetbiscuit/l.png",
-                    "http://digg.com/users/kylescousin/l.png",
-                    "http://digg.com/users/alphadoggs/l.png",
-                    "http://digg.com/users/DorkKnight/l.png",
+                    "http://digg.com/users/kolding/l.png",
+                    "http://digg.com/users/archivedigger/l.png",
+                    "http://digg.com/users/diggleague/l.png",
+                    "http://digg.com/users/ScarlettMadi/l.png",
+                    "http://digg.com/users/AmyVernon/l.png",
+                    "http://digg.com/users/MpenetrableTaco/l.png",
+                    "http://digg.com/users/thegman3/l.png",
+                    "http://digg.com/users/mebbin/l.png",
+                    "http://digg.com/users/BeShirtHappy/l.png",
+                    "http://digg.com/users/Lucas123/l.png",
+                    "http://digg.com/users/vtbarrera/l.png",
+                    "http://digg.com/users/PhilPerspective/l.png",
+                    "http://digg.com/users/cnpatterson3/l.png",
+                    "http://digg.com/users/TheEngineer2008/l.png",
+                    "http://digg.com/users/Financialhwy/l.png",
                     "http://digg.com/users/ScottMcIntyre/l.png",
-                    "http://digg.com/users/Shiner76/l.png",
-                    "http://digg.com/users/thoughtsonthis/l.png",
-                    "http://digg.com/users/DigSomeMore/l.png"
+                    "http://digg.com/users/theleetgeek/l.png",
+                    "http://digg.com/users/FI5HERMAN/l.png",
+                    "http://digg.com/users/irfanmp/l.png",
+                    "http://digg.com/users/Raycheetah/l.png"
                   ]
                 }
               }
@@ -1320,28 +1303,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 343.0,
+                  "ndistinct": 357.0,
                   "values": [
-                    "namslam",
-                    "tvvitter",
-                    "hdar3415",
-                    "wbrns",
-                    "nahsrocketeer75",
-                    "ritubpant",
-                    "68024",
-                    "RandomEyes",
-                    "louiebaur",
-                    "duphregne79",
-                    "korzon",
-                    "LtGenPanda",
-                    "Ricochetbiscuit",
-                    "kylescousin",
-                    "alphadoggs",
-                    "DorkKnight",
+                    "kolding",
+                    "archivedigger",
+                    "diggleague",
+                    "ScarlettMadi",
+                    "AmyVernon",
+                    "MpenetrableTaco",
+                    "thegman3",
+                    "mebbin",
+                    "BeShirtHappy",
+                    "Lucas123",
+                    "vtbarrera",
+                    "PhilPerspective",
+                    "cnpatterson3",
+                    "TheEngineer2008",
+                    "Financialhwy",
                     "ScottMcIntyre",
-                    "Shiner76",
-                    "thoughtsonthis",
-                    "DigSomeMore"
+                    "theleetgeek",
+                    "FI5HERMAN",
+                    "irfanmp",
+                    "Raycheetah"
                   ]
                 }
               }
@@ -1352,28 +1335,28 @@
                 "Number": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 616.0,
+                  "ndistinct": 592.0,
                   "values": [
-                    2747,
-                    1181,
-                    86232,
-                    6392,
-                    41169,
-                    50902,
-                    5009,
-                    41842,
-                    100097,
-                    5588,
-                    7011,
-                    85680,
-                    20005,
-                    16406,
-                    15003,
-                    8466,
+                    26581,
+                    14192,
+                    85155,
+                    13181,
+                    99690,
+                    1006,
+                    22448,
+                    19197,
+                    49092,
+                    48347,
+                    68826,
+                    30659,
+                    3867,
+                    56806,
+                    5019,
                     60484,
-                    36163,
-                    9381,
-                    35142
+                    1344,
+                    29765,
+                    72789,
+                    2200
                   ]
                 }
               }
@@ -1384,28 +1367,28 @@
                 "Number": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 343.0,
+                  "ndistinct": 357.0,
                   "values": [
-                    1251087812,
-                    1265581738,
-                    1143100969,
-                    1223585943,
-                    1139171197,
-                    1187787229,
-                    1170984577,
-                    1203539444,
-                    1198433570,
-                    1233784957,
-                    1144083843,
-                    1228861653,
-                    1176182984,
-                    1249677959,
-                    1140546368,
-                    1203407673,
+                    1184329889,
+                    1235459260,
+                    1174842253,
+                    1219271208,
+                    1177954323,
+                    1267124774,
+                    1199243566,
+                    1233572795,
+                    1201743658,
+                    1163174709,
+                    1165276372,
+                    1224794126,
+                    1253659731,
+                    1209502487,
+                    1257464936,
                     1215176921,
-                    1201630672,
-                    1222472553,
-                    1199501692
+                    1199978603,
+                    1217337464,
+                    1210944665,
+                    1187375064
                   ]
                 }
               }
@@ -1413,109 +1396,104 @@
           },
           "values": [
             {
-              "name": "namslam",
-              "registered": 1251087812,
-              "fullname": "Nam Nguyen",
-              "icon": "http://digg.com/users/namslam/l.png",
-              "profileviews": 2747
+              "name": "kolding",
+              "registered": 1184329889,
+              "icon": "http://digg.com/users/kolding/l.png",
+              "profileviews": 26581
             },
             {
-              "name": "tvvitter",
-              "registered": 1265581738,
-              "icon": "http://digg.com/users/tvvitter/l.png",
-              "profileviews": 1181
+              "name": "archivedigger",
+              "registered": 1235459260,
+              "fullname": "Archive Digger",
+              "icon": "http://digg.com/users/archivedigger/l.png",
+              "profileviews": 14192
             },
             {
-              "name": "hdar3415",
-              "registered": 1143100969,
-              "icon": "http://digg.com/users/hdar3415/l.png",
-              "profileviews": 86232
+              "name": "diggleague",
+              "registered": 1174842253,
+              "fullname": "Alex B.",
+              "icon": "http://digg.com/users/diggleague/l.png",
+              "profileviews": 85155
             },
             {
-              "name": "wbrns",
-              "registered": 1223585943,
-              "fullname": "Susan",
-              "icon": "http://digg.com/users/wbrns/l.png",
-              "profileviews": 6392
+              "name": "ScarlettMadi",
+              "registered": 1219271208,
+              "fullname": "Scarlett Madison",
+              "icon": "http://digg.com/users/ScarlettMadi/l.png",
+              "profileviews": 13181
             },
             {
-              "name": "nahsrocketeer75",
-              "registered": 1139171197,
-              "icon": "http://digg.com/users/nahsrocketeer75/l.png",
-              "profileviews": 41169
+              "name": "AmyVernon",
+              "registered": 1177954323,
+              "icon": "http://digg.com/users/AmyVernon/l.png",
+              "profileviews": 99690
             },
             {
-              "name": "ritubpant",
-              "registered": 1187787229,
-              "fullname": "Ritu",
-              "icon": "http://digg.com/users/ritubpant/l.png",
-              "profileviews": 50902
+              "name": "MpenetrableTaco",
+              "registered": 1267124774,
+              "icon": "http://digg.com/users/MpenetrableTaco/l.png",
+              "profileviews": 1006
             },
             {
-              "name": "68024",
-              "registered": 1170984577,
-              "icon": "http://digg.com/img/udl.png",
-              "profileviews": 5009
+              "name": "thegman3",
+              "registered": 1199243566,
+              "fullname": "Gerald Weber",
+              "icon": "http://digg.com/users/thegman3/l.png",
+              "profileviews": 22448
             },
             {
-              "name": "RandomEyes",
-              "registered": 1203539444,
-              "icon": "http://digg.com/users/RandomEyes/l.png",
-              "profileviews": 41842
+              "name": "mebbin",
+              "registered": 1233572795,
+              "fullname": "Mebbin Joes",
+              "icon": "http://digg.com/users/mebbin/l.png",
+              "profileviews": 19197
             },
             {
-              "name": "louiebaur",
-              "registered": 1198433570,
-              "fullname": "Louie Baur",
-              "icon": "http://digg.com/users/louiebaur/l.png",
-              "profileviews": 100097
+              "name": "BeShirtHappy",
+              "registered": 1201743658,
+              "fullname": "Sick_ThankU4URPatience",
+              "icon": "http://digg.com/users/BeShirtHappy/l.png",
+              "profileviews": 49092
             },
             {
-              "name": "duphregne79",
-              "registered": 1233784957,
-              "fullname": "Andy",
-              "icon": "http://digg.com/users/duphregne79/l.png",
-              "profileviews": 5588
+              "name": "Lucas123",
+              "registered": 1163174709,
+              "fullname": "Lucas Mearian",
+              "icon": "http://digg.com/users/Lucas123/l.png",
+              "profileviews": 48347
             },
             {
-              "name": "korzon",
-              "registered": 1144083843,
-              "fullname": "Korzon",
-              "icon": "http://digg.com/users/korzon/l.png",
-              "profileviews": 7011
+              "name": "vtbarrera",
+              "registered": 1165276372,
+              "icon": "http://digg.com/users/vtbarrera/l.png",
+              "profileviews": 68826
             },
             {
-              "name": "LtGenPanda",
-              "registered": 1228861653,
-              "fullname": "Lt Gen Panda",
-              "icon": "http://digg.com/users/LtGenPanda/l.png",
-              "profileviews": 85680
+              "name": "PhilPerspective",
+              "registered": 1224794126,
+              "fullname": "Phil Perspective",
+              "icon": "http://digg.com/users/PhilPerspective/l.png",
+              "profileviews": 30659
             },
             {
-              "name": "Ricochetbiscuit",
-              "registered": 1176182984,
-              "icon": "http://digg.com/users/Ricochetbiscuit/l.png",
-              "profileviews": 20005
+              "name": "cnpatterson3",
+              "registered": 1253659731,
+              "fullname": "Chip Patterson",
+              "icon": "http://digg.com/users/cnpatterson3/l.png",
+              "profileviews": 3867
             },
             {
-              "name": "kylescousin",
-              "registered": 1249677959,
-              "fullname": "Kyle´s Cousin",
-              "icon": "http://digg.com/users/kylescousin/l.png",
-              "profileviews": 16406
+              "name": "TheEngineer2008",
+              "registered": 1209502487,
+              "icon": "http://digg.com/users/TheEngineer2008/l.png",
+              "profileviews": 56806
             },
             {
-              "name": "alphadoggs",
-              "registered": 1140546368,
-              "icon": "http://digg.com/users/alphadoggs/l.png",
-              "profileviews": 15003
-            },
-            {
-              "name": "DorkKnight",
-              "registered": 1203407673,
-              "fullname": "khushboo nagori",
-              "icon": "http://digg.com/users/DorkKnight/l.png",
-              "profileviews": 8466
+              "name": "Financialhwy",
+              "registered": 1257464936,
+              "fullname": "HAPPY ST. PATRICK\\'S DAY!!",
+              "icon": "http://digg.com/users/Financialhwy/l.png",
+              "profileviews": 5019
             },
             {
               "name": "ScottMcIntyre",
@@ -1525,23 +1503,31 @@
               "profileviews": 60484
             },
             {
-              "name": "Shiner76",
-              "registered": 1201630672,
-              "icon": "http://digg.com/users/Shiner76/l.png",
-              "profileviews": 36163
+              "name": "theleetgeek",
+              "registered": 1199978603,
+              "fullname": "vance heard",
+              "icon": "http://digg.com/users/theleetgeek/l.png",
+              "profileviews": 1344
             },
             {
-              "name": "thoughtsonthis",
-              "registered": 1222472553,
-              "icon": "http://digg.com/users/thoughtsonthis/l.png",
-              "profileviews": 9381
+              "name": "FI5HERMAN",
+              "registered": 1217337464,
+              "fullname": "Allen  Sentance Fisherman",
+              "icon": "http://digg.com/users/FI5HERMAN/l.png",
+              "profileviews": 29765
             },
             {
-              "name": "DigSomeMore",
-              "registered": 1199501692,
-              "fullname": "Jonathan Nafarrete",
-              "icon": "http://digg.com/users/DigSomeMore/l.png",
-              "profileviews": 35142
+              "name": "irfanmp",
+              "registered": 1210944665,
+              "fullname": "Irfan Polani",
+              "icon": "http://digg.com/users/irfanmp/l.png",
+              "profileviews": 72789
+            },
+            {
+              "name": "Raycheetah",
+              "registered": 1187375064,
+              "icon": "http://digg.com/users/Raycheetah/l.png",
+              "profileviews": 2200
             }
           ]
         }
