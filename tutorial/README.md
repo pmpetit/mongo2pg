@@ -399,4 +399,4 @@ you can see a diagram
 
 Example of report, with the corresponding pg tables created.
 
-![alt text](report.png)
+![alt text](retail.png)
