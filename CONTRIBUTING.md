@@ -55,8 +55,11 @@ I have created some tasks, to help you run local migrations.
 those 2 tasks will
 
 🔍 Infer — samples your MongoDB collections and produces a probabilistic schema (field types, presence rates, nesting metrics)
+
 📐 Assess — surfaces structural metrics (depth, width, branch factor) that reveal whether a collection truly needs a document model or would be fine in a relational schema
+
 🛠️ Convert — generates PostgreSQL DDL from the inferred schema, flattening nested arrays and objects into child tables with foreign keys
+
 📊 Report — produces an HTML stats report and a Mermaid entity-relationship diagram of the resulting schema
 
 ### infer
