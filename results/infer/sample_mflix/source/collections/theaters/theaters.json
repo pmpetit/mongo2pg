@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "59a47286cfa9a3a73e51e790",
-            "59a47287cfa9a3a73e51ecaa",
-            "59a47287cfa9a3a73e51ea95",
-            "59a47287cfa9a3a73e51eb58",
-            "59a47287cfa9a3a73e51ea81",
-            "59a47287cfa9a3a73e51e90c",
-            "59a47287cfa9a3a73e51eaae",
-            "59a47287cfa9a3a73e51e8b4",
-            "59a47287cfa9a3a73e51ea46",
-            "59a47287cfa9a3a73e51e8bb",
-            "59a47287cfa9a3a73e51ec58",
-            "59a47287cfa9a3a73e51eaa7",
-            "59a47287cfa9a3a73e51ea9e",
-            "59a47286cfa9a3a73e51e798",
-            "59a47287cfa9a3a73e51ec9b",
-            "59a47287cfa9a3a73e51ea96",
-            "59a47287cfa9a3a73e51ec73",
-            "59a47286cfa9a3a73e51e77a",
-            "59a47287cfa9a3a73e51ea3f",
-            "59a47286cfa9a3a73e51e789"
+            "59a47287cfa9a3a73e51e8fc",
+            "59a47287cfa9a3a73e51e866",
+            "59a47287cfa9a3a73e51eb1a",
+            "59a47287cfa9a3a73e51ec22",
+            "59a47287cfa9a3a73e51eb4b",
+            "59a47287cfa9a3a73e51eb5e",
+            "59a47287cfa9a3a73e51e911",
+            "59a47286cfa9a3a73e51e7d7",
+            "59a47287cfa9a3a73e51ea8f",
+            "59a47287cfa9a3a73e51ea11",
+            "59a47287cfa9a3a73e51eb38",
+            "59a47287cfa9a3a73e51ea25",
+            "59a47287cfa9a3a73e51e9e0",
+            "59a47287cfa9a3a73e51e950",
+            "59a47286cfa9a3a73e51e781",
+            "59a47287cfa9a3a73e51ec1e",
+            "59a47286cfa9a3a73e51e760",
+            "59a47287cfa9a3a73e51eaf7",
+            "59a47287cfa9a3a73e51ec0d",
+            "59a47287cfa9a3a73e51e8db"
           ]
         }
       }
@@ -54,28 +54,28 @@
                         "String": {
                           "probability": 1.0,
                           "sampled": 1000,
-                          "ndistinct": 661.0,
+                          "ndistinct": 658.0,
                           "values": [
-                            "Signal Hill",
-                            "San Diego",
-                            "Reno",
-                            "Mount Vernon",
-                            "Racine",
+                            "Meriden",
+                            "Rochester",
+                            "Eau Claire",
+                            "Atlanta",
+                            "Amherst",
+                            "Lynnwood",
+                            "Austin",
+                            "Auburn",
+                            "Bel Air",
+                            "Wauwatosa",
+                            "Bay Shore",
                             "Wichita Falls",
-                            "Saint Louis",
-                            "Pottstown",
-                            "Gaithersburg",
-                            "Pflugerville",
-                            "Boston",
-                            "Cape Girardeau",
-                            "Melbourne",
-                            "San Juan",
-                            "Ft. Lauderdale",
-                            "Chesterfield",
-                            "Minneapolis",
-                            "Oxford",
-                            "Boise",
-                            "Avondale"
+                            "North Olmsted",
+                            "Waco",
+                            "Strongsville",
+                            "Burlington",
+                            "Mesa",
+                            "Prescott",
+                            "Georgetown",
+                            "Eatontown"
                           ]
                         }
                       }
@@ -88,26 +88,26 @@
                           "sampled": 1000,
                           "ndistinct": 52.0,
                           "values": [
-                            "CA",
-                            "NV",
-                            "NY",
-                            "WI",
-                            "TX",
-                            "MO",
-                            "PA",
-                            "MD",
-                            "MA",
-                            "FL",
-                            "PR",
-                            "MN",
-                            "AL",
-                            "ID",
-                            "AZ",
-                            "CO",
                             "CT",
+                            "MN",
+                            "WI",
+                            "GA",
+                            "NY",
+                            "WA",
+                            "TX",
+                            "CA",
+                            "MD",
+                            "OH",
+                            "AZ",
+                            "NJ",
+                            "PR",
+                            "ME",
                             "IL",
-                            "IN",
-                            "NJ"
+                            "KS",
+                            "CO",
+                            "UT",
+                            "MI",
+                            "NV"
                           ]
                         }
                       }
@@ -118,73 +118,73 @@
                         "String": {
                           "probability": 1.0,
                           "sampled": 1000,
-                          "ndistinct": 935.0,
+                          "ndistinct": 937.0,
                           "values": [
-                            "2701 Cherry Ave",
-                            "3665 N. Harbor Drive",
-                            "5000 Meadowood Mall Circle",
-                            "555 E Sandford Blvd",
-                            "5794 Durand Ave",
-                            "4100 Kemp Blvd",
-                            "7017 S Lindbergh Blvd",
-                            "Upland Square Drive ",
-                            "701 Russell Avenue",
-                            "19000 Limestone Commercial Dr",
-                            "1 Harborside Drive",
-                            "3049 William St",
-                            "1700 W New Haven Ave",
-                            "230 Calle Federico Costa Hato Rey",
-                            "100 Aviation Blvd.",
-                            "291 Chesterfield Mall",
-                            "7150 Humphrey Drive",
-                            "1100 Oxford Exchange Blvd",
-                            "350 N Milwaukee St",
-                            "10035 W Mcdowell Rd"
+                            "470 Lewis Avenue",
+                            "4050 Hwy 52 N",
+                            "4090 Commonwealth Ave",
+                            "6000 N. Terminal Pkwy",
+                            "1585 Niagara Falls Blvd",
+                            "19225 Alderwood Mall Pkwy",
+                            "9607 Research Blvd",
+                            "1760 Grass Valley Highway",
+                            "602 Boulton Street",
+                            "2500 N Mayfair Rd",
+                            "1851 Sunrise Highway",
+                            "3111 Midwestern Parkway",
+                            "228 Great Northern Mall",
+                            "4627 S Jack Kultgen Pkwy",
+                            "16630 Royalton Road",
+                            "1851 Marketplace Dr",
+                            "1628 S Signal Butte Rd",
+                            "3085 Gateway Blvd",
+                            "1015 W University Ave",
+                            "50 State Route 36"
                           ]
                         }
                       }
                     },
                     "street2": {
-                      "probability": 0.359,
+                      "probability": 0.352,
                       "types": {
                         "Null": {
-                          "probability": 0.3370473537604457,
-                          "sampled": 121,
+                          "probability": 0.35795454545454547,
+                          "sampled": 126,
                           "ndistinct": 1.0,
                           "values": [
                             null
                           ]
                         },
                         "String": {
-                          "probability": 0.6629526462395543,
-                          "sampled": 238,
-                          "ndistinct": 231.0,
+                          "probability": 0.6420454545454546,
+                          "sampled": 226,
+                          "ndistinct": 214.0,
                           "values": [
-                            "Ste F107B",
-                            "Spc 146",
-                            "Suite 200",
-                            "#H139",
-                            "Ste 137",
-                            "Ste 827",
-                            "Ste FC9",
-                            "Ste 2093",
-                            "#2011",
-                            "Ste D",
-                            "#B10",
-                            "Suite 4",
-                            "#1516",
-                            "#1097",
-                            "Ste 128",
-                            "Suite 417",
-                            "#2370",
-                            "Suite 1082",
-                            "Suite 100",
-                            "#2026A"
+                            "#23",
+                            "Ste 500",
+                            "Spc 614A",
+                            "#632",
+                            "Ste 300",
+                            "Ste 60",
+                            "#100",
+                            "Ste. 200 Space W115A",
+                            "#403",
+                            "Suite 310",
+                            "Ste 100",
+                            "Ste 215",
+                            "#234",
+                            "#W1117",
+                            "#272",
+                            "#1255",
+                            "#2385",
+                            "Suite 550",
+                            "Ste 2",
+                            "#B01C"
                           ]
                         },
                         "Undefined": {
-                          "probability": 0.641,
-                          "sampled": 641
+                          "probability": 0.648,
+                          "sampled": 648
                         }
                       }
                     },
@@ -194,28 +194,28 @@
                         "String": {
                           "probability": 1.0,
                           "sampled": 1000,
-                          "ndistinct": 839.0,
+                          "ndistinct": 838.0,
                           "values": [
-                            "90755",
-                            "92101",
-                            "89502",
-                            "10550",
-                            "53406",
+                            "06451",
+                            "55901",
+                            "54701",
+                            "30320",
+                            "14228",
+                            "98036",
+                            "78759",
+                            "95603",
+                            "21014",
+                            "53226",
+                            "11706",
                             "76308",
-                            "63125",
-                            "19464",
-                            "20877",
-                            "78660",
-                            "2128",
-                            "63703",
-                            "32904",
-                            "00918",
-                            "33315",
-                            "63017",
-                            "55111",
-                            "36203",
-                            "83704",
-                            "85323"
+                            "44070",
+                            "76711",
+                            "44136",
+                            "98233",
+                            "85209",
+                            "86303",
+                            "78627",
+                            "07724"
                           ]
                         }
                       }
@@ -223,136 +223,130 @@
                   },
                   "values": [
                     {
-                      "street1": "2701 Cherry Ave",
-                      "city": "Signal Hill",
-                      "state": "CA",
-                      "zipcode": "90755"
+                      "street1": "470 Lewis Avenue",
+                      "street2": "#23",
+                      "city": "Meriden",
+                      "state": "CT",
+                      "zipcode": "06451"
                     },
                     {
-                      "street1": "3665 N. Harbor Drive",
-                      "street2": null,
-                      "city": "San Diego",
-                      "state": "CA",
-                      "zipcode": "92101"
+                      "street1": "4050 Hwy 52 N",
+                      "city": "Rochester",
+                      "state": "MN",
+                      "zipcode": "55901"
                     },
                     {
-                      "street1": "5000 Meadowood Mall Circle",
-                      "street2": "Ste F107B",
-                      "city": "Reno",
-                      "state": "NV",
-                      "zipcode": "89502"
-                    },
-                    {
-                      "street1": "555 E Sandford Blvd",
-                      "city": "Mount Vernon",
-                      "state": "NY",
-                      "zipcode": "10550"
-                    },
-                    {
-                      "street1": "5794 Durand Ave",
-                      "street2": "Spc 146",
-                      "city": "Racine",
+                      "street1": "4090 Commonwealth Ave",
+                      "city": "Eau Claire",
                       "state": "WI",
-                      "zipcode": "53406"
+                      "zipcode": "54701"
                     },
                     {
-                      "street1": "4100 Kemp Blvd",
+                      "street1": "6000 N. Terminal Pkwy",
+                      "street2": null,
+                      "city": "Atlanta",
+                      "state": "GA",
+                      "zipcode": "30320"
+                    },
+                    {
+                      "street1": "1585 Niagara Falls Blvd",
+                      "city": "Amherst",
+                      "state": "NY",
+                      "zipcode": "14228"
+                    },
+                    {
+                      "street1": "19225 Alderwood Mall Pkwy",
+                      "city": "Lynnwood",
+                      "state": "WA",
+                      "zipcode": "98036"
+                    },
+                    {
+                      "street1": "9607 Research Blvd",
+                      "street2": "Ste 500",
+                      "city": "Austin",
+                      "state": "TX",
+                      "zipcode": "78759"
+                    },
+                    {
+                      "street1": "1760 Grass Valley Highway",
+                      "city": "Auburn",
+                      "state": "CA",
+                      "zipcode": "95603"
+                    },
+                    {
+                      "street1": "602 Boulton Street",
+                      "city": "Bel Air",
+                      "state": "MD",
+                      "zipcode": "21014"
+                    },
+                    {
+                      "street1": "2500 N Mayfair Rd",
+                      "street2": "Spc 614A",
+                      "city": "Wauwatosa",
+                      "state": "WI",
+                      "zipcode": "53226"
+                    },
+                    {
+                      "street1": "1851 Sunrise Highway",
+                      "city": "Bay Shore",
+                      "state": "NY",
+                      "zipcode": "11706"
+                    },
+                    {
+                      "street1": "3111 Midwestern Parkway",
+                      "street2": "#632",
                       "city": "Wichita Falls",
                       "state": "TX",
                       "zipcode": "76308"
                     },
                     {
-                      "street1": "7017 S Lindbergh Blvd",
-                      "city": "Saint Louis",
-                      "state": "MO",
-                      "zipcode": "63125"
+                      "street1": "228 Great Northern Mall",
+                      "city": "North Olmsted",
+                      "state": "OH",
+                      "zipcode": "44070"
                     },
                     {
-                      "street1": "Upland Square Drive ",
-                      "street2": "Suite 200",
-                      "city": "Pottstown",
-                      "state": "PA",
-                      "zipcode": "19464"
-                    },
-                    {
-                      "street1": "701 Russell Avenue",
-                      "street2": "#H139",
-                      "city": "Gaithersburg",
-                      "state": "MD",
-                      "zipcode": "20877"
-                    },
-                    {
-                      "street1": "19000 Limestone Commercial Dr",
-                      "city": "Pflugerville",
+                      "street1": "4627 S Jack Kultgen Pkwy",
+                      "city": "Waco",
                       "state": "TX",
-                      "zipcode": "78660"
+                      "zipcode": "76711"
                     },
                     {
-                      "street1": "1 Harborside Drive",
-                      "street2": null,
-                      "city": "Boston",
-                      "state": "MA",
-                      "zipcode": "2128"
+                      "street1": "16630 Royalton Road",
+                      "city": "Strongsville",
+                      "state": "OH",
+                      "zipcode": "44136"
                     },
                     {
-                      "street1": "3049 William St",
-                      "street2": "Ste 137",
-                      "city": "Cape Girardeau",
-                      "state": "MO",
-                      "zipcode": "63703"
+                      "street1": "1851 Marketplace Dr",
+                      "city": "Burlington",
+                      "state": "WA",
+                      "zipcode": "98233"
                     },
                     {
-                      "street1": "1700 W New Haven Ave",
-                      "street2": "Ste 827",
-                      "city": "Melbourne",
-                      "state": "FL",
-                      "zipcode": "32904"
-                    },
-                    {
-                      "street1": "230 Calle Federico Costa Hato Rey",
-                      "city": "San Juan",
-                      "state": "PR",
-                      "zipcode": "00918"
-                    },
-                    {
-                      "street1": "100 Aviation Blvd.",
-                      "street2": null,
-                      "city": "Ft. Lauderdale",
-                      "state": "FL",
-                      "zipcode": "33315"
-                    },
-                    {
-                      "street1": "291 Chesterfield Mall",
-                      "street2": "Ste FC9",
-                      "city": "Chesterfield",
-                      "state": "MO",
-                      "zipcode": "63017"
-                    },
-                    {
-                      "street1": "7150 Humphrey Drive",
-                      "street2": null,
-                      "city": "Minneapolis",
-                      "state": "MN",
-                      "zipcode": "55111"
-                    },
-                    {
-                      "street1": "1100 Oxford Exchange Blvd",
-                      "city": "Oxford",
-                      "state": "AL",
-                      "zipcode": "36203"
-                    },
-                    {
-                      "street1": "350 N Milwaukee St",
-                      "street2": "Ste 2093",
-                      "city": "Boise",
-                      "state": "ID",
-                      "zipcode": "83704"
-                    },
-                    {
-                      "street1": "10035 W Mcdowell Rd",
-                      "city": "Avondale",
+                      "street1": "1628 S Signal Butte Rd",
+                      "city": "Mesa",
                       "state": "AZ",
-                      "zipcode": "85323"
+                      "zipcode": "85209"
+                    },
+                    {
+                      "street1": "3085 Gateway Blvd",
+                      "city": "Prescott",
+                      "state": "AZ",
+                      "zipcode": "86303"
+                    },
+                    {
+                      "street1": "1015 W University Ave",
+                      "street2": "Ste 300",
+                      "city": "Georgetown",
+                      "state": "TX",
+                      "zipcode": "78627"
+                    },
+                    {
+                      "street1": "50 State Route 36",
+                      "city": "Eatontown",
+                      "state": "NJ",
+                      "zipcode": "07724"
                     }
                   ]
                 }
@@ -380,110 +374,110 @@
                                 "sampled": 2000,
                                 "ndistinct": 1000.0,
                                 "values": [
-                                  -118.16783,
-                                  33.807213,
-                                  -117.196704,
-                                  32.729565,
-                                  -119.780892,
-                                  39.472229,
-                                  -73.819061,
-                                  40.902191,
-                                  -87.845889,
-                                  42.697577,
-                                  -98.53701,
-                                  33.868481,
-                                  -90.33017,
-                                  38.510273,
-                                  -75.677409,
-                                  40.2525952,
-                                  -77.205929,
-                                  39.15098,
-                                  -97.59676,
-                                  30.46995
+                                  -72.809158,
+                                  41.551655,
+                                  -92.496895,
+                                  44.064365,
+                                  -91.431892,
+                                  44.771576,
+                                  -84.444486,
+                                  33.641229,
+                                  -78.815033,
+                                  42.999763,
+                                  -122.2688,
+                                  47.824009,
+                                  -97.74192,
+                                  30.387857,
+                                  -121.086269,
+                                  38.928965,
+                                  -76.359215,
+                                  39.527973,
+                                  -88.044662,
+                                  43.064415
                                 ]
                               }
                             }
                           },
                           "values": [
                             [
-                              -118.16783,
-                              33.807213
+                              -72.809158,
+                              41.551655
                             ],
                             [
-                              -117.196704,
-                              32.729565
+                              -92.496895,
+                              44.064365
                             ],
                             [
-                              -119.780892,
-                              39.472229
+                              -91.431892,
+                              44.771576
                             ],
                             [
-                              -73.819061,
-                              40.902191
+                              -84.444486,
+                              33.641229
                             ],
                             [
-                              -87.845889,
-                              42.697577
+                              -78.815033,
+                              42.999763
                             ],
                             [
-                              -98.53701,
-                              33.868481
+                              -122.2688,
+                              47.824009
                             ],
                             [
-                              -90.33017,
-                              38.510273
+                              -97.74192,
+                              30.387857
                             ],
                             [
-                              -75.677409,
-                              40.2525952
+                              -121.086269,
+                              38.928965
                             ],
                             [
-                              -77.205929,
-                              39.15098
+                              -76.359215,
+                              39.527973
                             ],
                             [
-                              -97.59676,
-                              30.46995
+                              -88.044662,
+                              43.064415
                             ],
                             [
-                              -71.025663,
-                              42.363275
+                              -73.236984,
+                              40.739594
                             ],
                             [
-                              -89.570464,
-                              37.298859
+                              -98.53244,
+                              33.868557
                             ],
                             [
-                              -80.650981,
-                              28.081957
+                              -81.906825,
+                              41.417026
                             ],
                             [
-                              -66.07188,
-                              18.42684
+                              -97.152046,
+                              31.498034
                             ],
                             [
-                              -80.14059,
-                              26.067547
+                              -81.8160406,
+                              41.313093
                             ],
                             [
-                              -90.564884,
-                              38.652475
+                              -122.33651,
+                              48.450352
                             ],
                             [
-                              -93.227904,
-                              44.873221
+                              -111.60139,
+                              33.384254
                             ],
                             [
-                              -85.835876,
-                              33.604454
+                              -112.43195,
+                              34.550468
                             ],
                             [
-                              -116.278249,
-                              43.60622
+                              -97.694054,
+                              30.630672
                             ],
                             [
-                              -112.27374,
-                              33.463428
+                              -74.0503975,
+                              40.2908597
                             ]
                           ]
                         }
@@ -507,141 +501,141 @@
                     {
                       "type": "Point",
                       "coordinates": [
-                        -118.16783,
-                        33.807213
+                        -72.809158,
+                        41.551655
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -117.196704,
-                        32.729565
+                        -92.496895,
+                        44.064365
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -119.780892,
-                        39.472229
+                        -91.431892,
+                        44.771576
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -73.819061,
-                        40.902191
+                        -84.444486,
+                        33.641229
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -87.845889,
-                        42.697577
+                        -78.815033,
+                        42.999763
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -98.53701,
-                        33.868481
+                        -122.2688,
+                        47.824009
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -90.33017,
-                        38.510273
+                        -97.74192,
+                        30.387857
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -75.677409,
-                        40.2525952
+                        -121.086269,
+                        38.928965
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -77.205929,
-                        39.15098
+                        -76.359215,
+                        39.527973
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -97.59676,
-                        30.46995
+                        -88.044662,
+                        43.064415
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -71.025663,
-                        42.363275
+                        -73.236984,
+                        40.739594
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -89.570464,
-                        37.298859
+                        -98.53244,
+                        33.868557
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -80.650981,
-                        28.081957
+                        -81.906825,
+                        41.417026
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -66.07188,
-                        18.42684
+                        -97.152046,
+                        31.498034
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -80.14059,
-                        26.067547
+                        -81.8160406,
+                        41.313093
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -90.564884,
-                        38.652475
+                        -122.33651,
+                        48.450352
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -93.227904,
-                        44.873221
+                        -111.60139,
+                        33.384254
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -85.835876,
-                        33.604454
+                        -112.43195,
+                        34.550468
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -116.278249,
-                        43.60622
+                        -97.694054,
+                        30.630672
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -112.27374,
-                        33.463428
+                        -74.0503975,
+                        40.2908597
                       ]
                     }
                   ]
@@ -652,85 +646,177 @@
           "values": [
             {
               "address": {
-                "street1": "2701 Cherry Ave",
-                "city": "Signal Hill",
-                "state": "CA",
-                "zipcode": "90755"
+                "street1": "470 Lewis Avenue",
+                "street2": "#23",
+                "city": "Meriden",
+                "state": "CT",
+                "zipcode": "06451"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -118.16783,
-                  33.807213
+                  -72.809158,
+                  41.551655
                 ]
               }
             },
             {
               "address": {
-                "street1": "3665 N. Harbor Drive",
-                "street2": null,
-                "city": "San Diego",
-                "state": "CA",
-                "zipcode": "92101"
+                "street1": "4050 Hwy 52 N",
+                "city": "Rochester",
+                "state": "MN",
+                "zipcode": "55901"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -117.196704,
-                  32.729565
+                  -92.496895,
+                  44.064365
                 ]
               }
             },
             {
               "address": {
-                "street1": "5000 Meadowood Mall Circle",
-                "street2": "Ste F107B",
-                "city": "Reno",
-                "state": "NV",
-                "zipcode": "89502"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -119.780892,
-                  39.472229
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "555 E Sandford Blvd",
-                "city": "Mount Vernon",
-                "state": "NY",
-                "zipcode": "10550"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -73.819061,
-                  40.902191
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "5794 Durand Ave",
-                "street2": "Spc 146",
-                "city": "Racine",
+                "street1": "4090 Commonwealth Ave",
+                "city": "Eau Claire",
                 "state": "WI",
-                "zipcode": "53406"
+                "zipcode": "54701"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -87.845889,
-                  42.697577
+                  -91.431892,
+                  44.771576
                 ]
               }
             },
             {
               "address": {
-                "street1": "4100 Kemp Blvd",
+                "street1": "6000 N. Terminal Pkwy",
+                "street2": null,
+                "city": "Atlanta",
+                "state": "GA",
+                "zipcode": "30320"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -84.444486,
+                  33.641229
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1585 Niagara Falls Blvd",
+                "city": "Amherst",
+                "state": "NY",
+                "zipcode": "14228"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -78.815033,
+                  42.999763
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "19225 Alderwood Mall Pkwy",
+                "city": "Lynnwood",
+                "state": "WA",
+                "zipcode": "98036"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -122.2688,
+                  47.824009
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "9607 Research Blvd",
+                "street2": "Ste 500",
+                "city": "Austin",
+                "state": "TX",
+                "zipcode": "78759"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -97.74192,
+                  30.387857
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1760 Grass Valley Highway",
+                "city": "Auburn",
+                "state": "CA",
+                "zipcode": "95603"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -121.086269,
+                  38.928965
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "602 Boulton Street",
+                "city": "Bel Air",
+                "state": "MD",
+                "zipcode": "21014"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -76.359215,
+                  39.527973
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2500 N Mayfair Rd",
+                "street2": "Spc 614A",
+                "city": "Wauwatosa",
+                "state": "WI",
+                "zipcode": "53226"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -88.044662,
+                  43.064415
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1851 Sunrise Highway",
+                "city": "Bay Shore",
+                "state": "NY",
+                "zipcode": "11706"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -73.236984,
+                  40.739594
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "3111 Midwestern Parkway",
+                "street2": "#632",
                 "city": "Wichita Falls",
                 "state": "TX",
                 "zipcode": "76308"
@@ -738,227 +824,129 @@
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -98.53701,
-                  33.868481
+                  -98.53244,
+                  33.868557
                 ]
               }
             },
             {
               "address": {
-                "street1": "7017 S Lindbergh Blvd",
-                "city": "Saint Louis",
-                "state": "MO",
-                "zipcode": "63125"
+                "street1": "228 Great Northern Mall",
+                "city": "North Olmsted",
+                "state": "OH",
+                "zipcode": "44070"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -90.33017,
-                  38.510273
+                  -81.906825,
+                  41.417026
                 ]
               }
             },
             {
               "address": {
-                "street1": "Upland Square Drive ",
-                "street2": "Suite 200",
-                "city": "Pottstown",
-                "state": "PA",
-                "zipcode": "19464"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -75.677409,
-                  40.2525952
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "701 Russell Avenue",
-                "street2": "#H139",
-                "city": "Gaithersburg",
-                "state": "MD",
-                "zipcode": "20877"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -77.205929,
-                  39.15098
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "19000 Limestone Commercial Dr",
-                "city": "Pflugerville",
+                "street1": "4627 S Jack Kultgen Pkwy",
+                "city": "Waco",
                 "state": "TX",
-                "zipcode": "78660"
+                "zipcode": "76711"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -97.59676,
-                  30.46995
+                  -97.152046,
+                  31.498034
                 ]
               }
             },
             {
               "address": {
-                "street1": "1 Harborside Drive",
-                "street2": null,
-                "city": "Boston",
-                "state": "MA",
-                "zipcode": "2128"
+                "street1": "16630 Royalton Road",
+                "city": "Strongsville",
+                "state": "OH",
+                "zipcode": "44136"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -71.025663,
-                  42.363275
+                  -81.8160406,
+                  41.313093
                 ]
               }
             },
             {
               "address": {
-                "street1": "3049 William St",
-                "street2": "Ste 137",
-                "city": "Cape Girardeau",
-                "state": "MO",
-                "zipcode": "63703"
+                "street1": "1851 Marketplace Dr",
+                "city": "Burlington",
+                "state": "WA",
+                "zipcode": "98233"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -89.570464,
-                  37.298859
+                  -122.33651,
+                  48.450352
                 ]
               }
             },
             {
               "address": {
-                "street1": "1700 W New Haven Ave",
-                "street2": "Ste 827",
-                "city": "Melbourne",
-                "state": "FL",
-                "zipcode": "32904"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -80.650981,
-                  28.081957
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "230 Calle Federico Costa Hato Rey",
-                "city": "San Juan",
-                "state": "PR",
-                "zipcode": "00918"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -66.07188,
-                  18.42684
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "100 Aviation Blvd.",
-                "street2": null,
-                "city": "Ft. Lauderdale",
-                "state": "FL",
-                "zipcode": "33315"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -80.14059,
-                  26.067547
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "291 Chesterfield Mall",
-                "street2": "Ste FC9",
-                "city": "Chesterfield",
-                "state": "MO",
-                "zipcode": "63017"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -90.564884,
-                  38.652475
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "7150 Humphrey Drive",
-                "street2": null,
-                "city": "Minneapolis",
-                "state": "MN",
-                "zipcode": "55111"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -93.227904,
-                  44.873221
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "1100 Oxford Exchange Blvd",
-                "city": "Oxford",
-                "state": "AL",
-                "zipcode": "36203"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -85.835876,
-                  33.604454
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "350 N Milwaukee St",
-                "street2": "Ste 2093",
-                "city": "Boise",
-                "state": "ID",
-                "zipcode": "83704"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -116.278249,
-                  43.60622
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "10035 W Mcdowell Rd",
-                "city": "Avondale",
+                "street1": "1628 S Signal Butte Rd",
+                "city": "Mesa",
                 "state": "AZ",
-                "zipcode": "85323"
+                "zipcode": "85209"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -112.27374,
-                  33.463428
+                  -111.60139,
+                  33.384254
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "3085 Gateway Blvd",
+                "city": "Prescott",
+                "state": "AZ",
+                "zipcode": "86303"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -112.43195,
+                  34.550468
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1015 W University Ave",
+                "street2": "Ste 300",
+                "city": "Georgetown",
+                "state": "TX",
+                "zipcode": "78627"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -97.694054,
+                  30.630672
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "50 State Route 36",
+                "city": "Eatontown",
+                "state": "NJ",
+                "zipcode": "07724"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -74.0503975,
+                  40.2908597
                 ]
               }
             }
@@ -974,26 +962,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            1119,
-            8164,
-            2974,
-            471,
-            2955,
-            195,
-            30,
-            1771,
-            2888,
-            1762,
-            8062,
-            2982,
-            2985,
-            1118,
-            8143,
-            2966,
-            8106,
-            1097,
-            2890,
-            1109
+            1934,
+            14,
+            40,
+            8002,
+            459,
+            477,
+            203,
+            1190,
+            296,
+            2845,
+            442,
+            2856,
+            2791,
+            244,
+            1099,
+            798,
+            1056,
+            377,
+            691,
+            1895
           ]
         }
       }

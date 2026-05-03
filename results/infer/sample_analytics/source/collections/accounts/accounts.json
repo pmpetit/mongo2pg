@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "5ca4bbc7a2dd94ee581628e0",
-            "5ca4bbc7a2dd94ee581629f8",
-            "5ca4bbc7a2dd94ee5816279f",
-            "5ca4bbc7a2dd94ee581623f6",
-            "5ca4bbc7a2dd94ee5816286a",
-            "5ca4bbc7a2dd94ee581625d3",
-            "5ca4bbc7a2dd94ee58162687",
-            "5ca4bbc7a2dd94ee58162816",
-            "5ca4bbc7a2dd94ee581628d7",
-            "5ca4bbc7a2dd94ee581626d4",
-            "5ca4bbc7a2dd94ee581626c7",
-            "5ca4bbc7a2dd94ee581628fc",
-            "5ca4bbc7a2dd94ee581627a0",
-            "5ca4bbc7a2dd94ee58162a1a",
-            "5ca4bbc7a2dd94ee581627c9",
-            "5ca4bbc7a2dd94ee581628b9",
-            "5ca4bbc7a2dd94ee581624f8",
-            "5ca4bbc7a2dd94ee58162555",
-            "5ca4bbc7a2dd94ee58162393",
-            "5ca4bbc7a2dd94ee5816266a"
+            "5ca4bbc7a2dd94ee58162780",
+            "5ca4bbc7a2dd94ee581629d0",
+            "5ca4bbc7a2dd94ee58162750",
+            "5ca4bbc7a2dd94ee5816295d",
+            "5ca4bbc7a2dd94ee58162391",
+            "5ca4bbc7a2dd94ee581628f9",
+            "5ca4bbc7a2dd94ee5816279d",
+            "5ca4bbc7a2dd94ee5816289f",
+            "5ca4bbc7a2dd94ee58162801",
+            "5ca4bbc7a2dd94ee58162647",
+            "5ca4bbc7a2dd94ee58162873",
+            "5ca4bbc7a2dd94ee5816288d",
+            "5ca4bbc7a2dd94ee58162a5f",
+            "5ca4bbc7a2dd94ee581624a3",
+            "5ca4bbc7a2dd94ee5816288f",
+            "5ca4bbc7a2dd94ee58162868",
+            "5ca4bbc7a2dd94ee58162580",
+            "5ca4bbc7a2dd94ee58162698",
+            "5ca4bbc7a2dd94ee581626ef",
+            "5ca4bbc7a2dd94ee581628e3"
           ]
         }
       }
@@ -40,28 +40,28 @@
         "Number": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 999.0,
+          "ndistinct": 1000.0,
           "values": [
-            147275,
-            218657,
-            664029,
-            682405,
-            639500,
-            343230,
-            94177,
-            289795,
-            413293,
-            179746,
-            923502,
-            308680,
-            846344,
-            420660,
-            664533,
-            351402,
-            397600,
-            960568,
-            328304,
-            941541
+            436056,
+            862214,
+            337202,
+            82071,
+            383777,
+            225930,
+            959196,
+            946116,
+            234369,
+            998674,
+            470615,
+            140557,
+            351063,
+            662207,
+            678540,
+            271625,
+            155156,
+            674433,
+            874413,
+            335182
           ]
         }
       }
@@ -72,13 +72,14 @@
         "Number": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 5.0,
+          "ndistinct": 6.0,
           "values": [
             10000,
             9000,
-            7000,
             8000,
-            3000
+            7000,
+            3000,
+            5000
           ]
         }
       }
@@ -89,21 +90,21 @@
         "Array": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 3.057,
+          "ndistinct": 3.09,
           "array": {
-            "probability": 3.057,
+            "probability": 3.09,
             "types": {
               "String": {
                 "probability": 1.0,
-                "sampled": 3057,
+                "sampled": 3090,
                 "ndistinct": 6.0,
                 "values": [
                   "Derivatives",
                   "InvestmentStock",
                   "Commodity",
+                  "InvestmentFund",
                   "Brokerage",
-                  "CurrencyService",
-                  "InvestmentFund"
+                  "CurrencyService"
                 ]
               }
             }
@@ -111,104 +112,113 @@
           "values": [
             [
               "Derivatives",
+              "InvestmentStock",
+              "Commodity",
+              "InvestmentFund"
+            ],
+            [
+              "Commodity",
+              "InvestmentFund",
               "InvestmentStock"
             ],
             [
               "Commodity",
-              "InvestmentStock"
-            ],
-            [
               "Brokerage",
               "InvestmentStock"
             ],
             [
-              "Brokerage",
-              "CurrencyService",
-              "InvestmentStock"
-            ],
-            [
-              "InvestmentStock",
-              "Derivatives"
-            ],
-            [
-              "InvestmentFund",
-              "CurrencyService",
-              "InvestmentStock"
-            ],
-            [
-              "InvestmentFund",
+              "Commodity",
               "InvestmentStock",
               "CurrencyService"
             ],
             [
-              "Commodity",
-              "Brokerage",
-              "InvestmentStock"
-            ],
-            [
-              "CurrencyService",
-              "InvestmentStock"
-            ],
-            [
               "CurrencyService",
               "Derivatives",
-              "InvestmentStock"
-            ],
-            [
               "InvestmentFund",
-              "Derivatives",
-              "Brokerage",
+              "Commodity",
               "InvestmentStock"
             ],
             [
-              "Commodity",
-              "Derivatives",
               "CurrencyService",
-              "Brokerage",
+              "InvestmentFund",
+              "Commodity",
               "InvestmentStock"
             ],
             [
-              "Commodity",
-              "CurrencyService",
               "Derivatives",
-              "InvestmentStock"
-            ],
-            [
-              "Brokerage",
-              "InvestmentStock",
-              "Derivatives"
-            ],
-            [
               "Commodity",
-              "Brokerage",
               "CurrencyService",
               "InvestmentStock"
             ],
             [
-              "Derivatives",
               "InvestmentStock",
               "CurrencyService"
             ],
             [
-              "Brokerage",
+              "CurrencyService",
+              "InvestmentStock"
+            ],
+            [
+              "Commodity",
+              "Derivatives",
+              "CurrencyService",
+              "InvestmentStock"
+            ],
+            [
               "InvestmentFund",
+              "CurrencyService",
+              "Commodity",
+              "Derivatives",
               "InvestmentStock"
             ],
             [
               "InvestmentStock",
+              "Derivatives",
               "Commodity"
             ],
             [
-              "InvestmentFund",
-              "Commodity",
-              "InvestmentStock",
-              "CurrencyService"
+              "InvestmentStock"
             ],
             [
-              "CurrencyService",
-              "InvestmentStock",
+              "Commodity",
+              "InvestmentFund",
               "Brokerage",
-              "Derivatives"
+              "Derivatives",
+              "InvestmentStock"
+            ],
+            [
+              "Derivatives",
+              "Brokerage",
+              "Commodity",
+              "InvestmentStock"
+            ],
+            [
+              "InvestmentFund",
+              "CurrencyService",
+              "Derivatives",
+              "InvestmentStock"
+            ],
+            [
+              "Commodity",
+              "CurrencyService",
+              "Derivatives",
+              "InvestmentFund",
+              "InvestmentStock"
+            ],
+            [
+              "Derivatives",
+              "InvestmentFund",
+              "InvestmentStock"
+            ],
+            [
+              "Brokerage",
+              "InvestmentStock"
+            ],
+            [
+              "Brokerage",
+              "InvestmentFund",
+              "CurrencyService",
+              "InvestmentStock"
             ]
           ]
         }

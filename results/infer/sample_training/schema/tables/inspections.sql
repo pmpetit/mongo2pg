@@ -14,6 +14,6 @@ CREATE TABLE inspections_address (
     city TEXT NOT NULL,
     number TEXT NOT NULL,
     street TEXT NOT NULL,
-    zip INTEGER NOT NULL,
+    zip TEXT NOT NULL,
     FOREIGN KEY (inspections_id) REFERENCES inspections (id) DEFERRABLE INITIALLY DEFERRED
 );

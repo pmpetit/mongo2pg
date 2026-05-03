@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "56e9b39c732b6122f8788cb3",
-            "56e9b39c732b6122f878eb2a",
-            "56e9b39c732b6122f878b935",
-            "56e9b39b732b6122f8781a09",
-            "56e9b39c732b6122f878ab8b",
-            "56e9b39b732b6122f8782b21",
-            "56e9b39c732b6122f8786cbb",
-            "56e9b39b732b6122f8781c9b",
-            "56e9b39c732b6122f878d529",
-            "56e9b39c732b6122f87875da",
-            "56e9b39c732b6122f878d7b3",
-            "56e9b39b732b6122f877fc42",
-            "56e9b39b732b6122f87850a5",
-            "56e9b39b732b6122f8782ca1",
-            "56e9b39b732b6122f8784ef2",
-            "56e9b39b732b6122f878002c",
-            "56e9b39b732b6122f8781450",
-            "56e9b39c732b6122f878d102",
-            "56e9b39c732b6122f878d1fb",
-            "56e9b39b732b6122f87810cd"
+            "56e9b39c732b6122f878d32a",
+            "56e9b39c732b6122f878654a",
+            "56e9b39c732b6122f878cdc1",
+            "56e9b39b732b6122f8780910",
+            "56e9b39c732b6122f878dc2f",
+            "56e9b39b732b6122f8785303",
+            "56e9b39b732b6122f8783e19",
+            "56e9b39c732b6122f878cde7",
+            "56e9b39c732b6122f878aba0",
+            "56e9b39b732b6122f8780437",
+            "56e9b39c732b6122f878645b",
+            "56e9b39b732b6122f87819f7",
+            "56e9b39c732b6122f878d3e1",
+            "56e9b39c732b6122f878d769",
+            "56e9b39c732b6122f878b7f1",
+            "56e9b39c732b6122f878f54a",
+            "56e9b39c732b6122f8785568",
+            "56e9b39c732b6122f878f2d0",
+            "56e9b39b732b6122f8780160",
+            "56e9b39c732b6122f87896e0"
           ]
         }
       }
@@ -47,28 +47,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 249.0,
+                  "ndistinct": 255.0,
                   "values": [
-                    "KY",
-                    "VS",
-                    "SA",
-                    "AC",
-                    "PC",
-                    "AV",
-                    "G5",
-                    "AD",
+                    "U6",
+                    "FR",
+                    "TU",
+                    "9R",
                     "UA",
-                    "HU",
-                    "3O",
-                    "DV",
-                    "AZ",
-                    "DL",
-                    "4U",
-                    "AA",
-                    "U2",
-                    "AF",
-                    "KK",
-                    "GE"
+                    "DY",
+                    "CG",
+                    "PC",
+                    "7H",
+                    "AC",
+                    "S7",
+                    "WN",
+                    "EK",
+                    "5J",
+                    "MF",
+                    "GS",
+                    "AT",
+                    "PK",
+                    "CA",
+                    "UG"
                   ]
                 }
               }
@@ -79,28 +79,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 228.0,
+                  "ndistinct": 238.0,
                   "values": [
-                    "KSY",
-                    "VIR",
-                    "SAA",
-                    "ACA",
-                    "PGT",
-                    "AVA",
-                    "\\N",
-                    "AZU",
+                    "SVR",
+                    "RYR",
+                    "TAR",
+                    "NSE",
                     "UAL",
-                    "CHH",
-                    "VSV",
-                    "AZA",
-                    "DAL",
-                    "GWI",
-                    "AAL",
-                    "EZY",
-                    "AFR",
-                    "KKK",
-                    "TNA",
-                    "ETH"
+                    "NAX",
+                    "TOK",
+                    "PGT",
+                    "ERR",
+                    "ACA",
+                    "SBI",
+                    "SWA",
+                    "UAE",
+                    "CEB",
+                    "CXA",
+                    "UPA",
+                    "RAM",
+                    "PIA",
+                    "CCA",
+                    "TUI"
                   ]
                 }
               }
@@ -111,28 +111,28 @@
                 "Number": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 249.0,
+                  "ndistinct": 255.0,
                   "values": [
-                    13704,
-                    5347,
-                    4305,
-                    330,
-                    3926,
-                    515,
-                    15837,
-                    13983,
+                    5234,
+                    4296,
+                    4870,
+                    4691,
                     5209,
-                    2660,
-                    9818,
-                    4840,
-                    596,
-                    2009,
-                    2548,
-                    24,
-                    2297,
-                    137,
-                    995,
-                    5038
+                    3737,
+                    1308,
+                    3926,
+                    16726,
+                    330,
+                    4329,
+                    4547,
+                    2183,
+                    1683,
+                    5484,
+                    690,
+                    4248,
+                    3871,
+                    751,
+                    5085
                   ]
                 }
               }
@@ -143,28 +143,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 249.0,
+                  "ndistinct": 255.0,
                   "values": [
-                    "KSY",
-                    "Virgin Atlantic Airways",
-                    "South African Airways",
-                    "Air Canada",
-                    "Pegasus Airlines",
-                    "Avianca - Aerovias Nacionales de Colombia",
-                    "Huaxia",
-                    "Azul",
+                    "Ural Airlines",
+                    "Ryanair",
+                    "Tunisair",
+                    "SATENA",
                     "United Airlines",
-                    "Hainan Airlines",
-                    "Air Arabia Maroc",
-                    "Scat Air",
-                    "Alitalia",
-                    "Delta Air Lines",
-                    "Germanwings",
-                    "American Airlines",
-                    "easyJet",
-                    "Air France",
-                    "Atlasjet",
-                    "TransAsia Airways"
+                    "Norwegian Air Shuttle",
+                    "Airlines PNG",
+                    "Pegasus Airlines",
+                    "Era Alaska",
+                    "Air Canada",
+                    "S7 Airlines",
+                    "Southwest Airlines",
+                    "Emirates",
+                    "Cebu Pacific",
+                    "Xiamen Airlines",
+                    "Air Foyle",
+                    "Royal Air Maroc",
+                    "Pakistan International Airlines",
+                    "Air China",
+                    "Tuninter"
                   ]
                 }
               }
@@ -172,52 +172,28 @@
           },
           "values": [
             {
-              "id": 13704,
-              "name": "KSY",
-              "alias": "KY",
-              "iata": "KSY"
+              "id": 5234,
+              "name": "Ural Airlines",
+              "alias": "U6",
+              "iata": "SVR"
             },
             {
-              "id": 5347,
-              "name": "Virgin Atlantic Airways",
-              "alias": "VS",
-              "iata": "VIR"
+              "id": 4296,
+              "name": "Ryanair",
+              "alias": "FR",
+              "iata": "RYR"
             },
             {
-              "id": 4305,
-              "name": "South African Airways",
-              "alias": "SA",
-              "iata": "SAA"
+              "id": 4870,
+              "name": "Tunisair",
+              "alias": "TU",
+              "iata": "TAR"
             },
             {
-              "id": 330,
-              "name": "Air Canada",
-              "alias": "AC",
-              "iata": "ACA"
-            },
-            {
-              "id": 3926,
-              "name": "Pegasus Airlines",
-              "alias": "PC",
-              "iata": "PGT"
-            },
-            {
-              "id": 515,
-              "name": "Avianca - Aerovias Nacionales de Colombia",
-              "alias": "AV",
-              "iata": "AVA"
-            },
-            {
-              "id": 15837,
-              "name": "Huaxia",
-              "alias": "G5",
-              "iata": "\\N"
-            },
-            {
-              "id": 13983,
-              "name": "Azul",
-              "alias": "AD",
-              "iata": "AZU"
+              "id": 4691,
+              "name": "SATENA",
+              "alias": "9R",
+              "iata": "NSE"
             },
             {
               "id": 5209,
@@ -226,70 +202,94 @@
               "iata": "UAL"
             },
             {
-              "id": 2660,
-              "name": "Hainan Airlines",
-              "alias": "HU",
-              "iata": "CHH"
+              "id": 3737,
+              "name": "Norwegian Air Shuttle",
+              "alias": "DY",
+              "iata": "NAX"
             },
             {
-              "id": 9818,
-              "name": "Air Arabia Maroc",
-              "alias": "3O",
-              "iata": "\\N"
+              "id": 1308,
+              "name": "Airlines PNG",
+              "alias": "CG",
+              "iata": "TOK"
             },
             {
-              "id": 4840,
-              "name": "Scat Air",
-              "alias": "DV",
-              "iata": "VSV"
+              "id": 3926,
+              "name": "Pegasus Airlines",
+              "alias": "PC",
+              "iata": "PGT"
             },
             {
-              "id": 596,
-              "name": "Alitalia",
-              "alias": "AZ",
-              "iata": "AZA"
+              "id": 16726,
+              "name": "Era Alaska",
+              "alias": "7H",
+              "iata": "ERR"
             },
             {
-              "id": 2009,
-              "name": "Delta Air Lines",
-              "alias": "DL",
-              "iata": "DAL"
+              "id": 330,
+              "name": "Air Canada",
+              "alias": "AC",
+              "iata": "ACA"
             },
             {
-              "id": 2548,
-              "name": "Germanwings",
-              "alias": "4U",
-              "iata": "GWI"
+              "id": 4329,
+              "name": "S7 Airlines",
+              "alias": "S7",
+              "iata": "SBI"
             },
             {
-              "id": 24,
-              "name": "American Airlines",
-              "alias": "AA",
-              "iata": "AAL"
+              "id": 4547,
+              "name": "Southwest Airlines",
+              "alias": "WN",
+              "iata": "SWA"
             },
             {
-              "id": 2297,
-              "name": "easyJet",
-              "alias": "U2",
-              "iata": "EZY"
+              "id": 2183,
+              "name": "Emirates",
+              "alias": "EK",
+              "iata": "UAE"
             },
             {
-              "id": 137,
-              "name": "Air France",
-              "alias": "AF",
-              "iata": "AFR"
+              "id": 1683,
+              "name": "Cebu Pacific",
+              "alias": "5J",
+              "iata": "CEB"
             },
             {
-              "id": 995,
-              "name": "Atlasjet",
-              "alias": "KK",
-              "iata": "KKK"
+              "id": 5484,
+              "name": "Xiamen Airlines",
+              "alias": "MF",
+              "iata": "CXA"
             },
             {
-              "id": 5038,
-              "name": "TransAsia Airways",
-              "alias": "GE",
-              "iata": "TNA"
+              "id": 690,
+              "name": "Air Foyle",
+              "alias": "GS",
+              "iata": "UPA"
+            },
+            {
+              "id": 4248,
+              "name": "Royal Air Maroc",
+              "alias": "AT",
+              "iata": "RAM"
+            },
+            {
+              "id": 3871,
+              "name": "Pakistan International Airlines",
+              "alias": "PK",
+              "iata": "PIA"
+            },
+            {
+              "id": 751,
+              "name": "Air China",
+              "alias": "CA",
+              "iata": "CCA"
+            },
+            {
+              "id": 5085,
+              "name": "Tuninter",
+              "alias": "UG",
+              "iata": "TUI"
             }
           ]
         }
@@ -299,57 +299,57 @@
       "probability": 1.0,
       "types": {
         "Number": {
-          "probability": 0.485,
-          "sampled": 485,
-          "ndistinct": 37.0,
+          "probability": 0.452,
+          "sampled": 452,
+          "ndistinct": 34.0,
           "values": [
-            738,
             320,
-            319,
-            763,
-            777,
-            346,
-            735,
-            100,
-            739,
-            332,
+            738,
+            736,
             333,
-            732,
-            330,
-            773,
             737,
-            345,
-            343,
+            319,
             321,
+            330,
+            734,
+            753,
+            764,
+            735,
+            772,
+            332,
+            717,
             744,
-            733
+            346,
+            763,
+            733,
+            752
           ]
         },
         "String": {
-          "probability": 0.515,
-          "sampled": 515,
-          "ndistinct": 249.0,
+          "probability": 0.548,
+          "sampled": 548,
+          "ndistinct": 258.0,
           "values": [
-            "757 319 320 M90 M88 717",
-            "DH4 AR8 ER3 CR7",
-            "ERJ",
-            "E90",
-            "CR9",
-            "AT7",
-            "ERJ CR7",
-            "AN4",
             "E70",
+            "E70 CR7",
             "73H",
-            "320 319",
-            "ERD",
-            "E75 CR9",
-            "757 M90 320",
-            "M88",
-            "330 321",
-            "319 320",
-            "ER4",
             "DH8",
-            "319 320 321"
+            "320 32A",
+            "320 738",
+            "CNC",
+            "73W 73C 735",
+            "388 77W",
+            "73W 73C",
+            "E90",
+            "738 73G",
+            "310 73H",
+            "CR9",
+            "AN4",
+            "73G",
+            "AT7",
+            "320 319",
+            "J32",
+            "ATP"
           ]
         }
       }
@@ -371,31 +371,39 @@
     "dst_airport": {
       "probability": 1.0,
       "types": {
-        "String": {
-          "probability": 1.0,
-          "sampled": 1000,
-          "ndistinct": 522.0,
+        "Number": {
+          "probability": 0.001,
+          "sampled": 1,
+          "ndistinct": 1.0,
           "values": [
-            "KMG",
+            null
+          ]
+        },
+        "String": {
+          "probability": 0.999,
+          "sampled": 999,
+          "ndistinct": 520.0,
+          "values": [
+            "OSS",
+            "LPP",
+            "DJE",
+            "PSO",
             "ORD",
-            "JNB",
-            "ADB",
-            "MCO",
-            "JNG",
-            "CGB",
-            "IAH",
-            "TNA",
-            "ACY",
+            "TOS",
+            "HGU",
+            "BEN",
             "SAW",
-            "KGF",
-            "CDG",
-            "JFK",
-            "TXL",
-            "MIA",
-            "SCQ",
-            "LGW",
-            "SDF",
-            "MSY"
+            "HCR",
+            "MLA",
+            "FRA",
+            "SVX",
+            "GCM",
+            "OVB",
+            "LAS",
+            "DXB",
+            "BNA",
+            "MNL",
+            "XMN"
           ]
         }
       }
@@ -406,28 +414,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 505.0,
+          "ndistinct": 508.0,
           "values": [
-            "SZX",
-            "ATL",
-            "KIM",
-            "YQB",
-            "ATH",
-            "SAL",
-            "XIY",
-            "SJP",
-            "CVG",
-            "IAH",
-            "CMN",
-            "KZO",
-            "ABZ",
-            "SAT",
-            "NUE",
-            "RTB",
-            "LGW",
-            "NCE",
-            "LGA",
-            "MSP"
+            "DME",
+            "NRN",
+            "MRS",
+            "BOG",
+            "YEG",
+            "TRD",
+            "UNG",
+            "TUN",
+            "BAL",
+            "ANI",
+            "LPL",
+            "YOW",
+            "TAS",
+            "IAD",
+            "FRU",
+            "PHX",
+            "ZRH",
+            "CLE",
+            "CGK",
+            "KMG"
           ]
         }
       }

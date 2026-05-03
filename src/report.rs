@@ -18,6 +18,8 @@ pub struct CollectionStatsYaml {
     pub depth_max: usize,
     pub branch_total: f64,
     #[serde(default)]
+    pub branch_per_level: indexmap::IndexMap<String, f64>,
+    #[serde(default)]
     pub array_field_count: usize,
     #[serde(default)]
     pub avg_fields_per_doc: f64,
@@ -227,7 +229,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
           <td class="num">{width_top}</td>
           <td class="num">{width_max:.1} <span class="level">(L{width_max_level})</span></td>
           <td class="num">{depth}</td>
-          <td class="num">{branch:.1}</td>
+          <td class="num" title="{branch_tooltip}">{branch:.1}</td>
           <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score:.2}</span></td>
           {tables_cell}
         </tr>
@@ -240,6 +242,13 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
                 width_max_level = r.stats.width_max_level,
                 depth = r.stats.depth_max,
                 branch = r.stats.branch_total,
+                branch_tooltip = {
+                    let levels = r.stats.branch_per_level.iter()
+                        .map(|(k, v)| format!("{}: {:.2}", k, v))
+                        .collect::<Vec<_>>()
+                        .join("  ");
+                    format!("Expected fields/doc by level — {}", levels)
+                },
                 score = r.stats.migrability_score,
                 score_color = score_color,
                 tables_cell = tables_cell,
@@ -291,6 +300,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
       box-shadow: 0 1px 4px rgba(0,0,0,.08);
     }}
     thead {{ background: #2c3e50; color: white; }}
+    th[title] {{ cursor: help; }}
     th {{
       padding: 0.75rem 1rem;
       text-align: left;
@@ -377,7 +387,12 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
     <strong>Complexity score</strong> per collection:
     <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
     DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
-    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.<br>
+    <strong>Width (top)</strong>: number of top-level fields in the collection schema.<br>
+    <strong>Width (max)</strong>: highest field count found at any single nesting level, with the level shown in parentheses (probability-weighted).<br>
+    <strong>Depth (max)</strong>: maximum nesting depth — top-level fields are depth 1, their sub-fields depth 2, etc.<br>
+    <strong>Fields (total)</strong>: expected number of fields a typical document in the collection
+    actually has, summed across all nesting levels (probability-weighted). Hover the value for the per-level breakdown.
   </p>
 
   <table>
@@ -386,10 +401,10 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
         <th>Collection</th>
         <th class="num">Documents</th>
         <th class="num">Sampled</th>
-        <th class="num">Width (top)</th>
-        <th class="num">Width (max)</th>
-        <th class="num">Depth (max)</th>
-        <th class="num">Fields (total)</th>
+        <th class="num" title="Number of top-level fields in the collection schema">Width (top)</th>
+        <th class="num" title="Highest field count found at any single nesting level, with the level shown in parentheses (probability-weighted)">Width (max)</th>
+        <th class="num" title="Maximum nesting depth: top-level fields are depth 1, their sub-fields depth 2, etc.">Depth (max)</th>
+        <th class="num" title="Expected number of fields a typical document has, summed across all levels (probability-weighted). Hover a value for the per-level breakdown.">Fields (total)</th>
         <th class="num">Score</th>
         {tables_header}
       </tr>
