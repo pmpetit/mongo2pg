@@ -1,0 +1,113 @@
+version: "3"
+
+vars:
+  URI: "mongodb://user:pass@localhost:2717/?authSource=admin"
+  RESULTS_DIR: results
+  BIN: "{{.ROOT_DIR}}/target/debug/mongo2pg"
+
+tasks:
+  build:
+    desc: Build the mongo2pg binary (debug)
+    cmds:
+      - cargo build
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+      - Cargo.lock
+    generates:
+      - target/debug/mongo2pg
+
+  infer:
+    desc: Infer schemas for all sample collections, generate SQL DDL into {{.RESULTS_DIR}}/infer/
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "{{.RESULTS_DIR}}/infer"
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - |
+        for ns in \
+          sample_airbnb.listingsAndReviews \
+          sample_analytics.accounts \
+          sample_analytics.customers \
+          sample_analytics.transactions \
+          sample_geospatial.shipwrecks \
+          sample_mflix.comments \
+          sample_mflix.movies \
+          sample_mflix.theaters \
+          sample_mflix.users \
+          sample_supplies.sales \
+          sample_training.companies \
+          sample_training.grades \
+          sample_training.inspections \
+          sample_training.routes \
+          sample_training.trips \
+          sample_training.zips \
+          sample_weatherdata.data
+        do
+          dbname=$(echo "$ns" | cut -d'.' -f1)
+          filename=$(echo "$ns" | tr '.' '_')
+          echo "📁 init $dbname"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$dbname" --uri "{{.URI}}"
+          coldir="{{.OUT}}/$dbname/source/collections/$filename"
+          mkdir -p "$coldir"
+          echo "📐 infer $ns"
+          "{{.BIN}}" infer --uri "{{.URI}}" --namespace "$ns" \
+            2>"$coldir/${filename}.stats.txt" \
+            > "$coldir/${filename}.json"
+          echo "🛠️  to-pg $filename"
+          "{{.BIN}}" to-pg -c "{{.OUT}}/$dbname/config/$dbname.conf" "$filename"
+          echo "📊 report"
+          "{{.BIN}}" report \
+            --collections-dir "{{.OUT}}/$dbname/source/collections" \
+            -o "{{.OUT}}/$dbname/reports/report.html"          
+        done
+      - echo "👉 results in {{.OUT}}"
+
+  infer-with-jsonb:
+    desc: Infer schemas with --jsonb 🪆, generate SQL DDL and HTML report into {{.RESULTS_DIR}}/infer-with-jsonb/
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "{{.RESULTS_DIR}}/infer-with-jsonb"
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - echo "📂 inferring with --jsonb 🪆, results in {{.OUT}}"
+      - |
+        for ns in \
+          sample_airbnb.listingsAndReviews \
+          sample_analytics.accounts \
+          sample_analytics.customers \
+          sample_analytics.transactions \
+          sample_geospatial.shipwrecks \
+          sample_mflix.comments \
+          sample_mflix.movies \
+          sample_mflix.theaters \
+          sample_mflix.users \
+          sample_supplies.sales \
+          sample_training.companies \
+          sample_training.grades \
+          sample_training.inspections \
+          sample_training.routes \
+          sample_training.trips \
+          sample_training.zips \
+          sample_weatherdata.data
+        do
+          dbname=$(echo "$ns" | cut -d'.' -f1)
+          filename=$(echo "$ns" | tr '.' '_')
+          echo "📁 init $dbname"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$dbname" --uri "{{.URI}}"
+          coldir="{{.OUT}}/$dbname/source/collections/$filename"
+          mkdir -p "$coldir"
+          echo "📐 infer $ns"
+          "{{.BIN}}" infer --uri "{{.URI}}" --namespace "$ns" --jsonb \
+            2>"$coldir/${filename}.stats.txt" \
+            > "$coldir/${filename}.json"
+          echo "🛠️ to-pg $filename"
+          "{{.BIN}}" to-pg -c "{{.OUT}}/$dbname/config/$dbname.conf" "$filename"
+          echo "📊 report"
+          "{{.BIN}}" report \
+            --collections-dir "{{.OUT}}/$dbname/source/collections" \
+            -o "{{.OUT}}/$dbname/reports/report.html"
+        done
+      - echo "👉 results in {{.OUT}}"

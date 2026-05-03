@@ -97,6 +97,11 @@ struct InferArgs {
     #[arg(short = 'p', long = "percent", conflicts_with = "number", value_parser = clap::value_parser!(f64))]
     percent: Option<f64>,
 
+    /// Treat all MongoDB Object fields as JSONB columns in the generated DDL
+    /// instead of creating 1:1 child tables (arrays of objects are unaffected)
+    #[arg(long = "jsonb", action = clap::ArgAction::SetTrue)]
+    jsonb: bool,
+
     /// Suppress schema output to stdout
     #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
     no_output: bool,
@@ -112,9 +117,6 @@ struct InferArgs {
 
 #[derive(Parser, Debug)]
 struct ToPgArgs {
-    #[command(flatten)]
-    mongo: UriArg,
-
     /// Optional collection name; if omitted all collections under source/collections/ are processed
     collection: Option<String>,
 
@@ -148,9 +150,6 @@ struct InitArgs {
 
 #[derive(Parser, Debug)]
 struct ReportArgs {
-    #[command(flatten)]
-    mongo: UriArg,
-
     /// Path to the project config file (.conf) – derives source/collections and output paths
     #[arg(short = 'c', long = "config", conflicts_with_all = ["collections_dir", "output"])]
     config: Option<PathBuf>,
@@ -170,9 +169,6 @@ struct ReportArgs {
 
 #[derive(Parser, Debug)]
 struct SchemaArgs {
-    #[command(flatten)]
-    mongo: UriArg,
-
     /// Path to the project config file (.conf) – derives schema/tables and reports paths
     #[arg(short = 'c', long = "config", conflicts_with = "tables_dir")]
     config: Option<PathBuf>,
@@ -426,6 +422,9 @@ async fn infer_collection(
             .context("Failed to get document count")?
     };
     schema.count = total_docs;
+    if args.jsonb {
+        schema.mark_objects_as_jsonb();
+    }
     let output_dir = output_dir; // rebind to keep borrow checker happy
 
     let stats_lines = format_stats(&schema, Some(total_docs));
