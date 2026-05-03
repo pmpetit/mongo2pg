@@ -70,6 +70,14 @@ mongo2pg report -c /app/migration/retail/config/retail.conf
 cargo test
 ```
 
+## Reports
+
+for example an analytic database, you can see some migration reports here
+
+summarized report : [static](https://pmpetit.github.io/mongo2pg/results/infer/sample_analytics/reports/sample_analytics.html)
+
+graphic representation: [graphical](https://pmpetit.github.io/mongo2pg/results/infer/sample_analytics/reports/sample_analytics.schema.html)
+
 Tests cover:
 
 - Field count and sorting (`_id` first, then alphabetical)
