@@ -219,6 +219,8 @@ mod tests {
             "String".to_owned(),
             TypeSchema {
                 probability: 1.0,
+                sampled: 0,
+                as_jsonb: false,
                 ndistinct: None,
                 object: None,
                 array: None,
