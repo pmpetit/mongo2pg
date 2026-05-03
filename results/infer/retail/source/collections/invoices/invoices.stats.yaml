@@ -20,3 +20,6 @@ top_level_types:
   status: String
   totalAmount: Number
   userId: ObjectId
+array_field_count: 2
+avg_fields_per_doc: 9.0
+migrability_score: 5.0

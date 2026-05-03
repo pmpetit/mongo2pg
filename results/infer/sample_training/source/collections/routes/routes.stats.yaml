@@ -16,3 +16,6 @@ top_level_types:
   dst_airport: String
   src_airport: String
   stops: Number
+array_field_count: 0
+avg_fields_per_doc: 7.0
+migrability_score: 2.0

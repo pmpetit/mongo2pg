@@ -24,3 +24,6 @@ top_level_types:
   stop time: Date
   tripduration: Number
   usertype: String
+array_field_count: 0
+avg_fields_per_doc: 14.0
+migrability_score: 2.5

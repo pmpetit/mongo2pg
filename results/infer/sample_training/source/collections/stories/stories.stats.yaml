@@ -1,12 +1,12 @@
 documents_in_collection: 9842
 documents_sampled: 1000
-width_top_level: 20
-width_max: 20
+width_top_level: 18
+width_max: 18
 width_max_level: 1
 depth_max: 3
-branch_total: 38
+branch_total: 36
 branch_per_level:
-  L1: 20
+  L1: 18
   L2: 16
   L3: 2
 top_level_types:
@@ -24,9 +24,10 @@ top_level_types:
   shorturl: Array
   status: String
   submit_date: Number
-  takedowndays: Number
-  takedownuri: String
   thumbnail: Object
   title: String
   topic: Object
   user: Object
+array_field_count: 1
+avg_fields_per_doc: 16.68
+migrability_score: 3.58

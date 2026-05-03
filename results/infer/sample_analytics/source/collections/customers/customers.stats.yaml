@@ -20,3 +20,6 @@ top_level_types:
   name: String
   tier_and_details: Object
   username: String
+array_field_count: 1
+avg_fields_per_doc: 8.0
+migrability_score: 4.12

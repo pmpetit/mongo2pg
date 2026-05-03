@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 
-use crate::analyzer::{CollectionSchema, FieldSchema};
+use crate::analyzer::{CollectionSchema, FieldSchema, TYPE_ARRAY};
 
 /// Summary statistics for a [`CollectionSchema`].
 #[derive(Debug, Clone, PartialEq)]
@@ -19,6 +19,10 @@ pub struct SchemaStats {
     pub branch: usize,
     /// Number of fields at each nesting level (index 0 → level 1, index 1 → level 2, …).
     pub branches_by_level: Vec<usize>,
+    /// Average number of fields present per document (sum of field probabilities).
+    pub avg_fields_per_doc: f64,
+    /// Number of top-level fields that have an Array type.
+    pub array_field_count: usize,
 }
 
 impl SchemaStats {
@@ -45,6 +49,17 @@ impl SchemaStats {
             .map(|(i, c)| (c, i + 1))
             .unwrap_or((width, 1));
 
+        // avg_fields_per_doc = sum of field probabilities (each field contributes its
+        // presence probability to the expected key count per document).
+        let avg_fields_per_doc: f64 = schema.object.values().map(|f| f.probability).sum();
+
+        // Count top-level fields that have at least one Array type observation.
+        let array_field_count = schema
+            .object
+            .values()
+            .filter(|f| f.types.contains_key(TYPE_ARRAY))
+            .count();
+
         SchemaStats {
             width,
             max_width,
@@ -52,7 +67,30 @@ impl SchemaStats {
             depth: max_depth,
             branch: total_branch,
             branches_by_level: level_counts,
+            avg_fields_per_doc,
+            array_field_count,
         }
+    }
+
+    /// Per-collection migrability complexity score.
+    ///
+    /// ```text
+    /// C = depth_max / 2  +  array_fields  +  distinct_fields / avg_fields_per_doc
+    /// ```
+    ///
+    /// * `depth_max / 2`  – penalises nesting (halved so it doesn't dominate)
+    /// * `array_fields`   – each array field adds a child table
+    /// * `distinct / avg` – polymorphism ratio: 1.0 = perfectly flat,
+    ///                      > 5 = highly sparse/polymorphic
+    pub fn migrability_score(&self) -> f64 {
+        let depth_term = self.depth as f64 / 2.0;
+        let array_term = self.array_field_count as f64;
+        let poly_term = if self.avg_fields_per_doc > 0.0 {
+            self.width as f64 / self.avg_fields_per_doc
+        } else {
+            0.0
+        };
+        depth_term + array_term + poly_term
     }
 }
 
@@ -74,13 +112,18 @@ fn field_depth_branch(
     level_counts[idx] += 1;
 
     for type_schema in field.types.values() {
-        if let Some(nested_obj) = &type_schema.object {
-            for nested_field in nested_obj.values() {
-                let (d, b) = field_depth_branch(nested_field, current_depth + 1, level_counts);
-                if d > max_depth {
-                    max_depth = d;
+        // Object fields marked as_jsonb become a single opaque JSONB column —
+        // their nested content is never traversed relationally, so don't count
+        // that nesting toward depth or branch.
+        if !type_schema.as_jsonb {
+            if let Some(nested_obj) = &type_schema.object {
+                for nested_field in nested_obj.values() {
+                    let (d, b) = field_depth_branch(nested_field, current_depth + 1, level_counts);
+                    if d > max_depth {
+                        max_depth = d;
+                    }
+                    branch += b;
                 }
-                branch += b;
             }
         }
         if let Some(array_items) = &type_schema.array {
@@ -159,6 +202,12 @@ pub struct StatsYaml {
     pub branch_total: usize,
     pub branch_per_level: indexmap::IndexMap<String, usize>,
     pub top_level_types: indexmap::IndexMap<String, String>,
+    /// Number of top-level fields that carry at least one Array value.
+    pub array_field_count: usize,
+    /// Average number of fields present per document (sum of field probabilities).
+    pub avg_fields_per_doc: f64,
+    /// Per-collection migrability complexity score.
+    pub migrability_score: f64,
 }
 
 /// Build a [`StatsYaml`] from a schema.
@@ -191,6 +240,8 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         })
         .collect();
 
+    let score = (s.migrability_score() * 100.0).round() / 100.0;
+
     StatsYaml {
         documents_in_collection: match total_docs {
             Some(n) => serde_yaml::Value::Number(n.into()),
@@ -204,6 +255,9 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         branch_total: s.branch,
         branch_per_level,
         top_level_types,
+        array_field_count: s.array_field_count,
+        avg_fields_per_doc: (s.avg_fields_per_doc * 100.0).round() / 100.0,
+        migrability_score: score,
     }
 }
 

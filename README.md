@@ -87,6 +87,43 @@ Tests cover:
 - Reservoir value sampling
 - Stats (width / depth / branch)
 
+### Migration score
+
+Each collection gets a **complexity score** that estimates how much effort its migration to PostgreSQL will require:
+
+$$C_i = \frac{depth_{max}}{2} + array\_fields + \frac{distinct\_fields}{avg\_fields\_per\_doc}$$
+
+| Term | Meaning |
+|------|---------|
+| $depth_{max} / 2$ | Penalises nesting depth (halved so it doesn't dominate). Every level of nesting typically requires a `JOIN` in SQL. |
+| $array\_fields$ | Number of top-level fields whose type is `Array`. Each array field produces a child table with a foreign key. |
+| $distinct\_fields / avg\_fields\_per\_doc$ | **Polymorphism ratio.** `1.0` means every field appears in every document (perfectly flat). Values `> 5` indicate a sparse or highly polymorphic schema where many columns will be `NULL`. |
+
+The three individual terms are then rolled up to a **database-level score**:
+
+$$C_{db} = 1.5 \times N_{collections} + \sum_i C_i$$
+
+The $1.5 \times N$ factor accounts for the baseline coordination cost of migrating multiple collections (foreign-key wiring, join views, load ordering, …).
+
+Three summary metrics are shown in the HTML report:
+
+| Metric | Description |
+|--------|-------------|
+| **Score (total)** | $C_{db}$ – primary complexity indicator for the whole database |
+| **Score (avg weighted)** | $C_i$ weighted by document count – shows where the bulk of the data sits |
+| **Score (max collection)** | The single hardest collection to migrate |
+
+**Thresholds:**
+
+| Label | Range | Meaning |
+|-------|-------|---------|
+| 🟢 Easy | $C_{db} < 30$ | Mostly flat, scalar documents – migration is straightforward |
+| 🟠 Medium | $30 \le C_{db} < 80$ | Some nesting or arrays – migration needs care but is tractable |
+| 🔴 Hard | $C_{db} \ge 80$ | Deep nesting, many arrays, or high polymorphism – significant schema redesign likely required |
+
+> **⚠️ Scores are strategy-dependent and not cross-comparable.**
+> Running `infer` with `--jsonb` lowers the $depth_{max}$ term because nested Object fields become a single JSONB column — their internal nesting is never traversed relationally and is therefore not penalised. A lower score obtained with `--jsonb` does **not** mean the database is inherently simpler; it means you are trading relational depth for opaque JSON storage. Compare scores only within the same strategy (both with or both without `--jsonb`).
+
 ---
 
 ## License

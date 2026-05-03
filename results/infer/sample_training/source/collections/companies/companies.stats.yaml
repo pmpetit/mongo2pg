@@ -55,3 +55,6 @@ top_level_types:
   twitter_username: String
   updated_at: String
   video_embeds: Array
+array_field_count: 13
+avg_fields_per_doc: 42.0
+migrability_score: 17.0

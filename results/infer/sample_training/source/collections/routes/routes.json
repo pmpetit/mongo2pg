@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "56e9b39c732b6122f87878b7",
-            "56e9b39c732b6122f878718f",
-            "56e9b39c732b6122f878557f",
-            "56e9b39b732b6122f8782e8d",
-            "56e9b39c732b6122f87868a8",
-            "56e9b39c732b6122f878d381",
-            "56e9b39c732b6122f8785f61",
-            "56e9b39b732b6122f87813db",
-            "56e9b39b732b6122f8784edd",
-            "56e9b39c732b6122f8786b6c",
-            "56e9b39c732b6122f8788055",
-            "56e9b39c732b6122f8788ec2",
-            "56e9b39b732b6122f8780f30",
-            "56e9b39b732b6122f878175f",
-            "56e9b39c732b6122f87881b7",
-            "56e9b39c732b6122f878e697",
-            "56e9b39b732b6122f87827b2",
-            "56e9b39c732b6122f87891bb",
-            "56e9b39c732b6122f8789ed4",
-            "56e9b39c732b6122f8788433"
+            "56e9b39c732b6122f8788008",
+            "56e9b39c732b6122f878b3fd",
+            "56e9b39c732b6122f87871df",
+            "56e9b39b732b6122f877faf3",
+            "56e9b39c732b6122f878faec",
+            "56e9b39b732b6122f8781485",
+            "56e9b39c732b6122f878d745",
+            "56e9b39c732b6122f878e380",
+            "56e9b39b732b6122f87825ca",
+            "56e9b39c732b6122f8788f50",
+            "56e9b39c732b6122f878a7b3",
+            "56e9b39c732b6122f878d6b2",
+            "56e9b39b732b6122f8781aa3",
+            "56e9b39c732b6122f87863f5",
+            "56e9b39b732b6122f8784f7b",
+            "56e9b39b732b6122f877fda4",
+            "56e9b39c732b6122f878c5d1",
+            "56e9b39c732b6122f878f13a",
+            "56e9b39c732b6122f87864fd",
+            "56e9b39c732b6122f8790155"
           ]
         }
       }
@@ -47,28 +47,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 257.0,
+                  "ndistinct": 269.0,
                   "values": [
-                    "IB",
-                    "GZ",
-                    "EO",
-                    "AZ",
-                    "FR",
-                    "U6",
-                    "AA",
-                    "DL",
-                    "G4",
                     "JJ",
-                    "LH",
-                    "AB",
-                    "JL",
+                    "QR",
+                    "HA",
+                    "2P",
+                    "Y4",
+                    "AA",
+                    "UA",
                     "US",
-                    "AS",
-                    "MU",
-                    "JU",
-                    "J9",
-                    "AY",
-                    "FB"
+                    "AM",
+                    "LH",
+                    "OK",
+                    "AC",
+                    "FR",
+                    "DL",
+                    "3U",
+                    "TG",
+                    "WF",
+                    "ZH",
+                    "SU",
+                    "AZ"
                   ]
                 }
               }
@@ -79,28 +79,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 236.0,
+                  "ndistinct": 250.0,
                   "values": [
-                    "IBE",
-                    "RAR",
-                    "LHN",
-                    "AZA",
-                    "RYR",
-                    "SVR",
-                    "AAL",
-                    "DAL",
-                    "AAY",
                     "TAM",
-                    "DLH",
-                    "BER",
-                    "JAL",
+                    "QTR",
+                    "HAL",
+                    "GAP",
+                    "VOI",
+                    "AAL",
+                    "UAL",
                     "USA",
-                    "ASA",
-                    "CES",
-                    "JAT",
-                    "JZR",
-                    "FIN",
-                    "LZB"
+                    "AMX",
+                    "DLH",
+                    "CSA",
+                    "ACA",
+                    "RYR",
+                    "DAL",
+                    "CSC",
+                    "THA",
+                    "WIF",
+                    "CSZ",
+                    "AFL",
+                    "AZA"
                   ]
                 }
               }
@@ -111,28 +111,28 @@
                 "Number": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 257.0,
+                  "ndistinct": 270.0,
                   "values": [
-                    2822,
-                    4234,
-                    2293,
-                    596,
-                    4296,
-                    5234,
-                    24,
-                    2009,
-                    35,
                     4867,
-                    3320,
-                    214,
-                    2987,
+                    4091,
+                    2688,
+                    897,
+                    5325,
+                    24,
+                    5209,
                     5265,
-                    439,
-                    1758,
-                    2991,
-                    2993,
-                    2350,
-                    1548
+                    321,
+                    3320,
+                    1946,
+                    330,
+                    4296,
+                    2009,
+                    4608,
+                    4940,
+                    5439,
+                    4611,
+                    130,
+                    596
                   ]
                 }
               }
@@ -143,28 +143,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 257.0,
+                  "ndistinct": 270.0,
                   "values": [
-                    "Iberia Airlines",
-                    "Air Rarotonga",
-                    "Express One International",
-                    "Alitalia",
-                    "Ryanair",
-                    "Ural Airlines",
-                    "American Airlines",
-                    "Delta Air Lines",
-                    "Allegiant Air",
                     "TAM Brazilian Airlines",
-                    "Lufthansa",
-                    "Air Berlin",
-                    "Japan Airlines",
+                    "Qatar Airways",
+                    "Hawaiian Airlines",
+                    "Air Philippines",
+                    "Volaris",
+                    "American Airlines",
+                    "United Airlines",
                     "US Airways",
-                    "Alaska Airlines",
-                    "China Eastern Airlines",
-                    "Jat Airways",
-                    "Jazeera Airways",
-                    "Finnair",
-                    "Bulgaria Air"
+                    "AeroMéxico",
+                    "Lufthansa",
+                    "Czech Airlines",
+                    "Air Canada",
+                    "Ryanair",
+                    "Delta Air Lines",
+                    "Sichuan Airlines",
+                    "Thai Airways International",
+                    "Widerøe",
+                    "Shenzhen Airlines",
+                    "Aeroflot Russian Airlines",
+                    "Alitalia"
                   ]
                 }
               }
@@ -172,40 +172,34 @@
           },
           "values": [
             {
-              "id": 2822,
-              "name": "Iberia Airlines",
-              "alias": "IB",
-              "iata": "IBE"
+              "id": 4867,
+              "name": "TAM Brazilian Airlines",
+              "alias": "JJ",
+              "iata": "TAM"
             },
             {
-              "id": 4234,
-              "name": "Air Rarotonga",
-              "alias": "GZ",
-              "iata": "RAR"
+              "id": 4091,
+              "name": "Qatar Airways",
+              "alias": "QR",
+              "iata": "QTR"
             },
             {
-              "id": 2293,
-              "name": "Express One International",
-              "alias": "EO",
-              "iata": "LHN"
+              "id": 2688,
+              "name": "Hawaiian Airlines",
+              "alias": "HA",
+              "iata": "HAL"
             },
             {
-              "id": 596,
-              "name": "Alitalia",
-              "alias": "AZ",
-              "iata": "AZA"
+              "id": 897,
+              "name": "Air Philippines",
+              "alias": "2P",
+              "iata": "GAP"
             },
             {
-              "id": 4296,
-              "name": "Ryanair",
-              "alias": "FR",
-              "iata": "RYR"
-            },
-            {
-              "id": 5234,
-              "name": "Ural Airlines",
-              "alias": "U6",
-              "iata": "SVR"
+              "id": 5325,
+              "name": "Volaris",
+              "alias": "Y4",
+              "iata": "VOI"
             },
             {
               "id": 24,
@@ -214,40 +208,10 @@
               "iata": "AAL"
             },
             {
-              "id": 2009,
-              "name": "Delta Air Lines",
-              "alias": "DL",
-              "iata": "DAL"
-            },
-            {
-              "id": 35,
-              "name": "Allegiant Air",
-              "alias": "G4",
-              "iata": "AAY"
-            },
-            {
-              "id": 4867,
-              "name": "TAM Brazilian Airlines",
-              "alias": "JJ",
-              "iata": "TAM"
-            },
-            {
-              "id": 3320,
-              "name": "Lufthansa",
-              "alias": "LH",
-              "iata": "DLH"
-            },
-            {
-              "id": 214,
-              "name": "Air Berlin",
-              "alias": "AB",
-              "iata": "BER"
-            },
-            {
-              "id": 2987,
-              "name": "Japan Airlines",
-              "alias": "JL",
-              "iata": "JAL"
+              "id": 5209,
+              "name": "United Airlines",
+              "alias": "UA",
+              "iata": "UAL"
             },
             {
               "id": 5265,
@@ -256,40 +220,76 @@
               "iata": "USA"
             },
             {
-              "id": 439,
-              "name": "Alaska Airlines",
-              "alias": "AS",
-              "iata": "ASA"
+              "id": 321,
+              "name": "AeroMéxico",
+              "alias": "AM",
+              "iata": "AMX"
             },
             {
-              "id": 1758,
-              "name": "China Eastern Airlines",
-              "alias": "MU",
-              "iata": "CES"
+              "id": 3320,
+              "name": "Lufthansa",
+              "alias": "LH",
+              "iata": "DLH"
             },
             {
-              "id": 2991,
-              "name": "Jat Airways",
-              "alias": "JU",
-              "iata": "JAT"
+              "id": 1946,
+              "name": "Czech Airlines",
+              "alias": "OK",
+              "iata": "CSA"
             },
             {
-              "id": 2993,
-              "name": "Jazeera Airways",
-              "alias": "J9",
-              "iata": "JZR"
+              "id": 330,
+              "name": "Air Canada",
+              "alias": "AC",
+              "iata": "ACA"
             },
             {
-              "id": 2350,
-              "name": "Finnair",
-              "alias": "AY",
-              "iata": "FIN"
+              "id": 4296,
+              "name": "Ryanair",
+              "alias": "FR",
+              "iata": "RYR"
             },
             {
-              "id": 1548,
-              "name": "Bulgaria Air",
-              "alias": "FB",
-              "iata": "LZB"
+              "id": 2009,
+              "name": "Delta Air Lines",
+              "alias": "DL",
+              "iata": "DAL"
+            },
+            {
+              "id": 4608,
+              "name": "Sichuan Airlines",
+              "alias": "3U",
+              "iata": "CSC"
+            },
+            {
+              "id": 4940,
+              "name": "Thai Airways International",
+              "alias": "TG",
+              "iata": "THA"
+            },
+            {
+              "id": 5439,
+              "name": "Widerøe",
+              "alias": "WF",
+              "iata": "WIF"
+            },
+            {
+              "id": 4611,
+              "name": "Shenzhen Airlines",
+              "alias": "ZH",
+              "iata": "CSZ"
+            },
+            {
+              "id": 130,
+              "name": "Aeroflot Russian Airlines",
+              "alias": "SU",
+              "iata": "AFL"
+            },
+            {
+              "id": 596,
+              "name": "Alitalia",
+              "alias": "AZ",
+              "iata": "AZA"
             }
           ]
         }
@@ -299,57 +299,57 @@
       "probability": 1.0,
       "types": {
         "Number": {
-          "probability": 0.467,
-          "sampled": 467,
+          "probability": 0.472,
+          "sampled": 472,
           "ndistinct": 32.0,
           "values": [
             320,
-            733,
+            717,
             738,
-            333,
-            330,
-            763,
-            319,
-            332,
-            777,
-            313,
             752,
-            737,
+            330,
+            788,
             739,
+            737,
+            333,
+            321,
+            777,
+            319,
+            763,
+            332,
             100,
             346,
-            321,
-            747,
-            735,
+            734,
+            773,
             757,
-            310
+            744
           ]
         },
         "String": {
-          "probability": 0.533,
-          "sampled": 533,
-          "ndistinct": 234.0,
+          "probability": 0.528,
+          "sampled": 528,
+          "ndistinct": 252.0,
           "values": [
-            "EMB",
+            "77W",
+            "DH4",
+            "SF3",
+            "ERJ",
+            "AT4 AT7",
+            "CRJ",
             "319 320",
-            "CR7",
-            "M80",
-            "320 319",
-            "M88 73H CR9 CR7 320 738 319",
-            "E95",
-            "321 320 738",
+            "380 346",
+            "DH4 DH3",
+            "321 738",
             "E90",
-            "CRK CR9 CR2",
-            "738 73H",
-            "E90 319 320 321",
-            "AT7",
-            "319 320 321",
-            "DH8",
-            "M82",
-            "CR9",
-            "E70 320",
+            "EMB",
+            "734 738 E90",
+            "73G 738",
             "73H",
-            "ER4 ERD"
+            "332 343",
+            "ERJ CRJ E70",
+            "CR7",
+            "J32",
+            "753 738"
           ]
         }
       }
@@ -362,8 +362,8 @@
           "sampled": 1000,
           "ndistinct": 2.0,
           "values": [
-            "Y",
-            ""
+            "",
+            "Y"
           ]
         }
       }
@@ -371,39 +371,31 @@
     "dst_airport": {
       "probability": 1.0,
       "types": {
-        "Number": {
-          "probability": 0.001,
-          "sampled": 1,
-          "ndistinct": 1.0,
-          "values": [
-            null
-          ]
-        },
         "String": {
-          "probability": 0.999,
-          "sampled": 999,
-          "ndistinct": 541.0,
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 532.0,
           "values": [
-            "BCN",
-            "RAR",
-            "HBE",
-            "BLQ",
+            "EZE",
+            "DOH",
+            "OGG",
+            "CRM",
+            "CUN",
+            "PHL",
+            "AOO",
+            "LAS",
+            "HMO",
+            "BHX",
+            "BTS",
+            "IAD",
+            "YXE",
+            "BGY",
+            "OAK",
+            "CAN",
+            "BKK",
+            "TRD",
             "CRL",
-            "GOJ",
-            "TRF",
-            "RNO",
-            "MSP",
-            "PGD",
-            "BSB",
-            "MUC",
-            "AUH",
-            "TFS",
-            "LIM",
-            "LAX",
-            "ATL",
-            "NAO",
-            "AMS",
-            "DWC"
+            "NNG"
           ]
         }
       }
@@ -422,28 +414,28 @@
         "String": {
           "probability": 0.999,
           "sampled": 999,
-          "ndistinct": 503.0,
+          "ndistinct": 552.0,
           "values": [
-            "BOD",
-            "MOI",
-            "JED",
-            "IAS",
-            "ZTH",
-            "LBD",
-            "AHO",
-            "PHX",
-            "RIC",
-            "IAG",
-            "IMP",
-            "BOS",
-            "DUS",
-            "MUC",
-            "LAX",
-            "YYZ",
-            "GSO",
-            "TRN",
-            "PVG",
-            "BEG"
+            "GIG",
+            "YUL",
+            "HNL",
+            "MNL",
+            "CUU",
+            "SDQ",
+            "IAD",
+            "MIA",
+            "MXL",
+            "EWR",
+            "KSC",
+            "FLL",
+            "YWG",
+            "LBA",
+            "SLC",
+            "SPN",
+            "FRA",
+            "KRS",
+            "MRS",
+            "XIY"
           ]
         }
       }

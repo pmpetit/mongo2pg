@@ -66,7 +66,7 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_mflix</h1>
-    <small>Generated: 2026-05-03 09:06 UTC</small>
+    <small>Generated: 2026-05-03 14:56 UTC</small>
   </header>
   <div class="layout">
     <aside>
@@ -180,9 +180,9 @@ erDiagram
   movies_tomatoes_critic {
     BIGINT id PK
     BIGINT movies_tomatoes_id FK
-    INTEGER meter
-    INTEGER numreviews
-    FLOAT rating
+    INTEGER meter "NOT NULL"
+    INTEGER numreviews "NOT NULL"
+    FLOAT rating "NOT NULL"
   }
   movies_tomatoes_viewer {
     BIGINT id PK

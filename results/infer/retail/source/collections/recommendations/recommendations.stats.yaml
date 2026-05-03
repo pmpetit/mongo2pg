@@ -16,3 +16,6 @@ top_level_types:
   invoiceId: ObjectId
   items: Array
   userId: ObjectId
+array_field_count: 1
+avg_fields_per_doc: 5.0
+migrability_score: 4.0

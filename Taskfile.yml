@@ -69,3 +69,22 @@ tasks:
           "{{.BIN}}" report -c "{{.OUT}}/$db/config/$db.conf"          
         done
       - echo "👉 results in {{.OUT}}"
+
+  make-tutorial:
+    desc: Create tutorial schemas
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "tutorial/base"
+      DB: "retail"
+    cmds:
+      - |
+        echo "📁 init {{.DB}}"
+        "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "{{.DB}}" --uri "{{.URI}}"
+        echo "📐 infer {{.DB}}"
+        "{{.BIN}}" infer --uri "{{.URI}}" -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.conf" --jsonb --no-output 2>/dev/null
+        echo "🛠️  to-pg {{.DB}}"
+        "{{.BIN}}" to-pg -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.conf"
+        echo "📊 report"
+        "{{.BIN}}" report -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.conf"          
+

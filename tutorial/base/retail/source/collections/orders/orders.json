@@ -7,12 +7,13 @@
       "types": {
         "ObjectId": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 4.0,
           "values": [
             "682b73a0463e7f2b09ed2b1a",
+            "682b77d0463e7f2b09ed2b1d",
             "682b7873463e7f2b09ed2b1f",
-            "682b7907463e7f2b09ed2b22",
-            "682b77d0463e7f2b09ed2b1d"
+            "682b7907463e7f2b09ed2b22"
           ]
         }
       }
@@ -22,12 +23,13 @@
       "types": {
         "ObjectId": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 4.0,
           "values": [
             "682b73a26b1445af06f99128",
+            "682b77d26b1445af06f99129",
             "682b78746b1445af06f9912a",
-            "682b79076b1445af06f9912b",
-            "682b77d26b1445af06f99129"
+            "682b79076b1445af06f9912b"
           ]
         }
       }
@@ -37,25 +39,29 @@
       "types": {
         "Array": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 1.25,
           "array": {
             "probability": 1.25,
             "types": {
               "Object": {
                 "probability": 1.0,
+                "sampled": 5,
+                "as_jsonb": true,
                 "object": {
                   "_id": {
                     "probability": 1.0,
                     "types": {
                       "String": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "ndistinct": 5.0,
                         "values": [
                           "67192b4164d161905fbe7df3",
-                          "67192b3f64d161905fbe77a5",
-                          "67192b3f64d161905fbe77e9",
                           "67192b3f64d161905fbe7a5a",
-                          "67192b3f64d161905fbe79f8"
+                          "67192b3f64d161905fbe79f8",
+                          "67192b3f64d161905fbe77a5",
+                          "67192b3f64d161905fbe77e9"
                         ]
                       }
                     }
@@ -65,6 +71,7 @@
                     "types": {
                       "Number": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "ndistinct": 1.0,
                         "values": [
                           1
@@ -77,6 +84,7 @@
                     "types": {
                       "String": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "ndistinct": 2.0,
                         "values": [
                           "Amazon Collection",
@@ -90,13 +98,14 @@
                     "types": {
                       "String": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "ndistinct": 5.0,
                         "values": [
                           "R9AA2C150Q",
-                          "FH-AZ037",
-                          "16076",
                           "",
-                          "TQ53900"
+                          "TQ53900",
+                          "FH-AZ037",
+                          "16076"
                         ]
                       }
                     }
@@ -106,6 +115,7 @@
                     "types": {
                       "String": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "ndistinct": 1.0,
                         "values": [
                           ""
@@ -118,19 +128,21 @@
                     "types": {
                       "Object": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "object": {
                           "url": {
                             "probability": 1.0,
                             "types": {
                               "String": {
                                 "probability": 1.0,
+                                "sampled": 5,
                                 "ndistinct": 5.0,
                                 "values": [
                                   "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg",
-                                  "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg",
-                                  "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg",
                                   "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg",
-                                  "https://m.media-amazon.com/images/I/71k8yp17P5L.jpg"
+                                  "https://m.media-amazon.com/images/I/71k8yp17P5L.jpg",
+                                  "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg",
+                                  "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
                                 ]
                               }
                             }
@@ -141,16 +153,16 @@
                             "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
                           },
                           {
-                            "url": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg"
-                          },
-                          {
-                            "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
-                          },
-                          {
                             "url": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg"
                           },
                           {
                             "url": "https://m.media-amazon.com/images/I/71k8yp17P5L.jpg"
+                          },
+                          {
+                            "url": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg"
+                          },
+                          {
+                            "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
                           }
                         ]
                       }
@@ -161,13 +173,14 @@
                     "types": {
                       "String": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "ndistinct": 5.0,
                         "values": [
                           "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
-                          "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
-                          "AmazonBasics - Pet Play Station Feeder",
                           "AmazonBasics Combo Plastic Cutlery",
-                          "AmazonBasics Shelby Door Lever - Entry - Oil Rubbed Bronze"
+                          "AmazonBasics Shelby Door Lever - Entry - Oil Rubbed Bronze",
+                          "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
+                          "AmazonBasics - Pet Play Station Feeder"
                         ]
                       }
                     }
@@ -177,19 +190,21 @@
                     "types": {
                       "Object": {
                         "probability": 1.0,
+                        "sampled": 5,
                         "object": {
                           "amount": {
                             "probability": 1.0,
                             "types": {
                               "Number": {
                                 "probability": 1.0,
+                                "sampled": 5,
                                 "ndistinct": 5.0,
                                 "values": [
                                   116,
-                                  63,
-                                  50,
                                   118,
-                                  49
+                                  49,
+                                  63,
+                                  50
                                 ]
                               }
                             }
@@ -199,6 +214,7 @@
                             "types": {
                               "Null": {
                                 "probability": 0.8,
+                                "sampled": 4,
                                 "ndistinct": 1.0,
                                 "values": [
                                   null
@@ -206,6 +222,7 @@
                               },
                               "String": {
                                 "probability": 0.2,
+                                "sampled": 1,
                                 "ndistinct": 1.0,
                                 "values": [
                                   "USD"
@@ -220,19 +237,19 @@
                             "currency": null
                           },
                           {
-                            "amount": 63,
-                            "currency": "USD"
-                          },
-                          {
-                            "amount": 50,
-                            "currency": null
-                          },
-                          {
                             "amount": 118,
                             "currency": null
                           },
                           {
                             "amount": 49,
+                            "currency": null
+                          },
+                          {
+                            "amount": 63,
+                            "currency": "USD"
+                          },
+                          {
+                            "amount": 50,
                             "currency": null
                           }
                         ]
@@ -253,36 +270,6 @@
                     "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
                     "price": {
                       "amount": 116,
-                      "currency": null
-                    }
-                  },
-                  {
-                    "amount": 1,
-                    "brand": "AmazonBasics",
-                    "code": "FH-AZ037",
-                    "description": "",
-                    "_id": "67192b3f64d161905fbe77a5",
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg"
-                    },
-                    "name": "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
-                    "price": {
-                      "amount": 63,
-                      "currency": "USD"
-                    }
-                  },
-                  {
-                    "amount": 1,
-                    "brand": "AmazonBasics",
-                    "code": "16076",
-                    "description": "",
-                    "_id": "67192b3f64d161905fbe77e9",
-                    "image": {
-                      "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
-                    },
-                    "name": "AmazonBasics - Pet Play Station Feeder",
-                    "price": {
-                      "amount": 50,
                       "currency": null
                     }
                   },
@@ -315,6 +302,36 @@
                       "amount": 49,
                       "currency": null
                     }
+                  },
+                  {
+                    "amount": 1,
+                    "brand": "AmazonBasics",
+                    "code": "FH-AZ037",
+                    "description": "",
+                    "_id": "67192b3f64d161905fbe77a5",
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg"
+                    },
+                    "name": "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
+                    "price": {
+                      "amount": 63,
+                      "currency": "USD"
+                    }
+                  },
+                  {
+                    "amount": 1,
+                    "brand": "AmazonBasics",
+                    "code": "16076",
+                    "description": "",
+                    "_id": "67192b3f64d161905fbe77e9",
+                    "image": {
+                      "url": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg"
+                    },
+                    "name": "AmazonBasics - Pet Play Station Feeder",
+                    "price": {
+                      "amount": 50,
+                      "currency": null
+                    }
                   }
                 ]
               }
@@ -334,6 +351,38 @@
                 "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
                 "price": {
                   "amount": 116,
+                  "currency": null
+                }
+              }
+            ],
+            [
+              {
+                "amount": 1,
+                "brand": "AmazonBasics",
+                "code": "",
+                "description": "",
+                "_id": "67192b3f64d161905fbe7a5a",
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg"
+                },
+                "name": "AmazonBasics Combo Plastic Cutlery",
+                "price": {
+                  "amount": 118,
+                  "currency": null
+                }
+              },
+              {
+                "amount": 1,
+                "brand": "AmazonBasics",
+                "code": "TQ53900",
+                "description": "",
+                "_id": "67192b3f64d161905fbe79f8",
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71k8yp17P5L.jpg"
+                },
+                "name": "AmazonBasics Shelby Door Lever - Entry - Oil Rubbed Bronze",
+                "price": {
+                  "amount": 49,
                   "currency": null
                 }
               }
@@ -371,38 +420,6 @@
                   "currency": null
                 }
               }
-            ],
-            [
-              {
-                "amount": 1,
-                "brand": "AmazonBasics",
-                "code": "",
-                "description": "",
-                "_id": "67192b3f64d161905fbe7a5a",
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg"
-                },
-                "name": "AmazonBasics Combo Plastic Cutlery",
-                "price": {
-                  "amount": 118,
-                  "currency": null
-                }
-              },
-              {
-                "amount": 1,
-                "brand": "AmazonBasics",
-                "code": "TQ53900",
-                "description": "",
-                "_id": "67192b3f64d161905fbe79f8",
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71k8yp17P5L.jpg"
-                },
-                "name": "AmazonBasics Shelby Door Lever - Entry - Oil Rubbed Bronze",
-                "price": {
-                  "amount": 49,
-                  "currency": null
-                }
-              }
             ]
           ]
         }
@@ -413,12 +430,13 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 4.0,
           "values": [
             "Calle de Londres 247, Mexico City 62240, Mexico",
+            "Av. Lázaro Cárdenas 305, Guadalajara 44030, Mexico",
             "3 St James's Square, London SW1Y 4JU, UK",
-            "45 Rue Laffitte, Parice 75009, France",
-            "Av. Lázaro Cárdenas 305, Guadalajara 44030, Mexico"
+            "45 Rue Laffitte, Parice 75009, France"
           ]
         }
       }
@@ -428,18 +446,22 @@
       "types": {
         "Array": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 4.75,
           "array": {
             "probability": 4.75,
             "types": {
               "Object": {
                 "probability": 1.0,
+                "sampled": 19,
+                "as_jsonb": true,
                 "object": {
                   "status": {
                     "probability": 1.0,
                     "types": {
                       "String": {
                         "probability": 1.0,
+                        "sampled": 19,
                         "ndistinct": 8.0,
                         "values": [
                           "In process",
@@ -459,6 +481,7 @@
                     "types": {
                       "Number": {
                         "probability": 1.0,
+                        "sampled": 19,
                         "ndistinct": 19.0,
                         "values": [
                           1747678112623.0,
@@ -466,6 +489,10 @@
                           1747678132676,
                           1747678142699,
                           1747678152726,
+                          1747679184288.0,
+                          1747679194321,
+                          1747679257629.0,
+                          1747679267999,
                           1747679347759.0,
                           1747679357788,
                           1747679367808,
@@ -475,11 +502,7 @@
                           1747679505036,
                           1747679515060,
                           1747679525081,
-                          1747679535108,
-                          1747679184288.0,
-                          1747679194321,
-                          1747679257629.0,
-                          1747679267999
+                          1747679535108
                         ]
                       }
                     }
@@ -505,6 +528,22 @@
                   {
                     "status": "Delivered",
                     "timestamp": 1747678152726
+                  },
+                  {
+                    "status": "In process",
+                    "timestamp": 1747679184288.0
+                  },
+                  {
+                    "status": "Ready for pickup",
+                    "timestamp": 1747679194321
+                  },
+                  {
+                    "status": "Customer In Store",
+                    "timestamp": 1747679257629.0
+                  },
+                  {
+                    "status": "Completed",
+                    "timestamp": 1747679267999
                   },
                   {
                     "status": "In process",
@@ -545,22 +584,6 @@
                   {
                     "status": "Delivered",
                     "timestamp": 1747679535108
-                  },
-                  {
-                    "status": "In process",
-                    "timestamp": 1747679184288.0
-                  },
-                  {
-                    "status": "Ready for pickup",
-                    "timestamp": 1747679194321
-                  },
-                  {
-                    "status": "Customer In Store",
-                    "timestamp": 1747679257629.0
-                  },
-                  {
-                    "status": "Completed",
-                    "timestamp": 1747679267999
                   }
                 ]
               }
@@ -587,6 +610,24 @@
               {
                 "status": "Delivered",
                 "timestamp": 1747678152726
+              }
+            ],
+            [
+              {
+                "status": "In process",
+                "timestamp": 1747679184288.0
+              },
+              {
+                "status": "Ready for pickup",
+                "timestamp": 1747679194321
+              },
+              {
+                "status": "Customer In Store",
+                "timestamp": 1747679257629.0
+              },
+              {
+                "status": "Completed",
+                "timestamp": 1747679267999
               }
             ],
             [
@@ -632,24 +673,6 @@
                 "status": "Delivered",
                 "timestamp": 1747679535108
               }
-            ],
-            [
-              {
-                "status": "In process",
-                "timestamp": 1747679184288.0
-              },
-              {
-                "status": "Ready for pickup",
-                "timestamp": 1747679194321
-              },
-              {
-                "status": "Customer In Store",
-                "timestamp": 1747679257629.0
-              },
-              {
-                "status": "Completed",
-                "timestamp": 1747679267999
-              }
             ]
           ]
         }
@@ -660,6 +683,7 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 2.0,
           "values": [
             "Buy Online, Get Delivery at Home",
@@ -673,12 +697,13 @@
       "types": {
         "ObjectId": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 4.0,
           "values": [
             "65a546ae4a8f64e8f88fb89e",
+            "66fe219d625d93a100528224",
             "671ff0081ec726b417352702",
-            "671ff2451ec726b417352703",
-            "66fe219d625d93a100528224"
+            "671ff2451ec726b417352703"
           ]
         }
       }

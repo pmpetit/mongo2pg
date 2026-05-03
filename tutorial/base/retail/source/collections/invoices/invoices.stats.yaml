@@ -1,15 +1,13 @@
 documents_in_collection: 4
 documents_sampled: 4
 width_top_level: 9
-width_max: 26
-width_max_level: 3
-depth_max: 4
-branch_total: 45
+width_max: 9
+width_max_level: 1
+depth_max: 2
+branch_total: 11
 branch_per_level:
   L1: 9
-  L2: 7
-  L3: 26
-  L4: 3
+  L2: 2
 top_level_types:
   _id: ObjectId
   createdAt: String
@@ -20,3 +18,6 @@ top_level_types:
   status: String
   totalAmount: Number
   userId: ObjectId
+array_field_count: 2
+avg_fields_per_doc: 9.0
+migrability_score: 4.0

@@ -32,3 +32,6 @@ top_level_types:
   type: String
   writers: Array
   year: Number
+array_field_count: 6
+avg_fields_per_doc: 20.19
+migrability_score: 8.59

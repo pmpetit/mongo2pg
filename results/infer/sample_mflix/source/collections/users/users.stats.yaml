@@ -13,3 +13,6 @@ top_level_types:
   name: String
   password: String
   preferences: Object
+array_field_count: 0
+avg_fields_per_doc: 4.01
+migrability_score: 1.75

@@ -1,6 +1,6 @@
 Documents in collection : 4
 Documents sampled       : 4
-Width (top-level / max)  : 7 / 10 (L3)
-Depth (max nesting)     : 4
-Branch (per level)      : L1:7  L2:2  L3:10  L4:3
+Width (top-level / max)  : 7 / 7 (L1)
+Depth (max nesting)     : 2
+Branch (per level)      : L1:7  L2:2
 Top-level types         : _id:ObjectId, invoiceId:ObjectId, products:Array, shipping_address:String, status_history:Array, type:String, user:ObjectId

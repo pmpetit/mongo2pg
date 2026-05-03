@@ -616,28 +616,34 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 
 fn run_report(args: ReportArgs) -> Result<()> {
     // Resolve collections dir and namespace from -c or explicit flags
-    let (collections_dir, namespace, default_output_dir) = if let Some(ref conf) = args.config {
-        let c = read_conf(conf)?;
-        let ns = args.namespace.clone();
-        let ns = if ns.is_empty() {
-            c.namespace.unwrap_or_else(|| c.project_dir.clone())
+    let (collections_dir, namespace, cluster, default_output_dir) =
+        if let Some(ref conf) = args.config {
+            let c = read_conf(conf)?;
+            let ns = args.namespace.clone();
+            let ns = if ns.is_empty() {
+                c.namespace.unwrap_or_else(|| c.project_dir.clone())
+            } else {
+                ns
+            };
+            let cluster = c
+                .uri
+                .as_deref()
+                .map(mongo2pg::report::cluster_from_uri)
+                .unwrap_or_default();
+            let cols_dir = c
+                .base_dir
+                .join(&c.project_dir)
+                .join("source")
+                .join("collections");
+            let out_dir = c.base_dir.join(&c.project_dir).join("reports");
+            (cols_dir, ns, cluster, Some((out_dir, c.project_dir)))
         } else {
-            ns
+            let dir = args
+                .collections_dir
+                .clone()
+                .ok_or_else(|| anyhow!("Provide --collections-dir or -c <config>"))?;
+            (dir, args.namespace.clone(), String::new(), None)
         };
-        let cols_dir = c
-            .base_dir
-            .join(&c.project_dir)
-            .join("source")
-            .join("collections");
-        let out_dir = c.base_dir.join(&c.project_dir).join("reports");
-        (cols_dir, ns, Some((out_dir, c.project_dir)))
-    } else {
-        let dir = args
-            .collections_dir
-            .clone()
-            .ok_or_else(|| anyhow!("Provide --collections-dir or -c <config>"))?;
-        (dir, args.namespace.clone(), None)
-    };
 
     // Resolve tables dir for the PG tables count column (only when using a conf file)
     let tables_dir_for_report: Option<std::path::PathBuf> =
@@ -652,7 +658,7 @@ fn run_report(args: ReportArgs) -> Result<()> {
 
     let rows = collect_rows(&collections_dir, tables_dir_opt)?;
 
-    let html = render_html(&rows, &namespace);
+    let html = render_html(&rows, &namespace, &cluster);
 
     let output_path = if let Some(ref o) = args.output {
         o.clone()

@@ -85,18 +85,48 @@
       font-family: monospace;
     }
     .level { color: #95a5a6; font-size: 0.8rem; }
+    .score-badge { font-size: 0.95rem; }
+    .complexity-badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+    }
     footer { margin-top: 2rem; font-size: 0.75rem; color: #aaa; }
+    .score-explainer { margin-top: 1rem; margin-bottom: 2rem; font-size: 0.82rem; color: #7f8c8d; }
+    .score-explainer code { background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }
   </style>
 </head>
 <body>
   <h1>mongo2pg – Migration Report</h1>
-  <p class="subtitle">Database: <strong>sample_weatherdata</strong> &nbsp;|&nbsp; Generated: 2026-05-03 09:06:42 UTC</p>
+  <p class="subtitle">Database: <strong>sample_weatherdata</strong> &nbsp;|&nbsp; Generated: 2026-05-03 14:56:09 UTC</p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">1</div></div>
     <div class="card"><div class="label">Total Documents</div><div class="value">10000</div></div>
-    <div class="card"><div class="label">PG Tables</div><div class="value">44</div></div>
+    <div class="card"><div class="label">PG Tables</div><div class="value">43</div></div>
+    <div class="card">
+      <div class="label">Complexity Score</div>
+      <div class="value" style="color:#27ae60">9.7</div>
+    </div>
+    <div class="card">
+      <div class="label">Complexity</div>
+      <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
+        <span class="complexity-badge" style="background:#27ae60">Easy</span>
+      </div>
+    </div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">8.17</div></div>
+    <div class="card"><div class="label">Score (max collection)</div><div class="value" style="font-size:1.3rem">8.17</div></div>
   </div>
+
+  <p class="score-explainer">
+    <strong>Complexity score</strong> per collection:
+    <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
+    DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+  </p>
 
   <table>
     <thead>
@@ -108,6 +138,7 @@
         <th class="num">Width (max)</th>
         <th class="num">Depth (max)</th>
         <th class="num">Fields (total)</th>
+        <th class="num">Score</th>
         <th class="num">PG Tables</th>
       </tr>
     </thead>
@@ -118,15 +149,16 @@
             </td>
           <td class="num">10000</td>
           <td class="num">1000</td>
-          <td class="num">27</td>
-          <td class="num">55 <span class="level">(L3)</span></td>
+          <td class="num">26</td>
+          <td class="num">51 <span class="level">(L3)</span></td>
           <td class="num">4</td>
-          <td class="num">131</td>
-          <td class="num">44</td>
+          <td class="num">125</td>
+          <td class="num"><span class="score-badge" style="color:#c0392b;font-weight:700">8.17</span></td>
+          <td class="num">43</td>
         </tr>
         <tr class="detail-row" id="detail-data" style="display:none">
-          <td colspan="8" class="detail-cell">
-            <div class="table-list"><span class="pill">data</span> <span class="pill">data_airtemperature</span> <span class="pill">data_atmosphericpressurechange</span> <span class="pill">data_atmosphericpressureobservation</span> <span class="pill">data_dewpoint</span> <span class="pill">data_extremeairtemperature</span> <span class="pill">data_liquidprecipitation</span> <span class="pill">data_pastweatherobservationmanual</span> <span class="pill">data_position</span> <span class="pill">data_precipitationestimatedobservation</span> <span class="pill">data_presentweatherobservationmanual</span> <span class="pill">data_pressure</span> <span class="pill">data_seasurfacetemperature</span> <span class="pill">data_sections</span> <span class="pill">data_skycondition</span> <span class="pill">data_skyconditionobservation</span> <span class="pill">data_skycoverlayer</span> <span class="pill">data_visibility</span> <span class="pill">data_wavemeasurement</span> <span class="pill">data_wind</span> <span class="pill">data_atmosphericpressurechange_quantity24hours</span> <span class="pill">data_atmosphericpressurechange_quantity3hours</span> <span class="pill">data_atmosphericpressurechange_tendency</span> <span class="pill">data_atmosphericpressureobservation_altimetersetting</span> <span class="pill">data_atmosphericpressureobservation_stationpressure</span> <span class="pill">data_pastweatherobservationmanual_atmosphericcondition</span> <span class="pill">data_pastweatherobservationmanual_period</span> <span class="pill">data_position_coordinates</span> <span class="pill">data_skycondition_ceilingheight</span> <span class="pill">data_skyconditionobservation_highcloudgenus</span> <span class="pill">data_skyconditionobservation_lowcloudgenus</span> <span class="pill">data_skyconditionobservation_lowestcloudbaseheight</span> <span class="pill">data_skyconditionobservation_lowestcloudcoverage</span> <span class="pill">data_skyconditionobservation_midcloudgenus</span> <span class="pill">data_skyconditionobservation_totalcoverage</span> <span class="pill">data_skycoverlayer_baseheight</span> <span class="pill">data_skycoverlayer_cloudtype</span> <span class="pill">data_skycoverlayer_coverage</span> <span class="pill">data_visibility_distance</span> <span class="pill">data_visibility_variability</span> <span class="pill">data_wavemeasurement_seastate</span> <span class="pill">data_wavemeasurement_waves</span> <span class="pill">data_wind_direction</span> <span class="pill">data_wind_speed</span></div>
+          <td colspan="9" class="detail-cell">
+            <div class="table-list"><span class="pill">data</span> <span class="pill">data_airtemperature</span> <span class="pill">data_atmosphericpressurechange</span> <span class="pill">data_atmosphericpressureobservation</span> <span class="pill">data_dewpoint</span> <span class="pill">data_liquidprecipitation</span> <span class="pill">data_pastweatherobservationmanual</span> <span class="pill">data_position</span> <span class="pill">data_precipitationestimatedobservation</span> <span class="pill">data_presentweatherobservationmanual</span> <span class="pill">data_pressure</span> <span class="pill">data_seasurfacetemperature</span> <span class="pill">data_sections</span> <span class="pill">data_skycondition</span> <span class="pill">data_skyconditionobservation</span> <span class="pill">data_skycoverlayer</span> <span class="pill">data_visibility</span> <span class="pill">data_wavemeasurement</span> <span class="pill">data_wind</span> <span class="pill">data_atmosphericpressurechange_quantity24hours</span> <span class="pill">data_atmosphericpressurechange_quantity3hours</span> <span class="pill">data_atmosphericpressurechange_tendency</span> <span class="pill">data_atmosphericpressureobservation_altimetersetting</span> <span class="pill">data_atmosphericpressureobservation_stationpressure</span> <span class="pill">data_pastweatherobservationmanual_atmosphericcondition</span> <span class="pill">data_pastweatherobservationmanual_period</span> <span class="pill">data_position_coordinates</span> <span class="pill">data_skycondition_ceilingheight</span> <span class="pill">data_skyconditionobservation_highcloudgenus</span> <span class="pill">data_skyconditionobservation_lowcloudgenus</span> <span class="pill">data_skyconditionobservation_lowestcloudbaseheight</span> <span class="pill">data_skyconditionobservation_lowestcloudcoverage</span> <span class="pill">data_skyconditionobservation_midcloudgenus</span> <span class="pill">data_skyconditionobservation_totalcoverage</span> <span class="pill">data_skycoverlayer_baseheight</span> <span class="pill">data_skycoverlayer_cloudtype</span> <span class="pill">data_skycoverlayer_coverage</span> <span class="pill">data_visibility_distance</span> <span class="pill">data_visibility_variability</span> <span class="pill">data_wavemeasurement_seastate</span> <span class="pill">data_wavemeasurement_waves</span> <span class="pill">data_wind_direction</span> <span class="pill">data_wind_speed</span></div>
           </td>
         </tr>
     </tbody>
