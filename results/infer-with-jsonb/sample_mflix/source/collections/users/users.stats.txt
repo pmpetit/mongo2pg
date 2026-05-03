@@ -1,0 +1,6 @@
+Documents in collection : 185
+Documents sampled       : 185
+Width (top-level / max)  : 5 / 5 (L1)
+Depth (max nesting)     : 1
+Branch (per level)      : L1:5
+Top-level types         : _id:ObjectId, email:String, name:String, password:String, preferences:Object

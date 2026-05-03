@@ -1,0 +1,458 @@
+{
+  "count": 66985,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "56e9b39c732b6122f87893b2",
+            "56e9b39c732b6122f878bebf",
+            "56e9b39b732b6122f8782ddb",
+            "56e9b39b732b6122f8784fa8",
+            "56e9b39b732b6122f8781391",
+            "56e9b39c732b6122f878d6e7",
+            "56e9b39c732b6122f878e690",
+            "56e9b39c732b6122f878a6b4",
+            "56e9b39c732b6122f87870f3",
+            "56e9b39c732b6122f8790069",
+            "56e9b39b732b6122f87815a5",
+            "56e9b39b732b6122f8784d9e",
+            "56e9b39c732b6122f878e6a5",
+            "56e9b39c732b6122f8786e91",
+            "56e9b39b732b6122f87843e9",
+            "56e9b39b732b6122f87830e3",
+            "56e9b39b732b6122f878209f",
+            "56e9b39c732b6122f8787f7e",
+            "56e9b39c732b6122f878dcb1",
+            "56e9b39b732b6122f8782ce0"
+          ]
+        }
+      }
+    },
+    "airline": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "alias": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 262.0,
+                  "values": [
+                    "LS",
+                    "SN",
+                    "AZ",
+                    "DL",
+                    "AA",
+                    "UA",
+                    "US",
+                    "O6",
+                    "GS",
+                    "ZH",
+                    "AB",
+                    "UU",
+                    "GE",
+                    "CZ",
+                    "B6",
+                    "AF",
+                    "JH",
+                    "UJ",
+                    "NZ",
+                    "SV"
+                  ]
+                }
+              }
+            },
+            "iata": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 245.0,
+                  "values": [
+                    "EXS",
+                    "DAT",
+                    "AZA",
+                    "DAL",
+                    "AAL",
+                    "UAL",
+                    "USA",
+                    "ONE",
+                    "UPA",
+                    "CSZ",
+                    "BER",
+                    "REU",
+                    "TNA",
+                    "CSN",
+                    "JBU",
+                    "AFR",
+                    "\\N",
+                    "LMU",
+                    "ANZ",
+                    "SVA"
+                  ]
+                }
+              }
+            },
+            "id": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 263.0,
+                  "values": [
+                    3026,
+                    1531,
+                    596,
+                    2009,
+                    24,
+                    5209,
+                    5265,
+                    3764,
+                    690,
+                    4611,
+                    214,
+                    1191,
+                    5038,
+                    1767,
+                    3029,
+                    137,
+                    13200,
+                    11811,
+                    345,
+                    4533
+                  ]
+                }
+              }
+            },
+            "name": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 263.0,
+                  "values": [
+                    "Jet2.com",
+                    "Brussels Airlines",
+                    "Alitalia",
+                    "Delta Air Lines",
+                    "American Airlines",
+                    "United Airlines",
+                    "US Airways",
+                    "Oceanair",
+                    "Air Foyle",
+                    "Shenzhen Airlines",
+                    "Air Berlin",
+                    "Air Austral",
+                    "TransAsia Airways",
+                    "China Southern Airlines",
+                    "JetBlue Airways",
+                    "Air France",
+                    "Fuji Dream Airlines",
+                    "AlMasria Universal Airlines",
+                    "Air New Zealand",
+                    "Saudi Arabian Airlines"
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "id": 3026,
+              "name": "Jet2.com",
+              "alias": "LS",
+              "iata": "EXS"
+            },
+            {
+              "id": 1531,
+              "name": "Brussels Airlines",
+              "alias": "SN",
+              "iata": "DAT"
+            },
+            {
+              "id": 596,
+              "name": "Alitalia",
+              "alias": "AZ",
+              "iata": "AZA"
+            },
+            {
+              "id": 2009,
+              "name": "Delta Air Lines",
+              "alias": "DL",
+              "iata": "DAL"
+            },
+            {
+              "id": 24,
+              "name": "American Airlines",
+              "alias": "AA",
+              "iata": "AAL"
+            },
+            {
+              "id": 5209,
+              "name": "United Airlines",
+              "alias": "UA",
+              "iata": "UAL"
+            },
+            {
+              "id": 5265,
+              "name": "US Airways",
+              "alias": "US",
+              "iata": "USA"
+            },
+            {
+              "id": 3764,
+              "name": "Oceanair",
+              "alias": "O6",
+              "iata": "ONE"
+            },
+            {
+              "id": 690,
+              "name": "Air Foyle",
+              "alias": "GS",
+              "iata": "UPA"
+            },
+            {
+              "id": 4611,
+              "name": "Shenzhen Airlines",
+              "alias": "ZH",
+              "iata": "CSZ"
+            },
+            {
+              "id": 214,
+              "name": "Air Berlin",
+              "alias": "AB",
+              "iata": "BER"
+            },
+            {
+              "id": 1191,
+              "name": "Air Austral",
+              "alias": "UU",
+              "iata": "REU"
+            },
+            {
+              "id": 5038,
+              "name": "TransAsia Airways",
+              "alias": "GE",
+              "iata": "TNA"
+            },
+            {
+              "id": 1767,
+              "name": "China Southern Airlines",
+              "alias": "CZ",
+              "iata": "CSN"
+            },
+            {
+              "id": 3029,
+              "name": "JetBlue Airways",
+              "alias": "B6",
+              "iata": "JBU"
+            },
+            {
+              "id": 137,
+              "name": "Air France",
+              "alias": "AF",
+              "iata": "AFR"
+            },
+            {
+              "id": 13200,
+              "name": "Fuji Dream Airlines",
+              "alias": "JH",
+              "iata": "\\N"
+            },
+            {
+              "id": 11811,
+              "name": "AlMasria Universal Airlines",
+              "alias": "UJ",
+              "iata": "LMU"
+            },
+            {
+              "id": 345,
+              "name": "Air New Zealand",
+              "alias": "NZ",
+              "iata": "ANZ"
+            },
+            {
+              "id": 4533,
+              "name": "Saudi Arabian Airlines",
+              "alias": "SV",
+              "iata": "SVA"
+            }
+          ]
+        }
+      }
+    },
+    "airplane": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 0.455,
+          "sampled": 455,
+          "ndistinct": 37.0,
+          "values": [
+            733,
+            320,
+            738,
+            321,
+            772,
+            333,
+            319,
+            330,
+            737,
+            739,
+            763,
+            146,
+            332,
+            340,
+            310,
+            777,
+            787,
+            717,
+            757,
+            100
+          ]
+        },
+        "String": {
+          "probability": 0.545,
+          "sampled": 545,
+          "ndistinct": 251.0,
+          "values": [
+            "320 319",
+            "757 M90",
+            "ERJ",
+            "321 319",
+            "ERJ E90",
+            "321 320",
+            "E70 CR9",
+            "320 321",
+            "CRK 319",
+            "E70",
+            "CR9 CRJ",
+            "SF3 EMB",
+            "320 738 319",
+            "CR9 E95 CR7",
+            "320 738",
+            "73W",
+            "CR7 717 CR9 CRJ",
+            "DH1 DH2",
+            "CR9",
+            "DH4 73G"
+          ]
+        }
+      }
+    },
+    "codeshare": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 2.0,
+          "values": [
+            "",
+            "Y"
+          ]
+        }
+      }
+    },
+    "dst_airport": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 0.001,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            null
+          ]
+        },
+        "String": {
+          "probability": 0.999,
+          "sampled": 999,
+          "ndistinct": 524.0,
+          "values": [
+            "FNC",
+            "BRU",
+            "LYS",
+            "ATL",
+            "SDQ",
+            "IAH",
+            "PHX",
+            "GRU",
+            "HET",
+            "WUH",
+            "PMI",
+            "BUF",
+            "HAH",
+            "RMQ",
+            "SZX",
+            "BDL",
+            "BES",
+            "CTS",
+            "YNB",
+            "CAE"
+          ]
+        }
+      }
+    },
+    "src_airport": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 508.0,
+          "values": [
+            "EMA",
+            "FAO",
+            "CTA",
+            "SRQ",
+            "PHL",
+            "GJT",
+            "YVR",
+            "NAT",
+            "TGO",
+            "PEK",
+            "ALC",
+            "MSP",
+            "DZA",
+            "FOC",
+            "NKG",
+            "FLL",
+            "ORY",
+            "MMJ",
+            "CAI",
+            "ATL"
+          ]
+        }
+      }
+    },
+    "stops": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            0
+          ]
+        }
+      }
+    }
+  }
+}

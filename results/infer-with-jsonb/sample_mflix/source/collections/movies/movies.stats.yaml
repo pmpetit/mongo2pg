@@ -1,0 +1,34 @@
+documents_in_collection: 23539
+documents_sampled: 1000
+width_top_level: 22
+width_max: 22
+width_max_level: 2
+depth_max: 3
+branch_total: 50
+branch_per_level:
+  L1: 22
+  L2: 22
+  L3: 6
+top_level_types:
+  _id: ObjectId
+  awards: Object
+  cast: Array
+  countries: Array
+  directors: Array
+  fullplot: String
+  genres: Array
+  imdb: Object
+  languages: Array
+  lastupdated: String
+  metacritic: Number
+  num_mflix_comments: Number
+  plot: String
+  poster: String
+  rated: String
+  released: Date
+  runtime: Number
+  title: String
+  tomatoes: Object
+  type: String
+  writers: Array
+  year: Number

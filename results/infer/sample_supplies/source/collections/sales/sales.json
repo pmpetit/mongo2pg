@@ -1,0 +1,1642 @@
+{
+  "count": 5000,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "5bd761ddae323e45a93cd4d3",
+            "5bd761deae323e45a93cdef4",
+            "5bd761dcae323e45a93cd152",
+            "5bd761deae323e45a93cddd9",
+            "5bd761ddae323e45a93cd498",
+            "5bd761ddae323e45a93cd879",
+            "5bd761ddae323e45a93cdab7",
+            "5bd761deae323e45a93ce29e",
+            "5bd761ddae323e45a93cd3fe",
+            "5bd761ddae323e45a93cd7ef",
+            "5bd761ddae323e45a93cd7f7",
+            "5bd761ddae323e45a93cd84e",
+            "5bd761deae323e45a93ce20d",
+            "5bd761ddae323e45a93cd5c4",
+            "5bd761dcae323e45a93cd31f",
+            "5bd761deae323e45a93ce05c",
+            "5bd761deae323e45a93cdeae",
+            "5bd761ddae323e45a93cd72b",
+            "5bd761deae323e45a93cde19",
+            "5bd761ddae323e45a93cd46b"
+          ]
+        }
+      }
+    },
+    "couponUsed": {
+      "probability": 1.0,
+      "types": {
+        "Boolean": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 2.0,
+          "values": [
+            false,
+            true
+          ]
+        }
+      }
+    },
+    "customer": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "age": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 60.0,
+                  "values": [
+                    39,
+                    33,
+                    59,
+                    60,
+                    45,
+                    55,
+                    62,
+                    36,
+                    66,
+                    27,
+                    26,
+                    58,
+                    52,
+                    42,
+                    35,
+                    64,
+                    24,
+                    47,
+                    37,
+                    29
+                  ]
+                }
+              }
+            },
+            "email": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 1000.0,
+                  "values": [
+                    "hibupceh@ija.vi",
+                    "rimcohiko@wavlafver.ao",
+                    "pufin@zuhdaves.cw",
+                    "tov@waido.gr",
+                    "misukut@wekhu.cc",
+                    "rugigoc@ija.cf",
+                    "zi@deneebi.bv",
+                    "mat@ni.pf",
+                    "umega@letemesa.co.uk",
+                    "pehti@sodteof.cf",
+                    "serdah@kihfe.sb",
+                    "tigi@tamefe.io",
+                    "juno@pevwo.bq",
+                    "ri@bo.pg",
+                    "uwuwo@ticfugi.gn",
+                    "to@leuvu.tv",
+                    "wovado@ve.kp",
+                    "hu@vewboz.eg",
+                    "figulhah@hipkiv.is",
+                    "bab@kus.tm"
+                  ]
+                }
+              }
+            },
+            "gender": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 2.0,
+                  "values": [
+                    "M",
+                    "F"
+                  ]
+                }
+              }
+            },
+            "satisfaction": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 5.0,
+                  "values": [
+                    2,
+                    3,
+                    5,
+                    4,
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "gender": "M",
+              "age": 39,
+              "email": "hibupceh@ija.vi",
+              "satisfaction": 2
+            },
+            {
+              "gender": "M",
+              "age": 33,
+              "email": "rimcohiko@wavlafver.ao",
+              "satisfaction": 3
+            },
+            {
+              "gender": "M",
+              "age": 59,
+              "email": "pufin@zuhdaves.cw",
+              "satisfaction": 5
+            },
+            {
+              "gender": "F",
+              "age": 60,
+              "email": "tov@waido.gr",
+              "satisfaction": 5
+            },
+            {
+              "gender": "M",
+              "age": 45,
+              "email": "misukut@wekhu.cc",
+              "satisfaction": 5
+            },
+            {
+              "gender": "M",
+              "age": 55,
+              "email": "rugigoc@ija.cf",
+              "satisfaction": 4
+            },
+            {
+              "gender": "M",
+              "age": 62,
+              "email": "zi@deneebi.bv",
+              "satisfaction": 1
+            },
+            {
+              "gender": "F",
+              "age": 36,
+              "email": "mat@ni.pf",
+              "satisfaction": 4
+            },
+            {
+              "gender": "F",
+              "age": 66,
+              "email": "umega@letemesa.co.uk",
+              "satisfaction": 4
+            },
+            {
+              "gender": "F",
+              "age": 27,
+              "email": "pehti@sodteof.cf",
+              "satisfaction": 5
+            },
+            {
+              "gender": "F",
+              "age": 26,
+              "email": "serdah@kihfe.sb",
+              "satisfaction": 5
+            },
+            {
+              "gender": "F",
+              "age": 26,
+              "email": "tigi@tamefe.io",
+              "satisfaction": 4
+            },
+            {
+              "gender": "M",
+              "age": 58,
+              "email": "juno@pevwo.bq",
+              "satisfaction": 4
+            },
+            {
+              "gender": "F",
+              "age": 52,
+              "email": "ri@bo.pg",
+              "satisfaction": 5
+            },
+            {
+              "gender": "F",
+              "age": 42,
+              "email": "uwuwo@ticfugi.gn",
+              "satisfaction": 5
+            },
+            {
+              "gender": "M",
+              "age": 42,
+              "email": "to@leuvu.tv",
+              "satisfaction": 5
+            },
+            {
+              "gender": "M",
+              "age": 59,
+              "email": "wovado@ve.kp",
+              "satisfaction": 5
+            },
+            {
+              "gender": "M",
+              "age": 55,
+              "email": "hu@vewboz.eg",
+              "satisfaction": 1
+            },
+            {
+              "gender": "F",
+              "age": 42,
+              "email": "figulhah@hipkiv.is",
+              "satisfaction": 4
+            },
+            {
+              "gender": "F",
+              "age": 36,
+              "email": "bab@kus.tm",
+              "satisfaction": 4
+            }
+          ]
+        }
+      }
+    },
+    "items": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 5.527,
+          "array": {
+            "probability": 5.527,
+            "types": {
+              "Object": {
+                "probability": 1.0,
+                "sampled": 5527,
+                "object": {
+                  "name": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 5527,
+                        "ndistinct": 7.0,
+                        "values": [
+                          "binder",
+                          "laptop",
+                          "notepad",
+                          "pens",
+                          "printer paper",
+                          "backpack",
+                          "envelopes"
+                        ]
+                      }
+                    }
+                  },
+                  "price": {
+                    "probability": 1.0,
+                    "types": {
+                      "Decimal128": {
+                        "probability": 1.0,
+                        "sampled": 5527,
+                        "ndistinct": 1000.0,
+                        "values": [
+                          "23.49",
+                          "1028.91",
+                          "12.06",
+                          "34.49",
+                          "5.58",
+                          "22.78",
+                          "490.89",
+                          "51.88",
+                          "37.73",
+                          "22.52",
+                          "29.77",
+                          "10.97",
+                          "24.86",
+                          "1042.94",
+                          "21.57",
+                          "25.26",
+                          "5.91",
+                          "69.74",
+                          "19.29",
+                          "5.08"
+                        ]
+                      }
+                    }
+                  },
+                  "quantity": {
+                    "probability": 1.0,
+                    "types": {
+                      "Number": {
+                        "probability": 1.0,
+                        "sampled": 5527,
+                        "ndistinct": 10.0,
+                        "values": [
+                          8,
+                          4,
+                          1,
+                          2,
+                          9,
+                          10,
+                          5,
+                          6,
+                          3,
+                          7
+                        ]
+                      }
+                    }
+                  },
+                  "tags": {
+                    "probability": 1.0,
+                    "types": {
+                      "Array": {
+                        "probability": 1.0,
+                        "sampled": 5527,
+                        "ndistinct": 3.096797539352271,
+                        "array": {
+                          "probability": 3.096797539352271,
+                          "types": {
+                            "String": {
+                              "probability": 1.0,
+                              "sampled": 17116,
+                              "ndistinct": 9.0,
+                              "values": [
+                                "school",
+                                "general",
+                                "organization",
+                                "electronics",
+                                "office",
+                                "writing",
+                                "stationary",
+                                "travel",
+                                "kids"
+                              ]
+                            }
+                          }
+                        },
+                        "values": [
+                          [
+                            "school",
+                            "general",
+                            "organization"
+                          ],
+                          [
+                            "electronics",
+                            "school",
+                            "office"
+                          ],
+                          [
+                            "office",
+                            "writing",
+                            "school"
+                          ],
+                          [
+                            "writing",
+                            "office",
+                            "school",
+                            "stationary"
+                          ],
+                          [
+                            "office",
+                            "stationary"
+                          ],
+                          [
+                            "school",
+                            "travel",
+                            "kids"
+                          ],
+                          [
+                            "stationary",
+                            "office",
+                            "general"
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                },
+                "values": [
+                  {
+                    "name": "binder",
+                    "tags": [
+                      "school",
+                      "general",
+                      "organization"
+                    ],
+                    "price": "23.49",
+                    "quantity": 8
+                  },
+                  {
+                    "name": "laptop",
+                    "tags": [
+                      "electronics",
+                      "school",
+                      "office"
+                    ],
+                    "price": "1028.91",
+                    "quantity": 4
+                  },
+                  {
+                    "name": "notepad",
+                    "tags": [
+                      "office",
+                      "writing",
+                      "school"
+                    ],
+                    "price": "12.06",
+                    "quantity": 1
+                  },
+                  {
+                    "name": "pens",
+                    "tags": [
+                      "writing",
+                      "office",
+                      "school",
+                      "stationary"
+                    ],
+                    "price": "34.49",
+                    "quantity": 4
+                  },
+                  {
+                    "name": "notepad",
+                    "tags": [
+                      "office",
+                      "writing",
+                      "school"
+                    ],
+                    "price": "5.58",
+                    "quantity": 2
+                  },
+                  {
+                    "name": "printer paper",
+                    "tags": [
+                      "office",
+                      "stationary"
+                    ],
+                    "price": "22.78",
+                    "quantity": 9
+                  },
+                  {
+                    "name": "laptop",
+                    "tags": [
+                      "electronics",
+                      "school",
+                      "office"
+                    ],
+                    "price": "490.89",
+                    "quantity": 4
+                  },
+                  {
+                    "name": "backpack",
+                    "tags": [
+                      "school",
+                      "travel",
+                      "kids"
+                    ],
+                    "price": "51.88",
+                    "quantity": 4
+                  },
+                  {
+                    "name": "notepad",
+                    "tags": [
+                      "office",
+                      "writing",
+                      "school"
+                    ],
+                    "price": "37.73",
+                    "quantity": 4
+                  },
+                  {
+                    "name": "envelopes",
+                    "tags": [
+                      "stationary",
+                      "office",
+                      "general"
+                    ],
+                    "price": "22.52",
+                    "quantity": 10
+                  },
+                  {
+                    "name": "notepad",
+                    "tags": [
+                      "office",
+                      "writing",
+                      "school"
+                    ],
+                    "price": "29.77",
+                    "quantity": 5
+                  },
+                  {
+                    "name": "binder",
+                    "tags": [
+                      "school",
+                      "general",
+                      "organization"
+                    ],
+                    "price": "10.97",
+                    "quantity": 6
+                  },
+                  {
+                    "name": "notepad",
+                    "tags": [
+                      "office",
+                      "writing",
+                      "school"
+                    ],
+                    "price": "24.86",
+                    "quantity": 5
+                  },
+                  {
+                    "name": "laptop",
+                    "tags": [
+                      "electronics",
+                      "school",
+                      "office"
+                    ],
+                    "price": "1042.94",
+                    "quantity": 3
+                  },
+                  {
+                    "name": "binder",
+                    "tags": [
+                      "school",
+                      "general",
+                      "organization"
+                    ],
+                    "price": "21.57",
+                    "quantity": 4
+                  },
+                  {
+                    "name": "binder",
+                    "tags": [
+                      "school",
+                      "general",
+                      "organization"
+                    ],
+                    "price": "25.26",
+                    "quantity": 6
+                  },
+                  {
+                    "name": "envelopes",
+                    "tags": [
+                      "stationary",
+                      "office",
+                      "general"
+                    ],
+                    "price": "5.91",
+                    "quantity": 6
+                  },
+                  {
+                    "name": "pens",
+                    "tags": [
+                      "writing",
+                      "office",
+                      "school",
+                      "stationary"
+                    ],
+                    "price": "69.74",
+                    "quantity": 1
+                  },
+                  {
+                    "name": "printer paper",
+                    "tags": [
+                      "office",
+                      "stationary"
+                    ],
+                    "price": "19.29",
+                    "quantity": 10
+                  },
+                  {
+                    "name": "notepad",
+                    "tags": [
+                      "office",
+                      "writing",
+                      "school"
+                    ],
+                    "price": "5.08",
+                    "quantity": 5
+                  }
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "23.49",
+                "quantity": 8
+              },
+              {
+                "name": "laptop",
+                "tags": [
+                  "electronics",
+                  "school",
+                  "office"
+                ],
+                "price": "1028.91",
+                "quantity": 4
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "12.06",
+                "quantity": 1
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "34.49",
+                "quantity": 4
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "5.58",
+                "quantity": 2
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "22.78",
+                "quantity": 9
+              },
+              {
+                "name": "laptop",
+                "tags": [
+                  "electronics",
+                  "school",
+                  "office"
+                ],
+                "price": "490.89",
+                "quantity": 4
+              },
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "51.88",
+                "quantity": 4
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "37.73",
+                "quantity": 4
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "22.52",
+                "quantity": 10
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "29.77",
+                "quantity": 5
+              }
+            ],
+            [
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "10.97",
+                "quantity": 6
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "24.86",
+                "quantity": 5
+              },
+              {
+                "name": "laptop",
+                "tags": [
+                  "electronics",
+                  "school",
+                  "office"
+                ],
+                "price": "1042.94",
+                "quantity": 3
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "21.57",
+                "quantity": 4
+              }
+            ],
+            [
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "25.26",
+                "quantity": 6
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "5.91",
+                "quantity": 6
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "69.74",
+                "quantity": 1
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "19.29",
+                "quantity": 10
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "5.08",
+                "quantity": 5
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "5.87",
+                "quantity": 5
+              },
+              {
+                "name": "laptop",
+                "tags": [
+                  "electronics",
+                  "school",
+                  "office"
+                ],
+                "price": "1045.82",
+                "quantity": 1
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "24.4",
+                "quantity": 2
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "19.4",
+                "quantity": 3
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "30.36",
+                "quantity": 3
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "19.4",
+                "quantity": 1
+              },
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "117.55",
+                "quantity": 1
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "12.04",
+                "quantity": 4
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "9.36",
+                "quantity": 4
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "14.35",
+                "quantity": 1
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "25.13",
+                "quantity": 2
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "12.77",
+                "quantity": 8
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "18.14",
+                "quantity": 2
+              }
+            ],
+            [
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "23.13",
+                "quantity": 4
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "13.84",
+                "quantity": 9
+              },
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "100.18",
+                "quantity": 4
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "22.25",
+                "quantity": 3
+              }
+            ],
+            [
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "17",
+                "quantity": 7
+              },
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "160.75",
+                "quantity": 5
+              }
+            ],
+            [
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "47.02",
+                "quantity": 2
+              },
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "155.05",
+                "quantity": 3
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "28.01",
+                "quantity": 4
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "19.15",
+                "quantity": 3
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "76.59",
+                "quantity": 2
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "15.75",
+                "quantity": 10
+              }
+            ],
+            [
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "49.98",
+                "quantity": 4
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "70.13",
+                "quantity": 5
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "23.35",
+                "quantity": 5
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "27.64",
+                "quantity": 3
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "24.49",
+                "quantity": 3
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "12.65",
+                "quantity": 5
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "20.86",
+                "quantity": 8
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "33.97",
+                "quantity": 5
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "16.08",
+                "quantity": 1
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "26.29",
+                "quantity": 4
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "17.8",
+                "quantity": 7
+              },
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "100.38",
+                "quantity": 1
+              }
+            ],
+            [
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "31.15",
+                "quantity": 3
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "9.02",
+                "quantity": 4
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "30.63",
+                "quantity": 2
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "44.65",
+                "quantity": 7
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "39.67",
+                "quantity": 3
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "28.1",
+                "quantity": 3
+              },
+              {
+                "name": "laptop",
+                "tags": [
+                  "electronics",
+                  "school",
+                  "office"
+                ],
+                "price": "1420.72",
+                "quantity": 2
+              }
+            ],
+            [
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "6.81",
+                "quantity": 5
+              }
+            ],
+            [
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "13.93",
+                "quantity": 8
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "19.78",
+                "quantity": 6
+              },
+              {
+                "name": "laptop",
+                "tags": [
+                  "electronics",
+                  "school",
+                  "office"
+                ],
+                "price": "1221.8",
+                "quantity": 2
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "35.72",
+                "quantity": 1
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "38.06",
+                "quantity": 2
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "33.42",
+                "quantity": 2
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "20.82",
+                "quantity": 9
+              }
+            ],
+            [
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "12.91",
+                "quantity": 10
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "38.11",
+                "quantity": 3
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "38.97",
+                "quantity": 6
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "72.76",
+                "quantity": 1
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "15.43",
+                "quantity": 6
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "18.84",
+                "quantity": 4
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "21.51",
+                "quantity": 5
+              }
+            ],
+            [
+              {
+                "name": "backpack",
+                "tags": [
+                  "school",
+                  "travel",
+                  "kids"
+                ],
+                "price": "69.77",
+                "quantity": 1
+              },
+              {
+                "name": "printer paper",
+                "tags": [
+                  "office",
+                  "stationary"
+                ],
+                "price": "14.58",
+                "quantity": 4
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "17.41",
+                "quantity": 3
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "6.91",
+                "quantity": 3
+              }
+            ],
+            [
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "14.03",
+                "quantity": 5
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "5.92",
+                "quantity": 4
+              },
+              {
+                "name": "notepad",
+                "tags": [
+                  "office",
+                  "writing",
+                  "school"
+                ],
+                "price": "18.89",
+                "quantity": 1
+              },
+              {
+                "name": "binder",
+                "tags": [
+                  "school",
+                  "general",
+                  "organization"
+                ],
+                "price": "17.51",
+                "quantity": 6
+              },
+              {
+                "name": "pens",
+                "tags": [
+                  "writing",
+                  "office",
+                  "school",
+                  "stationary"
+                ],
+                "price": "44.14",
+                "quantity": 3
+              },
+              {
+                "name": "envelopes",
+                "tags": [
+                  "stationary",
+                  "office",
+                  "general"
+                ],
+                "price": "22.33",
+                "quantity": 3
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "purchaseMethod": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 3.0,
+          "values": [
+            "Online",
+            "In store",
+            "Phone"
+          ]
+        }
+      }
+    },
+    "saleDate": {
+      "probability": 1.0,
+      "types": {
+        "Date": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "2016-03-17 10:51:57.009 +00:00:00",
+            "2017-11-04 19:38:05.488 +00:00:00",
+            "2014-10-15 12:20:01.181 +00:00:00",
+            "2015-02-13 10:05:12.254 +00:00:00",
+            "2015-08-09 2:22:47.551 +00:00:00",
+            "2017-04-20 0:13:48.064 +00:00:00",
+            "2015-08-31 19:24:25.758 +00:00:00",
+            "2014-03-03 15:44:24.543 +00:00:00",
+            "2015-07-31 23:33:04.736 +00:00:00",
+            "2015-10-09 10:37:52.298 +00:00:00",
+            "2013-05-19 7:24:54.535 +00:00:00",
+            "2013-09-14 17:41:48.545 +00:00:00",
+            "2014-06-06 0:14:37.587 +00:00:00",
+            "2017-11-16 0:29:15.193 +00:00:00",
+            "2015-07-15 17:13:44.05 +00:00:00",
+            "2015-04-04 14:04:03.198 +00:00:00",
+            "2014-09-21 22:27:12.961 +00:00:00",
+            "2014-03-16 22:46:34.498 +00:00:00",
+            "2015-08-12 16:25:10.901 +00:00:00",
+            "2014-07-13 16:33:37.476 +00:00:00"
+          ]
+        }
+      }
+    },
+    "storeLocation": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 6.0,
+          "values": [
+            "Seattle",
+            "London",
+            "Denver",
+            "New York",
+            "San Diego",
+            "Austin"
+          ]
+        }
+      }
+    }
+  }
+}

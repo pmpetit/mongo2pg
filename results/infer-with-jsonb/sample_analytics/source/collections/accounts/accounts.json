@@ -1,0 +1,221 @@
+{
+  "count": 1746,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "5ca4bbc7a2dd94ee5816248f",
+            "5ca4bbc7a2dd94ee5816297b",
+            "5ca4bbc7a2dd94ee5816262b",
+            "5ca4bbc7a2dd94ee581626e9",
+            "5ca4bbc7a2dd94ee58162659",
+            "5ca4bbc7a2dd94ee5816260e",
+            "5ca4bbc7a2dd94ee5816288a",
+            "5ca4bbc7a2dd94ee58162a26",
+            "5ca4bbc7a2dd94ee58162627",
+            "5ca4bbc7a2dd94ee581627a4",
+            "5ca4bbc7a2dd94ee5816278d",
+            "5ca4bbc7a2dd94ee581628d5",
+            "5ca4bbc7a2dd94ee5816254a",
+            "5ca4bbc7a2dd94ee581626a0",
+            "5ca4bbc7a2dd94ee58162682",
+            "5ca4bbc7a2dd94ee58162856",
+            "5ca4bbc7a2dd94ee581624be",
+            "5ca4bbc7a2dd94ee58162748",
+            "5ca4bbc7a2dd94ee581627d1",
+            "5ca4bbc7a2dd94ee58162631"
+          ]
+        }
+      }
+    },
+    "account_id": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            447644,
+            235824,
+            351069,
+            300879,
+            253017,
+            358036,
+            278669,
+            352837,
+            619693,
+            833855,
+            219169,
+            285957,
+            130832,
+            668634,
+            333075,
+            802298,
+            460192,
+            610738,
+            167440,
+            751513
+          ]
+        }
+      }
+    },
+    "limit": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 5.0,
+          "values": [
+            10000,
+            9000,
+            8000,
+            7000,
+            3000
+          ]
+        }
+      }
+    },
+    "products": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 3.127,
+          "array": {
+            "probability": 3.127,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 3127,
+                "ndistinct": 6.0,
+                "values": [
+                  "Commodity",
+                  "InvestmentStock",
+                  "Derivatives",
+                  "Brokerage",
+                  "CurrencyService",
+                  "InvestmentFund"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "Commodity",
+              "InvestmentStock"
+            ],
+            [
+              "InvestmentStock",
+              "Derivatives",
+              "Brokerage",
+              "CurrencyService"
+            ],
+            [
+              "CurrencyService",
+              "InvestmentStock"
+            ],
+            [
+              "InvestmentFund",
+              "Brokerage",
+              "InvestmentStock"
+            ],
+            [
+              "Brokerage",
+              "CurrencyService",
+              "InvestmentStock"
+            ],
+            [
+              "Commodity",
+              "InvestmentFund",
+              "Derivatives",
+              "InvestmentStock"
+            ],
+            [
+              "InvestmentStock",
+              "Derivatives",
+              "Brokerage",
+              "Commodity"
+            ],
+            [
+              "InvestmentFund",
+              "CurrencyService",
+              "Commodity",
+              "InvestmentStock"
+            ],
+            [
+              "Commodity",
+              "InvestmentFund",
+              "InvestmentStock"
+            ],
+            [
+              "InvestmentFund",
+              "InvestmentStock",
+              "Brokerage"
+            ],
+            [
+              "Derivatives",
+              "Commodity",
+              "InvestmentStock"
+            ],
+            [
+              "Derivatives",
+              "Commodity",
+              "InvestmentStock",
+              "CurrencyService"
+            ],
+            [
+              "Brokerage",
+              "InvestmentStock"
+            ],
+            [
+              "InvestmentStock",
+              "Commodity",
+              "Brokerage"
+            ],
+            [
+              "InvestmentStock",
+              "InvestmentFund"
+            ],
+            [
+              "Derivatives",
+              "CurrencyService",
+              "InvestmentStock"
+            ],
+            [
+              "InvestmentFund",
+              "InvestmentStock"
+            ],
+            [
+              "Brokerage",
+              "Commodity",
+              "Derivatives",
+              "CurrencyService",
+              "InvestmentStock"
+            ],
+            [
+              "Brokerage",
+              "Derivatives",
+              "InvestmentStock"
+            ],
+            [
+              "Commodity",
+              "Derivatives",
+              "CurrencyService",
+              "Brokerage",
+              "InvestmentStock"
+            ]
+          ]
+        }
+      }
+    }
+  }
+}

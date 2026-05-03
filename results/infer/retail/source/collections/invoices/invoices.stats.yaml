@@ -1,0 +1,22 @@
+documents_in_collection: 4
+documents_sampled: 4
+width_top_level: 9
+width_max: 26
+width_max_level: 3
+depth_max: 4
+branch_total: 45
+branch_per_level:
+  L1: 9
+  L2: 7
+  L3: 26
+  L4: 3
+top_level_types:
+  _id: ObjectId
+  createdAt: String
+  items: Array
+  metadata: Object
+  orderId: ObjectId
+  recommendations: Array
+  status: String
+  totalAmount: Number
+  userId: ObjectId

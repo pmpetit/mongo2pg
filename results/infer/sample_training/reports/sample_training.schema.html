@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mongo2pg – Schema Diagram – sample_training</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { margin: 0; font-size: 1.2rem; }
+    header small { opacity: 0.6; font-size: 0.75rem; }
+    .layout {
+      display: flex;
+      flex: 1;
+    }
+    aside {
+      width: 220px;
+      background: white;
+      border-right: 1px solid #ddd;
+      padding: 1rem;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    aside h2 { font-size: 0.8rem; text-transform: uppercase; color: #7f8c8d; margin: 0 0 0.75rem; }
+    aside ul { list-style: none; margin: 0; padding: 0; }
+    aside li { margin-bottom: 0.4rem; font-size: 0.85rem; }
+    aside a { color: #2c3e50; text-decoration: none; font-weight: 600; }
+    .badge {
+      background: #e74c3c;
+      color: white;
+      border-radius: 3px;
+      padding: 0 4px;
+      font-size: 0.7rem;
+    }
+    main {
+      flex: 1;
+      padding: 2rem;
+      overflow: auto;
+    }
+    .mermaid {
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    footer { padding: 0.75rem 2rem; font-size: 0.75rem; color: #aaa; text-align: right; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>mongo2pg – Schema Diagram – sample_training</h1>
+    <small>Generated: 2026-05-03 09:06 UTC</small>
+  </header>
+  <div class="layout">
+    <aside>
+      <h2>Tables (79)</h2>
+      <ul>
+        <li><a href="#" onclick="return false">companies</a> <small>(26 cols)</small></li>
+<li><a href="#" onclick="return false">companies_acquisition <span class="badge">1 FK</span></a> <small>(10 cols)</small></li>
+<li><a href="#" onclick="return false">companies_acquisitions <span class="badge">1 FK</span></a> <small>(10 cols)</small></li>
+<li><a href="#" onclick="return false">companies_competitions <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">companies_external_links <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_funding_rounds <span class="badge">1 FK</span></a> <small>(11 cols)</small></li>
+<li><a href="#" onclick="return false">companies_image <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">companies_investments <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">companies_ipo <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
+<li><a href="#" onclick="return false">companies_milestones <span class="badge">1 FK</span></a> <small>(11 cols)</small></li>
+<li><a href="#" onclick="return false">companies_offices <span class="badge">1 FK</span></a> <small>(11 cols)</small></li>
+<li><a href="#" onclick="return false">companies_partners <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
+<li><a href="#" onclick="return false">companies_products <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_providerships <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_relationships <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_screenshots <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">companies_video_embeds <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_acquisition_acquiring_company <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_acquisitions_company <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_competitions_competitor <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_funding_rounds_investments <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">companies_image_available_sizes <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">companies_investments_funding_round <span class="badge">1 FK</span></a> <small>(10 cols)</small></li>
+<li><a href="#" onclick="return false">companies_milestones_stoneable <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_providerships_provider <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_relationships_person <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
+<li><a href="#" onclick="return false">companies_screenshots_available_sizes <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">companies_funding_rounds_investments_company <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_funding_rounds_investments_financial_org <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">companies_funding_rounds_investments_person <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
+<li><a href="#" onclick="return false">companies_investments_funding_round_company <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">grades</a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">grades_scores <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">inspections</a> <small>(7 cols)</small></li>
+<li><a href="#" onclick="return false">inspections_address <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
+<li><a href="#" onclick="return false">posts</a> <small>(6 cols)</small></li>
+<li><a href="#" onclick="return false">posts_comments <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
+<li><a href="#" onclick="return false">posts_tags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">routes</a> <small>(6 cols)</small></li>
+<li><a href="#" onclick="return false">routes_airline <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
+<li><a href="#" onclick="return false">stories</a> <small>(15 cols)</small></li>
+<li><a href="#" onclick="return false">stories_container <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">stories_shorturl <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">stories_thumbnail <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
+<li><a href="#" onclick="return false">stories_topic <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">stories__user <span class="badge">1 FK</span></a> <small>(7 cols)</small></li>
+<li><a href="#" onclick="return false">trips</a> <small>(12 cols)</small></li>
+<li><a href="#" onclick="return false">trips_end_station_location <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">trips_start_station_location <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">trips_end_station_location_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">trips_start_station_location_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets</a> <small>(11 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_entities <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_geo <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_place <span class="badge">1 FK</span></a> <small>(9 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status <span class="badge">1 FK</span></a> <small>(12 cols)</small></li>
+<li><a href="#" onclick="return false">tweets__user <span class="badge">1 FK</span></a> <small>(31 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_coordinates_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_entities_hashtags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_entities_urls <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_entities_user_mentions <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_geo_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_place_attributes <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_place_bounding_box <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status__user <span class="badge">1 FK</span></a> <small>(31 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_entities_hashtags_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_entities_urls_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_entities_user_mentions_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_place_bounding_box_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities_hashtags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities_urls <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities_user_mentions <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities_hashtags_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities_urls_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_retweeted_status_entities_user_mentions_indices <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">zips</a> <small>(5 cols)</small></li>
+<li><a href="#" onclick="return false">zips_loc <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+      </ul>
+    </aside>
+    <main>
+      <div class="mermaid">
+erDiagram
+  companies {
+    UUID id PK
+    TEXT alias_list
+    TEXT blog_feed_url
+    TEXT blog_url
+    TEXT category_code
+    TEXT created_at "NOT NULL"
+    TEXT crunchbase_url "NOT NULL"
+    INTEGER deadpooled_day
+    INTEGER deadpooled_month
+    TEXT deadpooled_url
+    INTEGER deadpooled_year
+    TEXT description
+    TEXT email_address
+    INTEGER founded_day
+    INTEGER founded_month
+    INTEGER founded_year
+    TEXT homepage_url
+    TEXT name "NOT NULL"
+    INTEGER number_of_employees
+    TEXT overview
+    TEXT permalink "NOT NULL"
+    TEXT phone_number
+    TEXT tag_list
+    TEXT total_money_raised "NOT NULL"
+    TEXT twitter_username
+    TEXT updated_at "NOT NULL"
+  }
+  companies_acquisition {
+    BIGINT id PK
+    UUID companies_id FK
+    INTEGER acquired_day
+    INTEGER acquired_month
+    INTEGER acquired_year
+    INTEGER price_amount
+    VARCHAR(3) price_currency_code "NOT NULL"
+    TEXT source_description
+    TEXT source_url
+    TEXT term_code
+  }
+  companies_acquisitions {
+    BIGINT id PK
+    UUID companies_id FK
+    INTEGER acquired_day
+    INTEGER acquired_month
+    INTEGER acquired_year
+    BIGINT price_amount
+    VARCHAR(3) price_currency_code "NOT NULL"
+    TEXT source_description
+    TEXT source_url
+    TEXT term_code
+  }
+  companies_competitions {
+    BIGINT id PK
+    UUID companies_id FK
+  }
+  companies_external_links {
+    BIGINT id PK
+    UUID companies_id FK
+    TEXT external_url "NOT NULL"
+    TEXT title "NOT NULL"
+  }
+  companies_funding_rounds {
+    BIGINT id PK
+    UUID companies_id FK
+    INTEGER funded_day
+    INTEGER funded_month
+    INTEGER funded_year
+    INTEGER field_id "NOT NULL"
+    INTEGER raised_amount
+    VARCHAR(3) raised_currency_code
+    TEXT round_code "NOT NULL"
+    TEXT source_description
+    TEXT source_url
+  }
+  companies_image {
+    BIGINT id PK
+    UUID companies_id FK
+  }
+  companies_investments {
+    BIGINT id PK
+    UUID companies_id FK
+  }
+  companies_ipo {
+    BIGINT id PK
+    UUID companies_id FK
+    INTEGER pub_day
+    INTEGER pub_month
+    INTEGER pub_year
+    TEXT stock_symbol "NOT NULL"
+    BIGINT valuation_amount
+    VARCHAR(3) valuation_currency_code "NOT NULL"
+  }
+  companies_milestones {
+    BIGINT id PK
+    UUID companies_id FK
+    TEXT description "NOT NULL"
+    INTEGER field_id "NOT NULL"
+    TEXT source_description "NOT NULL"
+    TEXT source_text
+    TEXT source_url "NOT NULL"
+    TEXT stoneable_type "NOT NULL"
+    INTEGER stoned_day
+    INTEGER stoned_month
+    INTEGER stoned_year "NOT NULL"
+  }
+  companies_offices {
+    BIGINT id PK
+    UUID companies_id FK
+    TEXT address1
+    TEXT address2
+    TEXT city
+    VARCHAR(3) country_code "NOT NULL"
+    TEXT description
+    FLOAT latitude
+    FLOAT longitude
+    VARCHAR(2) state_code
+    TEXT zip_code
+  }
+  companies_partners {
+    BIGINT id PK
+    UUID companies_id FK
+    TEXT homepage_url "NOT NULL"
+    TEXT link_1_name "NOT NULL"
+    TEXT link_1_url "NOT NULL"
+    TEXT link_2_name
+    TEXT link_2_url
+    TEXT partner_name "NOT NULL"
+  }
+  companies_products {
+    BIGINT id PK
+    UUID companies_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_providerships {
+    BIGINT id PK
+    UUID companies_id FK
+    BOOLEAN is_past
+    TEXT title "NOT NULL"
+  }
+  companies_relationships {
+    BIGINT id PK
+    UUID companies_id FK
+    BOOLEAN is_past
+    TEXT title "NOT NULL"
+  }
+  companies_screenshots {
+    BIGINT id PK
+    UUID companies_id FK
+  }
+  companies_video_embeds {
+    BIGINT id PK
+    UUID companies_id FK
+    TEXT description "NOT NULL"
+    TEXT embed_code "NOT NULL"
+  }
+  companies_acquisition_acquiring_company {
+    BIGINT id PK
+    BIGINT companies_acquisition_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_acquisitions_company {
+    BIGINT id PK
+    BIGINT companies_acquisitions_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_competitions_competitor {
+    BIGINT id PK
+    BIGINT companies_competitions_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_funding_rounds_investments {
+    BIGINT id PK
+    BIGINT companies_funding_rounds_id FK
+  }
+  companies_image_available_sizes {
+    BIGINT id PK
+    BIGINT companies_image_id FK
+    TEXT value "NOT NULL"
+  }
+  companies_investments_funding_round {
+    BIGINT id PK
+    BIGINT companies_investments_id FK
+    INTEGER funded_day
+    INTEGER funded_month
+    INTEGER funded_year
+    BIGINT raised_amount
+    VARCHAR(3) raised_currency_code
+    TEXT round_code "NOT NULL"
+    TEXT source_description
+    TEXT source_url "NOT NULL"
+  }
+  companies_milestones_stoneable {
+    BIGINT id PK
+    BIGINT companies_milestones_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_providerships_provider {
+    BIGINT id PK
+    BIGINT companies_providerships_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_relationships_person {
+    BIGINT id PK
+    BIGINT companies_relationships_id FK
+    TEXT first_name "NOT NULL"
+    TEXT last_name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_screenshots_available_sizes {
+    BIGINT id PK
+    BIGINT companies_screenshots_id FK
+    TEXT value "NOT NULL"
+  }
+  companies_funding_rounds_investments_company {
+    BIGINT id PK
+    BIGINT companies_funding_rounds_investments_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_funding_rounds_investments_financial_org {
+    BIGINT id PK
+    BIGINT companies_funding_rounds_investments_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_funding_rounds_investments_person {
+    BIGINT id PK
+    BIGINT companies_funding_rounds_investments_id FK
+    TEXT first_name "NOT NULL"
+    TEXT last_name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  companies_investments_funding_round_company {
+    BIGINT id PK
+    BIGINT companies_investments_funding_round_id FK
+    TEXT name "NOT NULL"
+    TEXT permalink "NOT NULL"
+  }
+  grades {
+    UUID id PK
+    INTEGER class_id "NOT NULL"
+    INTEGER student_id "NOT NULL"
+  }
+  grades_scores {
+    BIGINT id PK
+    UUID grades_id FK
+    FLOAT score "NOT NULL"
+    TEXT type "NOT NULL"
+  }
+  inspections {
+    UUID id PK
+    TEXT business_name "NOT NULL"
+    TEXT certificate_number "NOT NULL"
+    TEXT date "NOT NULL"
+    TEXT field_id "NOT NULL"
+    TEXT result "NOT NULL"
+    TEXT sector "NOT NULL"
+  }
+  inspections_address {
+    BIGINT id PK
+    UUID inspections_id FK
+    TEXT city "NOT NULL"
+    TEXT number "NOT NULL"
+    TEXT street "NOT NULL"
+    TEXT zip "NOT NULL"
+  }
+  posts {
+    UUID id PK
+    TEXT author "NOT NULL"
+    TEXT body "NOT NULL"
+    TIMESTAMP date "NOT NULL"
+    TEXT permalink "NOT NULL"
+    TEXT title "NOT NULL"
+  }
+  posts_comments {
+    BIGINT id PK
+    UUID posts_id FK
+    TEXT author "NOT NULL"
+    TEXT body "NOT NULL"
+    TEXT email "NOT NULL"
+  }
+  posts_tags {
+    BIGINT id PK
+    UUID posts_id FK
+    TEXT value "NOT NULL"
+  }
+  routes {
+    UUID id PK
+    TEXT airplane "NOT NULL"
+    VARCHAR(1) codeshare "NOT NULL"
+    TEXT dst_airport "NOT NULL"
+    TEXT src_airport "NOT NULL"
+    INTEGER stops "NOT NULL"
+  }
+  routes_airline {
+    BIGINT id PK
+    UUID routes_id FK
+    TEXT alias "NOT NULL"
+    TEXT iata "NOT NULL"
+    INTEGER field_id "NOT NULL"
+    TEXT name "NOT NULL"
+  }
+  stories {
+    UUID id PK
+    INTEGER comments "NOT NULL"
+    TEXT description "NOT NULL"
+    INTEGER diggs "NOT NULL"
+    TEXT href "NOT NULL"
+    TEXT field_id "NOT NULL"
+    INTEGER inaccurate
+    TEXT link "NOT NULL"
+    TEXT media "NOT NULL"
+    INTEGER promote_date "NOT NULL"
+    TEXT status "NOT NULL"
+    INTEGER submit_date "NOT NULL"
+    INTEGER takedowndays
+    TEXT takedownuri
+    TEXT title "NOT NULL"
+  }
+  stories_container {
+    BIGINT id PK
+    UUID stories_id FK
+    TEXT name "NOT NULL"
+    TEXT short_name "NOT NULL"
+  }
+  stories_shorturl {
+    BIGINT id PK
+    UUID stories_id FK
+    TEXT short_url "NOT NULL"
+    INTEGER view_count "NOT NULL"
+  }
+  stories_thumbnail {
+    BIGINT id PK
+    UUID stories_id FK
+    TEXT contenttype "NOT NULL"
+    INTEGER height "NOT NULL"
+    INTEGER originalheight "NOT NULL"
+    INTEGER originalwidth "NOT NULL"
+    TEXT src "NOT NULL"
+    INTEGER width "NOT NULL"
+  }
+  stories_topic {
+    BIGINT id PK
+    UUID stories_id FK
+    TEXT name "NOT NULL"
+    TEXT short_name "NOT NULL"
+  }
+  stories__user {
+    BIGINT id PK
+    UUID stories_id FK
+    TEXT fullname
+    TEXT icon "NOT NULL"
+    TEXT name "NOT NULL"
+    INTEGER profileviews "NOT NULL"
+    INTEGER registered "NOT NULL"
+  }
+  trips {
+    UUID id PK
+    INTEGER bikeid "NOT NULL"
+    TEXT birth_year "NOT NULL"
+    INTEGER end_station_id "NOT NULL"
+    TEXT end_station_name "NOT NULL"
+    INTEGER gender "NOT NULL"
+    INTEGER start_station_id "NOT NULL"
+    TEXT start_station_name "NOT NULL"
+    TIMESTAMP start_time "NOT NULL"
+    TIMESTAMP stop_time "NOT NULL"
+    INTEGER tripduration "NOT NULL"
+    TEXT usertype "NOT NULL"
+  }
+  trips_end_station_location {
+    BIGINT id PK
+    UUID trips_id FK
+    TEXT type "NOT NULL"
+  }
+  trips_start_station_location {
+    BIGINT id PK
+    UUID trips_id FK
+    TEXT type "NOT NULL"
+  }
+  trips_end_station_location_coordinates {
+    BIGINT id PK
+    BIGINT trips_end_station_location_id FK
+    FLOAT value "NOT NULL"
+  }
+  trips_start_station_location_coordinates {
+    BIGINT id PK
+    BIGINT trips_start_station_location_id FK
+    FLOAT value "NOT NULL"
+  }
+  tweets {
+    UUID id PK
+    TEXT created_at "NOT NULL"
+    BOOLEAN favorited "NOT NULL"
+    BIGINT field_id "NOT NULL"
+    TEXT in_reply_to_screen_name
+    BIGINT in_reply_to_status_id
+    INTEGER in_reply_to_user_id
+    BOOLEAN retweeted "NOT NULL"
+    TEXT source "NOT NULL"
+    TEXT text "NOT NULL"
+    BOOLEAN truncated "NOT NULL"
+  }
+  tweets_coordinates {
+    BIGINT id PK
+    UUID tweets_id FK
+    TEXT type "NOT NULL"
+  }
+  tweets_entities {
+    BIGINT id PK
+    UUID tweets_id FK
+  }
+  tweets_geo {
+    BIGINT id PK
+    UUID tweets_id FK
+    TEXT type "NOT NULL"
+  }
+  tweets_place {
+    BIGINT id PK
+    UUID tweets_id FK
+    TEXT country "NOT NULL"
+    VARCHAR(2) country_code "NOT NULL"
+    TEXT full_name "NOT NULL"
+    TEXT field_id "NOT NULL"
+    TEXT name "NOT NULL"
+    TEXT place_type "NOT NULL"
+    TEXT url "NOT NULL"
+  }
+  tweets_retweeted_status {
+    BIGINT id PK
+    UUID tweets_id FK
+    TEXT created_at "NOT NULL"
+    BOOLEAN favorited "NOT NULL"
+    BIGINT field_id "NOT NULL"
+    TEXT in_reply_to_screen_name
+    BIGINT in_reply_to_status_id
+    INTEGER in_reply_to_user_id
+    BOOLEAN retweeted "NOT NULL"
+    TEXT source "NOT NULL"
+    TEXT text "NOT NULL"
+    BOOLEAN truncated "NOT NULL"
+  }
+  tweets__user {
+    BIGINT id PK
+    UUID tweets_id FK
+    BOOLEAN contributors_enabled "NOT NULL"
+    TEXT created_at "NOT NULL"
+    TEXT description
+    INTEGER favourites_count "NOT NULL"
+    INTEGER followers_count "NOT NULL"
+    INTEGER friends_count "NOT NULL"
+    BOOLEAN geo_enabled "NOT NULL"
+    INTEGER field_id "NOT NULL"
+    TEXT lang "NOT NULL"
+    INTEGER listed_count "NOT NULL"
+    TEXT location
+    TEXT name "NOT NULL"
+    TEXT profile_background_color "NOT NULL"
+    TEXT profile_background_image_url "NOT NULL"
+    BOOLEAN profile_background_tile "NOT NULL"
+    TEXT profile_image_url "NOT NULL"
+    TEXT profile_link_color "NOT NULL"
+    TEXT profile_sidebar_border_color "NOT NULL"
+    TEXT profile_sidebar_fill_color "NOT NULL"
+    TEXT profile_text_color "NOT NULL"
+    BOOLEAN profile_use_background_image "NOT NULL"
+    BOOLEAN protected "NOT NULL"
+    TEXT screen_name "NOT NULL"
+    BOOLEAN show_all_inline_media "NOT NULL"
+    INTEGER statuses_count "NOT NULL"
+    TEXT time_zone
+    TEXT url
+    INTEGER utc_offset
+    BOOLEAN verified "NOT NULL"
+  }
+  tweets_coordinates_coordinates {
+    BIGINT id PK
+    BIGINT tweets_coordinates_id FK
+    FLOAT value "NOT NULL"
+  }
+  tweets_entities_hashtags {
+    BIGINT id PK
+    BIGINT tweets_entities_id FK
+    TEXT text "NOT NULL"
+  }
+  tweets_entities_urls {
+    BIGINT id PK
+    BIGINT tweets_entities_id FK
+    TEXT expanded_url
+    TEXT url "NOT NULL"
+  }
+  tweets_entities_user_mentions {
+    BIGINT id PK
+    BIGINT tweets_entities_id FK
+    INTEGER field_id "NOT NULL"
+    TEXT name "NOT NULL"
+    TEXT screen_name "NOT NULL"
+  }
+  tweets_geo_coordinates {
+    BIGINT id PK
+    BIGINT tweets_geo_id FK
+    FLOAT value "NOT NULL"
+  }
+  tweets_place_attributes {
+    BIGINT id PK
+    BIGINT tweets_place_id FK
+  }
+  tweets_place_bounding_box {
+    BIGINT id PK
+    BIGINT tweets_place_id FK
+    TEXT type "NOT NULL"
+  }
+  tweets_retweeted_status_entities {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_id FK
+  }
+  tweets_retweeted_status__user {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_id FK
+    BOOLEAN contributors_enabled "NOT NULL"
+    TEXT created_at "NOT NULL"
+    TEXT description
+    INTEGER favourites_count "NOT NULL"
+    INTEGER followers_count "NOT NULL"
+    INTEGER friends_count "NOT NULL"
+    BOOLEAN geo_enabled "NOT NULL"
+    INTEGER field_id "NOT NULL"
+    TEXT lang "NOT NULL"
+    INTEGER listed_count "NOT NULL"
+    TEXT location
+    TEXT name "NOT NULL"
+    TEXT profile_background_color "NOT NULL"
+    TEXT profile_background_image_url "NOT NULL"
+    BOOLEAN profile_background_tile "NOT NULL"
+    TEXT profile_image_url "NOT NULL"
+    TEXT profile_link_color "NOT NULL"
+    TEXT profile_sidebar_border_color "NOT NULL"
+    TEXT profile_sidebar_fill_color "NOT NULL"
+    TEXT profile_text_color "NOT NULL"
+    BOOLEAN profile_use_background_image "NOT NULL"
+    BOOLEAN protected "NOT NULL"
+    TEXT screen_name "NOT NULL"
+    BOOLEAN show_all_inline_media "NOT NULL"
+    INTEGER statuses_count "NOT NULL"
+    TEXT time_zone
+    TEXT url
+    INTEGER utc_offset
+    BOOLEAN verified "NOT NULL"
+  }
+  tweets_entities_hashtags_indices {
+    BIGINT id PK
+    BIGINT tweets_entities_hashtags_id FK
+    INTEGER value "NOT NULL"
+  }
+  tweets_entities_urls_indices {
+    BIGINT id PK
+    BIGINT tweets_entities_urls_id FK
+    INTEGER value "NOT NULL"
+  }
+  tweets_entities_user_mentions_indices {
+    BIGINT id PK
+    BIGINT tweets_entities_user_mentions_id FK
+    INTEGER value "NOT NULL"
+  }
+  tweets_place_bounding_box_coordinates {
+    BIGINT id PK
+    BIGINT tweets_place_bounding_box_id FK
+    TEXT value "NOT NULL"
+  }
+  tweets_retweeted_status_entities_hashtags {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_entities_id FK
+    TEXT text "NOT NULL"
+  }
+  tweets_retweeted_status_entities_urls {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_entities_id FK
+    TEXT url "NOT NULL"
+  }
+  tweets_retweeted_status_entities_user_mentions {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_entities_id FK
+    INTEGER field_id "NOT NULL"
+    TEXT name "NOT NULL"
+    TEXT screen_name "NOT NULL"
+  }
+  tweets_retweeted_status_entities_hashtags_indices {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_entities_hashtags_id FK
+    INTEGER value "NOT NULL"
+  }
+  tweets_retweeted_status_entities_urls_indices {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_entities_urls_id FK
+    INTEGER value "NOT NULL"
+  }
+  tweets_retweeted_status_entities_user_mentions_indices {
+    BIGINT id PK
+    BIGINT tweets_retweeted_status_entities_user_mentions_id FK
+    INTEGER value "NOT NULL"
+  }
+  zips {
+    UUID id PK
+    TEXT city "NOT NULL"
+    INTEGER pop "NOT NULL"
+    TEXT state "NOT NULL"
+    INTEGER zip "NOT NULL"
+  }
+  zips_loc {
+    BIGINT id PK
+    UUID zips_id FK
+    FLOAT x "NOT NULL"
+    FLOAT y "NOT NULL"
+  }
+
+  companies ||--o{ companies_acquisition : "companies_id"
+  companies ||--o{ companies_acquisitions : "companies_id"
+  companies ||--o{ companies_competitions : "companies_id"
+  companies ||--o{ companies_external_links : "companies_id"
+  companies ||--o{ companies_funding_rounds : "companies_id"
+  companies ||--o{ companies_image : "companies_id"
+  companies ||--o{ companies_investments : "companies_id"
+  companies ||--o{ companies_ipo : "companies_id"
+  companies ||--o{ companies_milestones : "companies_id"
+  companies ||--o{ companies_offices : "companies_id"
+  companies ||--o{ companies_partners : "companies_id"
+  companies ||--o{ companies_products : "companies_id"
+  companies ||--o{ companies_providerships : "companies_id"
+  companies ||--o{ companies_relationships : "companies_id"
+  companies ||--o{ companies_screenshots : "companies_id"
+  companies ||--o{ companies_video_embeds : "companies_id"
+  companies_acquisition ||--o{ companies_acquisition_acquiring_company : "companies_acquisition_id"
+  companies_acquisitions ||--o{ companies_acquisitions_company : "companies_acquisitions_id"
+  companies_competitions ||--o{ companies_competitions_competitor : "companies_competitions_id"
+  companies_funding_rounds ||--o{ companies_funding_rounds_investments : "companies_funding_rounds_id"
+  companies_image ||--o{ companies_image_available_sizes : "companies_image_id"
+  companies_investments ||--o{ companies_investments_funding_round : "companies_investments_id"
+  companies_milestones ||--o{ companies_milestones_stoneable : "companies_milestones_id"
+  companies_providerships ||--o{ companies_providerships_provider : "companies_providerships_id"
+  companies_relationships ||--o{ companies_relationships_person : "companies_relationships_id"
+  companies_screenshots ||--o{ companies_screenshots_available_sizes : "companies_screenshots_id"
+  companies_funding_rounds_investments ||--o{ companies_funding_rounds_investments_company : "companies_funding_rounds_investments_id"
+  companies_funding_rounds_investments ||--o{ companies_funding_rounds_investments_financial_org : "companies_funding_rounds_investments_id"
+  companies_funding_rounds_investments ||--o{ companies_funding_rounds_investments_person : "companies_funding_rounds_investments_id"
+  companies_investments_funding_round ||--o{ companies_investments_funding_round_company : "companies_investments_funding_round_id"
+  grades ||--o{ grades_scores : "grades_id"
+  inspections ||--o{ inspections_address : "inspections_id"
+  posts ||--o{ posts_comments : "posts_id"
+  posts ||--o{ posts_tags : "posts_id"
+  routes ||--o{ routes_airline : "routes_id"
+  stories ||--o{ stories_container : "stories_id"
+  stories ||--o{ stories_shorturl : "stories_id"
+  stories ||--o{ stories_thumbnail : "stories_id"
+  stories ||--o{ stories_topic : "stories_id"
+  stories ||--o{ stories__user : "stories_id"
+  trips ||--o{ trips_end_station_location : "trips_id"
+  trips ||--o{ trips_start_station_location : "trips_id"
+  trips_end_station_location ||--o{ trips_end_station_location_coordinates : "trips_end_station_location_id"
+  trips_start_station_location ||--o{ trips_start_station_location_coordinates : "trips_start_station_location_id"
+  tweets ||--o{ tweets_coordinates : "tweets_id"
+  tweets ||--o{ tweets_entities : "tweets_id"
+  tweets ||--o{ tweets_geo : "tweets_id"
+  tweets ||--o{ tweets_place : "tweets_id"
+  tweets ||--o{ tweets_retweeted_status : "tweets_id"
+  tweets ||--o{ tweets__user : "tweets_id"
+  tweets_coordinates ||--o{ tweets_coordinates_coordinates : "tweets_coordinates_id"
+  tweets_entities ||--o{ tweets_entities_hashtags : "tweets_entities_id"
+  tweets_entities ||--o{ tweets_entities_urls : "tweets_entities_id"
+  tweets_entities ||--o{ tweets_entities_user_mentions : "tweets_entities_id"
+  tweets_geo ||--o{ tweets_geo_coordinates : "tweets_geo_id"
+  tweets_place ||--o{ tweets_place_attributes : "tweets_place_id"
+  tweets_place ||--o{ tweets_place_bounding_box : "tweets_place_id"
+  tweets_retweeted_status ||--o{ tweets_retweeted_status_entities : "tweets_retweeted_status_id"
+  tweets_retweeted_status ||--o{ tweets_retweeted_status__user : "tweets_retweeted_status_id"
+  tweets_entities_hashtags ||--o{ tweets_entities_hashtags_indices : "tweets_entities_hashtags_id"
+  tweets_entities_urls ||--o{ tweets_entities_urls_indices : "tweets_entities_urls_id"
+  tweets_entities_user_mentions ||--o{ tweets_entities_user_mentions_indices : "tweets_entities_user_mentions_id"
+  tweets_place_bounding_box ||--o{ tweets_place_bounding_box_coordinates : "tweets_place_bounding_box_id"
+  tweets_retweeted_status_entities ||--o{ tweets_retweeted_status_entities_hashtags : "tweets_retweeted_status_entities_id"
+  tweets_retweeted_status_entities ||--o{ tweets_retweeted_status_entities_urls : "tweets_retweeted_status_entities_id"
+  tweets_retweeted_status_entities ||--o{ tweets_retweeted_status_entities_user_mentions : "tweets_retweeted_status_entities_id"
+  tweets_retweeted_status_entities_hashtags ||--o{ tweets_retweeted_status_entities_hashtags_indices : "tweets_retweeted_status_entities_hashtags_id"
+  tweets_retweeted_status_entities_urls ||--o{ tweets_retweeted_status_entities_urls_indices : "tweets_retweeted_status_entities_urls_id"
+  tweets_retweeted_status_entities_user_mentions ||--o{ tweets_retweeted_status_entities_user_mentions_indices : "tweets_retweeted_status_entities_user_mentions_id"
+  zips ||--o{ zips_loc : "zips_id"
+
+      </div>
+    </main>
+  </div>
+  <footer>Generated by <a href="https://github.com/pmpetit/mongo2pg">mongo2pg</a></footer>
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'default', er: { diagramPadding: 40 } });
+  </script>
+</body>
+</html>

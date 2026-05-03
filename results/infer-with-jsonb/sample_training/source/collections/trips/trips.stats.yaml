@@ -1,0 +1,26 @@
+documents_in_collection: 10000
+documents_sampled: 1000
+width_top_level: 14
+width_max: 14
+width_max_level: 1
+depth_max: 3
+branch_total: 20
+branch_per_level:
+  L1: 14
+  L2: 4
+  L3: 2
+top_level_types:
+  _id: ObjectId
+  bikeid: Number
+  birth year: Number
+  end station id: Number
+  end station location: Object
+  end station name: String
+  gender: Number
+  start station id: Number
+  start station location: Object
+  start station name: String
+  start time: Date
+  stop time: Date
+  tripduration: Number
+  usertype: String

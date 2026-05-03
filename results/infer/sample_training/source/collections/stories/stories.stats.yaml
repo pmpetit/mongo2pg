@@ -1,0 +1,32 @@
+documents_in_collection: 9842
+documents_sampled: 1000
+width_top_level: 20
+width_max: 20
+width_max_level: 1
+depth_max: 3
+branch_total: 38
+branch_per_level:
+  L1: 20
+  L2: 16
+  L3: 2
+top_level_types:
+  _id: ObjectId
+  comments: Number
+  container: Object
+  description: String
+  diggs: Number
+  href: String
+  id: String
+  inaccurate: Number
+  link: String
+  media: String
+  promote_date: Number
+  shorturl: Array
+  status: String
+  submit_date: Number
+  takedowndays: Number
+  takedownuri: String
+  thumbnail: Object
+  title: String
+  topic: Object
+  user: Object

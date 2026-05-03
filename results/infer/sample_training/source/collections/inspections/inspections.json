@@ -1,0 +1,525 @@
+{
+  "count": 80047,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "56d61035a378eccde8a95650",
+            "56d61035a378eccde8a9715a",
+            "56d61033a378eccde8a8668d",
+            "56d61033a378eccde8a8a708",
+            "56d61033a378eccde8a8371f",
+            "56d61035a378eccde8a966b6",
+            "56d61035a378eccde8a969c3",
+            "56d61035a378eccde8a94ecb",
+            "56d61034a378eccde8a907e9",
+            "56d61035a378eccde8a950f4",
+            "56d61035a378eccde8a95f88",
+            "56d61034a378eccde8a8b422",
+            "56d61033a378eccde8a84840",
+            "56d61033a378eccde8a857f6",
+            "56d61034a378eccde8a8af8d",
+            "56d61033a378eccde8a84a7b",
+            "56d61034a378eccde8a9142d",
+            "56d61035a378eccde8a96f1d",
+            "56d61035a378eccde8a96d78",
+            "56d61035a378eccde8a96784"
+          ]
+        }
+      }
+    },
+    "address": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "city": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 56.0,
+                  "values": [
+                    "NEW YORK",
+                    "BROOKLYN",
+                    "ELMHURST",
+                    "STATEN ISLAND",
+                    "BRONX",
+                    "FLUSHING",
+                    "OZONE PARK",
+                    "RIDGEWOOD",
+                    "CORONA",
+                    "MIDDLE VILLAGE",
+                    "WOODHAVEN",
+                    "QUEENS VILLAGE",
+                    "ASTORIA",
+                    "JAMAICA",
+                    "GLENDALE",
+                    "MIDDLE VLG",
+                    "SOUTH RICHMOND HILL",
+                    "BAYSIDE",
+                    "ROCKAWAY PARK",
+                    "COLLEGE POINT"
+                  ]
+                }
+              }
+            },
+            "number": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 0.972,
+                  "sampled": 972,
+                  "ndistinct": 828.0,
+                  "values": [
+                    4091,
+                    170,
+                    708,
+                    8618,
+                    106,
+                    550,
+                    28,
+                    2141,
+                    2705,
+                    2085,
+                    9,
+                    3512,
+                    3070,
+                    5080,
+                    623,
+                    10204,
+                    563,
+                    779,
+                    3812,
+                    368
+                  ]
+                },
+                "String": {
+                  "probability": 0.028,
+                  "sampled": 28,
+                  "ndistinct": 18.0,
+                  "values": [
+                    "N/E/C",
+                    "810B",
+                    "225A",
+                    "",
+                    "986A",
+                    "14714A",
+                    "4712B",
+                    "137B",
+                    "1414A",
+                    "16B",
+                    "791B",
+                    "8153A",
+                    "2042-2046",
+                    "521B",
+                    "4622A",
+                    "231A",
+                    "537A",
+                    "1630A"
+                  ]
+                }
+              }
+            },
+            "street": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 414.0,
+                  "values": [
+                    "BROADWAY",
+                    "1ST AVE",
+                    "FLATBUSH AVE",
+                    "WHITNEY AVE",
+                    "MULBERRY AVE",
+                    "E 187TH ST",
+                    "FAYETTE ST",
+                    "3RD AVE",
+                    "AVENUE Z",
+                    "LEXINGTON AVE",
+                    "BAY 50TH ST",
+                    "FLATLANDS AVE",
+                    "ATLANTIC AVE",
+                    "NOSTRAND AVE",
+                    "E 188TH ST",
+                    "CANAL ST",
+                    "",
+                    "MAIN ST",
+                    "5TH AVE",
+                    "101ST AVE"
+                  ]
+                }
+              }
+            },
+            "zip": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 0.998,
+                  "sampled": 998,
+                  "ndistinct": 172.0,
+                  "values": [
+                    10032,
+                    10009,
+                    11225,
+                    11373,
+                    10314,
+                    10458,
+                    11206,
+                    10035,
+                    11235,
+                    11214,
+                    10031,
+                    10027,
+                    10034,
+                    11236,
+                    11217,
+                    11216,
+                    10013,
+                    10024,
+                    11354,
+                    11416
+                  ]
+                },
+                "String": {
+                  "probability": 0.002,
+                  "sampled": 2,
+                  "ndistinct": 1.0,
+                  "values": [
+                    ""
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "city": "NEW YORK",
+              "zip": 10032,
+              "street": "BROADWAY",
+              "number": 4091
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10009,
+              "street": "1ST AVE",
+              "number": 170
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11225,
+              "street": "FLATBUSH AVE",
+              "number": 708
+            },
+            {
+              "city": "ELMHURST",
+              "zip": 11373,
+              "street": "WHITNEY AVE",
+              "number": 8618
+            },
+            {
+              "city": "STATEN ISLAND",
+              "zip": 10314,
+              "street": "MULBERRY AVE",
+              "number": 106
+            },
+            {
+              "city": "BRONX",
+              "zip": 10458,
+              "street": "E 187TH ST",
+              "number": 550
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11206,
+              "street": "FAYETTE ST",
+              "number": 28
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10035,
+              "street": "3RD AVE",
+              "number": 2141
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11235,
+              "street": "AVENUE Z",
+              "number": 2705
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10035,
+              "street": "LEXINGTON AVE",
+              "number": 2085
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11214,
+              "street": "BAY 50TH ST",
+              "number": 9
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10031,
+              "street": "BROADWAY",
+              "number": 3512
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10027,
+              "street": "BROADWAY",
+              "number": 3070
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10034,
+              "street": "BROADWAY",
+              "number": 5080
+            },
+            {
+              "city": "BRONX",
+              "zip": 10458,
+              "street": "E 187TH ST",
+              "number": 623
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11236,
+              "street": "FLATLANDS AVE",
+              "number": 10204
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11217,
+              "street": "ATLANTIC AVE",
+              "number": 563
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11216,
+              "street": "NOSTRAND AVE",
+              "number": 779
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11235,
+              "street": "NOSTRAND AVE",
+              "number": 3812
+            },
+            {
+              "city": "BRONX",
+              "zip": 10458,
+              "street": "E 188TH ST",
+              "number": 368
+            }
+          ]
+        }
+      }
+    },
+    "business_name": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 943.0,
+          "values": [
+            "173RD STREET LAUNDROMAT INC.",
+            "KHL INC.",
+            "CITY CENTER OPTICAL",
+            "CHUM GROCERY & DISCOUNT INC",
+            "D & L CONTRACTING INC.",
+            "PEDRO ORTIZ",
+            "YUMASHEVA, ELENA",
+            "K&J DELI GROCERY INC.",
+            "SHEEPSHEAD BAY HALAL MARKET CORP.",
+            "TRIANA DELI GROCERY CORP.",
+            "UNLIMITED OPPORTUNITY INC.",
+            "ALL CITY 99¢ STORE, CORP",
+            "BROADWAY AU LAIT INC",
+            "RIVERDEAL OPERATING CORP.",
+            "HEAVENLY SHOES, INC.",
+            "CVS ALBANY, L.L.C",
+            "T-MOBILE NORTHEAST LLC",
+            "TAHEERA MALONEY",
+            "LUCKY MOON NAIL SALON INC",
+            "368 SUNNY DELI CORP."
+          ]
+        }
+      }
+    },
+    "certificate_number": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 0.999,
+          "sampled": 999,
+          "ndistinct": 999.0,
+          "values": [
+            3044168,
+            9327201,
+            5383777,
+            9317019,
+            9303447,
+            5390143,
+            10022099,
+            9316617,
+            50064043,
+            50060469,
+            9279147,
+            5351859,
+            9289322,
+            9306799,
+            9285742,
+            9275942,
+            9277595,
+            9322211,
+            5391640,
+            80021222
+          ]
+        },
+        "String": {
+          "probability": 0.001,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            "P0052815"
+          ]
+        }
+      }
+    },
+    "date": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 306.0,
+          "values": [
+            "Sep 17 2015",
+            "Jan 21 2016",
+            "Sep 24 2015",
+            "May 12 2015",
+            "May 14 2015",
+            "Jan  8 2016",
+            "Jan 13 2016",
+            "May 27 2015",
+            "Dec  6 2015",
+            "Jul 27 2015",
+            "Mar  6 2015",
+            "May  1 2015",
+            "Apr 16 2015",
+            "Oct 14 2015",
+            "Oct  9 2015",
+            "Jun  8 2015",
+            "Jan  6 2015",
+            "Jan 22 2016",
+            "Jan 12 2016",
+            "Apr 15 2015"
+          ]
+        }
+      }
+    },
+    "id": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "52976-2015-ENFO",
+            "5261-2016-ENFO",
+            "54847-2015-ENFO",
+            "25533-2015-ENFO",
+            "27462-2015-ENFO",
+            "3440-2016-ENFO",
+            "6601-UNIT",
+            "31402-2015-ENFO",
+            "69230-2015-ENFO",
+            "42571-2015-ENFO",
+            "11609-2015-ENFO",
+            "23296-2015-ENFO",
+            "21426-2015-ENFO",
+            "59676-2015-ENFO",
+            "59125-2015-ENFO",
+            "34732-2015-ENFO",
+            "1022-2015-ENFO",
+            "4970-2016-ENFO",
+            "5883-2016-ENFO",
+            "3585-2016-ENFO"
+          ]
+        }
+      }
+    },
+    "result": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 13.0,
+          "values": [
+            "Pass",
+            "No Violation Issued",
+            "Violation Issued",
+            "Out of Business",
+            "Fail",
+            "No Evidence of Activity",
+            "Unable to Locate",
+            "Closed",
+            "Warning",
+            "Posting Order Served",
+            "Re-inspection",
+            "ECB Warning Issued",
+            "License Confiscated"
+          ]
+        }
+      }
+    },
+    "sector": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 45.0,
+          "values": [
+            "Laundry - 064",
+            "Secondhand Dealer [General] - 006",
+            "Misc Non-Food Retail - 817",
+            "Cigarette Retail Dealer - 127",
+            "Home Improvement Contractor - 100",
+            "Salons And Barbershop - 841",
+            "Pedicab Business - 130",
+            "Grocery-Retail - 808",
+            "Wearing Apparel - 450",
+            "Electronic Store - 001",
+            "Horse Drawn Cab Driver - 086",
+            "Stoop Line Stand - 033",
+            "Gas Station-Retail - 815",
+            "Sidewalk Cafe - 013",
+            "Restaurant - 818",
+            "Tow Truck Company - 124",
+            "Drug Store Retail - 810",
+            "Supermarket - 819",
+            "Tax Preparers - 891",
+            "Pawnbroker - 080"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,60 @@
+CREATE TABLE listingsandreviews (
+    id BIGSERIAL PRIMARY KEY,
+    access TEXT NOT NULL,
+    accommodates INTEGER NOT NULL,
+    address JSONB NOT NULL,
+    availability JSONB NOT NULL,
+    bathrooms NUMERIC,
+    bed_type TEXT NOT NULL,
+    bedrooms INTEGER,
+    beds INTEGER,
+    calendar_last_scraped TIMESTAMP WITH TIME ZONE NOT NULL,
+    cancellation_policy TEXT NOT NULL,
+    cleaning_fee NUMERIC,
+    description TEXT NOT NULL,
+    extra_people NUMERIC NOT NULL,
+    first_review TIMESTAMP WITH TIME ZONE,
+    guests_included NUMERIC NOT NULL,
+    host JSONB NOT NULL,
+    house_rules TEXT NOT NULL,
+    images JSONB NOT NULL,
+    interaction TEXT NOT NULL,
+    last_review TIMESTAMP WITH TIME ZONE,
+    last_scraped TIMESTAMP WITH TIME ZONE NOT NULL,
+    listing_url TEXT NOT NULL,
+    maximum_nights INTEGER NOT NULL,
+    minimum_nights INTEGER NOT NULL,
+    monthly_price NUMERIC,
+    name TEXT NOT NULL,
+    neighborhood_overview TEXT NOT NULL,
+    notes TEXT NOT NULL,
+    number_of_reviews INTEGER NOT NULL,
+    price NUMERIC NOT NULL,
+    property_type TEXT NOT NULL,
+    review_scores JSONB NOT NULL,
+    reviews_per_month INTEGER,
+    room_type TEXT NOT NULL,
+    security_deposit NUMERIC,
+    space TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    transit TEXT NOT NULL,
+    weekly_price NUMERIC
+);
+
+CREATE TABLE listingsandreviews_amenities (
+    id BIGSERIAL PRIMARY KEY,
+    listingsandreviews_id BIGINT NOT NULL,
+    value TEXT NOT NULL,
+    FOREIGN KEY (listingsandreviews_id) REFERENCES listingsandreviews (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE listingsandreviews_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    listingsandreviews_id BIGINT NOT NULL,
+    comments TEXT,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
+    listing_id INTEGER NOT NULL,
+    reviewer_id INTEGER NOT NULL,
+    reviewer_name TEXT NOT NULL,
+    FOREIGN KEY (listingsandreviews_id) REFERENCES listingsandreviews (id) DEFERRABLE INITIALLY DEFERRED
+);

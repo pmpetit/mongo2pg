@@ -1,0 +1,6 @@
+Documents in collection : 9500
+Documents sampled       : 1000
+Width (top-level / max)  : 42 / 68 (L3)
+Depth (max nesting)     : 6
+Branch (per level)      : L1:42  L2:30  L3:68  L4:23  L5:7  L6:8
+Top-level types         : _id:ObjectId, acquisition:Null, acquisitions:Array, alias_list:Null, blog_feed_url:String, blog_url:String, category_code:String, competitions:Array, created_at:String, crunchbase_url:String, deadpooled_day:Null, deadpooled_month:Null, deadpooled_url:Null, deadpooled_year:Null, description:String, email_address:String, external_links:Array, founded_day:Null, founded_month:Null, founded_year:Number, funding_rounds:Array, homepage_url:String, image:Object, investments:Array, ipo:Null, milestones:Array, name:String, number_of_employees:Null, offices:Array, overview:String, partners:Array, permalink:String, phone_number:String, products:Array, providerships:Array, relationships:Array, screenshots:Array, tag_list:String, total_money_raised:String, twitter_username:String, updated_at:String, video_embeds:Array

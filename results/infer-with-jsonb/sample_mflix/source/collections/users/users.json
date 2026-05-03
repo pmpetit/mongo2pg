@@ -1,0 +1,152 @@
+{
+  "count": 185,
+  "sampled": 185,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 185,
+          "ndistinct": 185.0,
+          "values": [
+            "59b99dd0cfa9a34dcd7885f0",
+            "59b99df7cfa9a34dcd788644",
+            "59b99de2cfa9a34dcd788612",
+            "59b99df4cfa9a34dcd78863d",
+            "59b99dcccfa9a34dcd7885e6",
+            "59b99dbacfa9a34dcd7885c1",
+            "59b99dfecfa9a34dcd788655",
+            "59b99dfacfa9a34dcd78864c",
+            "59b99deecfa9a34dcd788630",
+            "59b99dcdcfa9a34dcd7885e8",
+            "59b99dbdcfa9a34dcd7885c7",
+            "59b99dfacfa9a34dcd78864d",
+            "59b99dcacfa9a34dcd7885e1",
+            "59b99dfdcfa9a34dcd788653",
+            "59b99db4cfa9a34dcd7885b7",
+            "59b99e01cfa9a34dcd788659",
+            "59b99e03cfa9a34dcd788660",
+            "59b99dcbcfa9a34dcd7885e3",
+            "59b99dd8cfa9a34dcd7885f9",
+            "59b99db9cfa9a34dcd7885bf"
+          ]
+        }
+      }
+    },
+    "email": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 185,
+          "ndistinct": 185.0,
+          "values": [
+            "ian_gelder@gameofthron.es",
+            "jerry_cabrera@fakegmail.com",
+            "amy_phillips@fakegmail.com",
+            "victoria_sanders@fakegmail.com",
+            "art_parkinson@gameofthron.es",
+            "maisie_williams@gameofthron.es",
+            "jeffrey_roberts@fakegmail.com",
+            "julia_nichols@fakegmail.com",
+            "john_roman@fakegmail.com",
+            "hafthór_júlíus_björnsson@gameofthron.es",
+            "peter_dinklage@gameofthron.es",
+            "heather_leonard@fakegmail.com",
+            "julian_glover@gameofthron.es",
+            "thomas_green@fakegmail.com",
+            "mark_addy@gameofthron.es",
+            "anthony_cline@fakegmail.com",
+            "john_bishop@fakegmail.com",
+            "kristian_nairn@gameofthron.es",
+            "richard_dormer@gameofthron.es",
+            "kit_harington@gameofthron.es"
+          ]
+        }
+      }
+    },
+    "name": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 185,
+          "ndistinct": 185.0,
+          "values": [
+            "Kevan Lannister",
+            "Jerry Cabrera",
+            "Amy Phillips",
+            "Victoria Sanders",
+            "Rickon Stark",
+            "Arya Stark",
+            "Jeffrey Roberts",
+            "Julia Nichols",
+            "John Roman",
+            "Gregor Clegane",
+            "Tyrion Lannister",
+            "Heather Leonard",
+            "Grand Maester Pycelle",
+            "Thomas Green",
+            "Robert Baratheon",
+            "Anthony Cline",
+            "John Bishop",
+            "Hodor",
+            "Beric Dondarrion",
+            "Jon Snow"
+          ]
+        }
+      }
+    },
+    "password": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 185,
+          "ndistinct": 185.0,
+          "values": [
+            "$2b$12$YB/GLht749jn9jxcwOnw4.ZekNoiSzmS8qS.raqFzZPrNbBJAB20O",
+            "$2b$12$HEimsC0UBidI9AYqPU4Mr.P8UZVO6zsZm2VUFVeuA467fdqp8WJDu",
+            "$2b$12$z.IU36O/1r25xdhI.Gdw1e2dLXSjIgIMNrxginP0/iVIlZcCWiyaK",
+            "$2b$12$/2aikvro4gXgcp01Z8qIj.s2s53lpVcLQRbG/9VNbHa4i3ajo5dc.",
+            "$2b$12$LKBf/wrMe29RwjUCkm6sq.AfuAXshbX6Evys3twd9vaGEsEm6YBqC",
+            "$2b$12$19h3KjeTg3/sPNFHztdb6eGWKrCxIwlVXVSh9POSi5PS9kSlguZEq",
+            "$2b$12$UrTFJ6Xnr043.QRwFVlqgudHC6GPSjejaldJw2/UFsR.dyPwj7cxK",
+            "$2b$12$HZbkbktkRTaV7LiwLxW3D.gDV5lQAy05Wumz981D7gwvSoAc9uJxq",
+            "$2b$12$UW2RqzQlgLcPNLn3gxY16uMhqso5GgeAzYfAQVY2yplhacxZ.daSy",
+            "$2b$12$6NQKRPtpvs.3w2VuLBgQv.nYBplKlGVK3GRvLqw1n06wO424E.zq6",
+            "$2b$12$xtHwQNXYlQzP2REobUDlzuQimjzBlXrTx1GnwP.xkfULeuuUpRxa2",
+            "$2b$12$/mzEsE5kIBX1sWGWlp4GuOilNW.h5ZSIWVgYh.kbt3i0LG3BPY3hy",
+            "$2b$12$R2KQQQMmjcrbm5XgGdkFJ.38e0I7KptV479H2p1UJ2t5TTb3OSww6",
+            "$2b$12$6u6dECDnaDoNehg1gU14KOcGAtmMnKcnsSv7U2W693xk/UTKF.of6",
+            "$2b$12$yGqxLG9LZpXA2xVDhuPnSOZd.VURVkz7wgOLY3pnO0s7u2S1ZO32y",
+            "$2b$12$JWTRRBJgXOv.peG2HDFHeORuwvOaZigFtxhUSDhbpPEFRRuhS19F2",
+            "$2b$12$ifnm6ZFlRQaV4YFe2WcpKuyYfp2eW.42QECH7dkEoD0WeTFpQ8pCe",
+            "$2b$12$hFkSycBpMDENs/sT.5y0feifE5IluHUJmYHqH/lSkcc81/HRzzRSq",
+            "$2b$12$CHeWRV3bBssK0MR1o4FLcOCmFLaPIPTA0KzKI0aWYDnXCKm98MbJy",
+            "$2b$12$fDEu1Ru66tLWAVidMN.b0.929BlfnyqdGuhWMyzfOAf/ATYOyLoY6"
+          ]
+        }
+      }
+    },
+    "preferences": {
+      "probability": 0.005405405405405406,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1,
+          "as_jsonb": true,
+          "object": {},
+          "values": [
+            {}
+          ]
+        },
+        "Undefined": {
+          "probability": 0.9945945945945946,
+          "sampled": 184
+        }
+      }
+    }
+  }
+}

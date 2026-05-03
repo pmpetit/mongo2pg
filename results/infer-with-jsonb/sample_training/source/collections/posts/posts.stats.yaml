@@ -1,0 +1,20 @@
+documents_in_collection: 500
+documents_sampled: 500
+width_top_level: 8
+width_max: 8
+width_max_level: 1
+depth_max: 3
+branch_total: 13
+branch_per_level:
+  L1: 8
+  L2: 2
+  L3: 3
+top_level_types:
+  _id: ObjectId
+  author: String
+  body: String
+  comments: Array
+  date: Date
+  permalink: String
+  tags: Array
+  title: String

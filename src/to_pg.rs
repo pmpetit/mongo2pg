@@ -638,6 +638,18 @@ fn process_fields(
         // ── Single pure Object ────────────────────────────────────────────────
         if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
             let ts = non_null[0].1;
+
+            // --jsonb flag: emit a JSONB column instead of a child table
+            if ts.as_jsonb {
+                table.columns.push(Column {
+                    name: col_name,
+                    pg_type: "JSONB".to_owned(),
+                    nullable,
+                    primary_key: false,
+                });
+                continue;
+            }
+
             let is_hex = ts
                 .object
                 .as_ref()

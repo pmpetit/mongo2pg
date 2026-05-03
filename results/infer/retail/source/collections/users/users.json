@@ -1,0 +1,1231 @@
+{
+  "count": 4,
+  "sampled": 4,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 4,
+          "ndistinct": 4.0,
+          "values": [
+            "65a546ae4a8f64e8f88fb89e",
+            "671ff0081ec726b417352702",
+            "66fe219d625d93a100528224",
+            "671ff2451ec726b417352703"
+          ]
+        }
+      }
+    },
+    "address": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 4,
+          "object": {
+            "city": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 4,
+                  "ndistinct": 4.0,
+                  "values": [
+                    "Mexico City",
+                    "London",
+                    "New York City",
+                    "Parice"
+                  ]
+                }
+              }
+            },
+            "country": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 4,
+                  "ndistinct": 4.0,
+                  "values": [
+                    "Mexico",
+                    "UK",
+                    "USA",
+                    "France"
+                  ]
+                }
+              }
+            },
+            "cp": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 4,
+                  "ndistinct": 4.0,
+                  "values": [
+                    "62240",
+                    "SW1Y 4JU",
+                    "NY 10025",
+                    "75009"
+                  ]
+                }
+              }
+            },
+            "state": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 4,
+                  "ndistinct": 4.0,
+                  "values": [
+                    "Mexico City",
+                    "England",
+                    "New York",
+                    "Île-de-France"
+                  ]
+                }
+              }
+            },
+            "street_and_number": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 4,
+                  "ndistinct": 4.0,
+                  "values": [
+                    "Calle de Londres 247",
+                    "3 St James's Square",
+                    "226 W 108th St",
+                    "45 Rue Laffitte"
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "street_and_number": "Calle de Londres 247",
+              "cp": "62240",
+              "city": "Mexico City",
+              "country": "Mexico",
+              "state": "Mexico City"
+            },
+            {
+              "street_and_number": "3 St James's Square",
+              "cp": "SW1Y 4JU",
+              "country": "UK",
+              "state": "England",
+              "city": "London"
+            },
+            {
+              "street_and_number": "226 W 108th St",
+              "cp": "NY 10025",
+              "country": "USA",
+              "state": "New York",
+              "city": "New York City"
+            },
+            {
+              "street_and_number": "45 Rue Laffitte",
+              "cp": "75009",
+              "country": "France",
+              "state": "Île-de-France",
+              "city": "Parice"
+            }
+          ]
+        }
+      }
+    },
+    "email": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 4,
+          "ndistinct": 4.0,
+          "values": [
+            "frida.klo@gmail.com",
+            "ada.lovelace@gmail.com",
+            "grace.hopper@gmail.com",
+            "claude.monet@gmail.com"
+          ]
+        }
+      }
+    },
+    "lastRecommendations": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 4,
+          "ndistinct": 20.0,
+          "array": {
+            "probability": 20.0,
+            "types": {
+              "Object": {
+                "probability": 1.0,
+                "sampled": 80,
+                "object": {
+                  "brand": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 80,
+                        "ndistinct": 5.0,
+                        "values": [
+                          "Amazon Collection",
+                          "AmazonBasics",
+                          "Amazon Brand - Solimo",
+                          "AmazonCommercial",
+                          "Whole Paws"
+                        ]
+                      }
+                    }
+                  },
+                  "image": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 80,
+                        "ndistinct": 76.0,
+                        "values": [
+                          "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg",
+                          "https://m.media-amazon.com/images/I/71N+6KrQo5L.jpg",
+                          "https://m.media-amazon.com/images/I/61ewDxCP2hL.jpg",
+                          "https://m.media-amazon.com/images/I/61-Xq5MXdZL.jpg",
+                          "https://m.media-amazon.com/images/I/61LKi+Zz10L.jpg",
+                          "https://m.media-amazon.com/images/I/71fkA0jXPUL.jpg",
+                          "https://m.media-amazon.com/images/I/61oUoKCakXL.jpg",
+                          "https://m.media-amazon.com/images/I/71L5iucX4RL.jpg",
+                          "https://m.media-amazon.com/images/I/71LomtWbmyL.jpg",
+                          "https://m.media-amazon.com/images/I/71wONFW5v8L.jpg",
+                          "https://m.media-amazon.com/images/I/71kk0N6dR2L.jpg",
+                          "https://m.media-amazon.com/images/I/81e8zyzLE+L.jpg",
+                          "https://m.media-amazon.com/images/I/61T9X+l-3lL.jpg",
+                          "https://m.media-amazon.com/images/I/71tKUPjL0qL.jpg",
+                          "https://m.media-amazon.com/images/I/71S+OBkPb5L.jpg",
+                          "https://m.media-amazon.com/images/I/71f0katHUoL.jpg",
+                          "https://m.media-amazon.com/images/I/81xO1RewKiL.jpg",
+                          "https://m.media-amazon.com/images/I/71OjYpm+OxL.jpg",
+                          "https://m.media-amazon.com/images/I/717rX+L5mgL.jpg",
+                          "https://m.media-amazon.com/images/I/81NZfrYpkTL.jpg"
+                        ]
+                      }
+                    }
+                  },
+                  "name": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 80,
+                        "ndistinct": 80.0,
+                        "values": [
+                          "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
+                          "Amazon Collection Sterling Silver Birthstone Halo Heart Stud Earrings, Garnet",
+                          "Sterling Silver Rose Gold Plated Polished Bead Post 12mm Stud Earrings",
+                          "Platinum-Plated Sterling Silver and Swarovski Zirconia Solitaire Pendant Necklace, 16 Inch",
+                          "Silver Plated Swarovski Emerald Crystal Birthstone Pendant Necklace (May)",
+                          "Yellow Gold Plated Sterling Silver Stud Earrings set with Round Cut Swarovski Zirconia (4 cttw)",
+                          "10k Gold Made with Swarovski Birthstone November Stud Earrings",
+                          "Amazon Collection Women 14 K Yellow Gold and Sterling Sterling Silver Heart Shape Design Round Shape I-J Diamond & Blue Topaz, White",
+                          "Sterling Silver Genuine or Created Gemstone Butterfly Stud Earrings",
+                          "Sterling Silver Created Emerald Flower Pendant Necklace, 18\"",
+                          "Sterling Silver Wishbone Pendant Necklace, 18\"",
+                          "Sterling Silver Celtic Knot Earrings",
+                          "Sterling Silver Created Ruby 5mm and 3mm Three Stone July Birthstone Leverback Dangle Earrings",
+                          "Sterling Silver Stationed Mini State Oregon Pendant Necklace, 16\"+2\" Extender",
+                          "Women's 14K Plated Sterling Silver Open Circle Cubic Zirconia Drop Earrings, Rose Gold, One Size",
+                          "Sterling Silver White-Topaz and Diamond Accent Open Halo Heart Ring, Size 6",
+                          "Women's Sterling Silver Filigree Hoop Earrings, Rose Gold, One Size",
+                          "Sterling Silver Stationed Mini State Pennsylvania Pendant Necklace, 16\"+2\" Extender",
+                          "Sterling Silver Oval Amethyst Dangle Earrings",
+                          "Sterling Silver Orange Pressed Flower Teardrop Earrings"
+                        ]
+                      }
+                    }
+                  },
+                  "price": {
+                    "probability": 1.0,
+                    "types": {
+                      "Number": {
+                        "probability": 1.0,
+                        "sampled": 80,
+                        "ndistinct": 57.0,
+                        "values": [
+                          116,
+                          77,
+                          53,
+                          49,
+                          47,
+                          107,
+                          82,
+                          118,
+                          24,
+                          56,
+                          80,
+                          106,
+                          83,
+                          11,
+                          41,
+                          58,
+                          88,
+                          98,
+                          29,
+                          63
+                        ]
+                      }
+                    }
+                  },
+                  "productId": {
+                    "probability": 1.0,
+                    "types": {
+                      "ObjectId": {
+                        "probability": 1.0,
+                        "sampled": 80,
+                        "ndistinct": 80.0,
+                        "values": [
+                          "67192b4164d161905fbe7df3",
+                          "67192b4264d161905fbe80fd",
+                          "67192b4464d161905fbe894f",
+                          "67192b4164d161905fbe7b78",
+                          "67192b4164d161905fbe7f09",
+                          "67192b4164d161905fbe7bf0",
+                          "67192b4464d161905fbe87ef",
+                          "67192b4164d161905fbe7e53",
+                          "67192b4364d161905fbe86f7",
+                          "67192b4464d161905fbe87ad",
+                          "67192b4164d161905fbe7edb",
+                          "67192b4364d161905fbe851c",
+                          "67192b4564d161905fbe8bb6",
+                          "67192b4164d161905fbe7d4f",
+                          "67192b3f64d161905fbe7968",
+                          "67192b3f64d161905fbe7b12",
+                          "67192b4464d161905fbe89a3",
+                          "67192b4264d161905fbe8101",
+                          "67192b3f64d161905fbe7ab8",
+                          "67192b4464d161905fbe8a43"
+                        ]
+                      }
+                    }
+                  },
+                  "vectorSearchScore": {
+                    "probability": 1.0,
+                    "types": {
+                      "Number": {
+                        "probability": 1.0,
+                        "sampled": 80,
+                        "ndistinct": 77.0,
+                        "values": [
+                          1.0,
+                          0.9097891449928284,
+                          0.8680694699287415,
+                          0.8678881525993347,
+                          0.8649834394454956,
+                          0.864978551864624,
+                          0.8646925091743469,
+                          0.8644770383834839,
+                          0.861723780632019,
+                          0.861472487449646,
+                          0.8609851598739624,
+                          0.8604781031608582,
+                          0.8596803545951843,
+                          0.8591042160987854,
+                          0.8586016893386841,
+                          0.8585289716720581,
+                          0.8582565188407898,
+                          0.8565768003463745,
+                          0.8537488579750061,
+                          0.8531463146209717
+                        ]
+                      }
+                    }
+                  }
+                },
+                "values": [
+                  {
+                    "productId": "67192b4164d161905fbe7df3",
+                    "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
+                    "brand": "Amazon Collection",
+                    "price": 116,
+                    "image": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg",
+                    "vectorSearchScore": 1.0
+                  },
+                  {
+                    "productId": "67192b4264d161905fbe80fd",
+                    "name": "Amazon Collection Sterling Silver Birthstone Halo Heart Stud Earrings, Garnet",
+                    "brand": "Amazon Collection",
+                    "price": 77,
+                    "image": "https://m.media-amazon.com/images/I/71N+6KrQo5L.jpg",
+                    "vectorSearchScore": 0.9097891449928284
+                  },
+                  {
+                    "productId": "67192b4464d161905fbe894f",
+                    "name": "Sterling Silver Rose Gold Plated Polished Bead Post 12mm Stud Earrings",
+                    "brand": "Amazon Collection",
+                    "price": 53,
+                    "image": "https://m.media-amazon.com/images/I/61ewDxCP2hL.jpg",
+                    "vectorSearchScore": 0.8680694699287415
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7b78",
+                    "name": "Platinum-Plated Sterling Silver and Swarovski Zirconia Solitaire Pendant Necklace, 16 Inch",
+                    "brand": "Amazon Collection",
+                    "price": 49,
+                    "image": "https://m.media-amazon.com/images/I/61-Xq5MXdZL.jpg",
+                    "vectorSearchScore": 0.8678881525993347
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7f09",
+                    "name": "Silver Plated Swarovski Emerald Crystal Birthstone Pendant Necklace (May)",
+                    "brand": "Amazon Collection",
+                    "price": 47,
+                    "image": "https://m.media-amazon.com/images/I/61LKi+Zz10L.jpg",
+                    "vectorSearchScore": 0.8649834394454956
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7bf0",
+                    "name": "Yellow Gold Plated Sterling Silver Stud Earrings set with Round Cut Swarovski Zirconia (4 cttw)",
+                    "brand": "Amazon Collection",
+                    "price": 107,
+                    "image": "https://m.media-amazon.com/images/I/71fkA0jXPUL.jpg",
+                    "vectorSearchScore": 0.864978551864624
+                  },
+                  {
+                    "productId": "67192b4464d161905fbe87ef",
+                    "name": "10k Gold Made with Swarovski Birthstone November Stud Earrings",
+                    "brand": "Amazon Collection",
+                    "price": 82,
+                    "image": "https://m.media-amazon.com/images/I/61oUoKCakXL.jpg",
+                    "vectorSearchScore": 0.8646925091743469
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7e53",
+                    "name": "Amazon Collection Women 14 K Yellow Gold and Sterling Sterling Silver Heart Shape Design Round Shape I-J Diamond & Blue Topaz, White",
+                    "brand": "Amazon Collection",
+                    "price": 118,
+                    "image": "https://m.media-amazon.com/images/I/71L5iucX4RL.jpg",
+                    "vectorSearchScore": 0.8644770383834839
+                  },
+                  {
+                    "productId": "67192b4364d161905fbe86f7",
+                    "name": "Sterling Silver Genuine or Created Gemstone Butterfly Stud Earrings",
+                    "brand": "Amazon Collection",
+                    "price": 24,
+                    "image": "https://m.media-amazon.com/images/I/71LomtWbmyL.jpg",
+                    "vectorSearchScore": 0.861723780632019
+                  },
+                  {
+                    "productId": "67192b4464d161905fbe87ad",
+                    "name": "Sterling Silver Created Emerald Flower Pendant Necklace, 18\"",
+                    "brand": "Amazon Collection",
+                    "price": 56,
+                    "image": "https://m.media-amazon.com/images/I/71wONFW5v8L.jpg",
+                    "vectorSearchScore": 0.861472487449646
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7edb",
+                    "name": "Sterling Silver Wishbone Pendant Necklace, 18\"",
+                    "brand": "Amazon Collection",
+                    "price": 80,
+                    "image": "https://m.media-amazon.com/images/I/71kk0N6dR2L.jpg",
+                    "vectorSearchScore": 0.8609851598739624
+                  },
+                  {
+                    "productId": "67192b4364d161905fbe851c",
+                    "name": "Sterling Silver Celtic Knot Earrings",
+                    "brand": "Amazon Collection",
+                    "price": 106,
+                    "image": "https://m.media-amazon.com/images/I/81e8zyzLE+L.jpg",
+                    "vectorSearchScore": 0.8604781031608582
+                  },
+                  {
+                    "productId": "67192b4564d161905fbe8bb6",
+                    "name": "Sterling Silver Created Ruby 5mm and 3mm Three Stone July Birthstone Leverback Dangle Earrings",
+                    "brand": "Amazon Collection",
+                    "price": 83,
+                    "image": "https://m.media-amazon.com/images/I/61T9X+l-3lL.jpg",
+                    "vectorSearchScore": 0.8596803545951843
+                  },
+                  {
+                    "productId": "67192b4164d161905fbe7d4f",
+                    "name": "Sterling Silver Stationed Mini State Oregon Pendant Necklace, 16\"+2\" Extender",
+                    "brand": "Amazon Collection",
+                    "price": 11,
+                    "image": "https://m.media-amazon.com/images/I/71tKUPjL0qL.jpg",
+                    "vectorSearchScore": 0.8591042160987854
+                  },
+                  {
+                    "productId": "67192b3f64d161905fbe7968",
+                    "name": "Women's 14K Plated Sterling Silver Open Circle Cubic Zirconia Drop Earrings, Rose Gold, One Size",
+                    "brand": "Amazon Collection",
+                    "price": 83,
+                    "image": "https://m.media-amazon.com/images/I/71S+OBkPb5L.jpg",
+                    "vectorSearchScore": 0.8586016893386841
+                  },
+                  {
+                    "productId": "67192b3f64d161905fbe7b12",
+                    "name": "Sterling Silver White-Topaz and Diamond Accent Open Halo Heart Ring, Size 6",
+                    "brand": "Amazon Collection",
+                    "price": 41,
+                    "image": "https://m.media-amazon.com/images/I/71f0katHUoL.jpg",
+                    "vectorSearchScore": 0.8585289716720581
+                  },
+                  {
+                    "productId": "67192b4464d161905fbe89a3",
+                    "name": "Women's Sterling Silver Filigree Hoop Earrings, Rose Gold, One Size",
+                    "brand": "Amazon Collection",
+                    "price": 58,
+                    "image": "https://m.media-amazon.com/images/I/81xO1RewKiL.jpg",
+                    "vectorSearchScore": 0.8582565188407898
+                  },
+                  {
+                    "productId": "67192b4264d161905fbe8101",
+                    "name": "Sterling Silver Stationed Mini State Pennsylvania Pendant Necklace, 16\"+2\" Extender",
+                    "brand": "Amazon Collection",
+                    "price": 88,
+                    "image": "https://m.media-amazon.com/images/I/71OjYpm+OxL.jpg",
+                    "vectorSearchScore": 0.8565768003463745
+                  },
+                  {
+                    "productId": "67192b3f64d161905fbe7ab8",
+                    "name": "Sterling Silver Oval Amethyst Dangle Earrings",
+                    "brand": "Amazon Collection",
+                    "price": 98,
+                    "image": "https://m.media-amazon.com/images/I/717rX+L5mgL.jpg",
+                    "vectorSearchScore": 0.8537488579750061
+                  },
+                  {
+                    "productId": "67192b4464d161905fbe8a43",
+                    "name": "Sterling Silver Orange Pressed Flower Teardrop Earrings",
+                    "brand": "Amazon Collection",
+                    "price": 29,
+                    "image": "https://m.media-amazon.com/images/I/81NZfrYpkTL.jpg",
+                    "vectorSearchScore": 0.8531463146209717
+                  }
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              {
+                "productId": "67192b4164d161905fbe7df3",
+                "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
+                "brand": "Amazon Collection",
+                "price": 116,
+                "image": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg",
+                "vectorSearchScore": 1.0
+              },
+              {
+                "productId": "67192b4264d161905fbe80fd",
+                "name": "Amazon Collection Sterling Silver Birthstone Halo Heart Stud Earrings, Garnet",
+                "brand": "Amazon Collection",
+                "price": 77,
+                "image": "https://m.media-amazon.com/images/I/71N+6KrQo5L.jpg",
+                "vectorSearchScore": 0.9097891449928284
+              },
+              {
+                "productId": "67192b4464d161905fbe894f",
+                "name": "Sterling Silver Rose Gold Plated Polished Bead Post 12mm Stud Earrings",
+                "brand": "Amazon Collection",
+                "price": 53,
+                "image": "https://m.media-amazon.com/images/I/61ewDxCP2hL.jpg",
+                "vectorSearchScore": 0.8680694699287415
+              },
+              {
+                "productId": "67192b4164d161905fbe7b78",
+                "name": "Platinum-Plated Sterling Silver and Swarovski Zirconia Solitaire Pendant Necklace, 16 Inch",
+                "brand": "Amazon Collection",
+                "price": 49,
+                "image": "https://m.media-amazon.com/images/I/61-Xq5MXdZL.jpg",
+                "vectorSearchScore": 0.8678881525993347
+              },
+              {
+                "productId": "67192b4164d161905fbe7f09",
+                "name": "Silver Plated Swarovski Emerald Crystal Birthstone Pendant Necklace (May)",
+                "brand": "Amazon Collection",
+                "price": 47,
+                "image": "https://m.media-amazon.com/images/I/61LKi+Zz10L.jpg",
+                "vectorSearchScore": 0.8649834394454956
+              },
+              {
+                "productId": "67192b4164d161905fbe7bf0",
+                "name": "Yellow Gold Plated Sterling Silver Stud Earrings set with Round Cut Swarovski Zirconia (4 cttw)",
+                "brand": "Amazon Collection",
+                "price": 107,
+                "image": "https://m.media-amazon.com/images/I/71fkA0jXPUL.jpg",
+                "vectorSearchScore": 0.864978551864624
+              },
+              {
+                "productId": "67192b4464d161905fbe87ef",
+                "name": "10k Gold Made with Swarovski Birthstone November Stud Earrings",
+                "brand": "Amazon Collection",
+                "price": 82,
+                "image": "https://m.media-amazon.com/images/I/61oUoKCakXL.jpg",
+                "vectorSearchScore": 0.8646925091743469
+              },
+              {
+                "productId": "67192b4164d161905fbe7e53",
+                "name": "Amazon Collection Women 14 K Yellow Gold and Sterling Sterling Silver Heart Shape Design Round Shape I-J Diamond & Blue Topaz, White",
+                "brand": "Amazon Collection",
+                "price": 118,
+                "image": "https://m.media-amazon.com/images/I/71L5iucX4RL.jpg",
+                "vectorSearchScore": 0.8644770383834839
+              },
+              {
+                "productId": "67192b4364d161905fbe86f7",
+                "name": "Sterling Silver Genuine or Created Gemstone Butterfly Stud Earrings",
+                "brand": "Amazon Collection",
+                "price": 24,
+                "image": "https://m.media-amazon.com/images/I/71LomtWbmyL.jpg",
+                "vectorSearchScore": 0.861723780632019
+              },
+              {
+                "productId": "67192b4464d161905fbe87ad",
+                "name": "Sterling Silver Created Emerald Flower Pendant Necklace, 18\"",
+                "brand": "Amazon Collection",
+                "price": 56,
+                "image": "https://m.media-amazon.com/images/I/71wONFW5v8L.jpg",
+                "vectorSearchScore": 0.861472487449646
+              },
+              {
+                "productId": "67192b4164d161905fbe7edb",
+                "name": "Sterling Silver Wishbone Pendant Necklace, 18\"",
+                "brand": "Amazon Collection",
+                "price": 80,
+                "image": "https://m.media-amazon.com/images/I/71kk0N6dR2L.jpg",
+                "vectorSearchScore": 0.8609851598739624
+              },
+              {
+                "productId": "67192b4364d161905fbe851c",
+                "name": "Sterling Silver Celtic Knot Earrings",
+                "brand": "Amazon Collection",
+                "price": 106,
+                "image": "https://m.media-amazon.com/images/I/81e8zyzLE+L.jpg",
+                "vectorSearchScore": 0.8604781031608582
+              },
+              {
+                "productId": "67192b4564d161905fbe8bb6",
+                "name": "Sterling Silver Created Ruby 5mm and 3mm Three Stone July Birthstone Leverback Dangle Earrings",
+                "brand": "Amazon Collection",
+                "price": 83,
+                "image": "https://m.media-amazon.com/images/I/61T9X+l-3lL.jpg",
+                "vectorSearchScore": 0.8596803545951843
+              },
+              {
+                "productId": "67192b4164d161905fbe7d4f",
+                "name": "Sterling Silver Stationed Mini State Oregon Pendant Necklace, 16\"+2\" Extender",
+                "brand": "Amazon Collection",
+                "price": 11,
+                "image": "https://m.media-amazon.com/images/I/71tKUPjL0qL.jpg",
+                "vectorSearchScore": 0.8591042160987854
+              },
+              {
+                "productId": "67192b3f64d161905fbe7968",
+                "name": "Women's 14K Plated Sterling Silver Open Circle Cubic Zirconia Drop Earrings, Rose Gold, One Size",
+                "brand": "Amazon Collection",
+                "price": 83,
+                "image": "https://m.media-amazon.com/images/I/71S+OBkPb5L.jpg",
+                "vectorSearchScore": 0.8586016893386841
+              },
+              {
+                "productId": "67192b3f64d161905fbe7b12",
+                "name": "Sterling Silver White-Topaz and Diamond Accent Open Halo Heart Ring, Size 6",
+                "brand": "Amazon Collection",
+                "price": 41,
+                "image": "https://m.media-amazon.com/images/I/71f0katHUoL.jpg",
+                "vectorSearchScore": 0.8585289716720581
+              },
+              {
+                "productId": "67192b4464d161905fbe89a3",
+                "name": "Women's Sterling Silver Filigree Hoop Earrings, Rose Gold, One Size",
+                "brand": "Amazon Collection",
+                "price": 58,
+                "image": "https://m.media-amazon.com/images/I/81xO1RewKiL.jpg",
+                "vectorSearchScore": 0.8582565188407898
+              },
+              {
+                "productId": "67192b4264d161905fbe8101",
+                "name": "Sterling Silver Stationed Mini State Pennsylvania Pendant Necklace, 16\"+2\" Extender",
+                "brand": "Amazon Collection",
+                "price": 88,
+                "image": "https://m.media-amazon.com/images/I/71OjYpm+OxL.jpg",
+                "vectorSearchScore": 0.8565768003463745
+              },
+              {
+                "productId": "67192b3f64d161905fbe7ab8",
+                "name": "Sterling Silver Oval Amethyst Dangle Earrings",
+                "brand": "Amazon Collection",
+                "price": 98,
+                "image": "https://m.media-amazon.com/images/I/717rX+L5mgL.jpg",
+                "vectorSearchScore": 0.8537488579750061
+              },
+              {
+                "productId": "67192b4464d161905fbe8a43",
+                "name": "Sterling Silver Orange Pressed Flower Teardrop Earrings",
+                "brand": "Amazon Collection",
+                "price": 29,
+                "image": "https://m.media-amazon.com/images/I/81NZfrYpkTL.jpg",
+                "vectorSearchScore": 0.8531463146209717
+              }
+            ],
+            [
+              {
+                "productId": "67192b3f64d161905fbe77a5",
+                "name": "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
+                "brand": "AmazonBasics",
+                "price": 63,
+                "image": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg",
+                "vectorSearchScore": 1.0
+              },
+              {
+                "productId": "67192b4164d161905fbe7e3a",
+                "name": "AmazonBasics Velvet Clothing Hangers - 50-Pack, Black - AQ-W0001",
+                "brand": "AmazonBasics",
+                "price": 22,
+                "image": "https://m.media-amazon.com/images/I/61Ju3ZUPuDL.jpg",
+                "vectorSearchScore": 0.9369443655014038
+              },
+              {
+                "productId": "67192b4264d161905fbe831a",
+                "name": "AmazonBasics Velvet Clothing Hangers - 50-Pack, Black (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 32,
+                "image": "https://m.media-amazon.com/images/I/819Lhgr-sgL.jpg",
+                "vectorSearchScore": 0.9343161582946777
+              },
+              {
+                "productId": "67192b4464d161905fbe899a",
+                "name": "Amazon Basics Wooden Pants & Skirts Hangers with Clips, 10-Pack, Cherry",
+                "brand": "AmazonBasics",
+                "price": 83,
+                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
+                "vectorSearchScore": 0.9022113084793091
+              },
+              {
+                "productId": "67192b4164d161905fbe7eaf",
+                "name": "Amazon Basics Wooden Pants & Skirts Hangers with Clips, 10-Pack, Natural",
+                "brand": "AmazonBasics",
+                "price": 100,
+                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
+                "vectorSearchScore": 0.900714099407196
+              },
+              {
+                "productId": "67192b4364d161905fbe8464",
+                "name": "AmazonBasics Trouser/Slack Hangers Easy Slide Organizers - 20-Pack (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 41,
+                "image": "https://m.media-amazon.com/images/I/71T5rBwu0iL.jpg",
+                "vectorSearchScore": 0.893616795539856
+              },
+              {
+                "productId": "67192b4264d161905fbe8019",
+                "name": "AmazonBasics Metal Pants and Skirt Hangers with Clips - 20-Pack (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 92,
+                "image": "https://m.media-amazon.com/images/I/61MsDrGhD9L.jpg",
+                "vectorSearchScore": 0.8907135725021362
+              },
+              {
+                "productId": "67192b4364d161905fbe849f",
+                "name": "Amazon Brand - Solimo Printed Fabric Hanging Closet Organiser, 3 Shelves, Pink",
+                "brand": "Amazon Brand - Solimo",
+                "price": 51,
+                "image": "https://m.media-amazon.com/images/I/510EUPNqR7L.jpg",
+                "vectorSearchScore": 0.8638238906860352
+              },
+              {
+                "productId": "67192b4264d161905fbe82b2",
+                "name": "AmazonBasics Wall Mounted Coat Rack - 8 Standard Hook",
+                "brand": "AmazonBasics",
+                "price": 57,
+                "image": "https://m.media-amazon.com/images/I/6189CrsyqlL.jpg",
+                "vectorSearchScore": 0.8630868196487427
+              },
+              {
+                "productId": "67192b4364d161905fbe836b",
+                "name": "AmazonBasics Standing Metal Coat and Hat Rack - Black",
+                "brand": "AmazonBasics",
+                "price": 77,
+                "image": "https://m.media-amazon.com/images/I/71xPjHpUQAL.jpg",
+                "vectorSearchScore": 0.8521050214767456
+              },
+              {
+                "productId": "67192b4564d161905fbe8b60",
+                "name": "AmazonBasics Over-the-Door Double Hooks, White",
+                "brand": "AmazonBasics",
+                "price": 15,
+                "image": "https://m.media-amazon.com/images/I/61TupbaxyOL.jpg",
+                "vectorSearchScore": 0.8509092330932617
+              },
+              {
+                "productId": "67192b4364d161905fbe853e",
+                "name": "(Renewed) Amazon Brand - Solimo U Steel Drying Rack",
+                "brand": "Amazon Brand - Solimo",
+                "price": 86,
+                "image": "https://m.media-amazon.com/images/I/51KDO7jfWwL.jpg",
+                "vectorSearchScore": 0.8406727313995361
+              },
+              {
+                "productId": "67192b4164d161905fbe7df0",
+                "name": "AmazonBasics Triple Laundry Basket Hamper, Black",
+                "brand": "AmazonBasics",
+                "price": 67,
+                "image": "https://m.media-amazon.com/images/I/81dO0HfwilL.jpg",
+                "vectorSearchScore": 0.8402054309844971
+              },
+              {
+                "productId": "67192b4564d161905fbe8b4a",
+                "name": "AmazonBasics Single Laundry Basket Hamper, Black",
+                "brand": "AmazonBasics",
+                "price": 56,
+                "image": "https://m.media-amazon.com/images/I/81OAICPHunL.jpg",
+                "vectorSearchScore": 0.8393269181251526
+              },
+              {
+                "productId": "67192b4264d161905fbe800b",
+                "name": "Amazon Brand - Solimo Printed Fabric Shirt Stacker Organiser, Set of 1, Red",
+                "brand": "Amazon Brand - Solimo",
+                "price": 45,
+                "image": "https://m.media-amazon.com/images/I/61mtCcP5VWL.jpg",
+                "vectorSearchScore": 0.8391951322555542
+              },
+              {
+                "productId": "67192b3f64d161905fbe7914",
+                "name": "AmazonBasics Decorative Curtain/Drapery Holdback, Set of 2, Black, 4-Pack",
+                "brand": "AmazonBasics",
+                "price": 17,
+                "image": "https://m.media-amazon.com/images/I/61MhcLwuw6L.jpg",
+                "vectorSearchScore": 0.8373140096664429
+              },
+              {
+                "productId": "67192b4264d161905fbe821b",
+                "name": "AmazonBasics Collapsible Fabric Storage Cubes with Oval Grommets - 6-Pack, Light Grey",
+                "brand": "AmazonBasics",
+                "price": 32,
+                "image": "https://m.media-amazon.com/images/I/81i10+pt9wL.jpg",
+                "vectorSearchScore": 0.8324379920959473
+              },
+              {
+                "productId": "67192b4164d161905fbe7c7a",
+                "name": "Amazon Brand - Solimo Fabric Shirt Stacker Organiser, Set of 3, Multicolor",
+                "brand": "Amazon Brand - Solimo",
+                "price": 86,
+                "image": "https://m.media-amazon.com/images/I/61IYn8rH4XL.jpg",
+                "vectorSearchScore": 0.8316413164138794
+              },
+              {
+                "productId": "67192b4264d161905fbe8267",
+                "name": "AmazonBasics Wall Wire Grid Panel, Rose Gold (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 111,
+                "image": "https://m.media-amazon.com/images/I/81M1-WMrcNL.jpg",
+                "vectorSearchScore": 0.8310959339141846
+              },
+              {
+                "productId": "67192b3f64d161905fbe7a00",
+                "name": "AmazonBasics Ironing Board for Shirt Sleeves (Grey)",
+                "brand": "AmazonBasics",
+                "price": 42,
+                "image": "https://m.media-amazon.com/images/I/71djC4F-4gL.jpg",
+                "vectorSearchScore": 0.8299871683120728
+              }
+            ],
+            [
+              {
+                "productId": "67192b3f64d161905fbe7a5a",
+                "name": "AmazonBasics Combo Plastic Cutlery",
+                "brand": "AmazonBasics",
+                "price": 118,
+                "image": "https://m.media-amazon.com/images/I/61Drh-HitgL.jpg",
+                "vectorSearchScore": 1.0
+              },
+              {
+                "productId": "67192b4164d161905fbe7e64",
+                "name": "AmazonBasics 45-Piece Stainless Steel Satin Matte Flatware Set, Service for 8",
+                "brand": "AmazonBasics",
+                "price": 86,
+                "image": "https://m.media-amazon.com/images/I/71C-47og3IL.jpg",
+                "vectorSearchScore": 0.8933537006378174
+              },
+              {
+                "productId": "67192b3f64d161905fbe7a84",
+                "name": "AmazonBasics Grill Tray with Tool Set,Spatula,Tongs,Basting brush",
+                "brand": "AmazonBasics",
+                "price": 10,
+                "image": "https://m.media-amazon.com/images/I/81rCRzd7OKL.jpg",
+                "vectorSearchScore": 0.8773636817932129
+              },
+              {
+                "productId": "67192b3f64d161905fbe79ed",
+                "name": "AmazonBasics Tools 4-Piece Pliers Set",
+                "brand": "AmazonBasics",
+                "price": 74,
+                "image": "https://m.media-amazon.com/images/I/71UfKIVpQbL.jpg",
+                "vectorSearchScore": 0.8745524287223816
+              },
+              {
+                "productId": "67192b3f64d161905fbe79d9",
+                "name": "AmazonBasics Bathroom Accessory Sets",
+                "brand": "AmazonBasics",
+                "price": 111,
+                "image": "https://m.media-amazon.com/images/I/61w4fs2ESyL.jpg",
+                "vectorSearchScore": 0.8700612783432007
+              },
+              {
+                "productId": "67192b4464d161905fbe898a",
+                "name": "Amazon Brand - Solimo 24 Piece Stainless Steel Cutlery Set, Vintage (Contains: 6 Table Spoons, 6 Tea Spoons, 6 Forks, 6 Soup Spoons), Silver",
+                "brand": "Amazon Brand - Solimo",
+                "price": 93,
+                "image": "https://m.media-amazon.com/images/I/810lMEAN3TL.jpg",
+                "vectorSearchScore": 0.8669348955154419
+              },
+              {
+                "productId": "67192b4464d161905fbe8845",
+                "name": "(Renewed) AmazonBasics 18-Piece Dinnerware Set - Soft Lines",
+                "brand": "AmazonBasics",
+                "price": 67,
+                "image": "https://m.media-amazon.com/images/I/51bZ4xREiBL.jpg",
+                "vectorSearchScore": 0.8667609691619873
+              },
+              {
+                "productId": "67192b3f64d161905fbe7b15",
+                "name": "AmazonCommercial Stainless Steel Cooking Utensils, Set of 29 Utensils",
+                "brand": "AmazonCommercial",
+                "price": 72,
+                "image": "https://m.media-amazon.com/images/I/810INGS6m0L.jpg",
+                "vectorSearchScore": 0.8617862462997437
+              },
+              {
+                "productId": "67192b4264d161905fbe804e",
+                "name": "AmazonBasics - 8 Piece Non-Stick Cookware Set (without Induction Base)",
+                "brand": "AmazonBasics",
+                "price": 33,
+                "image": "https://m.media-amazon.com/images/I/81-sJRhEapL.jpg",
+                "vectorSearchScore": 0.8579095602035522
+              },
+              {
+                "productId": "67192b4164d161905fbe7c07",
+                "name": "AmazonBasics 2-Piece Peeler Set, Soft Grip Handle, Grey and Green (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 91,
+                "image": "https://m.media-amazon.com/images/I/71kXj0gj9BL.jpg",
+                "vectorSearchScore": 0.8575308322906494
+              },
+              {
+                "productId": "67192b4264d161905fbe82ae",
+                "name": "AmazonBasics Comfort Grip Utility Knife - Retractable 3-Position Locking Blade with 4 Replacement Blades",
+                "brand": "AmazonBasics",
+                "price": 84,
+                "image": "https://m.media-amazon.com/images/I/71FSaBzcBUL.jpg",
+                "vectorSearchScore": 0.8571140766143799
+              },
+              {
+                "productId": "67192b4264d161905fbe803b",
+                "name": "AmazonBasics 12-Piece Melamine Dinnerware Set - Service for 4, Yellow Crackle Glaze",
+                "brand": "AmazonBasics",
+                "price": 43,
+                "image": "https://m.media-amazon.com/images/I/91uQDR-+s8L.jpg",
+                "vectorSearchScore": 0.8554350137710571
+              },
+              {
+                "productId": "67192b4264d161905fbe7fd1",
+                "name": "AmazonBasics Toilet Bowl Brush and Holder",
+                "brand": "AmazonBasics",
+                "price": 28,
+                "image": "https://m.media-amazon.com/images/I/5131duvzyJL.jpg",
+                "vectorSearchScore": 0.8486881256103516
+              },
+              {
+                "productId": "67192b4564d161905fbe8ba8",
+                "name": "AmazonBasics Stainless Steel Pizza Wheel and Cutter with Cover, Black Soft Grip Handle (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 28,
+                "image": "https://m.media-amazon.com/images/I/71Ss1jEI0cL.jpg",
+                "vectorSearchScore": 0.847941517829895
+              },
+              {
+                "productId": "67192b3f64d161905fbe7b61",
+                "name": "AmazonBasics 2\" Stiff Nylon Handle Putty Knife",
+                "brand": "AmazonBasics",
+                "price": 18,
+                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
+                "vectorSearchScore": 0.8465219736099243
+              },
+              {
+                "productId": "67192b3f64d161905fbe78e0",
+                "name": "AmazonBasics Pliers Set with Durable Nylon Case - 5-Piece (8-Inch Diagonal, 8-Inch Combination, 8-Inch Long Nose, 8-Inch Groove Joint, 8-Inch Slip-Joint) (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 108,
+                "image": "https://m.media-amazon.com/images/I/71r-Yywi2rL.jpg",
+                "vectorSearchScore": 0.844762921333313
+              },
+              {
+                "productId": "67192b4164d161905fbe7c9f",
+                "name": "AmazonBasics 2-Tier Sliding Basket Organizer",
+                "brand": "AmazonBasics",
+                "price": 13,
+                "image": "https://m.media-amazon.com/images/I/91pjCjZJu7L.jpg",
+                "vectorSearchScore": 0.8443998098373413
+              },
+              {
+                "productId": "67192b4564d161905fbe8b5a",
+                "name": "AmazonBasics Locking Glass Food Storage Container",
+                "brand": "AmazonBasics",
+                "price": 62,
+                "image": "https://m.media-amazon.com/images/I/81SYWl+N1qL.jpg",
+                "vectorSearchScore": 0.8440160751342773
+              },
+              {
+                "productId": "67192b3f64d161905fbe7964",
+                "name": "AmazonBasics Groove Joint Pliers Set - 3-Piece (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 28,
+                "image": "https://m.media-amazon.com/images/I/71lgQURhrbL.jpg",
+                "vectorSearchScore": 0.8423045873641968
+              },
+              {
+                "productId": "67192b4364d161905fbe8491",
+                "name": "AmazonBasics 1-1/4\" Chisel, Nylon Handle Putty Knife",
+                "brand": "AmazonBasics",
+                "price": 96,
+                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
+                "vectorSearchScore": 0.8421430587768555
+              }
+            ],
+            [
+              {
+                "productId": "67192b3f64d161905fbe77e9",
+                "name": "AmazonBasics - Pet Play Station Feeder",
+                "brand": "AmazonBasics",
+                "price": 50,
+                "image": "https://m.media-amazon.com/images/I/71SGpLJ+PiL.jpg",
+                "vectorSearchScore": 1.0
+              },
+              {
+                "productId": "67192b4364d161905fbe84ee",
+                "name": "AmazonBasics Pet House, Large",
+                "brand": "AmazonBasics",
+                "price": 30,
+                "image": "https://m.media-amazon.com/images/I/7100j+VbybL.jpg",
+                "vectorSearchScore": 0.8805115222930908
+              },
+              {
+                "productId": "67192b4464d161905fbe8969",
+                "name": "AmazonBasics Foldable Metal Pet Exercise and Playpen, 42\"",
+                "brand": "AmazonBasics",
+                "price": 49,
+                "image": "https://m.media-amazon.com/images/I/91b9m11p66L.jpg",
+                "vectorSearchScore": 0.8722970485687256
+              },
+              {
+                "productId": "67192b4264d161905fbe810d",
+                "name": "AmazonBasics Cuddler Pet Bed - Medium, Floral Print",
+                "brand": "AmazonBasics",
+                "price": 72,
+                "image": "https://m.media-amazon.com/images/I/61k+2yyQf-L.jpg",
+                "vectorSearchScore": 0.856462836265564
+              },
+              {
+                "productId": "67192b4364d161905fbe83be",
+                "name": "AmazonBasics Round Self Warming Pet Bed for Cat or Dog - 24 x 8 Inches",
+                "brand": "AmazonBasics",
+                "price": 39,
+                "image": "https://m.media-amazon.com/images/I/61ZQCeXeWbL.jpg",
+                "vectorSearchScore": 0.8559826016426086
+              },
+              {
+                "productId": "67192b4464d161905fbe8916",
+                "name": "AmazonBasics Water-Resistant Pet Bed - Oval, Royal Blue, 18.9 Inch",
+                "brand": "AmazonBasics",
+                "price": 90,
+                "image": "https://m.media-amazon.com/images/I/61UVrvXNYdL.jpg",
+                "vectorSearchScore": 0.8553478717803955
+              },
+              {
+                "productId": "67192b4164d161905fbe7ddb",
+                "name": "AmazonBasics Water-Resistant Pet Bed - Rectangular, Teal, 25.6 Inch",
+                "brand": "AmazonBasics",
+                "price": 24,
+                "image": "https://m.media-amazon.com/images/I/61MvMxT+yTL.jpg",
+                "vectorSearchScore": 0.8489893078804016
+              },
+              {
+                "productId": "67192b4364d161905fbe8648",
+                "name": "AmazonBasics Pet Carrier Kennel With Metal Wire Ventilation,23-Inch",
+                "brand": "AmazonBasics",
+                "price": 76,
+                "image": "https://m.media-amazon.com/images/I/813D6acTpRL.jpg",
+                "vectorSearchScore": 0.8464508652687073
+              },
+              {
+                "productId": "67192b4464d161905fbe8af1",
+                "name": "AmazonBasics Single-Door & Double-Door Folding Metal Dog or Pet Crate Kennel with Tray, 30 x 19 x 21 Inches",
+                "brand": "AmazonBasics",
+                "price": 60,
+                "image": "https://m.media-amazon.com/images/I/91z3DklrOdL.jpg",
+                "vectorSearchScore": 0.8460581302642822
+              },
+              {
+                "productId": "67192b4164d161905fbe7cd0",
+                "name": "AmazonBasics 8-Panel Plastic Pet Pen Fence Enclosure With Gate - 59 x 58 x 28 Inches, Grey",
+                "brand": "AmazonBasics",
+                "price": 34,
+                "image": "https://m.media-amazon.com/images/I/81j0-ItVJ7L.jpg",
+                "vectorSearchScore": 0.8447016477584839
+              },
+              {
+                "productId": "67192b4364d161905fbe85c0",
+                "name": "AmazonBasics Memory Foam Dog Bed with Removable Washable Cover, 16-Inch x 22-Inch",
+                "brand": "AmazonBasics",
+                "price": 69,
+                "image": "https://m.media-amazon.com/images/I/81YXRsJQvYL.jpg",
+                "vectorSearchScore": 0.8399190306663513
+              },
+              {
+                "productId": "67192b4364d161905fbe83f7",
+                "name": "AmazonBasics Cat Tree with Cave - Large, Beige (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 100,
+                "image": "https://m.media-amazon.com/images/I/81gcEh7n6kL.jpg",
+                "vectorSearchScore": 0.8388804197311401
+              },
+              {
+                "productId": "67192b4164d161905fbe7f2c",
+                "name": "AmazonBasics Cat Scratcher Lounger - Oval, Large",
+                "brand": "AmazonBasics",
+                "price": 91,
+                "image": "https://m.media-amazon.com/images/I/61ZpOn3vM9L.jpg",
+                "vectorSearchScore": 0.8341736793518066
+              },
+              {
+                "productId": "67192b4364d161905fbe8645",
+                "name": "AmazonBasics Soft-Sided Pet Travel Carrier - Grey, Medium",
+                "brand": "AmazonBasics",
+                "price": 98,
+                "image": "https://m.media-amazon.com/images/I/A1K+v-ZI2hL.jpg",
+                "vectorSearchScore": 0.8333920240402222
+              },
+              {
+                "productId": "67192b4264d161905fbe82c8",
+                "name": "AmazonBasics Soft-Sided Pet Travel Carrier - Grey, Large",
+                "brand": "AmazonBasics",
+                "price": 34,
+                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
+                "vectorSearchScore": 0.8312549591064453
+              },
+              {
+                "productId": "67192b4264d161905fbe8230",
+                "name": "AmazonBasics Cat Triple Scratching Posts (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 110,
+                "image": "https://m.media-amazon.com/images/I/81GUeFHKIAL.jpg",
+                "vectorSearchScore": 0.8261364698410034
+              },
+              {
+                "productId": "67192b4364d161905fbe85b9",
+                "name": "AmazonBasics Small Elevated Cooling Pet Dog Cot Bed - 36 x 22 x 7.5 Inches, Green",
+                "brand": "AmazonBasics",
+                "price": 38,
+                "image": "https://m.media-amazon.com/images/I/91nboUQK2ML.jpg",
+                "vectorSearchScore": 0.8241959810256958
+              },
+              {
+                "productId": "67192b3f64d161905fbe780c",
+                "name": "AmazonBasics Cat Tree - XX-Large, Grey (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 96,
+                "image": "https://m.media-amazon.com/images/I/61tVo4YgneL.jpg",
+                "vectorSearchScore": 0.8215769529342651
+              },
+              {
+                "productId": "67192b3f64d161905fbe79b1",
+                "name": "AmazonBasics 100% Cornstarch Waste Bags (16 Rolls)",
+                "brand": "AmazonBasics",
+                "price": 41,
+                "image": "https://m.media-amazon.com/images/I/41r7475mqgL.jpg",
+                "vectorSearchScore": 0.8186294436454773
+              },
+              {
+                "productId": "67192b3f64d161905fbe7aee",
+                "name": "WHOLE PAWS Whitefish & Sweet Potato Recipe Dog Food, 64 OZ",
+                "brand": "Whole Paws",
+                "price": 53,
+                "image": "https://m.media-amazon.com/images/I/91ll1KBBxOL.jpg",
+                "vectorSearchScore": 0.8144474029541016
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "name": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 4,
+          "ndistinct": 4.0,
+          "values": [
+            "Frida",
+            "Ada",
+            "Grace",
+            "Claude"
+          ]
+        }
+      }
+    },
+    "surname": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 4,
+          "ndistinct": 4.0,
+          "values": [
+            "Kahlo",
+            "Lovelace",
+            "Hopper",
+            "Monet"
+          ]
+        }
+      }
+    },
+    "type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 4,
+          "ndistinct": 1.0,
+          "values": [
+            "customer"
+          ]
+        }
+      }
+    },
+    "version": {
+      "probability": 0.25,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            2
+          ]
+        },
+        "Undefined": {
+          "probability": 0.75,
+          "sampled": 3
+        }
+      }
+    }
+  }
+}

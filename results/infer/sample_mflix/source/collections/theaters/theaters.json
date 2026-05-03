@@ -1,0 +1,990 @@
+{
+  "count": 1564,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "59a47286cfa9a3a73e51e763",
+            "59a47287cfa9a3a73e51eb94",
+            "59a47286cfa9a3a73e51e853",
+            "59a47287cfa9a3a73e51ebeb",
+            "59a47287cfa9a3a73e51ec5b",
+            "59a47287cfa9a3a73e51eabb",
+            "59a47287cfa9a3a73e51eb30",
+            "59a47287cfa9a3a73e51e94f",
+            "59a47287cfa9a3a73e51ebcd",
+            "59a47287cfa9a3a73e51e965",
+            "59a47287cfa9a3a73e51eae8",
+            "59a47287cfa9a3a73e51e8f5",
+            "59a47287cfa9a3a73e51ea25",
+            "59a47286cfa9a3a73e51e72e",
+            "59a47287cfa9a3a73e51eb1c",
+            "59a47287cfa9a3a73e51ebef",
+            "59a47287cfa9a3a73e51e8be",
+            "59a47287cfa9a3a73e51ebc0",
+            "59a47287cfa9a3a73e51ed47",
+            "59a47287cfa9a3a73e51ed01"
+          ]
+        }
+      }
+    },
+    "location": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "address": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "city": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 666.0,
+                          "values": [
+                            "Marina",
+                            "Salt Lake City",
+                            "Jacksonville",
+                            "South Elgin",
+                            "Las Vegas",
+                            "Austin",
+                            "Apple Valley",
+                            "Hyannis",
+                            "Medford",
+                            "Yonkers",
+                            "Olathe",
+                            "Wichita Falls",
+                            "Vacaville",
+                            "Bloomfield Hills",
+                            "Kildeer",
+                            "North Aurora",
+                            "Columbus",
+                            "Arden",
+                            "Grapevine",
+                            "Kennewick"
+                          ]
+                        }
+                      }
+                    },
+                    "state": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 52.0,
+                          "values": [
+                            "CA",
+                            "UT",
+                            "FL",
+                            "IL",
+                            "NV",
+                            "TX",
+                            "MN",
+                            "MA",
+                            "OR",
+                            "NY",
+                            "KS",
+                            "MI",
+                            "OH",
+                            "NC",
+                            "WA",
+                            "IN",
+                            "VA",
+                            "PA",
+                            "KY",
+                            "LA"
+                          ]
+                        }
+                      }
+                    },
+                    "street1": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 944.0,
+                          "values": [
+                            "101 General Stillwell Dr",
+                            "261 W 2100 S",
+                            "13141 City Station Dr",
+                            "424 Randall Rd",
+                            "5757 Wayne Newton Blvd",
+                            "2901 S Capital of Texas Hwy",
+                            "8151 Blanding Blvd",
+                            "15300 Cedar Ave",
+                            "793 Iyannough Rd",
+                            "2370 Poplar Drive",
+                            "2478 Central Park Ave",
+                            "11750 S Strang Line Rd",
+                            "3111 Midwestern Parkway",
+                            "1621 E Monte Vista Ave",
+                            "2169 S. Telegraph Rd.",
+                            "20771 N Rand Rd",
+                            "1830 Towne Centre Drive",
+                            "1375 Polaris Pkwy",
+                            "10 McKenna Rd",
+                            "1501 Gaylord Trail"
+                          ]
+                        }
+                      }
+                    },
+                    "street2": {
+                      "probability": 0.353,
+                      "types": {
+                        "Null": {
+                          "probability": 0.32577903682719545,
+                          "sampled": 115,
+                          "ndistinct": 1.0,
+                          "values": [
+                            null
+                          ]
+                        },
+                        "String": {
+                          "probability": 0.6742209631728046,
+                          "sampled": 238,
+                          "ndistinct": 224.0,
+                          "values": [
+                            "Ste P3",
+                            "Ste A",
+                            "#632",
+                            "Bldg J",
+                            "#1094",
+                            "Ste 201",
+                            "Ste 101",
+                            "Ste A07",
+                            "#1760",
+                            "#C10D",
+                            "#732",
+                            "Ste 2",
+                            "Ste 120",
+                            "#2148",
+                            "Suite 66A",
+                            "Ste 1048",
+                            "#D101",
+                            "#153",
+                            "Suite 1018",
+                            "Ste 100"
+                          ]
+                        },
+                        "Undefined": {
+                          "probability": 0.647,
+                          "sampled": 647
+                        }
+                      }
+                    },
+                    "zipcode": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 845.0,
+                          "values": [
+                            "93933",
+                            "84115",
+                            "32218",
+                            "60177",
+                            "89119",
+                            "78746",
+                            "32244",
+                            "55124",
+                            "02601",
+                            "97504",
+                            "10710",
+                            "66062",
+                            "76308",
+                            "95688",
+                            "48302",
+                            "60047",
+                            "60542",
+                            "43240",
+                            "28704",
+                            "76051"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "street1": "101 General Stillwell Dr",
+                      "city": "Marina",
+                      "state": "CA",
+                      "zipcode": "93933"
+                    },
+                    {
+                      "street1": "261 W 2100 S",
+                      "city": "Salt Lake City",
+                      "state": "UT",
+                      "zipcode": "84115"
+                    },
+                    {
+                      "street1": "13141 City Station Dr",
+                      "city": "Jacksonville",
+                      "state": "FL",
+                      "zipcode": "32218"
+                    },
+                    {
+                      "street1": "424 Randall Rd",
+                      "city": "South Elgin",
+                      "state": "IL",
+                      "zipcode": "60177"
+                    },
+                    {
+                      "street1": "5757 Wayne Newton Blvd",
+                      "street2": null,
+                      "city": "Las Vegas",
+                      "state": "NV",
+                      "zipcode": "89119"
+                    },
+                    {
+                      "street1": "2901 S Capital of Texas Hwy",
+                      "street2": "Ste P3",
+                      "city": "Austin",
+                      "state": "TX",
+                      "zipcode": "78746"
+                    },
+                    {
+                      "street1": "8151 Blanding Blvd",
+                      "city": "Jacksonville",
+                      "state": "FL",
+                      "zipcode": "32244"
+                    },
+                    {
+                      "street1": "15300 Cedar Ave",
+                      "city": "Apple Valley",
+                      "state": "MN",
+                      "zipcode": "55124"
+                    },
+                    {
+                      "street1": "793 Iyannough Rd",
+                      "street2": "Ste A",
+                      "city": "Hyannis",
+                      "state": "MA",
+                      "zipcode": "02601"
+                    },
+                    {
+                      "street1": "2370 Poplar Drive",
+                      "city": "Medford",
+                      "state": "OR",
+                      "zipcode": "97504"
+                    },
+                    {
+                      "street1": "2478 Central Park Ave",
+                      "city": "Yonkers",
+                      "state": "NY",
+                      "zipcode": "10710"
+                    },
+                    {
+                      "street1": "11750 S Strang Line Rd",
+                      "city": "Olathe",
+                      "state": "KS",
+                      "zipcode": "66062"
+                    },
+                    {
+                      "street1": "3111 Midwestern Parkway",
+                      "street2": "#632",
+                      "city": "Wichita Falls",
+                      "state": "TX",
+                      "zipcode": "76308"
+                    },
+                    {
+                      "street1": "1621 E Monte Vista Ave",
+                      "city": "Vacaville",
+                      "state": "CA",
+                      "zipcode": "95688"
+                    },
+                    {
+                      "street1": "2169 S. Telegraph Rd.",
+                      "city": "Bloomfield Hills",
+                      "state": "MI",
+                      "zipcode": "48302"
+                    },
+                    {
+                      "street1": "20771 N Rand Rd",
+                      "street2": "Bldg J",
+                      "city": "Kildeer",
+                      "state": "IL",
+                      "zipcode": "60047"
+                    },
+                    {
+                      "street1": "1830 Towne Centre Drive",
+                      "city": "North Aurora",
+                      "state": "IL",
+                      "zipcode": "60542"
+                    },
+                    {
+                      "street1": "1375 Polaris Pkwy",
+                      "city": "Columbus",
+                      "state": "OH",
+                      "zipcode": "43240"
+                    },
+                    {
+                      "street1": "10 McKenna Rd",
+                      "city": "Arden",
+                      "state": "NC",
+                      "zipcode": "28704"
+                    },
+                    {
+                      "street1": "1501 Gaylord Trail",
+                      "street2": null,
+                      "city": "Grapevine",
+                      "state": "TX",
+                      "zipcode": "76051"
+                    }
+                  ]
+                }
+              }
+            },
+            "geo": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "coordinates": {
+                      "probability": 1.0,
+                      "types": {
+                        "Array": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 2.0,
+                          "array": {
+                            "probability": 2.0,
+                            "types": {
+                              "Number": {
+                                "probability": 1.0,
+                                "sampled": 2000,
+                                "ndistinct": 1000.0,
+                                "values": [
+                                  -121.81196,
+                                  36.66708,
+                                  -111.89649,
+                                  40.72496,
+                                  -81.633011,
+                                  30.481318,
+                                  -88.343216,
+                                  41.984211,
+                                  -115.150408,
+                                  36.08863,
+                                  -97.808652,
+                                  30.256297,
+                                  -81.737518,
+                                  30.19779,
+                                  -93.21521,
+                                  44.729126,
+                                  -70.29747,
+                                  41.667824,
+                                  -122.86957,
+                                  42.353018
+                                ]
+                              }
+                            }
+                          },
+                          "values": [
+                            [
+                              -121.81196,
+                              36.66708
+                            ],
+                            [
+                              -111.89649,
+                              40.72496
+                            ],
+                            [
+                              -81.633011,
+                              30.481318
+                            ],
+                            [
+                              -88.343216,
+                              41.984211
+                            ],
+                            [
+                              -115.150408,
+                              36.08863
+                            ],
+                            [
+                              -97.808652,
+                              30.256297
+                            ],
+                            [
+                              -81.737518,
+                              30.19779
+                            ],
+                            [
+                              -93.21521,
+                              44.729126
+                            ],
+                            [
+                              -70.29747,
+                              41.667824
+                            ],
+                            [
+                              -122.86957,
+                              42.353018
+                            ],
+                            [
+                              -73.826805,
+                              40.983246
+                            ],
+                            [
+                              -94.767082,
+                              38.914909
+                            ],
+                            [
+                              -98.53244,
+                              33.868557
+                            ],
+                            [
+                              -121.96328,
+                              38.367649
+                            ],
+                            [
+                              -83.296834,
+                              42.606539
+                            ],
+                            [
+                              -88.055824,
+                              42.164577
+                            ],
+                            [
+                              -88.36679,
+                              41.79631
+                            ],
+                            [
+                              -82.979889,
+                              40.140507
+                            ],
+                            [
+                              -82.536293,
+                              35.442486
+                            ],
+                            [
+                              -97.064959,
+                              32.955345
+                            ]
+                          ]
+                        }
+                      }
+                    },
+                    "type": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "Point"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -121.81196,
+                        36.66708
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -111.89649,
+                        40.72496
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -81.633011,
+                        30.481318
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -88.343216,
+                        41.984211
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -115.150408,
+                        36.08863
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -97.808652,
+                        30.256297
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -81.737518,
+                        30.19779
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -93.21521,
+                        44.729126
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -70.29747,
+                        41.667824
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -122.86957,
+                        42.353018
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -73.826805,
+                        40.983246
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -94.767082,
+                        38.914909
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -98.53244,
+                        33.868557
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -121.96328,
+                        38.367649
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -83.296834,
+                        42.606539
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -88.055824,
+                        42.164577
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -88.36679,
+                        41.79631
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -82.979889,
+                        40.140507
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -82.536293,
+                        35.442486
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -97.064959,
+                        32.955345
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "address": {
+                "street1": "101 General Stillwell Dr",
+                "city": "Marina",
+                "state": "CA",
+                "zipcode": "93933"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -121.81196,
+                  36.66708
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "261 W 2100 S",
+                "city": "Salt Lake City",
+                "state": "UT",
+                "zipcode": "84115"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -111.89649,
+                  40.72496
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "13141 City Station Dr",
+                "city": "Jacksonville",
+                "state": "FL",
+                "zipcode": "32218"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -81.633011,
+                  30.481318
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "424 Randall Rd",
+                "city": "South Elgin",
+                "state": "IL",
+                "zipcode": "60177"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -88.343216,
+                  41.984211
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "5757 Wayne Newton Blvd",
+                "street2": null,
+                "city": "Las Vegas",
+                "state": "NV",
+                "zipcode": "89119"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -115.150408,
+                  36.08863
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2901 S Capital of Texas Hwy",
+                "street2": "Ste P3",
+                "city": "Austin",
+                "state": "TX",
+                "zipcode": "78746"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -97.808652,
+                  30.256297
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "8151 Blanding Blvd",
+                "city": "Jacksonville",
+                "state": "FL",
+                "zipcode": "32244"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -81.737518,
+                  30.19779
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "15300 Cedar Ave",
+                "city": "Apple Valley",
+                "state": "MN",
+                "zipcode": "55124"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -93.21521,
+                  44.729126
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "793 Iyannough Rd",
+                "street2": "Ste A",
+                "city": "Hyannis",
+                "state": "MA",
+                "zipcode": "02601"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -70.29747,
+                  41.667824
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2370 Poplar Drive",
+                "city": "Medford",
+                "state": "OR",
+                "zipcode": "97504"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -122.86957,
+                  42.353018
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2478 Central Park Ave",
+                "city": "Yonkers",
+                "state": "NY",
+                "zipcode": "10710"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -73.826805,
+                  40.983246
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "11750 S Strang Line Rd",
+                "city": "Olathe",
+                "state": "KS",
+                "zipcode": "66062"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -94.767082,
+                  38.914909
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "3111 Midwestern Parkway",
+                "street2": "#632",
+                "city": "Wichita Falls",
+                "state": "TX",
+                "zipcode": "76308"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -98.53244,
+                  33.868557
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1621 E Monte Vista Ave",
+                "city": "Vacaville",
+                "state": "CA",
+                "zipcode": "95688"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -121.96328,
+                  38.367649
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2169 S. Telegraph Rd.",
+                "city": "Bloomfield Hills",
+                "state": "MI",
+                "zipcode": "48302"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -83.296834,
+                  42.606539
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "20771 N Rand Rd",
+                "street2": "Bldg J",
+                "city": "Kildeer",
+                "state": "IL",
+                "zipcode": "60047"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -88.055824,
+                  42.164577
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1830 Towne Centre Drive",
+                "city": "North Aurora",
+                "state": "IL",
+                "zipcode": "60542"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -88.36679,
+                  41.79631
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1375 Polaris Pkwy",
+                "city": "Columbus",
+                "state": "OH",
+                "zipcode": "43240"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -82.979889,
+                  40.140507
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "10 McKenna Rd",
+                "city": "Arden",
+                "state": "NC",
+                "zipcode": "28704"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -82.536293,
+                  35.442486
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1501 Gaylord Trail",
+                "street2": null,
+                "city": "Grapevine",
+                "state": "TX",
+                "zipcode": "76051"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -97.064959,
+                  32.955345
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "theaterId": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            1061,
+            527,
+            1475,
+            607,
+            8066,
+            2994,
+            430,
+            245,
+            568,
+            2517,
+            374,
+            193,
+            2856,
+            1008,
+            412,
+            647,
+            1778,
+            570,
+            953,
+            8601
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+CREATE TABLE carts (
+    id UUID PRIMARY KEY,
+    _user TEXT NOT NULL
+);
+
+CREATE TABLE carts_products (
+    id BIGSERIAL PRIMARY KEY,
+    carts_id UUID NOT NULL,
+    value TEXT NOT NULL,
+    FOREIGN KEY (carts_id) REFERENCES carts (id) DEFERRABLE INITIALLY DEFERRED
+);

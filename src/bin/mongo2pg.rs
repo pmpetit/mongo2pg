@@ -97,6 +97,11 @@ struct InferArgs {
     #[arg(short = 'p', long = "percent", conflicts_with = "number", value_parser = clap::value_parser!(f64))]
     percent: Option<f64>,
 
+    /// Treat all MongoDB Object fields as JSONB columns in the generated DDL
+    /// instead of creating 1:1 child tables (arrays of objects are unaffected)
+    #[arg(long = "jsonb", action = clap::ArgAction::SetTrue)]
+    jsonb: bool,
+
     /// Suppress schema output to stdout
     #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
     no_output: bool,
@@ -426,6 +431,9 @@ async fn infer_collection(
             .context("Failed to get document count")?
     };
     schema.count = total_docs;
+    if args.jsonb {
+        schema.mark_objects_as_jsonb();
+    }
     let output_dir = output_dir; // rebind to keep borrow checker happy
 
     let stats_lines = format_stats(&schema, Some(total_docs));
@@ -504,7 +512,7 @@ fn run_init(args: InitArgs) -> Result<()> {
             .as_deref()
             .map(|u| format!("URI = {}\n", u))
             .unwrap_or_else(|| "# URI = mongodb://localhost:27017\n".to_owned()),
-        format!("# NAMESPACE = {}\n", args.project_name),
+        format!("NAMESPACE = {}\n", args.project_name),
     );
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;
