@@ -16,3 +16,6 @@ top_level_types:
   bucket_start_date: Date
   transaction_count: Number
   transactions: Array
+array_field_count: 1
+avg_fields_per_doc: 6.0
+migrability_score: 3.5

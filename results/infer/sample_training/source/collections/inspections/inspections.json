@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "56d61035a378eccde8a95650",
-            "56d61035a378eccde8a9715a",
-            "56d61033a378eccde8a8668d",
-            "56d61033a378eccde8a8a708",
-            "56d61033a378eccde8a8371f",
-            "56d61035a378eccde8a966b6",
-            "56d61035a378eccde8a969c3",
-            "56d61035a378eccde8a94ecb",
-            "56d61034a378eccde8a907e9",
-            "56d61035a378eccde8a950f4",
-            "56d61035a378eccde8a95f88",
-            "56d61034a378eccde8a8b422",
-            "56d61033a378eccde8a84840",
-            "56d61033a378eccde8a857f6",
-            "56d61034a378eccde8a8af8d",
-            "56d61033a378eccde8a84a7b",
-            "56d61034a378eccde8a9142d",
-            "56d61035a378eccde8a96f1d",
-            "56d61035a378eccde8a96d78",
-            "56d61035a378eccde8a96784"
+            "56d61034a378eccde8a8bf10",
+            "56d61033a378eccde8a89d3d",
+            "56d61034a378eccde8a8fc17",
+            "56d61034a378eccde8a8b0c5",
+            "56d61034a378eccde8a8ef19",
+            "56d61035a378eccde8a94c4e",
+            "56d61035a378eccde8a96458",
+            "56d61033a378eccde8a87e69",
+            "56d61033a378eccde8a88e99",
+            "56d61034a378eccde8a8f35d",
+            "56d61033a378eccde8a860a4",
+            "56d61035a378eccde8a95841",
+            "56d61034a378eccde8a8d436",
+            "56d61035a378eccde8a94b6f",
+            "56d61033a378eccde8a88e92",
+            "56d61034a378eccde8a917ee",
+            "56d61033a378eccde8a8a1ac",
+            "56d61034a378eccde8a914f5",
+            "56d61034a378eccde8a8c33a",
+            "56d61035a378eccde8a96a3f"
           ]
         }
       }
@@ -47,28 +47,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 56.0,
+                  "ndistinct": 50.0,
                   "values": [
-                    "NEW YORK",
                     "BROOKLYN",
-                    "ELMHURST",
-                    "STATEN ISLAND",
-                    "BRONX",
-                    "FLUSHING",
-                    "OZONE PARK",
-                    "RIDGEWOOD",
-                    "CORONA",
-                    "MIDDLE VILLAGE",
                     "WOODHAVEN",
-                    "QUEENS VILLAGE",
+                    "NEW YORK",
+                    "FAR ROCKAWAY",
+                    "BRONX",
                     "ASTORIA",
                     "JAMAICA",
+                    "RIDGEWOOD",
+                    "JACKSON HEIGHTS",
+                    "FOREST HILLS",
+                    "FLUSHING",
+                    "CORONA",
+                    "WHITESTONE",
+                    "STATEN ISLAND",
+                    "FLORAL PARK",
+                    "MIDDLE VILLAGE",
                     "GLENDALE",
-                    "MIDDLE VLG",
-                    "SOUTH RICHMOND HILL",
-                    "BAYSIDE",
-                    "ROCKAWAY PARK",
-                    "COLLEGE POINT"
+                    "WOODSIDE",
+                    "OAKLAND GDNS",
+                    "SOUTH RICHMOND HILL"
                   ]
                 }
               }
@@ -77,55 +77,57 @@
               "probability": 1.0,
               "types": {
                 "Number": {
-                  "probability": 0.972,
-                  "sampled": 972,
-                  "ndistinct": 828.0,
+                  "probability": 0.967,
+                  "sampled": 967,
+                  "ndistinct": 831.0,
                   "values": [
-                    4091,
-                    170,
-                    708,
-                    8618,
-                    106,
-                    550,
-                    28,
-                    2141,
-                    2705,
-                    2085,
-                    9,
-                    3512,
-                    3070,
-                    5080,
-                    623,
-                    10204,
-                    563,
-                    779,
-                    3812,
-                    368
+                    1961,
+                    8726,
+                    686,
+                    140,
+                    1353,
+                    409,
+                    155,
+                    2052,
+                    231,
+                    1864,
+                    3175,
+                    1687,
+                    727,
+                    153,
+                    603,
+                    1271,
+                    6902,
+                    3038,
+                    5405,
+                    888
                   ]
                 },
                 "String": {
-                  "probability": 0.028,
-                  "sampled": 28,
-                  "ndistinct": 18.0,
+                  "probability": 0.033,
+                  "sampled": 33,
+                  "ndistinct": 21.0,
                   "values": [
-                    "N/E/C",
-                    "810B",
-                    "225A",
+                    "19401A",
+                    "10701A",
+                    "6816A",
+                    "5227B",
                     "",
-                    "986A",
-                    "14714A",
-                    "4712B",
-                    "137B",
-                    "1414A",
-                    "16B",
-                    "791B",
-                    "8153A",
-                    "2042-2046",
-                    "521B",
-                    "4622A",
-                    "231A",
-                    "537A",
-                    "1630A"
+                    "2001B",
+                    "1304A",
+                    "3489A",
+                    "535A",
+                    "3516B",
+                    "2910A",
+                    "2152A",
+                    "533A",
+                    "N/W/C",
+                    "250A",
+                    "1018B",
+                    "14716A",
+                    "1094B",
+                    "7204A",
+                    "791B"
                   ]
                 }
               }
@@ -136,28 +138,28 @@
                 "String": {
                   "probability": 1.0,
                   "sampled": 1000,
-                  "ndistinct": 414.0,
+                  "ndistinct": 429.0,
                   "values": [
-                    "BROADWAY",
-                    "1ST AVE",
                     "FLATBUSH AVE",
-                    "WHITNEY AVE",
-                    "MULBERRY AVE",
-                    "E 187TH ST",
-                    "FAYETTE ST",
+                    "JAMAICA AVE",
+                    "CHURCH ST",
+                    "PARK AVE",
+                    "GATEWAY DR",
+                    "W 48TH ST",
+                    "MOTT AVE",
+                    "W 231ST ST",
                     "3RD AVE",
-                    "AVENUE Z",
-                    "LEXINGTON AVE",
-                    "BAY 50TH ST",
-                    "FLATLANDS AVE",
-                    "ATLANTIC AVE",
-                    "NOSTRAND AVE",
-                    "E 188TH ST",
-                    "CANAL ST",
-                    "",
-                    "MAIN ST",
+                    "STEINWAY ST",
+                    "MCDONALD AVE",
+                    "CONEY ISLAND AVE",
+                    "JORALEMON ST",
+                    "E 137TH ST",
+                    "BROADWAY",
+                    "LINDEN BLVD",
                     "5TH AVE",
-                    "101ST AVE"
+                    "MIDDLETOWN RD",
+                    "13TH AVE",
+                    "9TH AVE"
                   ]
                 }
               }
@@ -166,38 +168,30 @@
               "probability": 1.0,
               "types": {
                 "Number": {
-                  "probability": 0.998,
-                  "sampled": 998,
-                  "ndistinct": 172.0,
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 160.0,
                   "values": [
-                    10032,
-                    10009,
+                    11234,
+                    11421,
                     11225,
-                    11373,
-                    10314,
-                    10458,
-                    11206,
-                    10035,
-                    11235,
-                    11214,
-                    10031,
-                    10027,
-                    10034,
-                    11236,
-                    11217,
-                    11216,
-                    10013,
-                    10024,
-                    11354,
-                    11416
-                  ]
-                },
-                "String": {
-                  "probability": 0.002,
-                  "sampled": 2,
-                  "ndistinct": 1.0,
-                  "values": [
-                    ""
+                    10007,
+                    10029,
+                    11239,
+                    10036,
+                    11691,
+                    10463,
+                    11103,
+                    11230,
+                    11218,
+                    11201,
+                    10454,
+                    10001,
+                    11412,
+                    11209,
+                    10461,
+                    11219,
+                    10019
                   ]
                 }
               }
@@ -205,124 +199,124 @@
           },
           "values": [
             {
-              "city": "NEW YORK",
-              "zip": 10032,
-              "street": "BROADWAY",
-              "number": 4091
+              "city": "BROOKLYN",
+              "zip": 11234,
+              "street": "FLATBUSH AVE",
+              "number": 1961
             },
             {
-              "city": "NEW YORK",
-              "zip": 10009,
-              "street": "1ST AVE",
-              "number": 170
+              "city": "WOODHAVEN",
+              "zip": 11421,
+              "street": "JAMAICA AVE",
+              "number": 8726
             },
             {
               "city": "BROOKLYN",
               "zip": 11225,
               "street": "FLATBUSH AVE",
-              "number": 708
-            },
-            {
-              "city": "ELMHURST",
-              "zip": 11373,
-              "street": "WHITNEY AVE",
-              "number": 8618
-            },
-            {
-              "city": "STATEN ISLAND",
-              "zip": 10314,
-              "street": "MULBERRY AVE",
-              "number": 106
-            },
-            {
-              "city": "BRONX",
-              "zip": 10458,
-              "street": "E 187TH ST",
-              "number": 550
-            },
-            {
-              "city": "BROOKLYN",
-              "zip": 11206,
-              "street": "FAYETTE ST",
-              "number": 28
+              "number": 686
             },
             {
               "city": "NEW YORK",
-              "zip": 10035,
+              "zip": 10007,
+              "street": "CHURCH ST",
+              "number": 140
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10029,
+              "street": "PARK AVE",
+              "number": 1353
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11239,
+              "street": "GATEWAY DR",
+              "number": 409
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10036,
+              "street": "W 48TH ST",
+              "number": 155
+            },
+            {
+              "city": "FAR ROCKAWAY",
+              "zip": 11691,
+              "street": "MOTT AVE",
+              "number": 2052
+            },
+            {
+              "city": "BRONX",
+              "zip": 10463,
+              "street": "W 231ST ST",
+              "number": 231
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10029,
               "street": "3RD AVE",
-              "number": 2141
+              "number": 1864
+            },
+            {
+              "city": "ASTORIA",
+              "zip": 11103,
+              "street": "STEINWAY ST",
+              "number": 3175
             },
             {
               "city": "BROOKLYN",
-              "zip": 11235,
-              "street": "AVENUE Z",
-              "number": 2705
-            },
-            {
-              "city": "NEW YORK",
-              "zip": 10035,
-              "street": "LEXINGTON AVE",
-              "number": 2085
+              "zip": 11230,
+              "street": "MCDONALD AVE",
+              "number": 1687
             },
             {
               "city": "BROOKLYN",
-              "zip": 11214,
-              "street": "BAY 50TH ST",
-              "number": 9
+              "zip": 11218,
+              "street": "CONEY ISLAND AVE",
+              "number": 727
             },
             {
-              "city": "NEW YORK",
-              "zip": 10031,
-              "street": "BROADWAY",
-              "number": 3512
-            },
-            {
-              "city": "NEW YORK",
-              "zip": 10027,
-              "street": "BROADWAY",
-              "number": 3070
-            },
-            {
-              "city": "NEW YORK",
-              "zip": 10034,
-              "street": "BROADWAY",
-              "number": 5080
+              "city": "BROOKLYN",
+              "zip": 11201,
+              "street": "JORALEMON ST",
+              "number": 153
             },
             {
               "city": "BRONX",
-              "zip": 10458,
-              "street": "E 187TH ST",
-              "number": 623
+              "zip": 10454,
+              "street": "E 137TH ST",
+              "number": 603
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10001,
+              "street": "BROADWAY",
+              "number": 1271
+            },
+            {
+              "city": "JAMAICA",
+              "zip": 11412,
+              "street": "LINDEN BLVD",
+              "number": "19401A"
             },
             {
               "city": "BROOKLYN",
-              "zip": 11236,
-              "street": "FLATLANDS AVE",
-              "number": 10204
-            },
-            {
-              "city": "BROOKLYN",
-              "zip": 11217,
-              "street": "ATLANTIC AVE",
-              "number": 563
-            },
-            {
-              "city": "BROOKLYN",
-              "zip": 11216,
-              "street": "NOSTRAND AVE",
-              "number": 779
-            },
-            {
-              "city": "BROOKLYN",
-              "zip": 11235,
-              "street": "NOSTRAND AVE",
-              "number": 3812
+              "zip": 11209,
+              "street": "5TH AVE",
+              "number": 6902
             },
             {
               "city": "BRONX",
-              "zip": 10458,
-              "street": "E 188TH ST",
-              "number": 368
+              "zip": 10461,
+              "street": "MIDDLETOWN RD",
+              "number": 3038
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11219,
+              "street": "13TH AVE",
+              "number": 5405
             }
           ]
         }
@@ -334,28 +328,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 943.0,
+          "ndistinct": 950.0,
           "values": [
-            "173RD STREET LAUNDROMAT INC.",
-            "KHL INC.",
-            "CITY CENTER OPTICAL",
-            "CHUM GROCERY & DISCOUNT INC",
-            "D & L CONTRACTING INC.",
-            "PEDRO ORTIZ",
-            "YUMASHEVA, ELENA",
-            "K&J DELI GROCERY INC.",
-            "SHEEPSHEAD BAY HALAL MARKET CORP.",
-            "TRIANA DELI GROCERY CORP.",
-            "UNLIMITED OPPORTUNITY INC.",
-            "ALL CITY 99¢ STORE, CORP",
-            "BROADWAY AU LAIT INC",
-            "RIVERDEAL OPERATING CORP.",
-            "HEAVENLY SHOES, INC.",
-            "CVS ALBANY, L.L.C",
-            "T-MOBILE NORTHEAST LLC",
-            "TAHEERA MALONEY",
-            "LUCKY MOON NAIL SALON INC",
-            "368 SUNNY DELI CORP."
+            "A & B SHOE REPAIR",
+            "CREATIVE REALTY INC.",
+            "GLADYS A DANKWAA",
+            "PAUL SEVEN ELEVEN 2 INC",
+            "TOWN CAR REPAIR CORP.",
+            "STAPLES THE OFFICE SUPERSTORE EAST INC",
+            "CITY BIKE RENTALS OF NEW YORK INCORPORATED",
+            "URBAN FRESH CORP",
+            "231 STAR DELI GROCERY CORP.",
+            "EASTSIDE WIRELESS CORP",
+            "BABY BLUE #6 INC.",
+            "REMONT INTERNATIONAL CORP.",
+            "JEMA VARIETIES CORP.",
+            "SUNNY GOURMET DELI INC",
+            "WYCKOFF AVE LAUNDROMAT INC.",
+            "DNC FOOD SERVICE CORP.",
+            "JUBAN DELI & GROCERY CORP",
+            "W ALI & SHEERI, INC.",
+            "MIDDLETOWN DELI & GROCERY, INC.",
+            "Coffee Street LLC"
           ]
         }
       }
@@ -364,38 +358,42 @@
       "probability": 1.0,
       "types": {
         "Number": {
-          "probability": 0.999,
-          "sampled": 999,
-          "ndistinct": 999.0,
+          "probability": 0.995,
+          "sampled": 995,
+          "ndistinct": 995.0,
           "values": [
-            3044168,
-            9327201,
-            5383777,
-            9317019,
-            9303447,
-            5390143,
-            10022099,
-            9316617,
-            50064043,
-            50060469,
-            9279147,
-            5351859,
-            9289322,
-            9306799,
-            9285742,
-            9275942,
-            9277595,
-            9322211,
-            5391640,
-            80021222
+            9259911,
+            5353952,
+            5383686,
+            70031726,
+            9317888,
+            9312785,
+            10000731,
+            9273399,
+            9283910,
+            9290718,
+            3025071,
+            9278118,
+            5377265,
+            3042205,
+            9274658,
+            3043804,
+            50057745,
+            70033051,
+            9284309,
+            9321585
           ]
         },
         "String": {
-          "probability": 0.001,
-          "sampled": 1,
-          "ndistinct": 1.0,
+          "probability": 0.005,
+          "sampled": 5,
+          "ndistinct": 5.0,
           "values": [
-            "P0052815"
+            "P0038615",
+            "P0046315",
+            "P0040715",
+            "P0037015",
+            "P0008614"
           ]
         }
       }
@@ -406,28 +404,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 306.0,
+          "ndistinct": 301.0,
           "values": [
-            "Sep 17 2015",
-            "Jan 21 2016",
-            "Sep 24 2015",
-            "May 12 2015",
-            "May 14 2015",
+            "May  8 2015",
+            "Feb 25 2015",
+            "Sep  9 2015",
+            "Apr 10 2015",
+            "Oct 30 2015",
+            "Jul 15 2015",
             "Jan  8 2016",
-            "Jan 13 2016",
-            "May 27 2015",
-            "Dec  6 2015",
-            "Jul 27 2015",
+            "Jul 13 2015",
+            "Feb  6 2015",
+            "May  7 2015",
+            "Jan 23 2015",
+            "Jan 28 2015",
+            "Jan 13 2015",
+            "May 22 2015",
+            "Aug 14 2015",
+            "Jun 15 2015",
+            "Mar 21 2015",
+            "Nov 19 2015",
             "Mar  6 2015",
-            "May  1 2015",
-            "Apr 16 2015",
-            "Oct 14 2015",
-            "Oct  9 2015",
-            "Jun  8 2015",
-            "Jan  6 2015",
-            "Jan 22 2016",
-            "Jan 12 2016",
-            "Apr 15 2015"
+            "Jan 15 2016"
           ]
         }
       }
@@ -440,26 +438,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "52976-2015-ENFO",
-            "5261-2016-ENFO",
-            "54847-2015-ENFO",
-            "25533-2015-ENFO",
-            "27462-2015-ENFO",
-            "3440-2016-ENFO",
-            "6601-UNIT",
-            "31402-2015-ENFO",
-            "69230-2015-ENFO",
-            "42571-2015-ENFO",
-            "11609-2015-ENFO",
-            "23296-2015-ENFO",
-            "21426-2015-ENFO",
-            "59676-2015-ENFO",
-            "59125-2015-ENFO",
-            "34732-2015-ENFO",
-            "1022-2015-ENFO",
-            "4970-2016-ENFO",
-            "5883-2016-ENFO",
-            "3585-2016-ENFO"
+            "27892-2015-ENFO",
+            "9532-2015-ENFO",
+            "52767-2015-ENFO",
+            "19744-2015-ENFO",
+            "63102-2015-ENFO",
+            "40539-2015-ENFO",
+            "5408-UNIT",
+            "40334-2015-ENFO",
+            "1809-2015-ENFO",
+            "25713-2015-ENFO",
+            "3927-2015-ENFO",
+            "5168-2015-ENFO",
+            "1969-2015-ENFO",
+            "29308-2015-ENFO",
+            "43022-2015-ENFO",
+            "32672-2015-ENFO",
+            "14395-2015-ENFO",
+            "65176-2015-ENFO",
+            "11869-2015-ENFO",
+            "3799-2016-ENFO"
           ]
         }
       }
@@ -470,21 +468,22 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 13.0,
+          "ndistinct": 14.0,
           "values": [
-            "Pass",
             "No Violation Issued",
             "Violation Issued",
+            "Pass",
+            "Warning",
+            "Licensed",
             "Out of Business",
-            "Fail",
-            "No Evidence of Activity",
             "Unable to Locate",
             "Closed",
-            "Warning",
+            "Fail",
+            "No Evidence of Activity",
             "Posting Order Served",
             "Re-inspection",
-            "ECB Warning Issued",
-            "License Confiscated"
+            "Samples Obtained",
+            "ECB Warning Issued"
           ]
         }
       }
@@ -495,28 +494,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 45.0,
+          "ndistinct": 47.0,
           "values": [
-            "Laundry - 064",
-            "Secondhand Dealer [General] - 006",
             "Misc Non-Food Retail - 817",
-            "Cigarette Retail Dealer - 127",
-            "Home Improvement Contractor - 100",
-            "Salons And Barbershop - 841",
-            "Pedicab Business - 130",
+            "Tenant Screening - 480",
             "Grocery-Retail - 808",
-            "Wearing Apparel - 450",
-            "Electronic Store - 001",
-            "Horse Drawn Cab Driver - 086",
-            "Stoop Line Stand - 033",
-            "Gas Station-Retail - 815",
-            "Sidewalk Cafe - 013",
-            "Restaurant - 818",
-            "Tow Truck Company - 124",
-            "Drug Store Retail - 810",
+            "Cigarette Retail Dealer - 127",
+            "Secondhand Dealer [General] - 006",
+            "Air Condtioning Law - 899",
+            "Pedicab Business - 130",
             "Supermarket - 819",
-            "Tax Preparers - 891",
-            "Pawnbroker - 080"
+            "Electronic Store - 001",
+            "Wearing Apparel - 450",
+            "Laundry - 064",
+            "Salons And Barbershop - 841",
+            "Drug Store Retail - 810",
+            "Funeral Homes - 888",
+            "Hardware-Retail - 811",
+            "Other",
+            "Garage - 049",
+            "Sightseeing Bus - 078",
+            "Restaurant - 818",
+            "Travel Agency - 440"
           ]
         }
       }

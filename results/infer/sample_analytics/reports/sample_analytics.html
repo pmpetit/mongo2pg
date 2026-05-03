@@ -85,18 +85,48 @@
       font-family: monospace;
     }
     .level { color: #95a5a6; font-size: 0.8rem; }
+    .score-badge { font-size: 0.95rem; }
+    .complexity-badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+    }
     footer { margin-top: 2rem; font-size: 0.75rem; color: #aaa; }
+    .score-explainer { margin-top: 1rem; margin-bottom: 2rem; font-size: 0.82rem; color: #7f8c8d; }
+    .score-explainer code { background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }
   </style>
 </head>
 <body>
   <h1>mongo2pg – Migration Report</h1>
-  <p class="subtitle">Database: <strong>sample_analytics</strong> &nbsp;|&nbsp; Generated: 2026-05-03 09:06:37 UTC</p>
+  <p class="subtitle">Database: <strong>sample_analytics</strong> &nbsp;|&nbsp; Generated: 2026-05-03 14:56:02 UTC</p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">3</div></div>
     <div class="card"><div class="label">Total Documents</div><div class="value">3992</div></div>
     <div class="card"><div class="label">PG Tables</div><div class="value">8</div></div>
+    <div class="card">
+      <div class="label">Complexity Score</div>
+      <div class="value" style="color:#27ae60">15.1</div>
+    </div>
+    <div class="card">
+      <div class="label">Complexity</div>
+      <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
+        <span class="complexity-badge" style="background:#27ae60">Easy</span>
+      </div>
+    </div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">3.36</div></div>
+    <div class="card"><div class="label">Score (max collection)</div><div class="value" style="font-size:1.3rem">4.12</div></div>
   </div>
+
+  <p class="score-explainer">
+    <strong>Complexity score</strong> per collection:
+    <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
+    DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+  </p>
 
   <table>
     <thead>
@@ -108,6 +138,7 @@
         <th class="num">Width (max)</th>
         <th class="num">Depth (max)</th>
         <th class="num">Fields (total)</th>
+        <th class="num">Score</th>
         <th class="num">PG Tables</th>
       </tr>
     </thead>
@@ -122,10 +153,11 @@
           <td class="num">4 <span class="level">(L1)</span></td>
           <td class="num">2</td>
           <td class="num">5</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.00</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-accounts" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">accounts</span> <span class="pill">accounts_products</span></div>
           </td>
         </tr>
@@ -139,10 +171,11 @@
           <td class="num">1824 <span class="level">(L3)</span></td>
           <td class="num">4</td>
           <td class="num">2746</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">4.12</span></td>
           <td class="num">4</td>
         </tr>
         <tr class="detail-row" id="detail-customers" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">customers</span> <span class="pill">customers_accounts</span> <span class="pill">customers_tier_and_details</span> <span class="pill">customers_tier_and_details_benefits</span></div>
           </td>
         </tr>
@@ -156,10 +189,11 @@
           <td class="num">6 <span class="level">(L3)</span></td>
           <td class="num">3</td>
           <td class="num">13</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.50</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-transactions" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">transactions</span> <span class="pill">transactions_transactions</span></div>
           </td>
         </tr>

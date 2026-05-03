@@ -23,3 +23,6 @@ top_level_types:
   sounding_type: String
   vesslterms: String
   watlev: String
+array_field_count: 1
+avg_fields_per_doc: 14.0
+migrability_score: 3.0

@@ -17,3 +17,6 @@ top_level_types:
   id: String
   result: String
   sector: String
+array_field_count: 0
+avg_fields_per_doc: 8.0
+migrability_score: 2.0

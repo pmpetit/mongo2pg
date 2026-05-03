@@ -18,3 +18,6 @@ top_level_types:
   status_history: Array
   type: String
   user: ObjectId
+array_field_count: 2
+avg_fields_per_doc: 7.0
+migrability_score: 5.0

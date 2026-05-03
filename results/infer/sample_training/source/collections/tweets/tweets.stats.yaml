@@ -32,3 +32,6 @@ top_level_types:
   text: String
   truncated: Boolean
   user: Object
+array_field_count: 0
+avg_fields_per_doc: 18.09
+migrability_score: 4.05

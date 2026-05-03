@@ -1,14 +1,14 @@
 documents_in_collection: 10000
 documents_sampled: 1000
-width_top_level: 27
-width_max: 55
+width_top_level: 26
+width_max: 51
 width_max_level: 3
 depth_max: 4
-branch_total: 131
+branch_total: 125
 branch_per_level:
-  L1: 27
-  L2: 39
-  L3: 55
+  L1: 26
+  L2: 38
+  L3: 51
   L4: 10
 top_level_types:
   _id: ObjectId
@@ -19,7 +19,6 @@ top_level_types:
   dataSource: String
   dewPoint: Object
   elevation: Number
-  extremeAirTemperature: Array
   liquidPrecipitation: Array
   pastWeatherObservationManual: Array
   position: Object
@@ -38,3 +37,6 @@ top_level_types:
   visibility: Object
   waveMeasurement: Object
   wind: Object
+array_field_count: 5
+avg_fields_per_doc: 22.24
+migrability_score: 8.17

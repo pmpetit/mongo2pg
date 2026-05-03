@@ -17,6 +17,12 @@ pub struct CollectionStatsYaml {
     pub width_max_level: usize,
     pub depth_max: usize,
     pub branch_total: usize,
+    #[serde(default)]
+    pub array_field_count: usize,
+    #[serde(default)]
+    pub avg_fields_per_doc: f64,
+    #[serde(default)]
+    pub migrability_score: f64,
 }
 
 pub struct CollectionRow {
@@ -102,8 +108,41 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
 
     let has_tables = rows.iter().any(|r| !r.table_names.is_empty());
     let total_pg_tables: usize = rows.iter().map(|r| r.table_names.len()).sum();
-    // Number of columns in the table (used for colspan on detail rows)
-    let col_count = 7 + if has_tables { 1 } else { 0 };
+
+    // DB-level migrability aggregates
+    // C_db = 1.5 * N + sum(C_i)
+    let n = rows.len() as f64;
+    let score_sum: f64 = rows.iter().map(|r| r.stats.migrability_score).sum();
+    let score_db = (1.5 * n + score_sum) * 100.0 / 100.0;
+    let score_max: f64 = rows
+        .iter()
+        .map(|r| r.stats.migrability_score)
+        .fold(0.0_f64, f64::max);
+    let total_weighted: f64 = rows
+        .iter()
+        .map(|r| {
+            let docs = match &r.stats.documents_in_collection {
+                serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0) as f64,
+                _ => 0.0,
+            };
+            r.stats.migrability_score * docs
+        })
+        .sum();
+    let score_avg = if total_docs > 0 {
+        (total_weighted / total_docs as f64 * 100.0).round() / 100.0
+    } else {
+        0.0
+    };
+    let complexity_label = if score_db < 30.0 {
+        ("Easy", "#27ae60")
+    } else if score_db < 80.0 {
+        ("Medium", "#e67e22")
+    } else {
+        ("Hard", "#c0392b")
+    };
+
+    // Number of columns (used for colspan on detail rows)
+    let col_count = 8 + if has_tables { 1 } else { 0 };
 
     let table_rows: String = rows
         .iter()
@@ -111,6 +150,14 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
             let doc_count = match &r.stats.documents_in_collection {
                 serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
                 _ => "unknown".to_owned(),
+            };
+
+            let score_color = if r.stats.migrability_score < 3.0 {
+                "#27ae60"
+            } else if r.stats.migrability_score < 8.0 {
+                "#e67e22"
+            } else {
+                "#c0392b"
             };
 
             let (name_cell, detail_row) = if r.table_names.is_empty() {
@@ -167,6 +214,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
           <td class="num">{width_max} <span class="level">(L{width_max_level})</span></td>
           <td class="num">{depth}</td>
           <td class="num">{branch}</td>
+          <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score:.2}</span></td>
           {tables_cell}
         </tr>
         {detail_row}"#,
@@ -178,6 +226,8 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
                 width_max_level = r.stats.width_max_level,
                 depth = r.stats.depth_max,
                 branch = r.stats.branch_total,
+                score = r.stats.migrability_score,
+                score_color = score_color,
                 tables_cell = tables_cell,
                 detail_row = detail_row,
             )
@@ -273,7 +323,18 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
       font-family: monospace;
     }}
     .level {{ color: #95a5a6; font-size: 0.8rem; }}
+    .score-badge {{ font-size: 0.95rem; }}
+    .complexity-badge {{
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+    }}
     footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
+    .score-explainer {{ margin-top: 1rem; margin-bottom: 2rem; font-size: 0.82rem; color: #7f8c8d; }}
+    .score-explainer code {{ background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }}
   </style>
 </head>
 <body>
@@ -284,7 +345,26 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
     <div class="card"><div class="label">Collections</div><div class="value">{count}</div></div>
     <div class="card"><div class="label">Total Documents</div><div class="value">{total_docs}</div></div>
     {pg_tables_card}
+    <div class="card">
+      <div class="label">Complexity Score</div>
+      <div class="value" style="color:{complexity_color}">{score_db:.1}</div>
+    </div>
+    <div class="card">
+      <div class="label">Complexity</div>
+      <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
+        <span class="complexity-badge" style="background:{complexity_color}">{complexity_label}</span>
+      </div>
+    </div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
+    <div class="card"><div class="label">Score (max collection)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
   </div>
+
+  <p class="score-explainer">
+    <strong>Complexity score</strong> per collection:
+    <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
+    DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+  </p>
 
   <table>
     <thead>
@@ -296,6 +376,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
         <th class="num">Width (max)</th>
         <th class="num">Depth (max)</th>
         <th class="num">Fields (total)</th>
+        <th class="num">Score</th>
         {tables_header}
       </tr>
     </thead>
@@ -324,6 +405,11 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
         now = now,
         count = rows.len(),
         total_docs = total_docs,
+        score_db = score_db,
+        score_avg = score_avg,
+        score_max = score_max,
+        complexity_label = complexity_label.0,
+        complexity_color = complexity_label.1,
         pg_tables_card = if has_tables {
             format!(
                 r#"<div class="card"><div class="label">PG Tables</div><div class="value">{total_pg_tables}</div></div>"#,

@@ -15,3 +15,6 @@ top_level_types:
   pop: Number
   state: String
   zip: String
+array_field_count: 0
+avg_fields_per_doc: 6.0
+migrability_score: 2.0

@@ -23,3 +23,6 @@ top_level_types:
   subCategory: String
   vai_text_embedding: Array
   year: Number
+array_field_count: 1
+avg_fields_per_doc: 12.43
+migrability_score: 3.13

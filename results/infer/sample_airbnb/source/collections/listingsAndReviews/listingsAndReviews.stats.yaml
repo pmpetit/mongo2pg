@@ -53,3 +53,6 @@ top_level_types:
   summary: String
   transit: String
   weekly_price: Decimal128
+array_field_count: 2
+avg_fields_per_doc: 38.09
+migrability_score: 5.1

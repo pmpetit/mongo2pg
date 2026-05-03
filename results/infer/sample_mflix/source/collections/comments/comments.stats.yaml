@@ -14,3 +14,6 @@ top_level_types:
   movie_id: ObjectId
   name: String
   text: String
+array_field_count: 0
+avg_fields_per_doc: 6.0
+migrability_score: 1.5

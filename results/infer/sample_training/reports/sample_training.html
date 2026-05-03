@@ -85,18 +85,48 @@
       font-family: monospace;
     }
     .level { color: #95a5a6; font-size: 0.8rem; }
+    .score-badge { font-size: 0.95rem; }
+    .complexity-badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+    }
     footer { margin-top: 2rem; font-size: 0.75rem; color: #aaa; }
+    .score-explainer { margin-top: 1rem; margin-bottom: 2rem; font-size: 0.82rem; color: #7f8c8d; }
+    .score-explainer code { background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }
   </style>
 </head>
 <body>
   <h1>mongo2pg – Migration Report</h1>
-  <p class="subtitle">Database: <strong>sample_training</strong> &nbsp;|&nbsp; Generated: 2026-05-03 09:06:42 UTC</p>
+  <p class="subtitle">Database: <strong>sample_training</strong> &nbsp;|&nbsp; Generated: 2026-05-03 14:56:08 UTC</p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">9</div></div>
     <div class="card"><div class="label">Total Documents</div><div class="value">331176</div></div>
     <div class="card"><div class="label">PG Tables</div><div class="value">79</div></div>
+    <div class="card">
+      <div class="label">Complexity Score</div>
+      <div class="value" style="color:#e67e22">54.6</div>
+    </div>
+    <div class="card">
+      <div class="label">Complexity</div>
+      <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
+        <span class="complexity-badge" style="background:#e67e22">Medium</span>
+      </div>
+    </div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">3.10</div></div>
+    <div class="card"><div class="label">Score (max collection)</div><div class="value" style="font-size:1.3rem">17.00</div></div>
   </div>
+
+  <p class="score-explainer">
+    <strong>Complexity score</strong> per collection:
+    <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
+    DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+  </p>
 
   <table>
     <thead>
@@ -108,6 +138,7 @@
         <th class="num">Width (max)</th>
         <th class="num">Depth (max)</th>
         <th class="num">Fields (total)</th>
+        <th class="num">Score</th>
         <th class="num">PG Tables</th>
       </tr>
     </thead>
@@ -122,10 +153,11 @@
           <td class="num">68 <span class="level">(L3)</span></td>
           <td class="num">6</td>
           <td class="num">178</td>
+          <td class="num"><span class="score-badge" style="color:#c0392b;font-weight:700">17.00</span></td>
           <td class="num">31</td>
         </tr>
         <tr class="detail-row" id="detail-companies" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">companies</span> <span class="pill">companies_acquisition</span> <span class="pill">companies_acquisitions</span> <span class="pill">companies_competitions</span> <span class="pill">companies_external_links</span> <span class="pill">companies_funding_rounds</span> <span class="pill">companies_image</span> <span class="pill">companies_investments</span> <span class="pill">companies_ipo</span> <span class="pill">companies_milestones</span> <span class="pill">companies_offices</span> <span class="pill">companies_partners</span> <span class="pill">companies_products</span> <span class="pill">companies_providerships</span> <span class="pill">companies_relationships</span> <span class="pill">companies_screenshots</span> <span class="pill">companies_video_embeds</span> <span class="pill">companies_acquisition_acquiring_company</span> <span class="pill">companies_acquisitions_company</span> <span class="pill">companies_competitions_competitor</span> <span class="pill">companies_funding_rounds_investments</span> <span class="pill">companies_image_available_sizes</span> <span class="pill">companies_investments_funding_round</span> <span class="pill">companies_milestones_stoneable</span> <span class="pill">companies_providerships_provider</span> <span class="pill">companies_relationships_person</span> <span class="pill">companies_screenshots_available_sizes</span> <span class="pill">companies_funding_rounds_investments_company</span> <span class="pill">companies_funding_rounds_investments_financial_org</span> <span class="pill">companies_funding_rounds_investments_person</span> <span class="pill">companies_investments_funding_round_company</span></div>
           </td>
         </tr>
@@ -139,10 +171,11 @@
           <td class="num">4 <span class="level">(L1)</span></td>
           <td class="num">3</td>
           <td class="num">7</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.50</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-grades" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">grades</span> <span class="pill">grades_scores</span></div>
           </td>
         </tr>
@@ -156,10 +189,11 @@
           <td class="num">8 <span class="level">(L1)</span></td>
           <td class="num">2</td>
           <td class="num">12</td>
+          <td class="num"><span class="score-badge" style="color:#27ae60;font-weight:700">2.00</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-inspections" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">inspections</span> <span class="pill">inspections_address</span></div>
           </td>
         </tr>
@@ -173,10 +207,11 @@
           <td class="num">8 <span class="level">(L1)</span></td>
           <td class="num">3</td>
           <td class="num">13</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">4.50</span></td>
           <td class="num">3</td>
         </tr>
         <tr class="detail-row" id="detail-posts" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">posts</span> <span class="pill">posts_comments</span> <span class="pill">posts_tags</span></div>
           </td>
         </tr>
@@ -190,10 +225,11 @@
           <td class="num">7 <span class="level">(L1)</span></td>
           <td class="num">2</td>
           <td class="num">11</td>
+          <td class="num"><span class="score-badge" style="color:#27ae60;font-weight:700">2.00</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-routes" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">routes</span> <span class="pill">routes_airline</span></div>
           </td>
         </tr>
@@ -203,14 +239,15 @@
             </td>
           <td class="num">9842</td>
           <td class="num">1000</td>
-          <td class="num">20</td>
-          <td class="num">20 <span class="level">(L1)</span></td>
+          <td class="num">18</td>
+          <td class="num">18 <span class="level">(L1)</span></td>
           <td class="num">3</td>
-          <td class="num">38</td>
+          <td class="num">36</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.58</span></td>
           <td class="num">6</td>
         </tr>
         <tr class="detail-row" id="detail-stories" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">stories</span> <span class="pill">stories_container</span> <span class="pill">stories_shorturl</span> <span class="pill">stories_thumbnail</span> <span class="pill">stories_topic</span> <span class="pill">stories__user</span></div>
           </td>
         </tr>
@@ -224,10 +261,11 @@
           <td class="num">14 <span class="level">(L1)</span></td>
           <td class="num">3</td>
           <td class="num">20</td>
+          <td class="num"><span class="score-badge" style="color:#27ae60;font-weight:700">2.50</span></td>
           <td class="num">5</td>
         </tr>
         <tr class="detail-row" id="detail-trips" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">trips</span> <span class="pill">trips_end_station_location</span> <span class="pill">trips_start_station_location</span> <span class="pill">trips_end_station_location_coordinates</span> <span class="pill">trips_start_station_location_coordinates</span></div>
           </td>
         </tr>
@@ -241,10 +279,11 @@
           <td class="num">65 <span class="level">(L2)</span></td>
           <td class="num">6</td>
           <td class="num">156</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">4.05</span></td>
           <td class="num">26</td>
         </tr>
         <tr class="detail-row" id="detail-tweets" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">tweets</span> <span class="pill">tweets_coordinates</span> <span class="pill">tweets_entities</span> <span class="pill">tweets_geo</span> <span class="pill">tweets_place</span> <span class="pill">tweets_retweeted_status</span> <span class="pill">tweets__user</span> <span class="pill">tweets_coordinates_coordinates</span> <span class="pill">tweets_entities_hashtags</span> <span class="pill">tweets_entities_urls</span> <span class="pill">tweets_entities_user_mentions</span> <span class="pill">tweets_geo_coordinates</span> <span class="pill">tweets_place_attributes</span> <span class="pill">tweets_place_bounding_box</span> <span class="pill">tweets_retweeted_status_entities</span> <span class="pill">tweets_retweeted_status__user</span> <span class="pill">tweets_entities_hashtags_indices</span> <span class="pill">tweets_entities_urls_indices</span> <span class="pill">tweets_entities_user_mentions_indices</span> <span class="pill">tweets_place_bounding_box_coordinates</span> <span class="pill">tweets_retweeted_status_entities_hashtags</span> <span class="pill">tweets_retweeted_status_entities_urls</span> <span class="pill">tweets_retweeted_status_entities_user_mentions</span> <span class="pill">tweets_retweeted_status_entities_hashtags_indices</span> <span class="pill">tweets_retweeted_status_entities_urls_indices</span> <span class="pill">tweets_retweeted_status_entities_user_mentions_indices</span></div>
           </td>
         </tr>
@@ -258,10 +297,11 @@
           <td class="num">6 <span class="level">(L1)</span></td>
           <td class="num">2</td>
           <td class="num">8</td>
+          <td class="num"><span class="score-badge" style="color:#27ae60;font-weight:700">2.00</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-zips" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">zips</span> <span class="pill">zips_loc</span></div>
           </td>
         </tr>

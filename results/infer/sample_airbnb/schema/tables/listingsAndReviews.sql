@@ -116,7 +116,7 @@ CREATE TABLE listingsandreviews_reviews (
     date TIMESTAMP WITH TIME ZONE NOT NULL,
     listing_id INTEGER NOT NULL,
     reviewer_id INTEGER NOT NULL,
-    reviewer_name TEXT,
+    reviewer_name TEXT NOT NULL,
     FOREIGN KEY (listingsandreviews_id) REFERENCES listingsandreviews (id) DEFERRABLE INITIALLY DEFERRED
 );
 
