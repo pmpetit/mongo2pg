@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.3] - 2026-05-03
+
+### Added
+
+- **Migration complexity score** per collection and database in HTML report
+  - Per-collection score: `C = depth_max/2 + array_fields + distinct_fields/avg_fields_per_doc`
+  - DB-level score: `C_db = 1.5 × N_collections + Σ C_i`
+  - Three summary metrics surfaced in the report header: total score, doc-weighted average, max collection
+  - Easy / Medium / Hard badge with colour-coded thresholds (< 30 / 30–80 / > 80)
+  - Per-row score column in the collections table, colour-coded green/orange/red
+- Score is **JSONB-strategy-aware**: nested Object depth is not counted when `--jsonb` is active (those branches become a single opaque column, not relational depth)
+- HTML report title and subtitle now show the **cluster host** and **database name** extracted from the connection URI
+- `cluster_from_uri` public helper in `report.rs` to strip credentials from a URI for display
+
+### Changed
+
+- `render_html` signature gains a `cluster: &str` parameter
+
+---
+
 ## [0.3.2] - 2026-05-03
 
 ### Added
