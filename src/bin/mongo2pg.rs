@@ -305,7 +305,7 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 
 async fn run_infer(args: InferArgs) -> Result<()> {
     // Resolve URI, namespace, number, and percent – reading conf file if -c was given
-    let (resolved_uri, effective_output_dir, conf_namespace, conf_number, conf_percent) =
+    let (resolved_uri, effective_output_dir, conf_namespace, conf_number, conf_percent, conf_jsonb) =
         if let Some(ref conf) = args.config {
             let c = read_conf(conf)?;
             let uri = args.mongo.uri.clone().or(c.uri).ok_or_else(|| {
@@ -317,14 +317,21 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     .join("source")
                     .join("collections")
             });
-            (uri, Some(out_dir), c.namespace, c.number, c.percent)
+            (
+                uri,
+                Some(out_dir),
+                c.namespace,
+                c.number,
+                c.percent,
+                c.jsonb,
+            )
         } else {
             let uri = args
                 .mongo
                 .uri
                 .clone()
                 .expect("clap ensures uri is present when -c is absent");
-            (uri, args.output_dir.clone(), None, None, None)
+            (uri, args.output_dir.clone(), None, None, None, false)
         };
 
     let namespace = args
@@ -340,9 +347,10 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         .context("Failed to parse MongoDB URI")?;
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
 
-    // CLI takes priority over conf for number/percent; then fall back to default 1000
+    // CLI takes priority over conf for number/percent/jsonb; then fall back to defaults
     let resolved_number = args.number.or(conf_number);
     let resolved_percent = args.percent.or(conf_percent);
+    let resolved_jsonb = args.jsonb || conf_jsonb;
 
     let args = InferArgs {
         mongo: UriArg {
@@ -352,6 +360,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         output_dir: effective_output_dir,
         number: resolved_number,
         percent: resolved_percent,
+        jsonb: resolved_jsonb,
         config: None,
         ..args
     };
@@ -505,7 +514,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .join("config")
         .join(format!("{}.conf", args.project_name));
     let conf_content = format!(
-        "BASE_DIR = {}\nPROJECT_DIR = {}\n{}{}\n# NUMBER = 1000\n# PERCENT = 10\n",
+        "BASE_DIR = {}\nPROJECT_DIR = {}\n{}{}\n# NUMBER = 1000\n# PERCENT = 10\n# JSONB = false\n",
         args.project_base.display(),
         args.project_name,
         args.uri
@@ -709,6 +718,7 @@ struct ConfData {
     namespace: Option<String>,
     number: Option<u64>,
     percent: Option<f64>,
+    jsonb: bool,
 }
 
 /// Parse a `.conf` file produced by `mongo2pg init`.
@@ -722,6 +732,7 @@ fn read_conf(path: &Path) -> Result<ConfData> {
     let mut namespace: Option<String> = None;
     let mut number: Option<u64> = None;
     let mut percent: Option<f64> = None;
+    let mut jsonb: bool = false;
 
     for line in content.lines() {
         if let Some((key, val)) = line.split_once('=') {
@@ -732,6 +743,9 @@ fn read_conf(path: &Path) -> Result<ConfData> {
                 "NAMESPACE" => namespace = Some(val.trim().to_owned()),
                 "NUMBER" => number = val.trim().parse().ok(),
                 "PERCENT" => percent = val.trim().parse().ok(),
+                "JSONB" => {
+                    jsonb = matches!(val.trim().to_lowercase().as_str(), "true" | "1" | "yes")
+                }
                 _ => {}
             }
         }
@@ -748,5 +762,6 @@ fn read_conf(path: &Path) -> Result<ConfData> {
         namespace,
         number,
         percent,
+        jsonb,
     })
 }

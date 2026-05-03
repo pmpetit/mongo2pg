@@ -9,6 +9,7 @@
 //! PostgreSQL with `\COPY`.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
 
@@ -215,9 +216,34 @@ fn csv_escape(s: &str) -> String {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Table tree (mirrors the hierarchy created by to_pg)
-// ──────────────────────────────────────────────────────────────────────────────
+/// Convert a BSON value to a clean `serde_json::Value`, mapping BSON-specific
+/// types (ObjectId, DateTime, …) to their natural JSON equivalents.
+/// Used to serialise JSONB columns so PostgreSQL COPY can ingest them.
+fn bson_to_json_value(val: &Bson) -> serde_json::Value {
+    match val {
+        Bson::Double(d) => serde_json::Number::from_f64(*d)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        Bson::String(s) => serde_json::Value::String(s.clone()),
+        Bson::Array(arr) => serde_json::Value::Array(arr.iter().map(bson_to_json_value).collect()),
+        Bson::Document(doc) => {
+            let map = doc
+                .iter()
+                .map(|(k, v)| (k.clone(), bson_to_json_value(v)))
+                .collect();
+            serde_json::Value::Object(map)
+        }
+        Bson::Boolean(b) => serde_json::Value::Bool(*b),
+        Bson::Null | Bson::Undefined => serde_json::Value::Null,
+        Bson::Int32(n) => serde_json::Value::Number((*n).into()),
+        Bson::Int64(n) => serde_json::Value::Number((*n).into()),
+        Bson::ObjectId(oid) => serde_json::Value::String(oid.to_hex()),
+        Bson::DateTime(dt) => serde_json::Value::String(format_millis(dt.timestamp_millis())),
+        Bson::Decimal128(d) => serde_json::Value::String(d.to_string()),
+        Bson::Timestamp(ts) => serde_json::Value::Number(ts.time.into()),
+        other => serde_json::to_value(other).unwrap_or(serde_json::Value::Null),
+    }
+}
 
 struct TableNode {
     /// SQL table name
@@ -234,6 +260,9 @@ struct TableNode {
     /// `true` when this child table represents a scalar array
     /// (has exactly 3 columns: pk, fk, `value`).
     is_scalar_array: bool,
+    /// Columns whose SQL type is JSONB – serialised as clean JSON rather than
+    /// plain text so PostgreSQL COPY can ingest them.
+    jsonb_cols: HashSet<String>,
     children: Vec<TableNode>,
 }
 
@@ -298,6 +327,13 @@ fn build_node(
     let is_scalar_array =
         fk_col.is_some() && columns.len() == 3 && columns.iter().any(|c| c == "value");
 
+    let jsonb_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| c.col_type.eq_ignore_ascii_case("JSONB"))
+        .map(|c| c.name.clone())
+        .collect();
+
     let children: Vec<TableNode> = children_of
         .get(sql_t.name.as_str())
         .map(|cs| {
@@ -314,6 +350,7 @@ fn build_node(
         fk_col,
         mongo_field,
         is_scalar_array,
+        jsonb_cols,
         children,
     }
 }
@@ -376,7 +413,13 @@ fn extract_rows(
                 parent_id.unwrap_or("").to_owned()
             } else {
                 find_mongo_field(doc, col)
-                    .map(bson_to_string)
+                    .map(|v| {
+                        if node.jsonb_cols.contains(col) {
+                            serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default()
+                        } else {
+                            bson_to_string(v)
+                        }
+                    })
                     .unwrap_or_default()
             }
         })
