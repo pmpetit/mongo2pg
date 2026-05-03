@@ -1,0 +1,6799 @@
+{
+  "count": 10000,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "5553a99ae4b02cf715120965",
+            "5553a999e4b02cf71511b7b7",
+            "5553a999e4b02cf71511b7f4",
+            "5553a998e4b02cf715119fa4",
+            "5553a999e4b02cf71511ba41",
+            "5553a998e4b02cf715119d09",
+            "5553a99ae4b02cf7151209f5",
+            "5553a999e4b02cf71511dfa5",
+            "5553a999e4b02cf71511ba35",
+            "5553a999e4b02cf71511c172",
+            "5553a999e4b02cf71511bee2",
+            "5553a999e4b02cf71511e5a0",
+            "5553a999e4b02cf71511b913",
+            "5553a998e4b02cf715119a32",
+            "5553a999e4b02cf71511bc19",
+            "5553a999e4b02cf71511c0fa",
+            "5553a999e4b02cf71511e075",
+            "5553a998e4b02cf71511991e",
+            "5553a999e4b02cf71511df67",
+            "5553a999e4b02cf71511e39a"
+          ]
+        }
+      }
+    },
+    "airTemperature": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "quality": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 2.0,
+                  "values": [
+                    "1",
+                    "9"
+                  ]
+                }
+              }
+            },
+            "value": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 287.0,
+                  "values": [
+                    28.3,
+                    12.2,
+                    21,
+                    11.3,
+                    18.7,
+                    -2.4,
+                    27,
+                    28,
+                    14.8,
+                    9,
+                    2,
+                    15,
+                    29.8,
+                    10,
+                    17.2,
+                    1,
+                    27.5,
+                    2.5,
+                    8.9,
+                    1.2
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "value": 28.3,
+              "quality": "1"
+            },
+            {
+              "value": 12.2,
+              "quality": "1"
+            },
+            {
+              "value": 21,
+              "quality": "1"
+            },
+            {
+              "value": 11.3,
+              "quality": "1"
+            },
+            {
+              "value": 18.7,
+              "quality": "1"
+            },
+            {
+              "value": -2.4,
+              "quality": "1"
+            },
+            {
+              "value": 27,
+              "quality": "1"
+            },
+            {
+              "value": 28,
+              "quality": "1"
+            },
+            {
+              "value": 14.8,
+              "quality": "1"
+            },
+            {
+              "value": 9,
+              "quality": "1"
+            },
+            {
+              "value": 2,
+              "quality": "1"
+            },
+            {
+              "value": 15,
+              "quality": "1"
+            },
+            {
+              "value": 29.8,
+              "quality": "1"
+            },
+            {
+              "value": 10,
+              "quality": "1"
+            },
+            {
+              "value": 17.2,
+              "quality": "1"
+            },
+            {
+              "value": 1,
+              "quality": "1"
+            },
+            {
+              "value": 27.5,
+              "quality": "1"
+            },
+            {
+              "value": 2.5,
+              "quality": "1"
+            },
+            {
+              "value": 8.9,
+              "quality": "1"
+            },
+            {
+              "value": 1.2,
+              "quality": "1"
+            }
+          ]
+        }
+      }
+    },
+    "atmosphericPressureChange": {
+      "probability": 0.835,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 835,
+          "as_jsonb": true,
+          "object": {
+            "quantity24Hours": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 835,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 835,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 835,
+                          "ndistinct": 1.0,
+                          "values": [
+                            99.9
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": 99.9,
+                      "quality": "9"
+                    }
+                  ]
+                }
+              }
+            },
+            "quantity3Hours": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 835,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 835,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "1"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 835,
+                          "ndistinct": 58.0,
+                          "values": [
+                            0,
+                            0.5,
+                            3.9,
+                            2.2,
+                            1,
+                            1.1,
+                            3,
+                            2.8,
+                            0.1,
+                            0.6,
+                            4.3,
+                            1.5,
+                            2,
+                            1.2,
+                            0.8,
+                            1.3,
+                            0.3,
+                            0.9,
+                            0.4,
+                            2.5
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": 0,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0.5,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 3.9,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 2.2,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1.1,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 3,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 2.8,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0.1,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0.6,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 4.3,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1.5,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 2,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1.2,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0.8,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1.3,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0.3,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0.9,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0.4,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 2.5,
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "tendency": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 835,
+                  "object": {
+                    "code": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 835,
+                          "ndistinct": 9.0,
+                          "values": [
+                            "4",
+                            "1",
+                            "7",
+                            "8",
+                            "2",
+                            "3",
+                            "6",
+                            "0",
+                            "5"
+                          ]
+                        }
+                      }
+                    },
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 835,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "1"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "code": "4",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "1",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "7",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "8",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "2",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "3",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "6",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "0",
+                      "quality": "1"
+                    },
+                    {
+                      "code": "5",
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "tendency": {
+                "code": "4",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "1",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0.5,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "7",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0.5,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "7",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 3.9,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "8",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 2.2,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "2",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 1,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "3",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 1.1,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "6",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0.5,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "2",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 3,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "7",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 2.8,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "0",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0.1,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "2",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0.6,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "6",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 4.3,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "2",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 1.5,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "3",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 1,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "2",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 2,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "7",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 1.5,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "2",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 1.2,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "2",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0.8,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            },
+            {
+              "tendency": {
+                "code": "5",
+                "quality": "1"
+              },
+              "quantity3Hours": {
+                "value": 0,
+                "quality": "1"
+              },
+              "quantity24Hours": {
+                "value": 99.9,
+                "quality": "9"
+              }
+            }
+          ]
+        },
+        "Undefined": {
+          "probability": 0.165,
+          "sampled": 165
+        }
+      }
+    },
+    "atmosphericPressureObservation": {
+      "probability": 0.003,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 3,
+          "as_jsonb": true,
+          "object": {
+            "altimeterSetting": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 3,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 3,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "9",
+                            "1"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 3,
+                          "ndistinct": 2.0,
+                          "values": [
+                            9999.9,
+                            1015.9
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": 9999.9,
+                      "quality": "9"
+                    },
+                    {
+                      "value": 1015.9,
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "stationPressure": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 3,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 3,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 3,
+                          "ndistinct": 3.0,
+                          "values": [
+                            1009,
+                            1017,
+                            9999.9
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": 1009,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1017,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 9999.9,
+                      "quality": "9"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "altimeterSetting": {
+                "value": 9999.9,
+                "quality": "9"
+              },
+              "stationPressure": {
+                "value": 1009,
+                "quality": "1"
+              }
+            },
+            {
+              "altimeterSetting": {
+                "value": 9999.9,
+                "quality": "9"
+              },
+              "stationPressure": {
+                "value": 1017,
+                "quality": "1"
+              }
+            },
+            {
+              "altimeterSetting": {
+                "value": 1015.9,
+                "quality": "1"
+              },
+              "stationPressure": {
+                "value": 9999.9,
+                "quality": "9"
+              }
+            }
+          ]
+        },
+        "Undefined": {
+          "probability": 0.997,
+          "sampled": 997
+        }
+      }
+    },
+    "callLetters": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 704.0,
+          "values": [
+            "UWYJ",
+            "Y5ML",
+            "H8ZQ",
+            "EVEG",
+            "UBLF",
+            "UUXZ",
+            "JMZH",
+            "UAAX",
+            "PJYG",
+            "UJZN",
+            "EMJW",
+            "JFHX",
+            "GUSS",
+            "UWWZ",
+            "H9XW",
+            "SHIP",
+            "5MZH",
+            "JGJM",
+            "ELBO",
+            "TFUB"
+          ]
+        }
+      }
+    },
+    "dataSource": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            "4"
+          ]
+        }
+      }
+    },
+    "dewPoint": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "quality": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 2.0,
+                  "values": [
+                    "9",
+                    "1"
+                  ]
+                }
+              }
+            },
+            "value": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 236.0,
+                  "values": [
+                    999.9,
+                    6,
+                    17.6,
+                    24.3,
+                    24.4,
+                    13.3,
+                    23.4,
+                    24.8,
+                    -4.3,
+                    0.5,
+                    22.2,
+                    6.4,
+                    4.7,
+                    16.7,
+                    22.7,
+                    17.9,
+                    1.5,
+                    1.7,
+                    20.6,
+                    3.7
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "value": 999.9,
+              "quality": "9"
+            },
+            {
+              "value": 6,
+              "quality": "1"
+            },
+            {
+              "value": 17.6,
+              "quality": "1"
+            },
+            {
+              "value": 24.3,
+              "quality": "1"
+            },
+            {
+              "value": 24.4,
+              "quality": "1"
+            },
+            {
+              "value": 13.3,
+              "quality": "1"
+            },
+            {
+              "value": 23.4,
+              "quality": "1"
+            },
+            {
+              "value": 24.8,
+              "quality": "1"
+            },
+            {
+              "value": -4.3,
+              "quality": "1"
+            },
+            {
+              "value": 0.5,
+              "quality": "1"
+            },
+            {
+              "value": 22.2,
+              "quality": "1"
+            },
+            {
+              "value": 6.4,
+              "quality": "1"
+            },
+            {
+              "value": 4.7,
+              "quality": "1"
+            },
+            {
+              "value": 16.7,
+              "quality": "1"
+            },
+            {
+              "value": 22.7,
+              "quality": "1"
+            },
+            {
+              "value": 17.9,
+              "quality": "1"
+            },
+            {
+              "value": 1.5,
+              "quality": "1"
+            },
+            {
+              "value": 1.7,
+              "quality": "1"
+            },
+            {
+              "value": 20.6,
+              "quality": "1"
+            },
+            {
+              "value": 3.7,
+              "quality": "1"
+            }
+          ]
+        }
+      }
+    },
+    "elevation": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            9999
+          ]
+        }
+      }
+    },
+    "liquidPrecipitation": {
+      "probability": 0.006,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 6,
+          "ndistinct": 0.006,
+          "array": {
+            "probability": 1.0,
+            "types": {
+              "Object": {
+                "probability": 1.0,
+                "sampled": 6,
+                "as_jsonb": true,
+                "object": {
+                  "condition": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 6,
+                        "ndistinct": 1.0,
+                        "values": [
+                          "9"
+                        ]
+                      }
+                    }
+                  },
+                  "depth": {
+                    "probability": 1.0,
+                    "types": {
+                      "Number": {
+                        "probability": 1.0,
+                        "sampled": 6,
+                        "ndistinct": 3.0,
+                        "values": [
+                          40,
+                          0,
+                          7000
+                        ]
+                      }
+                    }
+                  },
+                  "period": {
+                    "probability": 1.0,
+                    "types": {
+                      "Number": {
+                        "probability": 1.0,
+                        "sampled": 6,
+                        "ndistinct": 3.0,
+                        "values": [
+                          12,
+                          6,
+                          99
+                        ]
+                      }
+                    }
+                  },
+                  "quality": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 6,
+                        "ndistinct": 2.0,
+                        "values": [
+                          "1",
+                          "2"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "values": [
+                  {
+                    "period": 12,
+                    "depth": 40,
+                    "condition": "9",
+                    "quality": "1"
+                  },
+                  {
+                    "period": 6,
+                    "depth": 0,
+                    "condition": "9",
+                    "quality": "1"
+                  },
+                  {
+                    "period": 99,
+                    "depth": 7000,
+                    "condition": "9",
+                    "quality": "2"
+                  }
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              {
+                "period": 12,
+                "depth": 40,
+                "condition": "9",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "period": 6,
+                "depth": 0,
+                "condition": "9",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "period": 99,
+                "depth": 7000,
+                "condition": "9",
+                "quality": "2"
+              }
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.994,
+          "sampled": 994
+        }
+      }
+    },
+    "pastWeatherObservationManual": {
+      "probability": 0.917,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 917,
+          "ndistinct": 0.917,
+          "array": {
+            "probability": 1.0,
+            "types": {
+              "Object": {
+                "probability": 1.0,
+                "sampled": 917,
+                "as_jsonb": true,
+                "object": {
+                  "atmosphericCondition": {
+                    "probability": 1.0,
+                    "types": {
+                      "Object": {
+                        "probability": 1.0,
+                        "sampled": 917,
+                        "object": {
+                          "quality": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 917,
+                                "ndistinct": 1.0,
+                                "values": [
+                                  "1"
+                                ]
+                              }
+                            }
+                          },
+                          "value": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 917,
+                                "ndistinct": 10.0,
+                                "values": [
+                                  "0",
+                                  "1",
+                                  "6",
+                                  "8",
+                                  "4",
+                                  "2",
+                                  "5",
+                                  "9",
+                                  "7",
+                                  "3"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "values": [
+                          {
+                            "value": "0",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "1",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "6",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "8",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "4",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "2",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "5",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "9",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "7",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "3",
+                            "quality": "1"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "period": {
+                    "probability": 1.0,
+                    "types": {
+                      "Object": {
+                        "probability": 1.0,
+                        "sampled": 917,
+                        "object": {
+                          "quality": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 917,
+                                "ndistinct": 2.0,
+                                "values": [
+                                  "1",
+                                  "9"
+                                ]
+                              }
+                            }
+                          },
+                          "value": {
+                            "probability": 1.0,
+                            "types": {
+                              "Number": {
+                                "probability": 1.0,
+                                "sampled": 917,
+                                "ndistinct": 3.0,
+                                "values": [
+                                  6,
+                                  3,
+                                  99
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "values": [
+                          {
+                            "value": 6,
+                            "quality": "1"
+                          },
+                          {
+                            "value": 3,
+                            "quality": "1"
+                          },
+                          {
+                            "value": 99,
+                            "quality": "9"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "values": [
+                  {
+                    "atmosphericCondition": {
+                      "value": "0",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "1",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "6",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "8",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "4",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "2",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "0",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 3,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "5",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "8",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 3,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "9",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "7",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 6,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "2",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 3,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "6",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 3,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "7",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 3,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "5",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 3,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "4",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 99,
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "0",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 99,
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "1",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 3,
+                      "quality": "1"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "6",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 99,
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "atmosphericCondition": {
+                      "value": "2",
+                      "quality": "1"
+                    },
+                    "period": {
+                      "value": 99,
+                      "quality": "9"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "0",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "1",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "6",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "8",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "4",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "2",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "0",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 3,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "5",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "8",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 3,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "9",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "7",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 6,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "2",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 3,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "6",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 3,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "7",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 3,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "5",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 3,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "4",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 99,
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "0",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 99,
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "1",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 3,
+                  "quality": "1"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "6",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 99,
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "atmosphericCondition": {
+                  "value": "2",
+                  "quality": "1"
+                },
+                "period": {
+                  "value": 99,
+                  "quality": "9"
+                }
+              }
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.083,
+          "sampled": 83
+        }
+      }
+    },
+    "position": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "coordinates": {
+              "probability": 1.0,
+              "types": {
+                "Array": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 2.0,
+                  "array": {
+                    "probability": 2.0,
+                    "types": {
+                      "Number": {
+                        "probability": 1.0,
+                        "sampled": 2000,
+                        "ndistinct": 1000.0,
+                        "values": [
+                          112.4,
+                          15,
+                          -6.7,
+                          46.8,
+                          -148.9,
+                          29.4,
+                          136.5,
+                          33.6,
+                          -70.1,
+                          36,
+                          60.7,
+                          -66.4,
+                          108.7,
+                          87.3,
+                          88.5,
+                          -2.5,
+                          -70,
+                          37.2,
+                          35.1,
+                          42.9
+                        ]
+                      }
+                    }
+                  },
+                  "values": [
+                    [
+                      112.4,
+                      15
+                    ],
+                    [
+                      -6.7,
+                      46.8
+                    ],
+                    [
+                      -148.9,
+                      29.4
+                    ],
+                    [
+                      136.5,
+                      33.6
+                    ],
+                    [
+                      -70.1,
+                      36
+                    ],
+                    [
+                      60.7,
+                      -66.4
+                    ],
+                    [
+                      108.7,
+                      87.3
+                    ],
+                    [
+                      88.5,
+                      -2.5
+                    ],
+                    [
+                      -70,
+                      37.2
+                    ],
+                    [
+                      35.1,
+                      42.9
+                    ],
+                    [
+                      -170.5,
+                      56.9
+                    ],
+                    [
+                      152.6,
+                      33.1
+                    ],
+                    [
+                      89.2,
+                      3.7
+                    ],
+                    [
+                      39.4,
+                      18.2
+                    ],
+                    [
+                      -129.7,
+                      48.7
+                    ],
+                    [
+                      -80.6,
+                      -37.6
+                    ],
+                    [
+                      158.8,
+                      44
+                    ],
+                    [
+                      149.8,
+                      10.3
+                    ],
+                    [
+                      145.4,
+                      42.2
+                    ],
+                    [
+                      -14.4,
+                      62.3
+                    ]
+                  ]
+                }
+              }
+            },
+            "type": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 1.0,
+                  "values": [
+                    "Point"
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "type": "Point",
+              "coordinates": [
+                112.4,
+                15
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -6.7,
+                46.8
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -148.9,
+                29.4
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                136.5,
+                33.6
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -70.1,
+                36
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                60.7,
+                -66.4
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                108.7,
+                87.3
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                88.5,
+                -2.5
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -70,
+                37.2
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                35.1,
+                42.9
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -170.5,
+                56.9
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                152.6,
+                33.1
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                89.2,
+                3.7
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                39.4,
+                18.2
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -129.7,
+                48.7
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -80.6,
+                -37.6
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                158.8,
+                44
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                149.8,
+                10.3
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                145.4,
+                42.2
+              ]
+            },
+            {
+              "type": "Point",
+              "coordinates": [
+                -14.4,
+                62.3
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "precipitationEstimatedObservation": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "discrepancy": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 4.0,
+                  "values": [
+                    "2",
+                    "0",
+                    "1",
+                    "4"
+                  ]
+                }
+              }
+            },
+            "estimatedWaterDepth": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 10.0,
+                  "values": [
+                    0,
+                    3,
+                    999,
+                    2,
+                    1,
+                    10,
+                    7,
+                    5,
+                    4,
+                    6
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 0
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 3
+            },
+            {
+              "discrepancy": "0",
+              "estimatedWaterDepth": 999
+            },
+            {
+              "discrepancy": "1",
+              "estimatedWaterDepth": 0
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 2
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 999
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 1
+            },
+            {
+              "discrepancy": "1",
+              "estimatedWaterDepth": 10
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 7
+            },
+            {
+              "discrepancy": "1",
+              "estimatedWaterDepth": 1
+            },
+            {
+              "discrepancy": "1",
+              "estimatedWaterDepth": 2
+            },
+            {
+              "discrepancy": "0",
+              "estimatedWaterDepth": 0
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 5
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 4
+            },
+            {
+              "discrepancy": "0",
+              "estimatedWaterDepth": 4
+            },
+            {
+              "discrepancy": "1",
+              "estimatedWaterDepth": 3
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 10
+            },
+            {
+              "discrepancy": "2",
+              "estimatedWaterDepth": 6
+            },
+            {
+              "discrepancy": "1",
+              "estimatedWaterDepth": 999
+            },
+            {
+              "discrepancy": "4",
+              "estimatedWaterDepth": 0
+            }
+          ]
+        }
+      }
+    },
+    "presentWeatherObservationManual": {
+      "probability": 0.919,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 919,
+          "ndistinct": 0.919,
+          "array": {
+            "probability": 1.0,
+            "types": {
+              "Object": {
+                "probability": 1.0,
+                "sampled": 919,
+                "as_jsonb": true,
+                "object": {
+                  "condition": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 919,
+                        "ndistinct": 51.0,
+                        "values": [
+                          "03",
+                          "02",
+                          "61",
+                          "15",
+                          "25",
+                          "44",
+                          "74",
+                          "10",
+                          "80",
+                          "01",
+                          "00",
+                          "47",
+                          "45",
+                          "60",
+                          "63",
+                          "04",
+                          "53",
+                          "85",
+                          "13",
+                          "58"
+                        ]
+                      }
+                    }
+                  },
+                  "quality": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 919,
+                        "ndistinct": 1.0,
+                        "values": [
+                          "1"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "values": [
+                  {
+                    "condition": "03",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "02",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "61",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "15",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "25",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "44",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "74",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "10",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "80",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "01",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "00",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "47",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "45",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "60",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "63",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "04",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "53",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "85",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "13",
+                    "quality": "1"
+                  },
+                  {
+                    "condition": "58",
+                    "quality": "1"
+                  }
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              {
+                "condition": "03",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "02",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "61",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "15",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "25",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "44",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "74",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "10",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "80",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "01",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "00",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "47",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "45",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "60",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "63",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "04",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "53",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "85",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "13",
+                "quality": "1"
+              }
+            ],
+            [
+              {
+                "condition": "58",
+                "quality": "1"
+              }
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.081,
+          "sampled": 81
+        }
+      }
+    },
+    "pressure": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "quality": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 2.0,
+                  "values": [
+                    "1",
+                    "9"
+                  ]
+                }
+              }
+            },
+            "value": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 356.0,
+                  "values": [
+                    1018.1,
+                    1029.5,
+                    1014,
+                    1016.9,
+                    1003.1,
+                    992.9,
+                    1009.5,
+                    1008.8,
+                    1006.6,
+                    1033.6,
+                    1010.1,
+                    1008.6,
+                    1011.6,
+                    1007.9,
+                    1019,
+                    1017.5,
+                    1008,
+                    1010.2,
+                    1022.9,
+                    1044.9
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "value": 1018.1,
+              "quality": "1"
+            },
+            {
+              "value": 1029.5,
+              "quality": "1"
+            },
+            {
+              "value": 1014,
+              "quality": "1"
+            },
+            {
+              "value": 1016.9,
+              "quality": "1"
+            },
+            {
+              "value": 1003.1,
+              "quality": "1"
+            },
+            {
+              "value": 992.9,
+              "quality": "1"
+            },
+            {
+              "value": 1009.5,
+              "quality": "1"
+            },
+            {
+              "value": 1008.8,
+              "quality": "1"
+            },
+            {
+              "value": 1006.6,
+              "quality": "1"
+            },
+            {
+              "value": 1033.6,
+              "quality": "1"
+            },
+            {
+              "value": 1010.1,
+              "quality": "1"
+            },
+            {
+              "value": 1008.6,
+              "quality": "1"
+            },
+            {
+              "value": 1011.6,
+              "quality": "1"
+            },
+            {
+              "value": 1007.9,
+              "quality": "1"
+            },
+            {
+              "value": 1019,
+              "quality": "1"
+            },
+            {
+              "value": 1017.5,
+              "quality": "1"
+            },
+            {
+              "value": 1008,
+              "quality": "1"
+            },
+            {
+              "value": 1010.2,
+              "quality": "1"
+            },
+            {
+              "value": 1022.9,
+              "quality": "1"
+            },
+            {
+              "value": 1044.9,
+              "quality": "1"
+            }
+          ]
+        }
+      }
+    },
+    "qualityControlProcess": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            "V020"
+          ]
+        }
+      }
+    },
+    "seaSurfaceTemperature": {
+      "probability": 0.801,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 801,
+          "as_jsonb": true,
+          "object": {
+            "quality": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 801,
+                  "ndistinct": 1.0,
+                  "values": [
+                    "9"
+                  ]
+                }
+              }
+            },
+            "value": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 801,
+                  "ndistinct": 238.0,
+                  "values": [
+                    26.3,
+                    12,
+                    21,
+                    14.5,
+                    18.7,
+                    0.8,
+                    28,
+                    20,
+                    9,
+                    -0.7,
+                    15.5,
+                    29.3,
+                    26,
+                    8,
+                    16.5,
+                    6,
+                    2,
+                    6.1,
+                    13.7,
+                    5.6
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "value": 26.3,
+              "quality": "9"
+            },
+            {
+              "value": 12,
+              "quality": "9"
+            },
+            {
+              "value": 21,
+              "quality": "9"
+            },
+            {
+              "value": 14.5,
+              "quality": "9"
+            },
+            {
+              "value": 18.7,
+              "quality": "9"
+            },
+            {
+              "value": 0.8,
+              "quality": "9"
+            },
+            {
+              "value": 28,
+              "quality": "9"
+            },
+            {
+              "value": 20,
+              "quality": "9"
+            },
+            {
+              "value": 9,
+              "quality": "9"
+            },
+            {
+              "value": -0.7,
+              "quality": "9"
+            },
+            {
+              "value": 15.5,
+              "quality": "9"
+            },
+            {
+              "value": 29.3,
+              "quality": "9"
+            },
+            {
+              "value": 26,
+              "quality": "9"
+            },
+            {
+              "value": 8,
+              "quality": "9"
+            },
+            {
+              "value": 16.5,
+              "quality": "9"
+            },
+            {
+              "value": 6,
+              "quality": "9"
+            },
+            {
+              "value": 2,
+              "quality": "9"
+            },
+            {
+              "value": 6.1,
+              "quality": "9"
+            },
+            {
+              "value": 13.7,
+              "quality": "9"
+            },
+            {
+              "value": 5.6,
+              "quality": "9"
+            }
+          ]
+        },
+        "Undefined": {
+          "probability": 0.199,
+          "sampled": 199
+        }
+      }
+    },
+    "sections": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 6.869,
+          "array": {
+            "probability": 6.869,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 6869,
+                "ndistinct": 15.0,
+                "values": [
+                  "AG1",
+                  "AY1",
+                  "GF1",
+                  "MD1",
+                  "MW1",
+                  "SA1",
+                  "UA1",
+                  "UG1",
+                  "WD1",
+                  "AA1",
+                  "UG2",
+                  "GA1",
+                  "OA1",
+                  "GA2",
+                  "MA1"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UA1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UA1",
+              "UG1"
+            ],
+            [
+              "AG1",
+              "GF1",
+              "MD1",
+              "SA1",
+              "UA1",
+              "UG1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UA1",
+              "UG1",
+              "WD1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "UA1",
+              "UG1"
+            ],
+            [
+              "AA1",
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UA1",
+              "UG1",
+              "UG2"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GA1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UA1",
+              "UG1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UA1",
+              "UG1",
+              "UG2"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MW1"
+            ],
+            [
+              "AG1",
+              "GF1"
+            ],
+            [
+              "AG1",
+              "MD1",
+              "OA1",
+              "SA1",
+              "UA1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GA1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "OA1",
+              "UA1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UA1",
+              "UG2"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MW1",
+              "SA1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GA1",
+              "GF1",
+              "MD1",
+              "MW1",
+              "SA1",
+              "UG1",
+              "UG2"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MD1",
+              "MW1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GA1",
+              "GF1",
+              "MW1",
+              "OA1",
+              "UA1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GA1",
+              "GF1",
+              "MW1",
+              "SA1",
+              "UA1"
+            ],
+            [
+              "AG1",
+              "AY1",
+              "GF1",
+              "MW1",
+              "UA1"
+            ]
+          ]
+        }
+      }
+    },
+    "skyCondition": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "cavok": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 1.0,
+                  "values": [
+                    "N"
+                  ]
+                }
+              }
+            },
+            "ceilingHeight": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "determination": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "C",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 26.0,
+                          "values": [
+                            420,
+                            22000,
+                            750,
+                            4500,
+                            99999,
+                            9000,
+                            210,
+                            30,
+                            450,
+                            1200,
+                            240,
+                            300,
+                            900,
+                            660,
+                            120,
+                            3600,
+                            1500,
+                            60,
+                            3000,
+                            1050
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": 420,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 22000,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 750,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 4500,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 99999,
+                      "quality": "9",
+                      "determination": "9"
+                    },
+                    {
+                      "value": 9000,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 210,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 30,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 450,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 1200,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 240,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 300,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 900,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 660,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 120,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 3600,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 1500,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 60,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 3000,
+                      "quality": "1",
+                      "determination": "C"
+                    },
+                    {
+                      "value": 1050,
+                      "quality": "1",
+                      "determination": "C"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "ceilingHeight": {
+                "value": 420,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 22000,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 750,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 4500,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 99999,
+                "quality": "9",
+                "determination": "9"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 9000,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 210,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 30,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 450,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 1200,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 240,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 300,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 900,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 660,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 120,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 3600,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 1500,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 60,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 3000,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            },
+            {
+              "ceilingHeight": {
+                "value": 1050,
+                "quality": "1",
+                "determination": "C"
+              },
+              "cavok": "N"
+            }
+          ]
+        }
+      }
+    },
+    "skyConditionObservation": {
+      "probability": 0.951,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 951,
+          "as_jsonb": true,
+          "object": {
+            "highCloudGenus": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 951,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 11.0,
+                          "values": [
+                            "00",
+                            "09",
+                            "04",
+                            "99",
+                            "02",
+                            "01",
+                            "05",
+                            "03",
+                            "06",
+                            "08",
+                            "07"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": "00",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "09",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "04",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "99",
+                      "quality": "9"
+                    },
+                    {
+                      "value": "02",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "01",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "05",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "03",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "06",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "07",
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "lowCloudGenus": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 951,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 11.0,
+                          "values": [
+                            "09",
+                            "00",
+                            "01",
+                            "02",
+                            "07",
+                            "05",
+                            "04",
+                            "03",
+                            "99",
+                            "08",
+                            "06"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": "09",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "00",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "01",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "02",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "07",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "05",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "04",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "03",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "99",
+                      "quality": "9"
+                    },
+                    {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "06",
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "lowestCloudBaseHeight": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 951,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 10.0,
+                          "values": [
+                            450,
+                            99999,
+                            800,
+                            250,
+                            1250,
+                            1750,
+                            25,
+                            150,
+                            75,
+                            2250
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": 450,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 99999,
+                      "quality": "9"
+                    },
+                    {
+                      "value": 800,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 250,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1250,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 1750,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 25,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 150,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 75,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 2250,
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "lowestCloudCoverage": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 951,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 11.0,
+                          "values": [
+                            "05",
+                            "00",
+                            "02",
+                            "06",
+                            "08",
+                            "04",
+                            "99",
+                            "01",
+                            "09",
+                            "07",
+                            "03"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": "05",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "00",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "02",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "06",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "04",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "99",
+                      "quality": "9"
+                    },
+                    {
+                      "value": "01",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "09",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "07",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "03",
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "midCloudGenus": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 951,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 11.0,
+                          "values": [
+                            "05",
+                            "00",
+                            "01",
+                            "02",
+                            "99",
+                            "08",
+                            "07",
+                            "04",
+                            "03",
+                            "06",
+                            "09"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": "05",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "00",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "01",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "02",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "99",
+                      "quality": "9"
+                    },
+                    {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "07",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "04",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "03",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "06",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "09",
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "totalCoverage": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 951,
+                  "object": {
+                    "opaque": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "99"
+                          ]
+                        }
+                      }
+                    },
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 951,
+                          "ndistinct": 11.0,
+                          "values": [
+                            "05",
+                            "00",
+                            "06",
+                            "03",
+                            "08",
+                            "04",
+                            "07",
+                            "01",
+                            "09",
+                            "02",
+                            "99"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": "05",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "00",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "06",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "03",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "08",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "04",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "07",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "01",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "09",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "02",
+                      "opaque": "99",
+                      "quality": "1"
+                    },
+                    {
+                      "value": "99",
+                      "opaque": "99",
+                      "quality": "9"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "totalCoverage": {
+                "value": "05",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "05",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "09",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "05",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "00",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "00",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 99999,
+                "quality": "9"
+              },
+              "midCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "06",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "05",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "01",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 800,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "01",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "09",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "03",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "02",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "02",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 800,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "04",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "08",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "06",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "07",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "02",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "08",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "08",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "05",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 800,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "04",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "04",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "04",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "07",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "02",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "03",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "08",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "02",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "08",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "99",
+                "quality": "9"
+              },
+              "lowCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 250,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "07",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "00",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 99999,
+                "quality": "9"
+              },
+              "midCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "09",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "04",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "04",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "02",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "08",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "08",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "05",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 250,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "08",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "01",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "01",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "07",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "01",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "01",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "01",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "01",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "09",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "09",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 99999,
+                "quality": "9"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "07",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "07",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "05",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 800,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "00",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "08",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "08",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "07",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 800,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "05",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "02",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "01",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 450,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "04",
+                "quality": "1"
+              },
+              "highCloudGenus": {
+                "value": "05",
+                "quality": "1"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "07",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "07",
+                "quality": "1"
+              },
+              "lowCloudGenus": {
+                "value": "07",
+                "quality": "1"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 99999,
+                "quality": "9"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "totalCoverage": {
+                "value": "08",
+                "opaque": "99",
+                "quality": "1"
+              },
+              "lowestCloudCoverage": {
+                "value": "99",
+                "quality": "9"
+              },
+              "lowCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "lowestCloudBaseHeight": {
+                "value": 800,
+                "quality": "1"
+              },
+              "midCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              },
+              "highCloudGenus": {
+                "value": "99",
+                "quality": "9"
+              }
+            }
+          ]
+        },
+        "Undefined": {
+          "probability": 0.049,
+          "sampled": 49
+        }
+      }
+    },
+    "skyCoverLayer": {
+      "probability": 0.082,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 82,
+          "ndistinct": 0.087,
+          "array": {
+            "probability": 1.0609756097560976,
+            "types": {
+              "Object": {
+                "probability": 1.0,
+                "sampled": 87,
+                "as_jsonb": true,
+                "object": {
+                  "baseHeight": {
+                    "probability": 1.0,
+                    "types": {
+                      "Object": {
+                        "probability": 1.0,
+                        "sampled": 87,
+                        "object": {
+                          "quality": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 87,
+                                "ndistinct": 1.0,
+                                "values": [
+                                  "9"
+                                ]
+                              }
+                            }
+                          },
+                          "value": {
+                            "probability": 1.0,
+                            "types": {
+                              "Number": {
+                                "probability": 1.0,
+                                "sampled": 87,
+                                "ndistinct": 12.0,
+                                "values": [
+                                  99999,
+                                  450,
+                                  900,
+                                  300,
+                                  660,
+                                  1050,
+                                  600,
+                                  1200,
+                                  210,
+                                  750,
+                                  240,
+                                  3000
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "values": [
+                          {
+                            "value": 99999,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 450,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 900,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 300,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 660,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 1050,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 600,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 1200,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 210,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 750,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 240,
+                            "quality": "9"
+                          },
+                          {
+                            "value": 3000,
+                            "quality": "9"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "cloudType": {
+                    "probability": 1.0,
+                    "types": {
+                      "Object": {
+                        "probability": 1.0,
+                        "sampled": 87,
+                        "object": {
+                          "quality": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 87,
+                                "ndistinct": 1.0,
+                                "values": [
+                                  "9"
+                                ]
+                              }
+                            }
+                          },
+                          "value": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 87,
+                                "ndistinct": 5.0,
+                                "values": [
+                                  "99",
+                                  "07",
+                                  "08",
+                                  "05",
+                                  "03"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "values": [
+                          {
+                            "value": "99",
+                            "quality": "9"
+                          },
+                          {
+                            "value": "07",
+                            "quality": "9"
+                          },
+                          {
+                            "value": "08",
+                            "quality": "9"
+                          },
+                          {
+                            "value": "05",
+                            "quality": "9"
+                          },
+                          {
+                            "value": "03",
+                            "quality": "9"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "coverage": {
+                    "probability": 1.0,
+                    "types": {
+                      "Object": {
+                        "probability": 1.0,
+                        "sampled": 87,
+                        "object": {
+                          "quality": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 87,
+                                "ndistinct": 1.0,
+                                "values": [
+                                  "1"
+                                ]
+                              }
+                            }
+                          },
+                          "value": {
+                            "probability": 1.0,
+                            "types": {
+                              "String": {
+                                "probability": 1.0,
+                                "sampled": 87,
+                                "ndistinct": 8.0,
+                                "values": [
+                                  "09",
+                                  "08",
+                                  "02",
+                                  "05",
+                                  "06",
+                                  "01",
+                                  "07",
+                                  "04"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "values": [
+                          {
+                            "value": "09",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "08",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "02",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "05",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "06",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "01",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "07",
+                            "quality": "1"
+                          },
+                          {
+                            "value": "04",
+                            "quality": "1"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "values": [
+                  {
+                    "coverage": {
+                      "value": "09",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 99999,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "99",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 450,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "99",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "02",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 900,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "99",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 300,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "07",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "05",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 660,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "08",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 1050,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "05",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "06",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 1050,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "05",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 600,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "05",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "01",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 600,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "08",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "07",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 1200,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "05",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "02",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 210,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "07",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 750,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "05",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "04",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 240,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "07",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "08",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 900,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "05",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "06",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 1200,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "05",
+                      "quality": "9"
+                    }
+                  },
+                  {
+                    "coverage": {
+                      "value": "07",
+                      "quality": "1"
+                    },
+                    "baseHeight": {
+                      "value": 3000,
+                      "quality": "9"
+                    },
+                    "cloudType": {
+                      "value": "03",
+                      "quality": "9"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              {
+                "coverage": {
+                  "value": "09",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 99999,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "99",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "08",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 450,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "99",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "02",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 900,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "99",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "08",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 300,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "07",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "05",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 660,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "08",
+                  "quality": "9"
+                }
+              },
+              {
+                "coverage": {
+                  "value": "08",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 1050,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "06",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 1050,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "08",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 600,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "01",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 600,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "08",
+                  "quality": "9"
+                }
+              },
+              {
+                "coverage": {
+                  "value": "07",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 1200,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "02",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 210,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "07",
+                  "quality": "9"
+                }
+              },
+              {
+                "coverage": {
+                  "value": "08",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 750,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "04",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 240,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "07",
+                  "quality": "9"
+                }
+              },
+              {
+                "coverage": {
+                  "value": "08",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 900,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "07",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 1200,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              }
+            ],
+            [
+              {
+                "coverage": {
+                  "value": "06",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 1200,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "05",
+                  "quality": "9"
+                }
+              },
+              {
+                "coverage": {
+                  "value": "07",
+                  "quality": "1"
+                },
+                "baseHeight": {
+                  "value": 3000,
+                  "quality": "9"
+                },
+                "cloudType": {
+                  "value": "03",
+                  "quality": "9"
+                }
+              }
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.918,
+          "sampled": 918
+        }
+      }
+    },
+    "st": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 929.0,
+          "values": [
+            "x+15000+112400",
+            "x+46800-006700",
+            "x+29400-148900",
+            "x+33600+136500",
+            "x+36000-070100",
+            "x-66400+060700",
+            "x+87300+108700",
+            "x-02500+088500",
+            "x+37200-070000",
+            "x+42900+035100",
+            "x+56900-170500",
+            "x+33100+152600",
+            "x+03700+089200",
+            "x+18200+039400",
+            "x+48700-129700",
+            "x-37600-080600",
+            "x+44000+158800",
+            "x+10300+149800",
+            "x+42200+145400",
+            "x+62300-014400"
+          ]
+        }
+      }
+    },
+    "ts": {
+      "probability": 1.0,
+      "types": {
+        "Date": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 79.0,
+          "values": [
+            "1984-03-13 12:00:00.0 +00:00:00",
+            "1984-03-07 18:00:00.0 +00:00:00",
+            "1984-03-08 0:00:00.0 +00:00:00",
+            "1984-03-06 6:00:00.0 +00:00:00",
+            "1984-03-07 12:00:00.0 +00:00:00",
+            "1984-03-12 12:00:00.0 +00:00:00",
+            "1984-03-10 12:00:00.0 +00:00:00",
+            "1984-03-07 6:00:00.0 +00:00:00",
+            "1984-03-08 18:00:00.0 +00:00:00",
+            "1984-03-08 12:00:00.0 +00:00:00",
+            "1984-03-08 6:00:00.0 +00:00:00",
+            "1984-03-05 12:00:00.0 +00:00:00",
+            "1984-03-10 0:00:00.0 +00:00:00",
+            "1984-03-10 6:00:00.0 +00:00:00",
+            "1984-03-12 18:00:00.0 +00:00:00",
+            "1984-03-10 18:00:00.0 +00:00:00",
+            "1984-03-07 15:00:00.0 +00:00:00",
+            "1984-03-09 18:00:00.0 +00:00:00",
+            "1984-03-06 12:00:00.0 +00:00:00",
+            "1984-03-11 20:00:00.0 +00:00:00"
+          ]
+        }
+      }
+    },
+    "type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 2.0,
+          "values": [
+            "FM-13",
+            "SAO"
+          ]
+        }
+      }
+    },
+    "visibility": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "distance": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 19.0,
+                          "values": [
+                            20000,
+                            4000,
+                            10000,
+                            50000,
+                            200,
+                            500,
+                            999999,
+                            1000,
+                            100,
+                            2000,
+                            70000,
+                            0,
+                            800,
+                            60000,
+                            28000,
+                            700,
+                            8000,
+                            75000,
+                            600
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": 20000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 4000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 10000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 50000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 200,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 500,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 999999,
+                      "quality": "9"
+                    },
+                    {
+                      "value": 1000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 100,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 2000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 70000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 0,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 800,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 60000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 28000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 700,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 8000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 75000,
+                      "quality": "1"
+                    },
+                    {
+                      "value": 600,
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "variability": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "9",
+                            "1"
+                          ]
+                        }
+                      }
+                    },
+                    "value": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "N"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "value": "N",
+                      "quality": "9"
+                    },
+                    {
+                      "value": "N",
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "distance": {
+                "value": 20000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 4000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 10000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 50000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 200,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 500,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 999999,
+                "quality": "9"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 1000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 100,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 2000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 70000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 0,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 800,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 60000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 28000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 700,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 8000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 75000,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 600,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "9"
+              }
+            },
+            {
+              "distance": {
+                "value": 0,
+                "quality": "1"
+              },
+              "variability": {
+                "value": "N",
+                "quality": "1"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "waveMeasurement": {
+      "probability": 0.758,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 758,
+          "as_jsonb": true,
+          "object": {
+            "method": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 758,
+                  "ndistinct": 2.0,
+                  "values": [
+                    "M",
+                    "I"
+                  ]
+                }
+              }
+            },
+            "seaState": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 758,
+                  "object": {
+                    "code": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 758,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "99",
+                            "00"
+                          ]
+                        }
+                      }
+                    },
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 758,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "9"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "code": "99",
+                      "quality": "9"
+                    },
+                    {
+                      "code": "00",
+                      "quality": "9"
+                    }
+                  ]
+                }
+              }
+            },
+            "waves": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 758,
+                  "object": {
+                    "height": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 758,
+                          "ndistinct": 18.0,
+                          "values": [
+                            0.5,
+                            2.5,
+                            4.5,
+                            1,
+                            2,
+                            1.5,
+                            0,
+                            3.5,
+                            3,
+                            99.9,
+                            5,
+                            6,
+                            31,
+                            15,
+                            5.5,
+                            22,
+                            4,
+                            7
+                          ]
+                        }
+                      }
+                    },
+                    "period": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 758,
+                          "ndistinct": 13.0,
+                          "values": [
+                            3,
+                            99,
+                            4,
+                            1,
+                            5,
+                            2,
+                            7,
+                            6,
+                            8,
+                            10,
+                            0,
+                            9,
+                            11
+                          ]
+                        }
+                      }
+                    },
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 758,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "9"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "period": 3,
+                      "height": 0.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 99,
+                      "height": 2.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 4,
+                      "height": 4.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 1,
+                      "height": 0.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 4,
+                      "height": 1,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 5,
+                      "height": 1,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 2,
+                      "height": 2,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 3,
+                      "height": 1,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 99,
+                      "height": 1.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 99,
+                      "height": 0,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 5,
+                      "height": 1.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 2,
+                      "height": 1,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 2,
+                      "height": 0.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 7,
+                      "height": 2,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 7,
+                      "height": 1.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 6,
+                      "height": 1,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 6,
+                      "height": 2.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 4,
+                      "height": 0.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 99,
+                      "height": 3.5,
+                      "quality": "9"
+                    },
+                    {
+                      "period": 4,
+                      "height": 1.5,
+                      "quality": "9"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "method": "M",
+              "waves": {
+                "period": 3,
+                "height": 0.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 99,
+                "height": 2.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 4,
+                "height": 4.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 1,
+                "height": 0.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 4,
+                "height": 1,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 5,
+                "height": 1,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 2,
+                "height": 2,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 3,
+                "height": 1,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 99,
+                "height": 1.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 99,
+                "height": 0,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 5,
+                "height": 1.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 2,
+                "height": 1,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 2,
+                "height": 0.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "I",
+              "waves": {
+                "period": 7,
+                "height": 2,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "I",
+              "waves": {
+                "period": 7,
+                "height": 1.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 6,
+                "height": 1,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 6,
+                "height": 2.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "I",
+              "waves": {
+                "period": 4,
+                "height": 0.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 99,
+                "height": 3.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "00",
+                "quality": "9"
+              }
+            },
+            {
+              "method": "M",
+              "waves": {
+                "period": 4,
+                "height": 1.5,
+                "quality": "9"
+              },
+              "seaState": {
+                "code": "99",
+                "quality": "9"
+              }
+            }
+          ]
+        },
+        "Undefined": {
+          "probability": 0.242,
+          "sampled": 242
+        }
+      }
+    },
+    "wind": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "direction": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "angle": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 37.0,
+                          "values": [
+                            190,
+                            70,
+                            270,
+                            220,
+                            210,
+                            100,
+                            50,
+                            300,
+                            360,
+                            330,
+                            110,
+                            160,
+                            340,
+                            140,
+                            999,
+                            240,
+                            200,
+                            170,
+                            60,
+                            80
+                          ]
+                        }
+                      }
+                    },
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 2.0,
+                          "values": [
+                            "1",
+                            "9"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "angle": 190,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 70,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 270,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 220,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 210,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 100,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 50,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 300,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 360,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 330,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 110,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 160,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 340,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 140,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 999,
+                      "quality": "9"
+                    },
+                    {
+                      "angle": 240,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 200,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 170,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 60,
+                      "quality": "1"
+                    },
+                    {
+                      "angle": 80,
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "speed": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "quality": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 3.0,
+                          "values": [
+                            "1",
+                            "9",
+                            "2"
+                          ]
+                        }
+                      }
+                    },
+                    "rate": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 71.0,
+                          "values": [
+                            7,
+                            12,
+                            10.8,
+                            6,
+                            14,
+                            8,
+                            3.1,
+                            9.8,
+                            5,
+                            12.9,
+                            1,
+                            4.6,
+                            999.9,
+                            20.6,
+                            8.2,
+                            4.1,
+                            6.7,
+                            13.4,
+                            1.5,
+                            9.3
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "rate": 7,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 12,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 10.8,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 6,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 14,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 8,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 3.1,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 9.8,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 5,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 12.9,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 1,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 4.6,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 999.9,
+                      "quality": "9"
+                    },
+                    {
+                      "rate": 20.6,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 8.2,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 4.1,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 6.7,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 13.4,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 1.5,
+                      "quality": "1"
+                    },
+                    {
+                      "rate": 9.3,
+                      "quality": "1"
+                    }
+                  ]
+                }
+              }
+            },
+            "type": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 4.0,
+                  "values": [
+                    "N",
+                    "9",
+                    "V",
+                    "C"
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "direction": {
+                "angle": 190,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 7,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 70,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 12,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 270,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 10.8,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 220,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 6,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 210,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 14,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 100,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 8,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 50,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 3.1,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 300,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 6,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 360,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 9.8,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 330,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 7,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 110,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 5,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 160,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 12.9,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 340,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 1,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 110,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 8,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 140,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 4.6,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 999,
+                "quality": "9"
+              },
+              "type": "9",
+              "speed": {
+                "rate": 999.9,
+                "quality": "9"
+              }
+            },
+            {
+              "direction": {
+                "angle": 300,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 20.6,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 110,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 8.2,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 240,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 4.1,
+                "quality": "1"
+              }
+            },
+            {
+              "direction": {
+                "angle": 200,
+                "quality": "1"
+              },
+              "type": "N",
+              "speed": {
+                "rate": 6.7,
+                "quality": "1"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

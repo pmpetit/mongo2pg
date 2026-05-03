@@ -1,0 +1,8 @@
+CREATE TABLE zips (
+    id UUID PRIMARY KEY,
+    city TEXT NOT NULL,
+    loc JSONB NOT NULL,
+    pop INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    zip INTEGER NOT NULL
+);

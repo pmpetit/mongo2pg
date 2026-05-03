@@ -1,0 +1,16 @@
+documents_in_collection: 100000
+documents_sampled: 1000
+width_top_level: 4
+width_max: 4
+width_max_level: 1
+depth_max: 3
+branch_total: 7
+branch_per_level:
+  L1: 4
+  L2: 1
+  L3: 2
+top_level_types:
+  _id: ObjectId
+  class_id: Number
+  scores: Array
+  student_id: Number

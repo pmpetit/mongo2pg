@@ -1,0 +1,1001 @@
+{
+  "count": 1564,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "59a47287cfa9a3a73e51ea0d",
+            "59a47287cfa9a3a73e51e9fe",
+            "59a47287cfa9a3a73e51eb10",
+            "59a47286cfa9a3a73e51e83b",
+            "59a47287cfa9a3a73e51e972",
+            "59a47287cfa9a3a73e51ed20",
+            "59a47287cfa9a3a73e51ea12",
+            "59a47287cfa9a3a73e51ea03",
+            "59a47287cfa9a3a73e51e8e3",
+            "59a47287cfa9a3a73e51eb5a",
+            "59a47287cfa9a3a73e51ecca",
+            "59a47287cfa9a3a73e51ea29",
+            "59a47287cfa9a3a73e51ea76",
+            "59a47287cfa9a3a73e51ec41",
+            "59a47287cfa9a3a73e51ec1a",
+            "59a47286cfa9a3a73e51e768",
+            "59a47287cfa9a3a73e51e8c0",
+            "59a47287cfa9a3a73e51ed09",
+            "59a47287cfa9a3a73e51ebae",
+            "59a47287cfa9a3a73e51e8aa"
+          ]
+        }
+      }
+    },
+    "location": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "address": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "city": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 650.0,
+                          "values": [
+                            "Hattiesburg",
+                            "Richfield",
+                            "Westland",
+                            "Union City",
+                            "Roseville",
+                            "Las Vegas",
+                            "Holyoke",
+                            "Franklin",
+                            "El Cajon",
+                            "East Hanover",
+                            "Florence",
+                            "Colonial Heights",
+                            "Miami",
+                            "Jamaica",
+                            "Dothan",
+                            "Sierra Vista",
+                            "Chula Vista",
+                            "Bend",
+                            "Boca Raton",
+                            "Fayetteville"
+                          ]
+                        }
+                      }
+                    },
+                    "state": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 52.0,
+                          "values": [
+                            "MS",
+                            "MN",
+                            "MI",
+                            "CA",
+                            "NV",
+                            "MA",
+                            "TN",
+                            "NJ",
+                            "SC",
+                            "VA",
+                            "FL",
+                            "NY",
+                            "AL",
+                            "AZ",
+                            "OR",
+                            "NC",
+                            "CO",
+                            "WI",
+                            "IL",
+                            "OH"
+                          ]
+                        }
+                      }
+                    },
+                    "street1": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 941.0,
+                          "values": [
+                            "1000 Turtle Creek Drive",
+                            "1000 West 78th St.",
+                            "35100 Cowan Rd",
+                            "31350 Courthouse Dr",
+                            "2100 Snelling Avenue North",
+                            "3667 Las Vegas Boulevard South",
+                            "50 Holyoke Street",
+                            "1800 Galleria Blvd",
+                            "415 Parkway Plaza",
+                            "410 State Route 10",
+                            "2701 David H Mcleod Blvd",
+                            "230 Southpark Circle",
+                            "20205 S Dixie Highway",
+                            "JFK Access Road",
+                            "4863 Montgomery Hwy",
+                            "2200 El Mercado Loop",
+                            "2015 Birch Rd ",
+                            "63455 N Highway 97",
+                            "20540 State Road 7",
+                            "2034 Skibo Rd"
+                          ]
+                        }
+                      }
+                    },
+                    "street2": {
+                      "probability": 0.356,
+                      "types": {
+                        "Null": {
+                          "probability": 0.3342696629213483,
+                          "sampled": 119,
+                          "ndistinct": 1.0,
+                          "values": [
+                            null
+                          ]
+                        },
+                        "String": {
+                          "probability": 0.6657303370786517,
+                          "sampled": 237,
+                          "ndistinct": 225.0,
+                          "values": [
+                            "#325",
+                            "Suite 66A",
+                            "Spc #B216",
+                            "Ste 2100",
+                            "#Y1",
+                            "#F70",
+                            "Space 1115",
+                            "Ste 100",
+                            "Ste 2300",
+                            "Suite 310",
+                            "Space #176",
+                            "Ste 140",
+                            "#632",
+                            "Ste 201",
+                            "Suite H009",
+                            "#800",
+                            "Ste E105",
+                            "#3035",
+                            "#2050",
+                            "Ste. 277"
+                          ]
+                        },
+                        "Undefined": {
+                          "probability": 0.644,
+                          "sampled": 644
+                        }
+                      }
+                    },
+                    "zipcode": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 834.0,
+                          "values": [
+                            "39402",
+                            "55423",
+                            "48185",
+                            "94587",
+                            "55113",
+                            "89109",
+                            "01040",
+                            "37067",
+                            "92020",
+                            "07936",
+                            "29501",
+                            "23834",
+                            "33189",
+                            "11430",
+                            "36303",
+                            "85635",
+                            "91915",
+                            "97701",
+                            "33498",
+                            "28314"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "street1": "1000 Turtle Creek Drive",
+                      "street2": "#325",
+                      "city": "Hattiesburg",
+                      "state": "MS",
+                      "zipcode": "39402"
+                    },
+                    {
+                      "street1": "1000 West 78th St.",
+                      "city": "Richfield",
+                      "state": "MN",
+                      "zipcode": "55423"
+                    },
+                    {
+                      "street1": "35100 Cowan Rd",
+                      "city": "Westland",
+                      "state": "MI",
+                      "zipcode": "48185"
+                    },
+                    {
+                      "street1": "31350 Courthouse Dr",
+                      "city": "Union City",
+                      "state": "CA",
+                      "zipcode": "94587"
+                    },
+                    {
+                      "street1": "2100 Snelling Avenue North",
+                      "street2": "Suite 66A",
+                      "city": "Roseville",
+                      "state": "MN",
+                      "zipcode": "55113"
+                    },
+                    {
+                      "street1": "3667 Las Vegas Boulevard South",
+                      "street2": null,
+                      "city": "Las Vegas",
+                      "state": "NV",
+                      "zipcode": "89109"
+                    },
+                    {
+                      "street1": "50 Holyoke Street",
+                      "street2": "Spc #B216",
+                      "city": "Holyoke",
+                      "state": "MA",
+                      "zipcode": "01040"
+                    },
+                    {
+                      "street1": "1800 Galleria Blvd",
+                      "street2": "Ste 2100",
+                      "city": "Franklin",
+                      "state": "TN",
+                      "zipcode": "37067"
+                    },
+                    {
+                      "street1": "415 Parkway Plaza",
+                      "street2": "#Y1",
+                      "city": "El Cajon",
+                      "state": "CA",
+                      "zipcode": "92020"
+                    },
+                    {
+                      "street1": "410 State Route 10",
+                      "city": "East Hanover",
+                      "state": "NJ",
+                      "zipcode": "07936"
+                    },
+                    {
+                      "street1": "2701 David H Mcleod Blvd",
+                      "city": "Florence",
+                      "state": "SC",
+                      "zipcode": "29501"
+                    },
+                    {
+                      "street1": "230 Southpark Circle",
+                      "street2": "#F70",
+                      "city": "Colonial Heights",
+                      "state": "VA",
+                      "zipcode": "23834"
+                    },
+                    {
+                      "street1": "20205 S Dixie Highway",
+                      "street2": "Space 1115",
+                      "city": "Miami",
+                      "state": "FL",
+                      "zipcode": "33189"
+                    },
+                    {
+                      "street1": "JFK Access Road",
+                      "street2": null,
+                      "city": "Jamaica",
+                      "state": "NY",
+                      "zipcode": "11430"
+                    },
+                    {
+                      "street1": "4863 Montgomery Hwy",
+                      "street2": "Ste 100",
+                      "city": "Dothan",
+                      "state": "AL",
+                      "zipcode": "36303"
+                    },
+                    {
+                      "street1": "2200 El Mercado Loop",
+                      "city": "Sierra Vista",
+                      "state": "AZ",
+                      "zipcode": "85635"
+                    },
+                    {
+                      "street1": "2015 Birch Rd ",
+                      "street2": "Ste 2300",
+                      "city": "Chula Vista",
+                      "state": "CA",
+                      "zipcode": "91915"
+                    },
+                    {
+                      "street1": "63455 N Highway 97",
+                      "city": "Bend",
+                      "state": "OR",
+                      "zipcode": "97701"
+                    },
+                    {
+                      "street1": "20540 State Road 7",
+                      "city": "Boca Raton",
+                      "state": "FL",
+                      "zipcode": "33498"
+                    },
+                    {
+                      "street1": "2034 Skibo Rd",
+                      "city": "Fayetteville",
+                      "state": "NC",
+                      "zipcode": "28314"
+                    }
+                  ]
+                }
+              }
+            },
+            "geo": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "object": {
+                    "coordinates": {
+                      "probability": 1.0,
+                      "types": {
+                        "Array": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 2.0,
+                          "array": {
+                            "probability": 2.0,
+                            "types": {
+                              "Number": {
+                                "probability": 1.0,
+                                "sampled": 2000,
+                                "ndistinct": 1000.0,
+                                "values": [
+                                  -89.37425,
+                                  31.324868,
+                                  -93.292557,
+                                  44.863312,
+                                  -83.3862122,
+                                  42.3434956,
+                                  -122.06322,
+                                  37.601608,
+                                  -93.163927,
+                                  45.003495,
+                                  -115.172501,
+                                  36.110067,
+                                  -72.640241,
+                                  42.17108,
+                                  -86.811281,
+                                  35.95775,
+                                  -116.967685,
+                                  32.804749,
+                                  -74.358688,
+                                  40.801476
+                                ]
+                              }
+                            }
+                          },
+                          "values": [
+                            [
+                              -89.37425,
+                              31.324868
+                            ],
+                            [
+                              -93.292557,
+                              44.863312
+                            ],
+                            [
+                              -83.3862122,
+                              42.3434956
+                            ],
+                            [
+                              -122.06322,
+                              37.601608
+                            ],
+                            [
+                              -93.163927,
+                              45.003495
+                            ],
+                            [
+                              -115.172501,
+                              36.110067
+                            ],
+                            [
+                              -72.640241,
+                              42.17108
+                            ],
+                            [
+                              -86.811281,
+                              35.95775
+                            ],
+                            [
+                              -116.967685,
+                              32.804749
+                            ],
+                            [
+                              -74.358688,
+                              40.801476
+                            ],
+                            [
+                              -79.828201,
+                              34.191662
+                            ],
+                            [
+                              -77.393539,
+                              37.253834
+                            ],
+                            [
+                              -80.371625,
+                              25.576382
+                            ],
+                            [
+                              -73.784817,
+                              40.645676
+                            ],
+                            [
+                              -85.44733,
+                              31.26812
+                            ],
+                            [
+                              -110.25728,
+                              31.529169
+                            ],
+                            [
+                              -116.96856,
+                              32.62447
+                            ],
+                            [
+                              -121.29939,
+                              44.104492
+                            ],
+                            [
+                              -80.20269,
+                              26.370686
+                            ],
+                            [
+                              -78.97499,
+                              35.054249
+                            ]
+                          ]
+                        }
+                      }
+                    },
+                    "type": {
+                      "probability": 1.0,
+                      "types": {
+                        "String": {
+                          "probability": 1.0,
+                          "sampled": 1000,
+                          "ndistinct": 1.0,
+                          "values": [
+                            "Point"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -89.37425,
+                        31.324868
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -93.292557,
+                        44.863312
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -83.3862122,
+                        42.3434956
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -122.06322,
+                        37.601608
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -93.163927,
+                        45.003495
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -115.172501,
+                        36.110067
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -72.640241,
+                        42.17108
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -86.811281,
+                        35.95775
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -116.967685,
+                        32.804749
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -74.358688,
+                        40.801476
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -79.828201,
+                        34.191662
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -77.393539,
+                        37.253834
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -80.371625,
+                        25.576382
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -73.784817,
+                        40.645676
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -85.44733,
+                        31.26812
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -110.25728,
+                        31.529169
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -116.96856,
+                        32.62447
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -121.29939,
+                        44.104492
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -80.20269,
+                        26.370686
+                      ]
+                    },
+                    {
+                      "type": "Point",
+                      "coordinates": [
+                        -78.97499,
+                        35.054249
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "address": {
+                "street1": "1000 Turtle Creek Drive",
+                "street2": "#325",
+                "city": "Hattiesburg",
+                "state": "MS",
+                "zipcode": "39402"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -89.37425,
+                  31.324868
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1000 West 78th St.",
+                "city": "Richfield",
+                "state": "MN",
+                "zipcode": "55423"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -93.292557,
+                  44.863312
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "35100 Cowan Rd",
+                "city": "Westland",
+                "state": "MI",
+                "zipcode": "48185"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -83.3862122,
+                  42.3434956
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "31350 Courthouse Dr",
+                "city": "Union City",
+                "state": "CA",
+                "zipcode": "94587"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -122.06322,
+                  37.601608
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2100 Snelling Avenue North",
+                "street2": "Suite 66A",
+                "city": "Roseville",
+                "state": "MN",
+                "zipcode": "55113"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -93.163927,
+                  45.003495
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "3667 Las Vegas Boulevard South",
+                "street2": null,
+                "city": "Las Vegas",
+                "state": "NV",
+                "zipcode": "89109"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -115.172501,
+                  36.110067
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "50 Holyoke Street",
+                "street2": "Spc #B216",
+                "city": "Holyoke",
+                "state": "MA",
+                "zipcode": "01040"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -72.640241,
+                  42.17108
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1800 Galleria Blvd",
+                "street2": "Ste 2100",
+                "city": "Franklin",
+                "state": "TN",
+                "zipcode": "37067"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -86.811281,
+                  35.95775
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "415 Parkway Plaza",
+                "street2": "#Y1",
+                "city": "El Cajon",
+                "state": "CA",
+                "zipcode": "92020"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -116.967685,
+                  32.804749
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "410 State Route 10",
+                "city": "East Hanover",
+                "state": "NJ",
+                "zipcode": "07936"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -74.358688,
+                  40.801476
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2701 David H Mcleod Blvd",
+                "city": "Florence",
+                "state": "SC",
+                "zipcode": "29501"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -79.828201,
+                  34.191662
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "230 Southpark Circle",
+                "street2": "#F70",
+                "city": "Colonial Heights",
+                "state": "VA",
+                "zipcode": "23834"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -77.393539,
+                  37.253834
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "20205 S Dixie Highway",
+                "street2": "Space 1115",
+                "city": "Miami",
+                "state": "FL",
+                "zipcode": "33189"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -80.371625,
+                  25.576382
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "JFK Access Road",
+                "street2": null,
+                "city": "Jamaica",
+                "state": "NY",
+                "zipcode": "11430"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -73.784817,
+                  40.645676
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "4863 Montgomery Hwy",
+                "street2": "Ste 100",
+                "city": "Dothan",
+                "state": "AL",
+                "zipcode": "36303"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -85.44733,
+                  31.26812
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2200 El Mercado Loop",
+                "city": "Sierra Vista",
+                "state": "AZ",
+                "zipcode": "85635"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -110.25728,
+                  31.529169
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2015 Birch Rd ",
+                "street2": "Ste 2300",
+                "city": "Chula Vista",
+                "state": "CA",
+                "zipcode": "91915"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -116.96856,
+                  32.62447
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "63455 N Highway 97",
+                "city": "Bend",
+                "state": "OR",
+                "zipcode": "97701"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -121.29939,
+                  44.104492
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "20540 State Road 7",
+                "city": "Boca Raton",
+                "state": "FL",
+                "zipcode": "33498"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -80.20269,
+                  26.370686
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2034 Skibo Rd",
+                "city": "Fayetteville",
+                "state": "NC",
+                "zipcode": "28314"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -78.97499,
+                  35.054249
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "theaterId": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            2849,
+            281,
+            403,
+            144,
+            2535,
+            8813,
+            2843,
+            2824,
+            1904,
+            473,
+            826,
+            2868,
+            2942,
+            8033,
+            793,
+            1077,
+            1769,
+            863,
+            554,
+            174
+          ]
+        }
+      }
+    }
+  }
+}

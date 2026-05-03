@@ -1,0 +1,2706 @@
+{
+  "count": 23539,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "573a139af29313caabcf0e95",
+            "573a1398f29313caabceb2d7",
+            "573a13bdf29313caabd58a50",
+            "573a13c2f29313caabd68170",
+            "573a13c7f29313caabd75b5f",
+            "573a13c4f29313caabd6ce7f",
+            "573a13b4f29313caabd41d3f",
+            "573a1395f29313caabce2411",
+            "573a1399f29313caabcec952",
+            "573a1392f29313caabcda2c5",
+            "573a13b5f29313caabd43816",
+            "573a1396f29313caabce5016",
+            "573a139af29313caabcf0051",
+            "573a13c0f29313caabd62fa5",
+            "573a1398f29313caabcead62",
+            "573a13bff29313caabd5f21b",
+            "573a13cbf29313caabd8105e",
+            "573a13c8f29313caabd78743",
+            "573a1394f29313caabcdf40e",
+            "573a13bff29313caabd6045a"
+          ]
+        }
+      }
+    },
+    "awards": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "nominations": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 51.0,
+                  "values": [
+                    2,
+                    1,
+                    4,
+                    9,
+                    7,
+                    5,
+                    18,
+                    0,
+                    3,
+                    8,
+                    14,
+                    6,
+                    13,
+                    38,
+                    47,
+                    19,
+                    29,
+                    10,
+                    41,
+                    27
+                  ]
+                }
+              }
+            },
+            "text": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 305.0,
+                  "values": [
+                    "2 wins & 2 nominations.",
+                    "1 win & 1 nomination.",
+                    "4 nominations.",
+                    "1 win & 2 nominations.",
+                    "5 wins & 2 nominations.",
+                    "2 nominations.",
+                    "1 nomination.",
+                    "9 nominations.",
+                    "Won 4 Primetime Emmys. Another 3 nominations.",
+                    "13 wins & 1 nomination.",
+                    "2 wins & 5 nominations.",
+                    "11 wins & 7 nominations.",
+                    "Nominated for 1 Oscar. Another 10 wins & 18 nominations.",
+                    "14 wins & 18 nominations.",
+                    "1 win.",
+                    "2 wins & 1 nomination.",
+                    "Nominated for 1 Oscar. Another 9 wins & 2 nominations.",
+                    "3 nominations.",
+                    "3 wins.",
+                    "Nominated for 1 Oscar. Another 11 wins & 2 nominations."
+                  ]
+                }
+              }
+            },
+            "wins": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 44.0,
+                  "values": [
+                    2,
+                    1,
+                    0,
+                    5,
+                    13,
+                    11,
+                    14,
+                    10,
+                    3,
+                    12,
+                    9,
+                    8,
+                    6,
+                    4,
+                    16,
+                    7,
+                    19,
+                    64,
+                    15,
+                    28
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "wins": 2,
+              "nominations": 2,
+              "text": "2 wins & 2 nominations."
+            },
+            {
+              "wins": 1,
+              "nominations": 1,
+              "text": "1 win & 1 nomination."
+            },
+            {
+              "wins": 0,
+              "nominations": 4,
+              "text": "4 nominations."
+            },
+            {
+              "wins": 1,
+              "nominations": 2,
+              "text": "1 win & 2 nominations."
+            },
+            {
+              "wins": 5,
+              "nominations": 2,
+              "text": "5 wins & 2 nominations."
+            },
+            {
+              "wins": 0,
+              "nominations": 2,
+              "text": "2 nominations."
+            },
+            {
+              "wins": 0,
+              "nominations": 1,
+              "text": "1 nomination."
+            },
+            {
+              "wins": 0,
+              "nominations": 9,
+              "text": "9 nominations."
+            },
+            {
+              "wins": 0,
+              "nominations": 7,
+              "text": "Won 4 Primetime Emmys. Another 3 nominations."
+            },
+            {
+              "wins": 13,
+              "nominations": 1,
+              "text": "13 wins & 1 nomination."
+            },
+            {
+              "wins": 2,
+              "nominations": 5,
+              "text": "2 wins & 5 nominations."
+            },
+            {
+              "wins": 11,
+              "nominations": 7,
+              "text": "11 wins & 7 nominations."
+            },
+            {
+              "wins": 11,
+              "nominations": 18,
+              "text": "Nominated for 1 Oscar. Another 10 wins & 18 nominations."
+            },
+            {
+              "wins": 14,
+              "nominations": 18,
+              "text": "14 wins & 18 nominations."
+            },
+            {
+              "wins": 1,
+              "nominations": 0,
+              "text": "1 win."
+            },
+            {
+              "wins": 2,
+              "nominations": 1,
+              "text": "2 wins & 1 nomination."
+            },
+            {
+              "wins": 10,
+              "nominations": 2,
+              "text": "Nominated for 1 Oscar. Another 9 wins & 2 nominations."
+            },
+            {
+              "wins": 0,
+              "nominations": 3,
+              "text": "3 nominations."
+            },
+            {
+              "wins": 3,
+              "nominations": 0,
+              "text": "3 wins."
+            },
+            {
+              "wins": 12,
+              "nominations": 2,
+              "text": "Nominated for 1 Oscar. Another 11 wins & 2 nominations."
+            }
+          ]
+        }
+      }
+    },
+    "cast": {
+      "probability": 0.979,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 979,
+          "ndistinct": 3.85,
+          "array": {
+            "probability": 3.932584269662921,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 3850,
+                "ndistinct": 1000.0,
+                "values": [
+                  "Antonio Banderas",
+                  "Diane Venora",
+                  "Dennis Storhèi",
+                  "Vladimir Kulich",
+                  "Carolyn Beauchamp",
+                  "Sean Bowen",
+                  "Rick Washburn",
+                  "Patrick Weathers",
+                  "Larry the Cable Guy",
+                  "Richard Bull",
+                  "J. David Moeller",
+                  "Will Clinger",
+                  "Katie Holmes",
+                  "Guy Pearce",
+                  "Bailee Madison",
+                  "Jack Thompson",
+                  "Ken Coolen",
+                  "Kristoffer Joner",
+                  "Cecilie A. Mosli",
+                  "Bjarte Hjelmeland"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "Antonio Banderas",
+              "Diane Venora",
+              "Dennis Storhèi",
+              "Vladimir Kulich"
+            ],
+            [
+              "Carolyn Beauchamp",
+              "Sean Bowen",
+              "Rick Washburn",
+              "Patrick Weathers"
+            ],
+            [
+              "Larry the Cable Guy",
+              "Richard Bull",
+              "J. David Moeller",
+              "Will Clinger"
+            ],
+            [
+              "Katie Holmes",
+              "Guy Pearce",
+              "Bailee Madison",
+              "Jack Thompson"
+            ],
+            [
+              "Ken Coolen"
+            ],
+            [
+              "Kristoffer Joner",
+              "Cecilie A. Mosli",
+              "Bjarte Hjelmeland",
+              "Marko Iversen Kanic"
+            ],
+            [
+              "Patrick Dempsey",
+              "Mandy Moore",
+              "Jeremy Suarez",
+              "Rick Moranis"
+            ],
+            [
+              "Tippi Hedren",
+              "Sean Connery",
+              "Martin Gabel",
+              "Louise Latham"
+            ],
+            [
+              "Bruce Willis",
+              "Damon Wayans",
+              "Chelsea Field",
+              "Noble Willingham"
+            ],
+            [
+              "Fredric March",
+              "Evelyn Venable",
+              "Guy Standing",
+              "Katharine Alexander"
+            ],
+            [
+              "Jake Gyllenhaal",
+              "Gemma Arterton",
+              "Ben Kingsley",
+              "Alfred Molina"
+            ],
+            [
+              "Katharine Hepburn",
+              "Sam Waterston",
+              "Joanna Miles",
+              "Michael Moriarty"
+            ],
+            [
+              "Ken Kaneko",
+              "Masanobu Andè",
+              "Leo Morimoto",
+              "Hatsuo Yamaya"
+            ],
+            [
+              "David Fandila"
+            ],
+            [
+              "Luès Miguel Cintra",
+              "Leonor Silveira",
+              "Diogo Dèria",
+              "Oliveira Lopes"
+            ],
+            [
+              "Ye Liu",
+              "Yuanyuan Gao",
+              "Hideo Nakaizumi",
+              "Wei Fan"
+            ],
+            [
+              "Kevin Spacey",
+              "Paul Bettany",
+              "Jeremy Irons",
+              "Zachary Quinto"
+            ],
+            [
+              "Elio Germano",
+              "Raoul Bova",
+              "Isabella Ragonese",
+              "Luca Zingaretti"
+            ],
+            [
+              "Edmond O'Brien",
+              "Frank Lovejoy",
+              "William Talman",
+              "Josè Torvay"
+            ],
+            [
+              "George Hardy",
+              "Lily Hardy",
+              "Pita Ray",
+              "Micki Knox"
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.021,
+          "sampled": 21
+        }
+      }
+    },
+    "countries": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.4,
+          "array": {
+            "probability": 1.4,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 1400,
+                "ndistinct": 75.0,
+                "values": [
+                  "USA",
+                  "Australia",
+                  "Mexico",
+                  "Canada",
+                  "Norway",
+                  "Japan",
+                  "Spain",
+                  "Portugal",
+                  "France",
+                  "West Germany",
+                  "Italy",
+                  "Switzerland",
+                  "China",
+                  "Hong Kong",
+                  "UK",
+                  "Czechoslovakia",
+                  "Germany",
+                  "Poland",
+                  "Sweden",
+                  "Romania"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "USA"
+            ],
+            [
+              "USA",
+              "Australia",
+              "Mexico"
+            ],
+            [
+              "Canada"
+            ],
+            [
+              "Norway"
+            ],
+            [
+              "Japan"
+            ],
+            [
+              "USA",
+              "Spain"
+            ],
+            [
+              "Portugal",
+              "France",
+              "West Germany",
+              "Italy",
+              "Switzerland"
+            ],
+            [
+              "China",
+              "Hong Kong"
+            ],
+            [
+              "Italy",
+              "France"
+            ],
+            [
+              "UK",
+              "USA",
+              "Japan"
+            ],
+            [
+              "Czechoslovakia"
+            ],
+            [
+              "France"
+            ],
+            [
+              "Germany",
+              "France",
+              "Poland"
+            ],
+            [
+              "UK"
+            ],
+            [
+              "Sweden"
+            ],
+            [
+              "USA",
+              "Canada"
+            ],
+            [
+              "Hong Kong"
+            ],
+            [
+              "Romania",
+              "France"
+            ],
+            [
+              "India"
+            ],
+            [
+              "USA",
+              "Canada",
+              "France"
+            ]
+          ]
+        }
+      }
+    },
+    "directors": {
+      "probability": 0.99,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 990,
+          "ndistinct": 1.095,
+          "array": {
+            "probability": 1.106060606060606,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 1095,
+                "ndistinct": 985.0,
+                "values": [
+                  "John McTiernan",
+                  "Michael Crichton",
+                  "Michael Herz",
+                  "Lloyd Kaufman",
+                  "Charles Robert Carner",
+                  "Troy Nixey",
+                  "Bob Christie",
+                  "Pèl èie",
+                  "Ben Gluck",
+                  "Alfred Hitchcock",
+                  "Tony Scott",
+                  "Mitchell Leisen",
+                  "Mike Newell",
+                  "Anthony Harvey",
+                  "Takeshi Kitano",
+                  "Stephen Higgins",
+                  "Nina Gilden Seavey",
+                  "Manoel de Oliveira",
+                  "Chuan Lu",
+                  "J.C. Chandor"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "John McTiernan",
+              "Michael Crichton"
+            ],
+            [
+              "Michael Herz",
+              "Lloyd Kaufman"
+            ],
+            [
+              "Charles Robert Carner"
+            ],
+            [
+              "Troy Nixey"
+            ],
+            [
+              "Bob Christie"
+            ],
+            [
+              "Pèl èie"
+            ],
+            [
+              "Ben Gluck"
+            ],
+            [
+              "Alfred Hitchcock"
+            ],
+            [
+              "Tony Scott"
+            ],
+            [
+              "Mitchell Leisen"
+            ],
+            [
+              "Mike Newell"
+            ],
+            [
+              "Anthony Harvey"
+            ],
+            [
+              "Takeshi Kitano"
+            ],
+            [
+              "Stephen Higgins",
+              "Nina Gilden Seavey"
+            ],
+            [
+              "Manoel de Oliveira"
+            ],
+            [
+              "Chuan Lu"
+            ],
+            [
+              "J.C. Chandor"
+            ],
+            [
+              "Daniele Luchetti"
+            ],
+            [
+              "Ida Lupino"
+            ],
+            [
+              "Michael Stephenson"
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.01,
+          "sampled": 10
+        }
+      }
+    },
+    "fullplot": {
+      "probability": 0.947,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 947,
+          "ndistinct": 946.0,
+          "values": [
+            "In AD 922, Arab courtier Ahmad Ibn Fadlan accompanies a party of Vikings to the barbaric North. Ibn Fadlan is appalled by the Vikings customs-- their wanton sexuality, their disregard for cleanliness, their cold-blooded human sacrifices. And then he learns the horrifying truth: he has been enlisted to combat a terror that slaughters the Vikings and devours their flesh.",
+            "A small group of typical Tromaville citizens find themselves in the path of a terrorist army controlled by the power elite. The freedom of Tromaville and the world is at stake! Troma's War creates new kinds of heroes. A used car salesman, a handsome environmentalist, an obese junk-food gourmand, a seventy-year-old housewife, some sensational young women, a year old jingoistic baby and more sensational women all become deadly soldiers...",
+            "The story centers on a small-town sheriff who witnesses what he believes is a kidnapping and rushes to rescue a woman. The kidnappers turn out to be FBI agents assigned to protect her and deliver her to a big Enron-type corruption trial in Chicago but are later found to be on the take and are villains who are bent on killing her.",
+            "A young girl is sent to live with her estranged father and his girlfriend at their new home. The father, Alex has plans to spruce up the home with the help of his interior decorator girlfriend, Kim. The previous owner of the home was a famous painter who mysteriously disappeared. Alex's daughter, Sally, soon discovers the cause of the painter's disappearance.",
+            "Before the 30th anniversary, Vancouver's Gay Pride Parade director examines relevance of Pride celebrations internationally. He travels to places where Pride is steeped in protest to experience the powerful oppression that still exists. Pride is more than a parade, it's a giant step on the road to equality.",
+            "Painful memories arise when Kai Koss goes back to his childhood home after 19 years and inherits his dead mother's house.",
+            "Kenai, still a bear and Koda strongly believe that they do not need any girl, just each other. Kenai dreams of Nita, a girl he had met and saved when he was very young. After giving her an amulet, and promising they'd be friends forever, Nita leaves for her home and Kenai never sees her again. We then see Nita, now grown up, beautiful and preparing her her wedding. However, the ancestors are not pleased, as Nita is already tied to Kenai. The only way for Nita to break their bond and be happily married is to journey to the very place where Kenai gave her the amulet and burn it together. As Kenai, Nita and Koda journey to the place together, Koda cannot help but feel worried that Kenai might abandon him altogether for Nita. Will Nita break the bond she shares with Kenai and marry another? Will Koda be abandoned by his big brother?",
+            "Marnie Edgar is a habitual liar and a thief who gets jobs as a secretary and after a few months robs the firms in question, usually of several thousand dollars. When she gets a job at Rutland's, she also catches the eye of the handsome owner, Mark Rutland. He prevents her from stealing and running off, as is her usual pattern, but also forces her to marry him. Their honeymoon is a disaster and she cannot stand to have a man touch her and on their return home, Mark has a private detective look into her past. When he has the details of what happened in her childhood to make her what she is, he arranges a confrontation with her mother realizing that reliving the terrible events that occurred in her childhood and bringing out those repressed memories is the only way to save her.",
+            "A down and out cynical detective teams up with a down and out ex-quarterback to try and solve a murder case involving a pro football team and a politician.",
+            "Death decides to take a holiday from his usual business to see what it is like to be a mortal. Posing as Prince Sirki, he spends 3 days with Duke Lambert and his guests at his dukal estate. Several of the women are attracted to the mysterious prince, but shy away from him when they sense his true nature. But Grazia, the beautiful young woman whom the Duke thought was to marry his son, loves him even when she knows who he is.",
+            "Set in the mystical lands of Persia, a rogue prince and a mysterious princess race against dark forces to safeguard an ancient dagger capable of releasing the Sands of Time -- a gift from the gods that can reverse time and allow its possessor to rule the world.",
+            "Amanda Wingfield dominates her children with her faded gentility and exaggerated tales of her Southern belle past. Her son plans escape; her daughter withdraws into a dream world. When a \"gentleman caller\" appears, things move to crisis point.",
+            "Two buddies visit the schoolyard of the high school they used to attend, and remember their young and dumb days. They used to be the bullies in the school, until they find their own ways of life; one as a boxer, and the other as a member of the yakuza.",
+            "We follow David Fandila, \"El Fandi\" (1981- ), in 2003, 2004, and 2005, three bullfighting seasons in Spain, as he seeks to become the 13th person in history to kill 100 bulls in a season. His older brother dedicated his life to being David's second. He sees little of his fiancèe. His parents also assist his success. We watch him train and then fight: he's swift and theatrical. His is one of several voices explaining the sport and its meaning in Spain. Protestors speak out as well. Injury is close at hand. We watch El Fandi in surgery after a goring; he returns that day to the ring. We see gallantry, courage, and showmanship. Will he reach his goal?",
+            "A drama following stories of characters from the Portuguese High Society.",
+            "In 1937, Japan occupied Nanjing, the Chinese capital. There was a battle and subsequent atrocities against the inhabitants, especially those who took refuge in the International Security Zone.",
+            "A respected financial company is downsizing and one of the victims is the risk management division head, who was working on a major analysis just when he was let go. His protègè completes the study late into the night and then frantically calls his colleagues in about the company's financial disaster he has discovered. What follows is a long night of panicked double checking and double dealing as the senior management prepare to do whatever it takes to mitigate the debacle to come even as the handful of conscientious comrades find themselves dragged along into the unethical abyss.",
+            "Claudio, a construction worker, works on a site in the suburbs of Rome. He is madly in love with his wife who is pregnant with their third child. However, when he finds the remains of an illegal immigrant under the site and doesn't report it, fearing he'll be out of a job if construction comes to a halt, it upsets his simple and happy life. In a rage for life, Claudio energetically fights against the injustice that fell upon him. Love and support from his friends and family as well as the laughter of his children will help him to triumph against the odds.",
+            "Two friends on a fishing trip pick up a stranded motorist who turns out to be a psychotic escaped convict. This sociopath has already murdered other good Samaritans in his efforts to evade authorities. He sadistically taunts and threatens the two men and perversely delights in telling them that he has them both marked for death sometime before the end of the trip. His destination is a ferryboat in Baja, California, which he hopes will help him get to the mainland. The hostages hope to stay alive long enough to escape or be rescued by Mexican authorities.",
+            "In 1989, unwitting Utah actors starred in the undisputed Worst Movie in History: TROLL 2. Two decades later, the legendarily inept film's child star unravels the improbable, heartfelt story of an Alabama dentist-turned-cult movie icon and an Italian filmmaker who come to terms with this genuine, internationally revered cinematic failure."
+          ]
+        },
+        "Undefined": {
+          "probability": 0.053,
+          "sampled": 53
+        }
+      }
+    },
+    "genres": {
+      "probability": 0.998,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 998,
+          "ndistinct": 2.168,
+          "array": {
+            "probability": 2.1723446893787575,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 2168,
+                "ndistinct": 24.0,
+                "values": [
+                  "Action",
+                  "Adventure",
+                  "History",
+                  "Comedy",
+                  "Crime",
+                  "Fantasy",
+                  "Horror",
+                  "Thriller",
+                  "Documentary",
+                  "Biography",
+                  "Animation",
+                  "Drama",
+                  "Romance",
+                  "Sport",
+                  "Musical",
+                  "War",
+                  "Film-Noir",
+                  "Sci-Fi",
+                  "Short",
+                  "Mystery"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "Action",
+              "Adventure",
+              "History"
+            ],
+            [
+              "Action",
+              "Adventure",
+              "Comedy"
+            ],
+            [
+              "Comedy",
+              "Crime"
+            ],
+            [
+              "Fantasy",
+              "Horror",
+              "Thriller"
+            ],
+            [
+              "Documentary",
+              "Biography",
+              "History"
+            ],
+            [
+              "Horror",
+              "Thriller"
+            ],
+            [
+              "Animation",
+              "Adventure",
+              "Comedy"
+            ],
+            [
+              "Drama",
+              "Thriller"
+            ],
+            [
+              "Action",
+              "Comedy",
+              "Crime"
+            ],
+            [
+              "Drama",
+              "Fantasy",
+              "Romance"
+            ],
+            [
+              "Action",
+              "Adventure",
+              "Fantasy"
+            ],
+            [
+              "Drama"
+            ],
+            [
+              "Crime",
+              "Drama",
+              "Sport"
+            ],
+            [
+              "Documentary"
+            ],
+            [
+              "Musical",
+              "Drama",
+              "Fantasy"
+            ],
+            [
+              "Drama",
+              "History",
+              "War"
+            ],
+            [
+              "Crime",
+              "Film-Noir",
+              "Thriller"
+            ],
+            [
+              "Sci-Fi",
+              "Short",
+              "Animation"
+            ],
+            [
+              "Horror",
+              "Sci-Fi"
+            ],
+            [
+              "Animation",
+              "Short",
+              "Comedy"
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.002,
+          "sampled": 2
+        }
+      }
+    },
+    "imdb": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "id": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 999.0,
+                  "values": [
+                    120657,
+                    96310,
+                    1001562,
+                    1270761,
+                    1469864,
+                    1347007,
+                    465925,
+                    58329,
+                    102266,
+                    25037,
+                    473075,
+                    70115,
+                    116767,
+                    1186238,
+                    94833,
+                    1124052,
+                    1615147,
+                    1509636,
+                    45877,
+                    1144539
+                  ]
+                }
+              }
+            },
+            "rating": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 0.998,
+                  "sampled": 998,
+                  "ndistinct": 60.0,
+                  "values": [
+                    6.6,
+                    5.8,
+                    3.1,
+                    5.6,
+                    7.3,
+                    5.7,
+                    6.3,
+                    7.2,
+                    6.9,
+                    7.5,
+                    7.6,
+                    6.7,
+                    7.7,
+                    7.1,
+                    7,
+                    7.4,
+                    8.3,
+                    5.4,
+                    7.9,
+                    5.9
+                  ]
+                },
+                "String": {
+                  "probability": 0.002,
+                  "sampled": 2,
+                  "ndistinct": 1.0,
+                  "values": [
+                    ""
+                  ]
+                }
+              }
+            },
+            "votes": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 0.998,
+                  "sampled": 998,
+                  "ndistinct": 932.0,
+                  "values": [
+                    97229,
+                    1094,
+                    5352,
+                    38827,
+                    96,
+                    2280,
+                    6887,
+                    31582,
+                    70869,
+                    1134,
+                    204206,
+                    792,
+                    3882,
+                    110,
+                    326,
+                    8011,
+                    84723,
+                    1535,
+                    3707,
+                    5835
+                  ]
+                },
+                "String": {
+                  "probability": 0.002,
+                  "sampled": 2,
+                  "ndistinct": 1.0,
+                  "values": [
+                    ""
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "rating": 6.6,
+              "votes": 97229,
+              "id": 120657
+            },
+            {
+              "rating": 5.8,
+              "votes": 1094,
+              "id": 96310
+            },
+            {
+              "rating": 3.1,
+              "votes": 5352,
+              "id": 1001562
+            },
+            {
+              "rating": 5.6,
+              "votes": 38827,
+              "id": 1270761
+            },
+            {
+              "rating": 7.3,
+              "votes": 96,
+              "id": 1469864
+            },
+            {
+              "rating": 5.7,
+              "votes": 2280,
+              "id": 1347007
+            },
+            {
+              "rating": 6.3,
+              "votes": 6887,
+              "id": 465925
+            },
+            {
+              "rating": 7.2,
+              "votes": 31582,
+              "id": 58329
+            },
+            {
+              "rating": 6.9,
+              "votes": 70869,
+              "id": 102266
+            },
+            {
+              "rating": 7.2,
+              "votes": 1134,
+              "id": 25037
+            },
+            {
+              "rating": 6.6,
+              "votes": 204206,
+              "id": 473075
+            },
+            {
+              "rating": 7.5,
+              "votes": 792,
+              "id": 70115
+            },
+            {
+              "rating": 7.6,
+              "votes": 3882,
+              "id": 116767
+            },
+            {
+              "rating": 6.7,
+              "votes": 110,
+              "id": 1186238
+            },
+            {
+              "rating": 7.2,
+              "votes": 326,
+              "id": 94833
+            },
+            {
+              "rating": 7.7,
+              "votes": 8011,
+              "id": 1124052
+            },
+            {
+              "rating": 7.1,
+              "votes": 84723,
+              "id": 1615147
+            },
+            {
+              "rating": 6.6,
+              "votes": 1535,
+              "id": 1509636
+            },
+            {
+              "rating": 7,
+              "votes": 3707,
+              "id": 45877
+            },
+            {
+              "rating": 7.4,
+              "votes": 5835,
+              "id": 1144539
+            }
+          ]
+        }
+      }
+    },
+    "languages": {
+      "probability": 0.992,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 992,
+          "ndistinct": 1.377,
+          "array": {
+            "probability": 1.3881048387096775,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 1377,
+                "ndistinct": 88.0,
+                "values": [
+                  "English",
+                  "Latin",
+                  "Swedish",
+                  "Norse",
+                  " Old",
+                  "Danish",
+                  "German",
+                  "Spanish",
+                  "Norwegian",
+                  "French",
+                  "Japanese",
+                  "Portuguese",
+                  "Mandarin",
+                  "Italian",
+                  "Czech",
+                  "Russian",
+                  "Polish",
+                  "Hebrew",
+                  "Tuvinian",
+                  "Cantonese"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "English",
+              "Latin",
+              "Swedish",
+              "Norse",
+              " Old",
+              "Danish"
+            ],
+            [
+              "English",
+              "German",
+              "Spanish"
+            ],
+            [
+              "English"
+            ],
+            [
+              "Norwegian",
+              "Swedish"
+            ],
+            [
+              "English",
+              "French"
+            ],
+            [
+              "Japanese"
+            ],
+            [
+              "Spanish",
+              "English"
+            ],
+            [
+              "Portuguese"
+            ],
+            [
+              "Mandarin",
+              "English",
+              "Japanese",
+              "German"
+            ],
+            [
+              "Italian"
+            ],
+            [
+              "English",
+              "Spanish"
+            ],
+            [
+              "English",
+              "Italian"
+            ],
+            [
+              "Czech"
+            ],
+            [
+              "German",
+              "Russian",
+              "Polish",
+              "Hebrew"
+            ],
+            [
+              "Swedish"
+            ],
+            [
+              "Norwegian"
+            ],
+            [
+              "English",
+              "Tuvinian"
+            ],
+            [
+              "Cantonese",
+              "Shanghainese",
+              "Tagalog",
+              "English",
+              "Mandarin"
+            ],
+            [
+              "Romanian"
+            ],
+            [
+              "Norwegian",
+              "English"
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.008,
+          "sampled": 8
+        }
+      }
+    },
+    "lastupdated": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 999.0,
+          "values": [
+            "2015-09-01 01:07:24.770000000",
+            "2015-08-18 00:23:11.703000000",
+            "2015-09-07 00:42:18.427000000",
+            "2015-09-13 00:11:46.867000000",
+            "2015-08-19 00:10:30.063000000",
+            "2015-09-07 00:37:35.220000000",
+            "2015-08-26 01:36:34.977000000",
+            "2015-09-16 11:18:34.590000000",
+            "2015-09-07 00:31:02.397000000",
+            "2015-07-25 00:22:28.740000000",
+            "2015-09-04 00:14:19.943000000",
+            "2015-09-17 04:38:39.143000000",
+            "2015-09-17 04:02:36.373000000",
+            "2015-08-13 00:50:20.100000000",
+            "2015-08-17 00:21:37.500000000",
+            "2015-08-30 00:46:14.133000000",
+            "2015-09-05 00:46:17.823000000",
+            "2015-08-07 00:32:30.443000000",
+            "2015-08-31 00:20:57.670000000",
+            "2015-09-01 00:38:20.020000000"
+          ]
+        }
+      }
+    },
+    "metacritic": {
+      "probability": 0.379,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 379,
+          "ndistinct": 78.0,
+          "values": [
+            42,
+            17,
+            56,
+            50,
+            85,
+            76,
+            61,
+            41,
+            53,
+            65,
+            30,
+            96,
+            67,
+            84,
+            52,
+            51,
+            47,
+            83,
+            60,
+            21
+          ]
+        },
+        "Undefined": {
+          "probability": 0.621,
+          "sampled": 621
+        }
+      }
+    },
+    "num_mflix_comments": {
+      "probability": 0.664,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 664,
+          "ndistinct": 17.0,
+          "values": [
+            1,
+            2,
+            3,
+            5,
+            393,
+            424,
+            384,
+            4,
+            385,
+            420,
+            447,
+            380,
+            367,
+            409,
+            419,
+            383,
+            375
+          ]
+        },
+        "Undefined": {
+          "probability": 0.336,
+          "sampled": 336
+        }
+      }
+    },
+    "plot": {
+      "probability": 0.962,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 962,
+          "ndistinct": 961.0,
+          "values": [
+            "A man, having fallen in love with the wrong woman, is sent by the sultan himself on a diplomatic mission to a distant land as an ambassador. Stopping at a Viking village port to restock on supplies, he finds himself unwittingly embroiled on a quest to banish a mysterious threat in a distant Viking land.",
+            "A small group of typical Tromaville citizens find themselves in the path of a terrorist army controlled by the power elite. The freedom of Tromaville and the world is at stake! Troma's War ...",
+            "The story centers on a small-town sheriff who witnesses what he believes is a kidnapping and rushes to rescue a woman. The kidnappers turn out to be FBI agents assigned to protect her and ...",
+            "A young girl sent to live with her father and his new girlfriend believes that she has released creatures from a sealed ash pit in the basement of her new home.",
+            "Before the 30th anniversary, Vancouver's Gay Pride Parade director examines relevance of Pride celebrations internationally. He travels to places where Pride is steeped in protest to ...",
+            "Painful memories arise when Kai Koss goes back to his childhood home after 19 years and inherits his dead mother's house.",
+            "An old female friend of Kenai needs his help on a quest, much to Koda's growing consternation.",
+            "Mark marries Marnie although she is a habitual thief and has serious psychological problems, and tries to help her confront and resolve them.",
+            "A down and out cynical detective teams up with a down and out ex-quarterback to try and solve a murder case involving a pro football team and a politician.",
+            "Death decides to take a holiday from his usual business to see what it is like to be a mortal. Posing as Prince Sirki, he spends 3 days with Duke Lambert and his guests at his dukal estate....",
+            "A young fugitive prince and princess must stop a villain who unknowingly threatens to destroy the world with a special dagger that enables the magic sand inside to reverse time.",
+            "Amanda Wingfield dominates her children with her faded gentility and exaggerated tales of her Southern belle past. Her son plans escape; her daughter withdraws into a dream world. When a \"...",
+            "Dropping out of high school, two friends at first find success, one as a up-and-coming boxer and one as a low level gangster. Yet, their life decisions still find a way of catching up on them.",
+            "The epic tale of David Fandila's quest to become the world's top-ranked bullfighter.",
+            "A drama following stories of characters from the Portuguese High Society.",
+            "In 1937, Japan occupied Nanjing, the Chinese capital. There was a battle and subsequent atrocities against the inhabitants, especially those who took refuge in the International Security Zone.",
+            "Follows the key people at an investment bank, over a 24-hour period, during the early stages of the financial crisis.",
+            "Claudio, a construction worker, works on a site in the suburbs of Rome. He is madly in love with his wife who is pregnant with their third child. However, when he finds the remains of an ...",
+            "Two fishermen pick up a psychotic escaped convict who tells them that he intends to murder them when the ride is over.",
+            "A look at the making of the film Troll 2 (1990) and its journey from being crowned the \"worst film of all time\" to a cherished cult classic."
+          ]
+        },
+        "Undefined": {
+          "probability": 0.038,
+          "sampled": 38
+        }
+      }
+    },
+    "poster": {
+      "probability": 0.869,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 869,
+          "ndistinct": 868.0,
+          "values": [
+            "https://m.media-amazon.com/images/M/MV5BNDZhZDk0ZTktZmNhMC00YTU1LWEwY2YtZmIyMWM5MTNlNDEwXkEyXkFqcGdeQXVyNjUwNzk3NDc@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMjM5Y2I1NzUtODAwMS00YjM1LTk1NDEtNzI3ZjY1YjNiMGEyXkEyXkFqcGdeQXVyMTQxNzMzNDI@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMTU2OTc5ODA1M15BMl5BanBnXkFtZTcwOTkzMzU1MQ@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMTYwMDk4ODU0OV5BMl5BanBnXkFtZTcwMDY2NDE0Ng@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMTU4YWQ5MjgtZDc2Yi00YWZkLWFmOGQtNjAwOTQ1NWRhZjk3XkEyXkFqcGdeQXVyMjEzNzU3Mjc@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BYTZkNGFlM2UtZjE4ZC00YjVhLWJmNGYtMDVmMzFhNjg3MGU0XkEyXkFqcGdeQXVyNTY2NTA1Ng@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BM2U2N2M3M2EtMzQxYi00Mjk0LTlhNzItZDA5MDgxZDU2YmFjXkEyXkFqcGdeQXVyNjExODE1MDc@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BYjQwZjliMjQtZDg3Yy00MzVmLWI3YTgtYjMxNWNkN2ZhMzg2L2ltYWdlL2ltYWdlXkEyXkFqcGdeQXVyNjc1NTYyMjg@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BN2QxYjAwNDUtYWIzMC00ZTg3LTg5YjMtOGM4YzAyZmUxMzI2XkEyXkFqcGdeQXVyNjU0OTQ0OTY@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMjAwNzAxOTMxOF5BMl5BanBnXkFtZTgwMzMzNzY2MjE@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMTMwNDg0NzcyMV5BMl5BanBnXkFtZTcwNjg4MjQyMw@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMTgyODE3OTUxMF5BMl5BanBnXkFtZTcwMDUyODUyMQ@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMWViZmQzMjAtY2RkNy00MzU4LTliNzEtNDNmM2NkOTA2ZWZlXkEyXkFqcGdeQXVyNTAyODkwOQ@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BNDQzNjIyNTY3NF5BMl5BanBnXkFtZTcwMTAwMDk5MQ@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BY2U3YTAwMjQtMmIzNC00MmI0LTliOWEtYTYwMDc1NmU1Mzc3XkEyXkFqcGdeQXVyNzI1NzMxNzM@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMjE5NzkyNDI2Nl5BMl5BanBnXkFtZTcwMTYzNDc2Ng@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BY2VkOWI2YjAtMzMwZi00MGMzLTlhN2QtZGFiMTY0NDQ3YTdlXkEyXkFqcGdeQXVyMjQ2MTk1OTE@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BNjM3NTY4OWYtNzkzNy00ZGZhLThkMmUtYjM4OTRlNmY0MWI2L2ltYWdlXkEyXkFqcGdeQXVyNjc1NTYyMjg@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMTQ1NjE1MjYzNF5BMl5BanBnXkFtZTcwMDU0MDczMw@@._V1_SY1000_SX677_AL_.jpg",
+            "https://m.media-amazon.com/images/M/MV5BMmYwNWRmNTAtZjYyZC00YzdiLWJlNjItYmJkODEyYWFjYWM0XkEyXkFqcGdeQXVyMjExNjgyMTc@._V1_SY1000_SX677_AL_.jpg"
+          ]
+        },
+        "Undefined": {
+          "probability": 0.131,
+          "sampled": 131
+        }
+      }
+    },
+    "rated": {
+      "probability": 0.592,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 592,
+          "ndistinct": 12.0,
+          "values": [
+            "R",
+            "PG-13",
+            "G",
+            "APPROVED",
+            "UNRATED",
+            "NOT RATED",
+            "PG",
+            "PASSED",
+            "TV-G",
+            "X",
+            "TV-PG",
+            "TV-14"
+          ]
+        },
+        "Undefined": {
+          "probability": 0.408,
+          "sampled": 408
+        }
+      }
+    },
+    "released": {
+      "probability": 0.979,
+      "types": {
+        "Date": {
+          "probability": 1.0,
+          "sampled": 979,
+          "ndistinct": 875.0,
+          "values": [
+            "1999-08-27 0:00:00.0 +00:00:00",
+            "1989-11-18 0:00:00.0 +00:00:00",
+            "2008-02-22 0:00:00.0 +00:00:00",
+            "2011-08-26 0:00:00.0 +00:00:00",
+            "2010-03-26 0:00:00.0 +00:00:00",
+            "2009-04-03 0:00:00.0 +00:00:00",
+            "2006-08-29 0:00:00.0 +00:00:00",
+            "1964-07-22 0:00:00.0 +00:00:00",
+            "1991-12-13 0:00:00.0 +00:00:00",
+            "1934-03-30 0:00:00.0 +00:00:00",
+            "2010-05-28 0:00:00.0 +00:00:00",
+            "1973-12-16 0:00:00.0 +00:00:00",
+            "1996-07-27 0:00:00.0 +00:00:00",
+            "2008-03-10 0:00:00.0 +00:00:00",
+            "1988-11-10 0:00:00.0 +00:00:00",
+            "2009-04-22 0:00:00.0 +00:00:00",
+            "2011-09-29 0:00:00.0 +00:00:00",
+            "2010-05-21 0:00:00.0 +00:00:00",
+            "1953-10-16 0:00:00.0 +00:00:00",
+            "2009-03-01 0:00:00.0 +00:00:00"
+          ]
+        },
+        "Undefined": {
+          "probability": 0.021,
+          "sampled": 21
+        }
+      }
+    },
+    "runtime": {
+      "probability": 0.98,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 980,
+          "ndistinct": 128.0,
+          "values": [
+            102,
+            91,
+            97,
+            99,
+            87,
+            95,
+            74,
+            130,
+            105,
+            79,
+            116,
+            100,
+            107,
+            90,
+            133,
+            98,
+            71,
+            93,
+            6,
+            108
+          ]
+        },
+        "Undefined": {
+          "probability": 0.02,
+          "sampled": 20
+        }
+      }
+    },
+    "title": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 998.0,
+          "values": [
+            "The 13th Warrior",
+            "Troma's War",
+            "Witless Protection",
+            "Don't Be Afraid of the Dark",
+            "Beyond Gay: The Politics of Pride",
+            "Hidden",
+            "Brother Bear 2",
+            "Marnie",
+            "The Last Boy Scout",
+            "Death Takes a Holiday",
+            "Prince of Persia: The Sands of Time",
+            "The Glass Menagerie",
+            "Kids Return",
+            "The Matador",
+            "Os Canibais",
+            "City of Life and Death",
+            "Margin Call",
+            "La nostra vita",
+            "The Hitch-Hiker",
+            "Best Worst Movie"
+          ]
+        }
+      }
+    },
+    "tomatoes": {
+      "probability": 0.92,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 920,
+          "object": {
+            "boxOffice": {
+              "probability": 0.17282608695652174,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 159,
+                  "ndistinct": 126.0,
+                  "values": [
+                    "$4.1M",
+                    "$24.0M",
+                    "$90.8M",
+                    "$0.1M",
+                    "$60.0M",
+                    "$0.2M",
+                    "$41.6M",
+                    "$18.1k",
+                    "$0.7M",
+                    "$47.0M",
+                    "$7.3M",
+                    "$63.9M",
+                    "$20.2k",
+                    "$105.5M",
+                    "$380.2M",
+                    "$34.8k",
+                    "$198.3M",
+                    "$52.5M",
+                    "$0.5M",
+                    "$1.7M"
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.8271739130434783,
+                  "sampled": 761
+                }
+              }
+            },
+            "consensus": {
+              "probability": 0.27717391304347827,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 255,
+                  "ndistinct": 254.0,
+                  "values": [
+                    "Atmospheric, great sets and costumes, but thin plot.",
+                    "Larry the Cable Guy continues his critical losing streak with this insipid, tasteless caper comedy.",
+                    "While it's pleasantly atmospheric and initially quite scary, Don't Be Afraid of the Dark ultimately fails to deliver the skin-crawling chills of the original.",
+                    "It doesn't offer much in the way of substance, but Prince of Persia is a suitably entertaining swashbuckler -- and a substantial improvement over most video game adaptations.",
+                    "The Lawnmower Man suffers from a predictable, melodramatic script, and its once-groundbreaking visual effects look dated today.",
+                    "The production design is first rate, but 13 Ghosts is distinctly lacking in scares.",
+                    "An upfront study of a drug addict confronting his demons, Oslo, August 31st makes this dark journey worthwhile with fantastic directing and equally fantastic acting.",
+                    "Halle Berry gives it her all (and then some), but Frankie & Alice is ultimately too narratively strained and clumsily assembled to do her performance justice.",
+                    "Filled with excellent performances, Ramin Bahrani's deft sophomore effort is a heartfelt, hopeful neorealist look at the people who live in the gritty underbelly of New York City.",
+                    "Dull, formulaic, and chemistry-free, Killers is an action/comedy that's largely bereft of thrills or laughs.",
+                    "Despite the beautiful visuals, Crime and Punishment is too somber and pretentious. Also, the acting is of mixed quality.",
+                    "The Condemned is a morally ambiguous, exceedingly violent and mostly forgettable action film.",
+                    "It doesn't offer much in the way of uplift, but Sunlight Jr.'s grim storyline is offset by Laurie Collyer's empathetic screenplay and strong performances from Naomi Watts and Matt Dillon.",
+                    "Tony Scott tries to combine action, science fiction, romance, and explosions into one movie, but the time travel conceit might be too preposterous and the action falls apart under scrutiny.",
+                    "The sports movie Iron Ladies is as predictable and sentimental as many of its American counterparts.",
+                    "Though critics say Bullock is funny and charming, she can't overcome a bad script that makes the movie feel too much like a fluffy, unoriginal sitcom.",
+                    "The performances in Big Night are wonderful, and the food looks delicious.",
+                    "This sixth and final installment of George Lucas' epic space opera will please die-hard fanatics and non-believers alike -- largely due to awesome digital effects and the sheer power of the mythology.",
+                    "One of the most influential films of the 1990s, Pulp Fiction is a delirious post-modern mix of neo-noir thrills, pitch-black humor, and pop-culture touchstones.",
+                    "This engaging and well-organized eco-doc maps the successes and failures of the American environmental movement, thanks to sharp interviews and remarkable archive footage."
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.7228260869565217,
+                  "sampled": 665
+                }
+              }
+            },
+            "critic": {
+              "probability": 0.6043478260869565,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 556,
+                  "object": {
+                    "meter": {
+                      "probability": 0.9946043165467626,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 553,
+                          "ndistinct": 98.0,
+                          "values": [
+                            33,
+                            4,
+                            58,
+                            50,
+                            81,
+                            44,
+                            83,
+                            36,
+                            73,
+                            91,
+                            100,
+                            95,
+                            38,
+                            80,
+                            67,
+                            34,
+                            41,
+                            24,
+                            82,
+                            14
+                          ]
+                        },
+                        "Undefined": {
+                          "probability": 0.00539568345323741,
+                          "sampled": 3
+                        }
+                      }
+                    },
+                    "numReviews": {
+                      "probability": 0.9982014388489209,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 555,
+                          "ndistinct": 150.0,
+                          "values": [
+                            87,
+                            28,
+                            162,
+                            8,
+                            32,
+                            6,
+                            215,
+                            15,
+                            47,
+                            7,
+                            62,
+                            34,
+                            16,
+                            5,
+                            9,
+                            29,
+                            17,
+                            33,
+                            92,
+                            12
+                          ]
+                        },
+                        "Undefined": {
+                          "probability": 0.0017985611510791368,
+                          "sampled": 1
+                        }
+                      }
+                    },
+                    "rating": {
+                      "probability": 0.9928057553956835,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 552,
+                          "ndistinct": 68.0,
+                          "values": [
+                            4.6,
+                            2.1,
+                            5.8,
+                            5.6,
+                            7.3,
+                            5.3,
+                            5,
+                            6.6,
+                            8.4,
+                            6.9,
+                            7.6,
+                            7.2,
+                            5.9,
+                            4.8,
+                            4.9,
+                            3.4,
+                            7.7,
+                            8.3,
+                            6.1,
+                            7.9
+                          ]
+                        },
+                        "Undefined": {
+                          "probability": 0.007194244604316547,
+                          "sampled": 4
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "rating": 4.6,
+                      "numReviews": 87,
+                      "meter": 33
+                    },
+                    {
+                      "rating": 2.1,
+                      "numReviews": 28,
+                      "meter": 4
+                    },
+                    {
+                      "rating": 5.8,
+                      "numReviews": 162,
+                      "meter": 58
+                    },
+                    {
+                      "rating": 5.6,
+                      "numReviews": 8,
+                      "meter": 50
+                    },
+                    {
+                      "rating": 7.3,
+                      "numReviews": 32,
+                      "meter": 81
+                    },
+                    {
+                      "rating": 5.3,
+                      "numReviews": 32,
+                      "meter": 44
+                    },
+                    {
+                      "rating": 7.3,
+                      "numReviews": 6,
+                      "meter": 83
+                    },
+                    {
+                      "rating": 5,
+                      "numReviews": 215,
+                      "meter": 36
+                    },
+                    {
+                      "rating": 6.6,
+                      "numReviews": 15,
+                      "meter": 73
+                    },
+                    {
+                      "rating": 8.4,
+                      "numReviews": 47,
+                      "meter": 91
+                    },
+                    {
+                      "rating": 7.3,
+                      "numReviews": 7,
+                      "meter": 100
+                    },
+                    {
+                      "rating": 7.3,
+                      "numReviews": 62,
+                      "meter": 95
+                    },
+                    {
+                      "rating": 4.6,
+                      "numReviews": 34,
+                      "meter": 38
+                    },
+                    {
+                      "rating": 6.9,
+                      "numReviews": 6,
+                      "meter": 100
+                    },
+                    {
+                      "rating": 7.6,
+                      "numReviews": 16,
+                      "meter": 100
+                    },
+                    {
+                      "rating": 7.2,
+                      "numReviews": 5,
+                      "meter": 80
+                    },
+                    {
+                      "rating": 5.9,
+                      "numReviews": 9,
+                      "meter": 67
+                    },
+                    {
+                      "rating": 4.8,
+                      "numReviews": 29,
+                      "meter": 34
+                    },
+                    {
+                      "rating": 5.3,
+                      "numReviews": 17,
+                      "meter": 41
+                    },
+                    {
+                      "rating": 4.9,
+                      "numReviews": 33,
+                      "meter": 24
+                    }
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.39565217391304347,
+                  "sampled": 364
+                }
+              }
+            },
+            "dvd": {
+              "probability": 0.758695652173913,
+              "types": {
+                "Date": {
+                  "probability": 1.0,
+                  "sampled": 698,
+                  "ndistinct": 514.0,
+                  "values": [
+                    "2002-01-15 0:00:00.0 +00:00:00",
+                    "1998-09-15 0:00:00.0 +00:00:00",
+                    "2008-06-10 0:00:00.0 +00:00:00",
+                    "2012-01-03 0:00:00.0 +00:00:00",
+                    "2013-01-08 0:00:00.0 +00:00:00",
+                    "2010-03-23 0:00:00.0 +00:00:00",
+                    "2006-08-29 0:00:00.0 +00:00:00",
+                    "2000-05-30 0:00:00.0 +00:00:00",
+                    "1998-05-26 0:00:00.0 +00:00:00",
+                    "1998-11-03 0:00:00.0 +00:00:00",
+                    "2010-09-14 0:00:00.0 +00:00:00",
+                    "2003-02-11 0:00:00.0 +00:00:00",
+                    "2000-12-12 0:00:00.0 +00:00:00",
+                    "2009-02-17 0:00:00.0 +00:00:00",
+                    "2011-10-25 0:00:00.0 +00:00:00",
+                    "1999-10-14 0:00:00.0 +00:00:00",
+                    "2010-11-16 0:00:00.0 +00:00:00",
+                    "1997-09-30 0:00:00.0 +00:00:00",
+                    "2005-04-19 0:00:00.0 +00:00:00",
+                    "2003-03-04 0:00:00.0 +00:00:00"
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.24130434782608695,
+                  "sampled": 222
+                }
+              }
+            },
+            "fresh": {
+              "probability": 0.6032608695652174,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 555,
+                  "ndistinct": 121.0,
+                  "values": [
+                    29,
+                    1,
+                    94,
+                    4,
+                    26,
+                    14,
+                    5,
+                    77,
+                    11,
+                    43,
+                    7,
+                    59,
+                    13,
+                    6,
+                    16,
+                    10,
+                    8,
+                    75,
+                    9,
+                    20
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.3967391304347826,
+                  "sampled": 365
+                }
+              }
+            },
+            "lastUpdated": {
+              "probability": 1.0,
+              "types": {
+                "Date": {
+                  "probability": 1.0,
+                  "sampled": 920,
+                  "ndistinct": 914.0,
+                  "values": [
+                    "2015-08-18 19:23:52.0 +00:00:00",
+                    "2015-07-26 18:39:16.0 +00:00:00",
+                    "2015-09-11 17:40:22.0 +00:00:00",
+                    "2015-09-14 17:49:48.0 +00:00:00",
+                    "2015-09-16 20:20:15.0 +00:00:00",
+                    "2015-09-10 19:08:54.0 +00:00:00",
+                    "2015-09-14 19:15:43.0 +00:00:00",
+                    "2015-08-31 18:03:03.0 +00:00:00",
+                    "2015-09-16 18:16:06.0 +00:00:00",
+                    "2015-07-20 18:53:52.0 +00:00:00",
+                    "2015-09-12 17:51:27.0 +00:00:00",
+                    "2015-08-26 18:24:16.0 +00:00:00",
+                    "2015-08-10 18:08:03.0 +00:00:00",
+                    "2015-09-11 18:32:02.0 +00:00:00",
+                    "2015-08-26 18:20:29.0 +00:00:00",
+                    "2015-08-26 18:26:42.0 +00:00:00",
+                    "2015-08-31 20:27:02.0 +00:00:00",
+                    "2015-08-23 18:58:55.0 +00:00:00",
+                    "2015-09-01 19:45:29.0 +00:00:00",
+                    "2015-08-21 19:26:14.0 +00:00:00"
+                  ]
+                }
+              }
+            },
+            "production": {
+              "probability": 0.7076086956521739,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 651,
+                  "ndistinct": 317.0,
+                  "values": [
+                    "Buena Vista Pictures",
+                    "Troma Films",
+                    "Lions Gate Films",
+                    "Miramax Films",
+                    "Walt Disney Home Entertainment",
+                    "MCA Universal Home Video",
+                    "Warner Home Video",
+                    "Universal Pictures",
+                    "Walt Disney Pictures",
+                    "Talent Associates",
+                    "City Lights Pictures",
+                    "Les Films Plain Chant",
+                    "Cinema Ventures",
+                    "Unknown",
+                    "Acme DVD Works",
+                    "Area23A",
+                    "Sony Pictures Home Entertainment",
+                    "Live Home Video",
+                    "Orion Home Video",
+                    "Grindhouse Entertainment"
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.29239130434782606,
+                  "sampled": 269
+                }
+              }
+            },
+            "rotten": {
+              "probability": 0.6032608695652174,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 555,
+                  "ndistinct": 96.0,
+                  "values": [
+                    58,
+                    27,
+                    68,
+                    4,
+                    6,
+                    18,
+                    1,
+                    138,
+                    0,
+                    3,
+                    21,
+                    19,
+                    10,
+                    25,
+                    17,
+                    79,
+                    26,
+                    2,
+                    11,
+                    16
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.3967391304347826,
+                  "sampled": 365
+                }
+              }
+            },
+            "viewer": {
+              "probability": 1.0,
+              "types": {
+                "Object": {
+                  "probability": 1.0,
+                  "sampled": 920,
+                  "object": {
+                    "meter": {
+                      "probability": 0.8945652173913043,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 823,
+                          "ndistinct": 89.0,
+                          "values": [
+                            66,
+                            64,
+                            45,
+                            34,
+                            92,
+                            30,
+                            57,
+                            73,
+                            68,
+                            82,
+                            58,
+                            88,
+                            65,
+                            85,
+                            46,
+                            59,
+                            84,
+                            31,
+                            72,
+                            91
+                          ]
+                        },
+                        "Undefined": {
+                          "probability": 0.10543478260869565,
+                          "sampled": 97
+                        }
+                      }
+                    },
+                    "numReviews": {
+                      "probability": 1.0,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 920,
+                          "ndistinct": 798.0,
+                          "values": [
+                            117415,
+                            772,
+                            11446,
+                            40290,
+                            25,
+                            375,
+                            24202,
+                            18922,
+                            59860,
+                            690,
+                            436257,
+                            454,
+                            3984,
+                            204,
+                            71,
+                            3663,
+                            245,
+                            1816,
+                            3159,
+                            298
+                          ]
+                        }
+                      }
+                    },
+                    "rating": {
+                      "probability": 0.9989130434782608,
+                      "types": {
+                        "Number": {
+                          "probability": 1.0,
+                          "sampled": 919,
+                          "ndistinct": 36.0,
+                          "values": [
+                            3.2,
+                            3.4,
+                            3.1,
+                            2.8,
+                            4.1,
+                            3.5,
+                            3.6,
+                            3.3,
+                            3.8,
+                            3.9,
+                            4.3,
+                            2.6,
+                            4,
+                            2.7,
+                            3,
+                            0,
+                            3.7,
+                            2,
+                            2.9,
+                            4.2
+                          ]
+                        },
+                        "Undefined": {
+                          "probability": 0.0010869565217391304,
+                          "sampled": 1
+                        }
+                      }
+                    }
+                  },
+                  "values": [
+                    {
+                      "rating": 3.2,
+                      "numReviews": 117415,
+                      "meter": 66
+                    },
+                    {
+                      "rating": 3.4,
+                      "numReviews": 772,
+                      "meter": 64
+                    },
+                    {
+                      "rating": 3.1,
+                      "numReviews": 11446,
+                      "meter": 45
+                    },
+                    {
+                      "rating": 2.8,
+                      "numReviews": 40290,
+                      "meter": 34
+                    },
+                    {
+                      "rating": 4.1,
+                      "numReviews": 25,
+                      "meter": 92
+                    },
+                    {
+                      "rating": 2.8,
+                      "numReviews": 375,
+                      "meter": 30
+                    },
+                    {
+                      "rating": 3.5,
+                      "numReviews": 24202,
+                      "meter": 57
+                    },
+                    {
+                      "rating": 3.6,
+                      "numReviews": 18922,
+                      "meter": 73
+                    },
+                    {
+                      "rating": 3.3,
+                      "numReviews": 59860,
+                      "meter": 68
+                    },
+                    {
+                      "rating": 3.8,
+                      "numReviews": 690,
+                      "meter": 82
+                    },
+                    {
+                      "rating": 3.4,
+                      "numReviews": 436257,
+                      "meter": 58
+                    },
+                    {
+                      "rating": 3.6,
+                      "numReviews": 454,
+                      "meter": 64
+                    },
+                    {
+                      "rating": 3.9,
+                      "numReviews": 3984,
+                      "meter": 88
+                    },
+                    {
+                      "rating": 3.4,
+                      "numReviews": 204,
+                      "meter": 65
+                    },
+                    {
+                      "rating": 3.4,
+                      "numReviews": 71
+                    },
+                    {
+                      "rating": 4.1,
+                      "numReviews": 3663,
+                      "meter": 85
+                    },
+                    {
+                      "rating": 3.2,
+                      "numReviews": 245,
+                      "meter": 46
+                    },
+                    {
+                      "rating": 3.4,
+                      "numReviews": 1816,
+                      "meter": 59
+                    },
+                    {
+                      "rating": 3.9,
+                      "numReviews": 3159,
+                      "meter": 84
+                    },
+                    {
+                      "rating": 4.3,
+                      "numReviews": 298
+                    }
+                  ]
+                }
+              }
+            },
+            "website": {
+              "probability": 0.36086956521739133,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 332,
+                  "ndistinct": 328.0,
+                  "values": [
+                    "http://www.lionsgate.com/witlessprotection",
+                    "http://www.dontbeafraidofthedark.com",
+                    "http://biggaymovie.com/",
+                    "http://www.skjult.no/",
+                    "http://disney.go.com/disneypictures/brotherbear/main.html",
+                    "http://Disney.com/PrinceOfPersia",
+                    "http://www.matadorthefilm.com/",
+                    "http://www.cityoflifeanddeath.co.uk/",
+                    "http://bestworst.ca",
+                    "http://danceofthedeadmovie.com",
+                    "http://www.troma.com/movies/citizentoxie/",
+                    "http://www.thedisappearanceofalicecreed.com/",
+                    "http://13ghosts.warnerbros.com",
+                    "http://www.kino.com/daysofbeingwild",
+                    "http://cinemaguild.com/theatrical/eveningfalls_press.htm",
+                    "http://www.facebook.com/Oslo31august",
+                    "http://www.frankieandalicemovie.com/",
+                    "http://noruzfilms.com",
+                    "http://www.pandaemonium-themovie.com",
+                    "http://www.killersfilm.com/"
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.6391304347826087,
+                  "sampled": 588
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "viewer": {
+                "rating": 3.2,
+                "numReviews": 117415,
+                "meter": 66
+              },
+              "dvd": "2002-01-15 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 4.6,
+                "numReviews": 87,
+                "meter": 33
+              },
+              "lastUpdated": "2015-08-18 19:23:52.0 +00:00:00",
+              "consensus": "Atmospheric, great sets and costumes, but thin plot.",
+              "rotten": 58,
+              "production": "Buena Vista Pictures",
+              "fresh": 29
+            },
+            {
+              "viewer": {
+                "rating": 3.4,
+                "numReviews": 772,
+                "meter": 64
+              },
+              "dvd": "1998-09-15 0:00:00.0 +00:00:00",
+              "production": "Troma Films",
+              "lastUpdated": "2015-07-26 18:39:16.0 +00:00:00"
+            },
+            {
+              "website": "http://www.lionsgate.com/witlessprotection",
+              "viewer": {
+                "rating": 3.1,
+                "numReviews": 11446,
+                "meter": 45
+              },
+              "dvd": "2008-06-10 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 2.1,
+                "numReviews": 28,
+                "meter": 4
+              },
+              "boxOffice": "$4.1M",
+              "consensus": "Larry the Cable Guy continues his critical losing streak with this insipid, tasteless caper comedy.",
+              "rotten": 27,
+              "production": "Lions Gate Films",
+              "lastUpdated": "2015-09-11 17:40:22.0 +00:00:00",
+              "fresh": 1
+            },
+            {
+              "website": "http://www.dontbeafraidofthedark.com",
+              "viewer": {
+                "rating": 2.8,
+                "numReviews": 40290,
+                "meter": 34
+              },
+              "dvd": "2012-01-03 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 5.8,
+                "numReviews": 162,
+                "meter": 58
+              },
+              "boxOffice": "$24.0M",
+              "consensus": "While it's pleasantly atmospheric and initially quite scary, Don't Be Afraid of the Dark ultimately fails to deliver the skin-crawling chills of the original.",
+              "rotten": 68,
+              "production": "Miramax Films",
+              "lastUpdated": "2015-09-14 17:49:48.0 +00:00:00",
+              "fresh": 94
+            },
+            {
+              "viewer": {
+                "rating": 4.1,
+                "numReviews": 25,
+                "meter": 92
+              },
+              "dvd": "2013-01-08 0:00:00.0 +00:00:00",
+              "website": "http://biggaymovie.com/",
+              "lastUpdated": "2015-09-16 20:20:15.0 +00:00:00"
+            },
+            {
+              "viewer": {
+                "rating": 2.8,
+                "numReviews": 375,
+                "meter": 30
+              },
+              "dvd": "2010-03-23 0:00:00.0 +00:00:00",
+              "website": "http://www.skjult.no/",
+              "lastUpdated": "2015-09-10 19:08:54.0 +00:00:00"
+            },
+            {
+              "website": "http://disney.go.com/disneypictures/brotherbear/main.html",
+              "viewer": {
+                "rating": 3.5,
+                "numReviews": 24202,
+                "meter": 57
+              },
+              "dvd": "2006-08-29 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 5.6,
+                "numReviews": 8,
+                "meter": 50
+              },
+              "lastUpdated": "2015-09-14 19:15:43.0 +00:00:00",
+              "rotten": 4,
+              "production": "Walt Disney Home Entertainment",
+              "fresh": 4
+            },
+            {
+              "viewer": {
+                "rating": 3.6,
+                "numReviews": 18922,
+                "meter": 73
+              },
+              "dvd": "2000-05-30 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 7.3,
+                "numReviews": 32,
+                "meter": 81
+              },
+              "lastUpdated": "2015-08-31 18:03:03.0 +00:00:00",
+              "rotten": 6,
+              "production": "MCA Universal Home Video",
+              "fresh": 26
+            },
+            {
+              "viewer": {
+                "rating": 3.3,
+                "numReviews": 59860,
+                "meter": 68
+              },
+              "dvd": "1998-05-26 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 5.3,
+                "numReviews": 32,
+                "meter": 44
+              },
+              "lastUpdated": "2015-09-16 18:16:06.0 +00:00:00",
+              "rotten": 18,
+              "production": "Warner Home Video",
+              "fresh": 14
+            },
+            {
+              "viewer": {
+                "rating": 3.8,
+                "numReviews": 690,
+                "meter": 82
+              },
+              "dvd": "1998-11-03 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 7.3,
+                "numReviews": 6,
+                "meter": 83
+              },
+              "lastUpdated": "2015-07-20 18:53:52.0 +00:00:00",
+              "rotten": 1,
+              "production": "Universal Pictures",
+              "fresh": 5
+            },
+            {
+              "website": "http://Disney.com/PrinceOfPersia",
+              "viewer": {
+                "rating": 3.4,
+                "numReviews": 436257,
+                "meter": 58
+              },
+              "dvd": "2010-09-14 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 5,
+                "numReviews": 215,
+                "meter": 36
+              },
+              "boxOffice": "$90.8M",
+              "consensus": "It doesn't offer much in the way of substance, but Prince of Persia is a suitably entertaining swashbuckler -- and a substantial improvement over most video game adaptations.",
+              "rotten": 138,
+              "production": "Walt Disney Pictures",
+              "lastUpdated": "2015-09-12 17:51:27.0 +00:00:00",
+              "fresh": 77
+            },
+            {
+              "viewer": {
+                "rating": 3.6,
+                "numReviews": 454,
+                "meter": 64
+              },
+              "dvd": "2003-02-11 0:00:00.0 +00:00:00",
+              "production": "Talent Associates",
+              "lastUpdated": "2015-08-26 18:24:16.0 +00:00:00"
+            },
+            {
+              "viewer": {
+                "rating": 3.9,
+                "numReviews": 3984,
+                "meter": 88
+              },
+              "dvd": "2000-12-12 0:00:00.0 +00:00:00",
+              "lastUpdated": "2015-08-10 18:08:03.0 +00:00:00"
+            },
+            {
+              "website": "http://www.matadorthefilm.com/",
+              "viewer": {
+                "rating": 3.4,
+                "numReviews": 204,
+                "meter": 65
+              },
+              "dvd": "2009-02-17 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 6.6,
+                "numReviews": 15,
+                "meter": 73
+              },
+              "lastUpdated": "2015-09-11 18:32:02.0 +00:00:00",
+              "rotten": 4,
+              "production": "City Lights Pictures",
+              "fresh": 11
+            },
+            {
+              "viewer": {
+                "rating": 3.4,
+                "numReviews": 71
+              },
+              "production": "Les Films Plain Chant",
+              "lastUpdated": "2015-08-26 18:20:29.0 +00:00:00"
+            },
+            {
+              "website": "http://www.cityoflifeanddeath.co.uk/",
+              "viewer": {
+                "rating": 4.1,
+                "numReviews": 3663,
+                "meter": 85
+              },
+              "dvd": "2011-10-25 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 8.4,
+                "numReviews": 47,
+                "meter": 91
+              },
+              "lastUpdated": "2015-08-26 18:26:42.0 +00:00:00",
+              "rotten": 4,
+              "production": "Cinema Ventures",
+              "fresh": 43
+            },
+            {
+              "viewer": {
+                "rating": 3.2,
+                "numReviews": 245,
+                "meter": 46
+              },
+              "production": "Unknown",
+              "lastUpdated": "2015-08-31 20:27:02.0 +00:00:00"
+            },
+            {
+              "viewer": {
+                "rating": 3.4,
+                "numReviews": 1816,
+                "meter": 59
+              },
+              "dvd": "1999-10-14 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 7.3,
+                "numReviews": 7,
+                "meter": 100
+              },
+              "lastUpdated": "2015-08-23 18:58:55.0 +00:00:00",
+              "rotten": 0,
+              "production": "Acme DVD Works",
+              "fresh": 7
+            },
+            {
+              "website": "http://bestworst.ca",
+              "viewer": {
+                "rating": 3.9,
+                "numReviews": 3159,
+                "meter": 84
+              },
+              "dvd": "2010-11-16 0:00:00.0 +00:00:00",
+              "critic": {
+                "rating": 7.3,
+                "numReviews": 62,
+                "meter": 95
+              },
+              "boxOffice": "$0.1M",
+              "rotten": 3,
+              "production": "Area23A",
+              "lastUpdated": "2015-09-01 19:45:29.0 +00:00:00",
+              "fresh": 59
+            },
+            {
+              "viewer": {
+                "rating": 4.3,
+                "numReviews": 298
+              },
+              "lastUpdated": "2015-08-21 19:26:14.0 +00:00:00"
+            }
+          ]
+        },
+        "Undefined": {
+          "probability": 0.08,
+          "sampled": 80
+        }
+      }
+    },
+    "type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 2.0,
+          "values": [
+            "movie",
+            "series"
+          ]
+        }
+      }
+    },
+    "writers": {
+      "probability": 0.95,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 950,
+          "ndistinct": 2.368,
+          "array": {
+            "probability": 2.4926315789473685,
+            "types": {
+              "String": {
+                "probability": 1.0,
+                "sampled": 2368,
+                "ndistinct": 1000.0,
+                "values": [
+                  "Michael Crichton (novel)",
+                  "William Wisher Jr. (screenplay)",
+                  "Warren Lewis (screenplay)",
+                  "Lloyd Kaufman (story)",
+                  "Mitchell Dana (screenplay)",
+                  "Lloyd Kaufman (screenplay)",
+                  "Eric Hattler (additional material)",
+                  "Tom Martinek (additional material)",
+                  "Rick Washburn (additional dialogue)",
+                  "Charles Robert Carner (screenplay)",
+                  "Charles Robert Carner (story)",
+                  "Alan C. Blomquist (story)",
+                  "Guillermo del Toro (screenplay)",
+                  "Matthew Robbins (screenplay)",
+                  "Nigel McKeand",
+                  "Bob Christie",
+                  "Aerlyn Weissman",
+                  "Pèl èie",
+                  "Rich Burns (screenplay)",
+                  "Ben Gluck (additional screenplay)"
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              "Michael Crichton (novel)",
+              "William Wisher Jr. (screenplay)",
+              "Warren Lewis (screenplay)"
+            ],
+            [
+              "Lloyd Kaufman (story)",
+              "Mitchell Dana (screenplay)",
+              "Lloyd Kaufman (screenplay)",
+              "Eric Hattler (additional material)",
+              "Tom Martinek (additional material)",
+              "Rick Washburn (additional dialogue)"
+            ],
+            [
+              "Charles Robert Carner (screenplay)",
+              "Charles Robert Carner (story)",
+              "Alan C. Blomquist (story)"
+            ],
+            [
+              "Guillermo del Toro (screenplay)",
+              "Matthew Robbins (screenplay)",
+              "Nigel McKeand"
+            ],
+            [
+              "Bob Christie",
+              "Aerlyn Weissman"
+            ],
+            [
+              "Pèl èie"
+            ],
+            [
+              "Rich Burns (screenplay)",
+              "Ben Gluck (additional screenplay)"
+            ],
+            [
+              "Winston Graham (from the novel by)",
+              "Jay Presson Allen (screenplay)"
+            ],
+            [
+              "Shane Black (story)",
+              "Greg Hicks (story)",
+              "Shane Black (screenplay)"
+            ],
+            [
+              "Maxwell Anderson (screenplay)",
+              "Gladys Lehman (screenplay)",
+              "Alberto Casella (play)",
+              "Walter Ferris (english adaptation)"
+            ],
+            [
+              "Boaz Yakin (screenplay)",
+              "Doug Miro (screenplay)",
+              "Carlo Bernard (screenplay)",
+              "Jordan Mechner (screen story)",
+              "Jordan Mechner (video game series \"Prince of Persia\")"
+            ],
+            [
+              "Stewart Stern (screenplay)",
+              "Tennessee Williams (play)"
+            ],
+            [
+              "Takeshi Kitano"
+            ],
+            [
+              "èlvaro Carvalhal (novel)",
+              "Joèo Paes (libretto)",
+              "Manoel de Oliveira"
+            ],
+            [
+              "Chuan Lu"
+            ],
+            [
+              "J.C. Chandor"
+            ],
+            [
+              "Daniele Luchetti",
+              "Sandro Petraglia",
+              "Stefano Rulli"
+            ],
+            [
+              "Collier Young (screenplay)",
+              "Ida Lupino (screenplay)",
+              "Robert L. Joseph (adaptation)"
+            ],
+            [
+              "Mark Osborne"
+            ],
+            [
+              "Stephen King (title only)",
+              "Brett Leonard (screenplay)",
+              "Gimel Everett (screenplay)"
+            ]
+          ]
+        },
+        "Undefined": {
+          "probability": 0.05,
+          "sampled": 50
+        }
+      }
+    },
+    "year": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 0.999,
+          "sampled": 999,
+          "ndistinct": 75.0,
+          "values": [
+            1999,
+            1988,
+            2008,
+            2010,
+            2009,
+            2006,
+            1964,
+            1991,
+            1934,
+            1973,
+            1996,
+            2011,
+            1953,
+            1998,
+            1992,
+            1989,
+            1990,
+            2000,
+            1976,
+            2005
+          ]
+        },
+        "String": {
+          "probability": 0.001,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            "1997è"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mongo2pg – Schema Diagram – retail</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    header {
+      background: #2c3e50;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { margin: 0; font-size: 1.2rem; }
+    header small { opacity: 0.6; font-size: 0.75rem; }
+    .layout {
+      display: flex;
+      flex: 1;
+    }
+    aside {
+      width: 220px;
+      background: white;
+      border-right: 1px solid #ddd;
+      padding: 1rem;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    aside h2 { font-size: 0.8rem; text-transform: uppercase; color: #7f8c8d; margin: 0 0 0.75rem; }
+    aside ul { list-style: none; margin: 0; padding: 0; }
+    aside li { margin-bottom: 0.4rem; font-size: 0.85rem; }
+    aside a { color: #2c3e50; text-decoration: none; font-weight: 600; }
+    .badge {
+      background: #e74c3c;
+      color: white;
+      border-radius: 3px;
+      padding: 0 4px;
+      font-size: 0.7rem;
+    }
+    main {
+      flex: 1;
+      padding: 2rem;
+      overflow: auto;
+    }
+    .mermaid {
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    footer { padding: 0.75rem 2rem; font-size: 0.75rem; color: #aaa; text-align: right; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>mongo2pg – Schema Diagram – retail</h1>
+    <small>Generated: 2026-05-03 09:06 UTC</small>
+  </header>
+  <div class="layout">
+    <aside>
+      <h2>Tables (21)</h2>
+      <ul>
+        <li><a href="#" onclick="return false">carts</a> <small>(2 cols)</small></li>
+<li><a href="#" onclick="return false">carts_products <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">invoices</a> <small>(7 cols)</small></li>
+<li><a href="#" onclick="return false">invoices_items <span class="badge">1 FK</span></a> <small>(7 cols)</small></li>
+<li><a href="#" onclick="return false">invoices_recommendations <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
+<li><a href="#" onclick="return false">invoices_items_image <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">invoices_items_price <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">locations</a> <small>(8 cols)</small></li>
+<li><a href="#" onclick="return false">orders</a> <small>(5 cols)</small></li>
+<li><a href="#" onclick="return false">orders_products <span class="badge">1 FK</span></a> <small>(7 cols)</small></li>
+<li><a href="#" onclick="return false">orders_status_history <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">orders_products_image <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">orders_products_price <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">products</a> <small>(13 cols)</small></li>
+<li><a href="#" onclick="return false">products_vai_text_embedding <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">recommendations</a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">recommendations_items <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
+<li><a href="#" onclick="return false">recommendations_items_image <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">recommendations_items_price <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">users</a> <small>(7 cols)</small></li>
+<li><a href="#" onclick="return false">users_lastrecommendations <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
+      </ul>
+    </aside>
+    <main>
+      <div class="mermaid">
+erDiagram
+  carts {
+    UUID id PK
+    TEXT _user "NOT NULL"
+  }
+  carts_products {
+    BIGINT id PK
+    UUID carts_id FK
+    TEXT value "NOT NULL"
+  }
+  invoices {
+    UUID id PK
+    TEXT createdat "NOT NULL"
+    JSONB metadata "NOT NULL"
+    TEXT orderid "NOT NULL"
+    TEXT status "NOT NULL"
+    INTEGER totalamount "NOT NULL"
+    TEXT userid "NOT NULL"
+  }
+  invoices_items {
+    BIGINT id PK
+    UUID invoices_id FK
+    INTEGER amount "NOT NULL"
+    TEXT brand "NOT NULL"
+    TEXT code "NOT NULL"
+    TEXT description "NOT NULL"
+    TEXT name "NOT NULL"
+  }
+  invoices_recommendations {
+    BIGINT id PK
+    UUID invoices_id FK
+    TEXT brand "NOT NULL"
+    TEXT image "NOT NULL"
+    TEXT name "NOT NULL"
+    INTEGER price "NOT NULL"
+    TEXT productid "NOT NULL"
+    FLOAT vectorsearchscore "NOT NULL"
+  }
+  invoices_items_image {
+    BIGINT id PK
+    BIGINT invoices_items_id FK
+    TEXT url "NOT NULL"
+  }
+  invoices_items_price {
+    BIGINT id PK
+    BIGINT invoices_items_id FK
+    INTEGER amount "NOT NULL"
+    TEXT currency
+  }
+  locations {
+    UUID id PK
+    TEXT city
+    TEXT country "NOT NULL"
+    TEXT cp "NOT NULL"
+    TEXT name "NOT NULL"
+    TEXT state "NOT NULL"
+    TEXT street_and_number "NOT NULL"
+    TEXT type "NOT NULL"
+  }
+  orders {
+    UUID id PK
+    TEXT invoiceid "NOT NULL"
+    TEXT shipping_address "NOT NULL"
+    TEXT type "NOT NULL"
+    TEXT _user "NOT NULL"
+  }
+  orders_products {
+    BIGINT id PK
+    UUID orders_id FK
+    INTEGER amount "NOT NULL"
+    TEXT brand "NOT NULL"
+    TEXT code "NOT NULL"
+    TEXT description "NOT NULL"
+    TEXT name "NOT NULL"
+  }
+  orders_status_history {
+    BIGINT id PK
+    UUID orders_id FK
+    TEXT status "NOT NULL"
+    BIGINT timestamp "NOT NULL"
+  }
+  orders_products_image {
+    BIGINT id PK
+    BIGINT orders_products_id FK
+    TEXT url "NOT NULL"
+  }
+  orders_products_price {
+    BIGINT id PK
+    BIGINT orders_products_id FK
+    INTEGER amount "NOT NULL"
+    TEXT currency
+  }
+  products {
+    UUID id PK
+    TEXT articletype "NOT NULL"
+    TEXT basecolour
+    TEXT brand "NOT NULL"
+    TEXT code "NOT NULL"
+    TEXT description "NOT NULL"
+    TEXT gender "NOT NULL"
+    JSONB image "NOT NULL"
+    TEXT mastercategory
+    TEXT name "NOT NULL"
+    JSONB price "NOT NULL"
+    TEXT subcategory
+    INTEGER year
+  }
+  products_vai_text_embedding {
+    BIGINT id PK
+    UUID products_id FK
+    FLOAT value "NOT NULL"
+  }
+  recommendations {
+    UUID id PK
+    TIMESTAMP createdat "NOT NULL"
+    TEXT invoiceid "NOT NULL"
+    TEXT userid "NOT NULL"
+  }
+  recommendations_items {
+    BIGINT id PK
+    UUID recommendations_id FK
+    TEXT brand "NOT NULL"
+    TEXT name "NOT NULL"
+    TEXT productid "NOT NULL"
+    FLOAT vectorsearchscore "NOT NULL"
+  }
+  recommendations_items_image {
+    BIGINT id PK
+    BIGINT recommendations_items_id FK
+    TEXT url "NOT NULL"
+  }
+  recommendations_items_price {
+    BIGINT id PK
+    BIGINT recommendations_items_id FK
+    INTEGER amount "NOT NULL"
+    TEXT currency "NOT NULL"
+  }
+  users {
+    UUID id PK
+    JSONB address "NOT NULL"
+    TEXT email "NOT NULL"
+    TEXT name "NOT NULL"
+    TEXT surname "NOT NULL"
+    TEXT type "NOT NULL"
+    INTEGER version
+  }
+  users_lastrecommendations {
+    BIGINT id PK
+    UUID users_id FK
+    TEXT brand "NOT NULL"
+    TEXT image "NOT NULL"
+    TEXT name "NOT NULL"
+    INTEGER price "NOT NULL"
+    TEXT productid "NOT NULL"
+    FLOAT vectorsearchscore "NOT NULL"
+  }
+
+  carts ||--o{ carts_products : "carts_id"
+  invoices ||--o{ invoices_items : "invoices_id"
+  invoices ||--o{ invoices_recommendations : "invoices_id"
+  invoices_items ||--o{ invoices_items_image : "invoices_items_id"
+  invoices_items ||--o{ invoices_items_price : "invoices_items_id"
+  orders ||--o{ orders_products : "orders_id"
+  orders ||--o{ orders_status_history : "orders_id"
+  orders_products ||--o{ orders_products_image : "orders_products_id"
+  orders_products ||--o{ orders_products_price : "orders_products_id"
+  products ||--o{ products_vai_text_embedding : "products_id"
+  recommendations ||--o{ recommendations_items : "recommendations_id"
+  recommendations_items ||--o{ recommendations_items_image : "recommendations_items_id"
+  recommendations_items ||--o{ recommendations_items_price : "recommendations_items_id"
+  users ||--o{ users_lastrecommendations : "users_id"
+
+      </div>
+    </main>
+  </div>
+  <footer>Generated by <a href="https://github.com/pmpetit/mongo2pg">mongo2pg</a></footer>
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'default', er: { diagramPadding: 40 } });
+  </script>
+</body>
+</html>

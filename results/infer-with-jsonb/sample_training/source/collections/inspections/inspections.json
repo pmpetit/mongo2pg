@@ -1,0 +1,519 @@
+{
+  "count": 80047,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "56d61033a378eccde8a8977d",
+            "56d61034a378eccde8a8ba7e",
+            "56d61033a378eccde8a871b9",
+            "56d61034a378eccde8a8c3d0",
+            "56d61035a378eccde8a94317",
+            "56d61033a378eccde8a8a881",
+            "56d61035a378eccde8a94c27",
+            "56d61035a378eccde8a95376",
+            "56d61033a378eccde8a8a6e0",
+            "56d61033a378eccde8a84ec7",
+            "56d61035a378eccde8a9598c",
+            "56d61035a378eccde8a97183",
+            "56d61035a378eccde8a95777",
+            "56d61035a378eccde8a94e3b",
+            "56d61035a378eccde8a9607e",
+            "56d61035a378eccde8a94230",
+            "56d61035a378eccde8a971b1",
+            "56d61033a378eccde8a8a1c9",
+            "56d61034a378eccde8a8bf8b",
+            "56d61035a378eccde8a96a30"
+          ]
+        }
+      }
+    },
+    "address": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "as_jsonb": true,
+          "object": {
+            "city": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 55.0,
+                  "values": [
+                    "BROOKLYN",
+                    "NEW YORK",
+                    "WOODHAVEN",
+                    "BRONX",
+                    "OZONE PARK",
+                    "RIDGEWOOD",
+                    "JAMAICA",
+                    "FLUSHING",
+                    "STATEN ISLAND",
+                    "CORONA",
+                    "BAYSIDE",
+                    "HOLLIS",
+                    "WHITESTONE",
+                    "ASTORIA",
+                    "JACKSON HEIGHTS",
+                    "QUEENS VILLAGE",
+                    "S OZONE PARK",
+                    "SOUTH RICHMOND HILL",
+                    "ELMHURST",
+                    ""
+                  ]
+                }
+              }
+            },
+            "number": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 0.959,
+                  "sampled": 959,
+                  "ndistinct": 827.0,
+                  "values": [
+                    1577,
+                    500,
+                    8424,
+                    2083,
+                    3281,
+                    2094,
+                    701,
+                    143,
+                    10703,
+                    8324,
+                    2607,
+                    3764,
+                    311,
+                    3823,
+                    5601,
+                    782,
+                    149,
+                    203,
+                    675,
+                    1611
+                  ]
+                },
+                "String": {
+                  "probability": 0.041,
+                  "sampled": 41,
+                  "ndistinct": 17.0,
+                  "values": [
+                    "",
+                    "6 1/2",
+                    "1147A",
+                    "3835A",
+                    "19401A",
+                    "20502A",
+                    "837A",
+                    "9890A",
+                    "501B",
+                    "145A",
+                    "227A",
+                    "3611A",
+                    "986A",
+                    "3915A",
+                    "2114A",
+                    "619A",
+                    "3711B"
+                  ]
+                }
+              }
+            },
+            "street": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 429.0,
+                  "values": [
+                    "PITKIN AVE",
+                    "8TH AVE",
+                    "JAMAICA AVE",
+                    "AMSTERDAM AVE",
+                    "E TREMONT AVE",
+                    "LINDEN BLVD",
+                    "LENOX AVE",
+                    "TOMPKINS AVE",
+                    "ROCKAWAY BLVD",
+                    "FOSTER AVE",
+                    "E 12TH ST",
+                    "NOSTRAND AVE",
+                    "UTICA AVE",
+                    "FORT HAMILTON PKWY",
+                    "AVENUE L",
+                    "FRANKLIN AVE",
+                    "E 149TH ST",
+                    "ALLEN ST",
+                    "UNIVERSITY PLACE",
+                    "CONEY ISLAND AVE"
+                  ]
+                }
+              }
+            },
+            "zip": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 0.999,
+                  "sampled": 999,
+                  "ndistinct": 170.0,
+                  "values": [
+                    11212,
+                    10018,
+                    11421,
+                    10032,
+                    10461,
+                    11207,
+                    10039,
+                    11206,
+                    11417,
+                    11236,
+                    11235,
+                    11213,
+                    11218,
+                    11234,
+                    11238,
+                    10451,
+                    10002,
+                    10003,
+                    10472,
+                    10001
+                  ]
+                },
+                "String": {
+                  "probability": 0.001,
+                  "sampled": 1,
+                  "ndistinct": 1.0,
+                  "values": [
+                    ""
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "city": "BROOKLYN",
+              "zip": 11212,
+              "street": "PITKIN AVE",
+              "number": 1577
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10018,
+              "street": "8TH AVE",
+              "number": 500
+            },
+            {
+              "city": "WOODHAVEN",
+              "zip": 11421,
+              "street": "JAMAICA AVE",
+              "number": 8424
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10032,
+              "street": "AMSTERDAM AVE",
+              "number": 2083
+            },
+            {
+              "city": "BRONX",
+              "zip": 10461,
+              "street": "E TREMONT AVE",
+              "number": 3281
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11207,
+              "street": "LINDEN BLVD",
+              "number": 2094
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10039,
+              "street": "LENOX AVE",
+              "number": 701
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11206,
+              "street": "TOMPKINS AVE",
+              "number": 143
+            },
+            {
+              "city": "OZONE PARK",
+              "zip": 11417,
+              "street": "ROCKAWAY BLVD",
+              "number": 10703
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11236,
+              "street": "FOSTER AVE",
+              "number": 8324
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11235,
+              "street": "E 12TH ST",
+              "number": 2607
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11235,
+              "street": "NOSTRAND AVE",
+              "number": 3764
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11213,
+              "street": "UTICA AVE",
+              "number": 311
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11218,
+              "street": "FORT HAMILTON PKWY",
+              "number": 3823
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11234,
+              "street": "AVENUE L",
+              "number": 5601
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11238,
+              "street": "FRANKLIN AVE",
+              "number": 782
+            },
+            {
+              "city": "BRONX",
+              "zip": 10451,
+              "street": "E 149TH ST",
+              "number": 149
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10002,
+              "street": "ALLEN ST",
+              "number": 203
+            },
+            {
+              "city": "NEW YORK",
+              "zip": 10003,
+              "street": "UNIVERSITY PLACE",
+              "number": ""
+            },
+            {
+              "city": "BROOKLYN",
+              "zip": 11218,
+              "street": "CONEY ISLAND AVE",
+              "number": 675
+            }
+          ]
+        }
+      }
+    },
+    "business_name": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 953.0,
+          "values": [
+            "CSR NYC LLC",
+            "FIRSTCLASS WIRELESS INC.",
+            "METRO PLACE OF JAMAICA, INC",
+            "ROLANDO FAJARDO CARDOSO",
+            "MILEA AUTO GROUP",
+            "ALMARK PHARMACY, INC.",
+            "701 DELI, INC.",
+            "ZHENG, QI",
+            "CARLTON MANAGEMENT CORP.",
+            "MOUSE ACTION TOWING SERVICE, INC.",
+            "BAHOVADDIN, HAKIMOV",
+            "SPRING COMMUNICATIONS HOLDING, INC",
+            "K &S SYNERGY CORP",
+            "YAT DE LEON, DOMINGA",
+            "SHREEJI DELI & GROCERY, INC.",
+            "N & A GROCERY CANDY STORE, INC",
+            "AMINI, ABDERRAHIM",
+            "BASUNDHURA, INC.",
+            "SHAIKH, MEHFUJA A",
+            "MASHA ALLAH HALAL MEAT & GROCERY INC."
+          ]
+        }
+      }
+    },
+    "certificate_number": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            9314812,
+            5383265,
+            5349156,
+            5369390,
+            9285124,
+            9279980,
+            3044526,
+            3048178,
+            9296635,
+            9256365,
+            10021441,
+            9321860,
+            3043064,
+            70033508,
+            9312329,
+            9259799,
+            9288131,
+            70032972,
+            9322003,
+            5391628
+          ]
+        }
+      }
+    },
+    "date": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 302.0,
+          "values": [
+            "Aug 28 2015",
+            "Sep 11 2015",
+            "Jan 30 2015",
+            "Jun  1 2015",
+            "May  5 2015",
+            "Apr  1 2015",
+            "Jul 27 2015",
+            "Oct  9 2015",
+            "Apr 15 2015",
+            "Jan 15 2015",
+            "Oct 21 2015",
+            "Jan 22 2016",
+            "Aug 21 2015",
+            "Jul 16 2015",
+            "Aug 12 2015",
+            "Apr  9 2015",
+            "Oct 28 2015",
+            "Dec 15 2015",
+            "Jan 16 2016",
+            "Nov 16 2015"
+          ]
+        }
+      }
+    },
+    "id": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "50558-2015-ENFO",
+            "51999-2015-ENFO",
+            "4942-2015-ENFO",
+            "29957-2015-ENFO",
+            "25505-2015-ENFO",
+            "18746-2015-ENFO",
+            "42427-2015-ENFO",
+            "57499-2015-ENFO",
+            "20000-2015-ENFO",
+            "2646-2015-ENFO",
+            "6992-UNIT",
+            "6275-2016-ENFO",
+            "48403-2015-ENFO",
+            "40069-2015-ENFO",
+            "47878-2015-ENFO",
+            "19226-2015-ENFO",
+            "6495-2016-ENFO",
+            "60675-2015-ENFO",
+            "70838-2015-ENFO",
+            "3977-2016-ENFO"
+          ]
+        }
+      }
+    },
+    "result": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 15.0,
+          "values": [
+            "No Violation Issued",
+            "Violation Issued",
+            "Pass",
+            "Closed",
+            "Warning",
+            "Out of Business",
+            "Fail",
+            "Re-inspection",
+            "No Evidence of Activity",
+            "Unable to Locate",
+            "ECB Warning Issued",
+            "Posting Order Served",
+            "NOH Withdrawn",
+            "Samples Obtained",
+            "Licensed"
+          ]
+        }
+      }
+    },
+    "sector": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 46.0,
+          "values": [
+            "Secondhand Dealer [General] - 006",
+            "Electronic & Home Appliance Service Dealer - 115",
+            "Electronic Store - 001",
+            "Misc Non-Food Retail - 817",
+            "Dealer In Products For The Disabled - 119",
+            "Grocery-Retail - 808",
+            "Laundry - 064",
+            "Pedicab Business - 130",
+            "Cigarette Retail Dealer - 127",
+            "Newsstand - 024",
+            "Wearing Apparel - 450",
+            "Sightseeing Bus - 078",
+            "Supermarket - 819",
+            "Mobile Food Vendor - 881",
+            "Salons And Barbershop - 841",
+            "Tax Preparers - 891",
+            "Air Condtioning Law - 899",
+            "Laundry Jobber - 066",
+            "Fuel Oil Dealer - 814",
+            "Gas Station-Retail - 815"
+          ]
+        }
+      }
+    }
+  }
+}

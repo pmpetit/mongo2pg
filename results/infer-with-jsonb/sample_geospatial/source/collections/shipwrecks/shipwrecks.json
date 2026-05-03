@@ -1,0 +1,454 @@
+{
+  "count": 11095,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "578f6fa3df35c7fbdbaeddc4",
+            "578f6fa3df35c7fbdbaeda57",
+            "578f6fa3df35c7fbdbaee762",
+            "578f6fa3df35c7fbdbaedc86",
+            "578f6fa3df35c7fbdbaef1a5",
+            "578f6fa3df35c7fbdbaee79f",
+            "578f6fa3df35c7fbdbaedbfe",
+            "578f6fa3df35c7fbdbaee0a6",
+            "578f6fa3df35c7fbdbaee472",
+            "578f6fa3df35c7fbdbaef762",
+            "578f6fa3df35c7fbdbaed9ae",
+            "578f6fa3df35c7fbdbaedeaa",
+            "578f6fa3df35c7fbdbaedfb3",
+            "578f6fa3df35c7fbdbaedda8",
+            "578f6fa3df35c7fbdbaefb96",
+            "578f6fa3df35c7fbdbaedf77",
+            "578f6fa3df35c7fbdbaee216",
+            "578f6fa3df35c7fbdbaee45e",
+            "578f6fa3df35c7fbdbaedc60",
+            "578f6fa3df35c7fbdbaedd2e"
+          ]
+        }
+      }
+    },
+    "chart": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 549.0,
+          "values": [
+            "US,US,graph,Chart 11464",
+            "US,US,graph,Chart 18653",
+            "US,US,graph,Chart 14852",
+            "US,US,graph,Chart 12216",
+            "US,US,graph,Chart 83484",
+            "US,US,graph,chart 14883",
+            "US,US,graph,Chart 12368",
+            "US,US,graph,Chart 11448",
+            "US,US,reprt,1stCGD,LNM 28/11",
+            "US,US,graph,Chart 14909",
+            "US,US,graph,GC10581",
+            "US,US,graph,Chart 11427",
+            "US,US,graph,Chart 11383",
+            "US,US,graph,Chart 11463",
+            "US,US,graph,H12711",
+            "US,US,reprt,8thCGD,LNM 25/92",
+            "US,US,graph,Chart 11355",
+            "US,US,graph,Chart 13249",
+            "US,US,graph,Chart 12378",
+            "US,US,graph,Chart 11411"
+          ]
+        }
+      }
+    },
+    "coordinates": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 2.0,
+          "array": {
+            "probability": 2.0,
+            "types": {
+              "Number": {
+                "probability": 1.0,
+                "sampled": 2000,
+                "ndistinct": 1000.0,
+                "values": [
+                  -80.6213069,
+                  24.8986834,
+                  -122.469123,
+                  37.9663594,
+                  -82.6249928,
+                  42.5951238,
+                  -75.0751614,
+                  38.8438969,
+                  -170.6744444,
+                  -14.3038945,
+                  -84.210869,
+                  46.538638,
+                  -73.4449809,
+                  40.9973461,
+                  -81.338915,
+                  24.688421,
+                  -70.1205,
+                  41.9375,
+                  -86.9378563,
+                  45.3405289
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              -80.6213069,
+              24.8986834
+            ],
+            [
+              -122.469123,
+              37.9663594
+            ],
+            [
+              -82.6249928,
+              42.5951238
+            ],
+            [
+              -75.0751614,
+              38.8438969
+            ],
+            [
+              -170.6744444,
+              -14.3038945
+            ],
+            [
+              -84.210869,
+              46.538638
+            ],
+            [
+              -73.4449809,
+              40.9973461
+            ],
+            [
+              -81.338915,
+              24.688421
+            ],
+            [
+              -70.1205,
+              41.9375
+            ],
+            [
+              -86.9378563,
+              45.3405289
+            ],
+            [
+              -166.6099288,
+              53.8305124
+            ],
+            [
+              -82.2033712,
+              26.5568105
+            ],
+            [
+              -87.158791,
+              30.429539
+            ],
+            [
+              -80.1333749,
+              25.4001542
+            ],
+            [
+              -88.8975556,
+              30.05225
+            ],
+            [
+              -84.6345833,
+              29.7342222
+            ],
+            [
+              -91.203068,
+              29.675398
+            ],
+            [
+              -70.2495079,
+              42.0501075
+            ],
+            [
+              -72.664533,
+              41.764473
+            ],
+            [
+              -82.8879733,
+              28.0258419
+            ]
+          ]
+        }
+      }
+    },
+    "depth": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 0.245,
+          "sampled": 245,
+          "ndistinct": 100.0,
+          "values": [
+            30.7,
+            28.6,
+            7.6,
+            3.3,
+            4.2,
+            0.1,
+            17.9,
+            11.5,
+            105.1,
+            20.1,
+            9.1,
+            1.8,
+            5.1,
+            26.8,
+            0.6,
+            7.3,
+            3.6,
+            32.9,
+            1.5,
+            10
+          ]
+        },
+        "String": {
+          "probability": 0.755,
+          "sampled": 755,
+          "ndistinct": 1.0,
+          "values": [
+            ""
+          ]
+        }
+      }
+    },
+    "feature_type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 5.0,
+          "values": [
+            "Wrecks - Submerged, dangerous",
+            "Wrecks - Submerged, nondangerous",
+            "Wrecks - Visible",
+            "distributed remains of wreck",
+            ""
+          ]
+        }
+      }
+    },
+    "gp_quality": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            ""
+          ]
+        }
+      }
+    },
+    "history": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 25.0,
+          "values": [
+            "",
+            "Reported",
+            "reported 1995",
+            "Wrecks",
+            "2 wrecks",
+            "to be avoided by vessels anchoring, trawling, etc",
+            "Bow",
+            "6.4 meters/21 feet",
+            "108-ft Barge",
+            "Target",
+            "The bow of the wreck is reportedly 4.5 meters/15 feet above the water",
+            "Reported in 2012",
+            "4.9 meters/16 feet pleasure craft",
+            "Ship Govenor",
+            "rep 2000",
+            "Unexploded ordnance",
+            "35 - 40 feet S/V",
+            "Navy Targets",
+            "30 foot P/C",
+            "9.7 meters/32 foot F/V Captain K"
+          ]
+        }
+      }
+    },
+    "latdec": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            24.8986834,
+            37.9663594,
+            42.5951238,
+            38.8438969,
+            -14.3038945,
+            46.538638,
+            40.9973461,
+            24.688421,
+            41.9375,
+            45.3405289,
+            53.8305124,
+            26.5568105,
+            30.429539,
+            25.4001542,
+            30.05225,
+            29.7342222,
+            29.675398,
+            42.0501075,
+            41.764473,
+            28.0258419
+          ]
+        }
+      }
+    },
+    "londec": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 999.0,
+          "values": [
+            -80.6213069,
+            -122.469123,
+            -82.6249928,
+            -75.0751614,
+            -170.6744444,
+            -84.210869,
+            -73.4449809,
+            -81.338915,
+            -70.1205,
+            -86.9378563,
+            -166.6099288,
+            -82.2033712,
+            -87.158791,
+            -80.1333749,
+            -88.8975556,
+            -84.6345833,
+            -91.203068,
+            -70.2495079,
+            -72.664533,
+            -82.8879733
+          ]
+        }
+      }
+    },
+    "quasou": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 6.0,
+          "values": [
+            "depth unknown",
+            "least depth known",
+            "",
+            "value reported (not confirmed)",
+            "depth known",
+            "least depth unknown, safe clearance at value shown"
+          ]
+        }
+      }
+    },
+    "recrd": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            ""
+          ]
+        }
+      }
+    },
+    "sounding_type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 4.0,
+          "values": [
+            "",
+            "Wire-drag clearance, feet/fathoms",
+            "found by multi-beam",
+            "found by side scan sonar"
+          ]
+        }
+      }
+    },
+    "vesslterms": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 18.0,
+          "values": [
+            "",
+            "F/V Little Sandra",
+            "F/V Desperado",
+            "Lady D",
+            "Miss Betty III",
+            "Miss Lee",
+            "Dryland AWOIS 1607",
+            "Eber Ward",
+            "SS PHOENIX",
+            "J.R. Williams",
+            "Smith Creek Wreck",
+            "GEN-SEC USCGD08- 001-07",
+            "Qanirtuuq Princess",
+            "Capt. Manuel",
+            "KP21",
+            "Clipper",
+            "Henry Clay",
+            "Minneapolis"
+          ]
+        }
+      }
+    },
+    "watlev": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 5.0,
+          "values": [
+            "always under water/submerged",
+            "covers and uncovers",
+            "always dry",
+            "partly submerged at high water",
+            "awash"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+CREATE TABLE grades (
+    id UUID PRIMARY KEY,
+    class_id INTEGER NOT NULL,
+    student_id INTEGER NOT NULL
+);
+
+CREATE TABLE grades_scores (
+    id BIGSERIAL PRIMARY KEY,
+    grades_id UUID NOT NULL,
+    score DOUBLE PRECISION NOT NULL,
+    type TEXT NOT NULL,
+    FOREIGN KEY (grades_id) REFERENCES grades (id) DEFERRABLE INITIALLY DEFERRED
+);

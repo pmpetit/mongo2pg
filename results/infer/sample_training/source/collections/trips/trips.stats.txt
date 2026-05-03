@@ -1,0 +1,6 @@
+Documents in collection : 10000
+Documents sampled       : 1000
+Width (top-level / max)  : 14 / 14 (L1)
+Depth (max nesting)     : 3
+Branch (per level)      : L1:14  L2:4  L3:2
+Top-level types         : _id:ObjectId, bikeid:Number, birth year:Number, end station id:Number, end station location:Object, end station name:String, gender:Number, start station id:Number, start station location:Object, start station name:String, start time:Date, stop time:Date, tripduration:Number, usertype:String

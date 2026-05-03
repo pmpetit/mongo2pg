@@ -1,0 +1,18 @@
+documents_in_collection: 1746
+documents_sampled: 1000
+width_top_level: 6
+width_max: 6
+width_max_level: 3
+depth_max: 3
+branch_total: 13
+branch_per_level:
+  L1: 6
+  L2: 1
+  L3: 6
+top_level_types:
+  _id: ObjectId
+  account_id: Number
+  bucket_end_date: Date
+  bucket_start_date: Date
+  transaction_count: Number
+  transactions: Array

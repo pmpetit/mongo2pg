@@ -1,0 +1,40 @@
+documents_in_collection: 10000
+documents_sampled: 1000
+width_top_level: 27
+width_max: 55
+width_max_level: 3
+depth_max: 4
+branch_total: 131
+branch_per_level:
+  L1: 27
+  L2: 39
+  L3: 55
+  L4: 10
+top_level_types:
+  _id: ObjectId
+  airTemperature: Object
+  atmosphericPressureChange: Object
+  atmosphericPressureObservation: Object
+  callLetters: String
+  dataSource: String
+  dewPoint: Object
+  elevation: Number
+  extremeAirTemperature: Array
+  liquidPrecipitation: Array
+  pastWeatherObservationManual: Array
+  position: Object
+  precipitationEstimatedObservation: Object
+  presentWeatherObservationManual: Array
+  pressure: Object
+  qualityControlProcess: String
+  seaSurfaceTemperature: Object
+  sections: Array
+  skyCondition: Object
+  skyConditionObservation: Object
+  skyCoverLayer: Array
+  st: String
+  ts: Date
+  type: String
+  visibility: Object
+  waveMeasurement: Object
+  wind: Object

@@ -1,0 +1,1584 @@
+{
+  "count": 9842,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "4ba28148238d3ba3ca002644",
+            "4ba27ea0238d3ba3ca002258",
+            "4ba27348238d3ba3ca001192",
+            "4ba271b5238d3ba3ca000ee4",
+            "4ba275a6238d3ba3ca0014d3",
+            "4ba26e0e238d3ba3ca000985",
+            "4ba271f8238d3ba3ca000f97",
+            "4ba27999238d3ba3ca001aa9",
+            "4ba27f26238d3ba3ca0022ce",
+            "4ba27c7e238d3ba3ca001f2d",
+            "4ba26b3b238d3ba3ca000566",
+            "4ba276b5238d3ba3ca001676",
+            "4ba26e0e238d3ba3ca00098e",
+            "4ba27562238d3ba3ca001465",
+            "4ba27fac238d3ba3ca0023ec",
+            "4ba2807b238d3ba3ca002511",
+            "4ba2777d238d3ba3ca00178d",
+            "4ba26e93238d3ba3ca000a6c",
+            "4ba27e1a238d3ba3ca002181",
+            "4ba2751f238d3ba3ca001449"
+          ]
+        }
+      }
+    },
+    "comments": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 267.0,
+          "values": [
+            197,
+            114,
+            41,
+            9,
+            104,
+            50,
+            58,
+            55,
+            59,
+            23,
+            30,
+            194,
+            97,
+            422,
+            49,
+            90,
+            64,
+            62,
+            61,
+            39
+          ]
+        }
+      }
+    },
+    "container": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "name": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 8.0,
+                  "values": [
+                    "Offbeat",
+                    "Lifestyle",
+                    "Technology",
+                    "Sports",
+                    "Gaming",
+                    "World & Business",
+                    "Entertainment",
+                    "Science"
+                  ]
+                }
+              }
+            },
+            "short_name": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 8.0,
+                  "values": [
+                    "offbeat",
+                    "lifestyle",
+                    "technology",
+                    "sports",
+                    "gaming",
+                    "world_business",
+                    "entertainment",
+                    "science"
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "name": "Offbeat",
+              "short_name": "offbeat"
+            },
+            {
+              "name": "Lifestyle",
+              "short_name": "lifestyle"
+            },
+            {
+              "name": "Technology",
+              "short_name": "technology"
+            },
+            {
+              "name": "Sports",
+              "short_name": "sports"
+            },
+            {
+              "name": "Gaming",
+              "short_name": "gaming"
+            },
+            {
+              "name": "World & Business",
+              "short_name": "world_business"
+            },
+            {
+              "name": "Entertainment",
+              "short_name": "entertainment"
+            },
+            {
+              "name": "Science",
+              "short_name": "science"
+            }
+          ]
+        }
+      }
+    },
+    "description": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 902.0,
+          "values": [
+            "A Wyoming man is accused of posing online as his former girlfriend and soliciting someone to act out a violent sexual fantasy.",
+            " 'Smoking' baby Facebook picture sparks investigation into teenage mother\r\n",
+            "The Python is a huge snake of explosives, a fire whip half a kilometer long launched from Trojan bulldozer tanks. It opens safe passages for convoys in hostile territory. This video shows it in combat for the first time.",
+            "Pakistan's first Winter Olympian started skiing by strapping two planks of pine wood to his rubber boots with thick rubber bands, then zipping down a tiny slope near his home. Look at Muhammad Abbas now. He'll have real ski boots and real skis as he heads down the same course as Bode Miller, Ted Ligety and Aksel Lund Svindal in the giant slalom..",
+            "Bad Company 2, particularly in its beta stage, isn’t perfect. However, not only is it a heck of a lot of fun, but it has the potential to be one of the best shooters of 2010.",
+            "Some may feel squeamish about eating it, but rabbit has a fan base that grows as cooks discover how easy they are to raise — and how good the meat tastes. But killing them takes a little skill and a lot of fortitude, which some novices lacked.",
+            "A U.S. Navy warship prevented an attack on a Tanzanian ship and apprehended eight suspected pirates in the process, the U.S. Embassy in Tanzania said on Tuesday. USS Farragut dispatched an SH-60B Seahawk helicopter to MV Barakaale 1 after it raised a distress call saying it was under attack from a gang on a skiff...",
+            "",
+            "Marijuana is the only major drug for which the federal government controls the only legal research supply and for which the government requires a special scientific review. Thwarted research means there is no good scientific evidence that legalizing marijuana’s use provides any benefits over current therapies. ",
+            "Getting enough sleep? Sleep is the most underrated part of staying healthy, whether it's the holiday season or not. And let's settle this right now: Adults need seven to eight hours every night for optimal health. ",
+            "Most polymers -- materials made of long, chain-like molecules -- are very good insulators for both heat and electricity. But scientists have now found a way to transform the most widely used polymer, polyethylene, into a material that conducts heat just as well as most metals, yet remains an electrical insulator...",
+            "Plucky vole does battle with a coyote... and lives to tell the tale\r\n",
+            "The woman was decapitated and died instantly at the scene after walking past an empty block of land just after 8am. Police said a tractor pulling a grass cutter ran over a steel pipe that had been lying in the long grass, which was then sent flying through the air at great speed. ",
+            "Nintendo's Reggie Fils-Aime threw down the gauntlet when he said New Super Mario Bros. Wii could outsell Modern Warfare 2 on a single system through the holiday season. The results? Let's take a look.",
+            "Back in 2004, Jay Leno turned 'The Tonight Show' over to Conan. Not so fast...",
+            "Right now, MTV is threatening to pull programming from the N.C.T.C. or (National Cable Television Cooperation). If they can’t reach an agreement then the following channels will be pulled from the NCTC lineup:...",
+            "Cyber-thieves used a classic phishing scheme to gain access to $4 million in carbon emissions credits last week, sending out emails to businesses asking them to log in to a fraudulent website posing as that of the German Emissions Trading Authority (DEHSt).",
+            "They're said to utter little more than an occasional groan, but zombies -- the blood-drenched monsters we all know and love -- still have a right to free speech, a US court ruled this week.",
+            "Amazon tries to stay ahead of the competition by offering higher royalties to publishers... so long as they follow certain e-book sales guidelines. Amazon wants Kindle content to be the cheapest e-book content on the market. Still, authors and publishers are split on how good this deal really is. \r\n",
+            "Seems like they could have used the real image and not photoshopped!"
+          ]
+        }
+      }
+    },
+    "diggs": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 540.0,
+          "values": [
+            446,
+            359,
+            333,
+            212,
+            379,
+            250,
+            316,
+            450,
+            387,
+            405,
+            345,
+            366,
+            730,
+            3265,
+            301,
+            452,
+            458,
+            273,
+            576,
+            832
+          ]
+        }
+      }
+    },
+    "href": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 959.0,
+          "values": [
+            "http://digg.com/people/Ex_Boyfriend_Used_Craigslist_to_Arrange_Woman_s_Rape",
+            "http://digg.com/health/Smoking_baby_Facebook_picture",
+            "http://digg.com/gadgets/Python_Explosive_Snake_Saves_Soldiers_Opens_Gates_of_Hell",
+            "http://digg.com/olympics/From_wooden_skis_to_Pakistan_s_1st_Winter_Olympian",
+            "http://digg.com/pc_games/Bigger_Better_more_Badass_Bad_Company_2_Beta",
+            "http://digg.com/pets_animals/Brooklyn_s_Rabbit_Killing_Seminar_Is_Not_for_the_Squeamish",
+            "http://digg.com/world_news/U_S_Navy_rescues_Tanzanian_ship_nabs_8_pirates",
+            "http://digg.com/movies/A_Brief_History_Of_Film_Censorship_In_The_USA_Pic",
+            "http://digg.com/health/Researchers_Find_Study_Of_Medical_Marijuana_Discouraged",
+            "http://digg.com/health/Study_Cheating_on_Zzzzs_invites_health_problems",
+            "http://digg.com/general_sciences/Insulators_Made_Into_Conductors",
+            "http://digg.com/pets_animals/Pick_on_somebody_your_own_size",
+            "http://digg.com/people/Woman_Decapitated_in_Freak_Lawnmower_Accident",
+            "http://digg.com/gaming_news/New_Super_Mario_Bros_Wii_vs_Modern_Warfare_2_the_Winner_is",
+            "http://digg.com/television/Leno_to_Conan_The_Tonight_Show_is_Yours",
+            "http://digg.com/television/MTV_Says_No_More_Daily_Show_for_Small_Towns",
+            "http://digg.com/environment/Hackers_Steal_4_Million_in_Carbon_Credits",
+            "http://digg.com/odd_stuff/US_Court_Rules_Zombies_Have_Free_Speech_Rights_Too",
+            "http://digg.com/gadgets/Amazon_Hikes_Kindle_Royalties_to_70_with_a_Catch",
+            "http://digg.com/television/Benjamin_Linus_Valentine"
+          ]
+        }
+      }
+    },
+    "id": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 0.06,
+          "sampled": 60,
+          "ndistinct": 60.0,
+          "values": [
+            19945275,
+            19649929,
+            18913804,
+            19836921,
+            19364214,
+            18921147,
+            19944671,
+            19800134,
+            19500274,
+            19450964,
+            19631608,
+            19003082,
+            19372543,
+            18609135,
+            19774406,
+            19945439,
+            19786769,
+            19439177,
+            19147250,
+            19286171
+          ]
+        },
+        "String": {
+          "probability": 0.94,
+          "sampled": 940,
+          "ndistinct": 905.0,
+          "values": [
+            "18456305",
+            "18613606",
+            "19360176",
+            "19465270",
+            "19191733",
+            "19653027",
+            "19463233",
+            "18958079",
+            "18603690",
+            "18740199",
+            "19810069",
+            "19156824",
+            "19668414",
+            "19212730",
+            "18569738",
+            "18503301",
+            "19123842",
+            "19629069",
+            "18651823",
+            "19241128"
+          ]
+        }
+      }
+    },
+    "inaccurate": {
+      "probability": 0.001,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            1
+          ]
+        },
+        "Undefined": {
+          "probability": 0.999,
+          "sampled": 999
+        }
+      }
+    },
+    "link": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 959.0,
+          "values": [
+            "http://www.latimes.com/news/nationworld/nation/la-na-rape-craigslist11-2010jan11,0,1829364,full.story",
+            "http://www.dailymail.co.uk/news/article-1244351/Smoking-baby-Facebook-picture-sparks-investigation-teenage-mother.html",
+            "http://gizmodo.com/5474833/python-explosive-snake-saves-soldiers-opening-the-gates-of-hell",
+            "http://wintergames.ap.org/story.aspx?st=id&id=f0523f75245e4024aa217a49db21286f",
+            "http://gamingbolt.com/2010/02/11/bigger-badder-better-bad-company-2-beta/",
+            "http://www.nytimes.com/2010/03/03/dining/03rabbit.html",
+            "http://www.reuters.com/article/idUSTRE61M2B620100223?rpc=64",
+            "http://i.imgur.com/PnAyX.jpg",
+            "http://www.nytimes.com/2010/01/19/health/policy/19marijuana.html",
+            "http://articles.orlandosentinel.com/2009-12-08/news/0912080057_1_sleep-women-s-blood-heart-disease",
+            "http://www.sciencedaily.com/releases/2010/03/100307215542.htm",
+            "http://www.dailymail.co.uk/news/worldnews/article-1249900/Pictured-Plucky-vole-does-battle-coyote-lives-tell-tale.html",
+            "http://www.telegraph.co.uk/news/worldnews/australiaandthepacific/australia/7358857/Australian-woman-decapitated-during-freak-lawnmower-accident.html",
+            "http://arstechnica.com/gaming/news/2010/02/new-super-mario-bros-wii-vs-modern-warfare-2-the-winner.ars",
+            "http://www.thewrap.com/ind-column/leno-conan-tonight-show-yours-13102",
+            "http://www.businesspundit.com/mtv-strong-arms-small-cable-providers/",
+            "http://www.mnn.com/technology/computers/stories/hackers-steal-4-million-in-carbon-credits",
+            "http://news.yahoo.com/s/afp/uscourtjusticeoffbeat;_ylt=Agm7kNY07SEZ3Wf6iSlLXYYeO7gF",
+            "http://arstechnica.com/gadgets/news/2010/01/some-authors-still-split-on-amazons-70-royalty-offer.ars",
+            "http://reporter.blogs.com/.a/6a00d83451d69069e2012877964507970c-500wi"
+          ]
+        }
+      }
+    },
+    "media": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 3.0,
+          "values": [
+            "news",
+            "images",
+            "videos"
+          ]
+        }
+      }
+    },
+    "promote_date": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 958.0,
+          "values": [
+            1263352203,
+            1263953403,
+            1266573547,
+            1267057202,
+            1265982003,
+            1267674611,
+            1266945040,
+            1265174403,
+            1263960002,
+            1264393202,
+            1268206802,
+            1265846402,
+            1267669203,
+            1266095402,
+            1263771602,
+            1263540603,
+            1265754604,
+            1267578603,
+            1264051803,
+            1266166802
+          ]
+        }
+      }
+    },
+    "shorturl": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "array": {
+            "probability": 1.0,
+            "types": {
+              "Object": {
+                "probability": 1.0,
+                "sampled": 1000,
+                "object": {
+                  "short_url": {
+                    "probability": 1.0,
+                    "types": {
+                      "String": {
+                        "probability": 1.0,
+                        "sampled": 1000,
+                        "ndistinct": 959.0,
+                        "values": [
+                          "http://digg.com/d31FRKL",
+                          "http://digg.com/d31G6FS",
+                          "http://digg.com/d31JESu",
+                          "http://digg.com/d31Jfny",
+                          "http://digg.com/d31IWe5",
+                          "http://digg.com/d31KSeJ",
+                          "http://digg.com/d31JfH7",
+                          "http://digg.com/d31HXrT",
+                          "http://digg.com/d31G3fW",
+                          "http://digg.com/d31GdBH",
+                          "http://digg.com/d31L7VF",
+                          "http://digg.com/d31INZ2",
+                          "http://digg.com/d31KWeU",
+                          "http://digg.com/d31Ic6k",
+                          "http://digg.com/d31Fupu",
+                          "http://digg.com/d31FdYL",
+                          "http://digg.com/d31IEz4",
+                          "http://digg.com/d31KMPt",
+                          "http://digg.com/d31GGBr",
+                          "http://digg.com/d31IjUm"
+                        ]
+                      }
+                    }
+                  },
+                  "view_count": {
+                    "probability": 1.0,
+                    "types": {
+                      "Number": {
+                        "probability": 1.0,
+                        "sampled": 1000,
+                        "ndistinct": 912.0,
+                        "values": [
+                          6659,
+                          5323,
+                          4763,
+                          697,
+                          2530,
+                          1464,
+                          1007,
+                          5682,
+                          1761,
+                          1910,
+                          687,
+                          2667,
+                          7689,
+                          6425,
+                          58149,
+                          1645,
+                          1001,
+                          2949,
+                          698,
+                          6833
+                        ]
+                      }
+                    }
+                  }
+                },
+                "values": [
+                  {
+                    "short_url": "http://digg.com/d31FRKL",
+                    "view_count": 6659
+                  },
+                  {
+                    "short_url": "http://digg.com/d31G6FS",
+                    "view_count": 5323
+                  },
+                  {
+                    "short_url": "http://digg.com/d31JESu",
+                    "view_count": 4763
+                  },
+                  {
+                    "short_url": "http://digg.com/d31Jfny",
+                    "view_count": 697
+                  },
+                  {
+                    "short_url": "http://digg.com/d31IWe5",
+                    "view_count": 2530
+                  },
+                  {
+                    "short_url": "http://digg.com/d31KSeJ",
+                    "view_count": 1464
+                  },
+                  {
+                    "short_url": "http://digg.com/d31JfH7",
+                    "view_count": 1007
+                  },
+                  {
+                    "short_url": "http://digg.com/d31HXrT",
+                    "view_count": 5682
+                  },
+                  {
+                    "short_url": "http://digg.com/d31G3fW",
+                    "view_count": 1761
+                  },
+                  {
+                    "short_url": "http://digg.com/d31GdBH",
+                    "view_count": 1910
+                  },
+                  {
+                    "short_url": "http://digg.com/d31L7VF",
+                    "view_count": 687
+                  },
+                  {
+                    "short_url": "http://digg.com/d31INZ2",
+                    "view_count": 2667
+                  },
+                  {
+                    "short_url": "http://digg.com/d31KWeU",
+                    "view_count": 7689
+                  },
+                  {
+                    "short_url": "http://digg.com/d31Ic6k",
+                    "view_count": 6425
+                  },
+                  {
+                    "short_url": "http://digg.com/d31Fupu",
+                    "view_count": 58149
+                  },
+                  {
+                    "short_url": "http://digg.com/d31FdYL",
+                    "view_count": 1645
+                  },
+                  {
+                    "short_url": "http://digg.com/d31IEz4",
+                    "view_count": 1001
+                  },
+                  {
+                    "short_url": "http://digg.com/d31KMPt",
+                    "view_count": 2949
+                  },
+                  {
+                    "short_url": "http://digg.com/d31GGBr",
+                    "view_count": 698
+                  },
+                  {
+                    "short_url": "http://digg.com/d31IjUm",
+                    "view_count": 6833
+                  }
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              {
+                "short_url": "http://digg.com/d31FRKL",
+                "view_count": 6659
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31G6FS",
+                "view_count": 5323
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31JESu",
+                "view_count": 4763
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31Jfny",
+                "view_count": 697
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31IWe5",
+                "view_count": 2530
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31KSeJ",
+                "view_count": 1464
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31JfH7",
+                "view_count": 1007
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31HXrT",
+                "view_count": 5682
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31G3fW",
+                "view_count": 1761
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31GdBH",
+                "view_count": 1910
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31L7VF",
+                "view_count": 687
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31INZ2",
+                "view_count": 2667
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31KWeU",
+                "view_count": 7689
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31Ic6k",
+                "view_count": 6425
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31Fupu",
+                "view_count": 58149
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31FdYL",
+                "view_count": 1645
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31IEz4",
+                "view_count": 1001
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31KMPt",
+                "view_count": 2949
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31GGBr",
+                "view_count": 698
+              }
+            ],
+            [
+              {
+                "short_url": "http://digg.com/d31IjUm",
+                "view_count": 6833
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "status": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            "popular"
+          ]
+        }
+      }
+    },
+    "submit_date": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 959.0,
+          "values": [
+            1263335713,
+            1263915419,
+            1266531011,
+            1266932104,
+            1265922233,
+            1267589504,
+            1266925091,
+            1265123223,
+            1263883867,
+            1264354990,
+            1268180314,
+            1265816434,
+            1267639320,
+            1265996807,
+            1263761497,
+            1263491016,
+            1265712782,
+            1267514606,
+            1264031483,
+            1266117481
+          ]
+        }
+      }
+    },
+    "takedowndays": {
+      "probability": 0.001,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            0
+          ]
+        },
+        "Undefined": {
+          "probability": 0.999,
+          "sampled": 999
+        }
+      }
+    },
+    "takedownuri": {
+      "probability": 0.001,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            "http://www.chillingeffects.org/notice.cgi?sID=17785"
+          ]
+        },
+        "Undefined": {
+          "probability": 0.999,
+          "sampled": 999
+        }
+      }
+    },
+    "thumbnail": {
+      "probability": 0.691,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 691,
+          "object": {
+            "contentType": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 691,
+                  "ndistinct": 3.0,
+                  "values": [
+                    "image/jpeg",
+                    "image/gif",
+                    "image/png"
+                  ]
+                }
+              }
+            },
+            "height": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 691,
+                  "ndistinct": 1.0,
+                  "values": [
+                    80
+                  ]
+                }
+              }
+            },
+            "originalheight": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 691,
+                  "ndistinct": 318.0,
+                  "values": [
+                    468,
+                    360,
+                    480,
+                    381,
+                    309,
+                    75,
+                    1036,
+                    283,
+                    352,
+                    406,
+                    84,
+                    289,
+                    169,
+                    500,
+                    111,
+                    263,
+                    90,
+                    410,
+                    270,
+                    199
+                  ]
+                }
+              }
+            },
+            "originalwidth": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 691,
+                  "ndistinct": 224.0,
+                  "values": [
+                    600,
+                    224,
+                    640,
+                    512,
+                    550,
+                    75,
+                    2700,
+                    190,
+                    300,
+                    634,
+                    80,
+                    409,
+                    357,
+                    251,
+                    460,
+                    120,
+                    325,
+                    450,
+                    298,
+                    500
+                  ]
+                }
+              }
+            },
+            "src": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 691,
+                  "ndistinct": 666.0,
+                  "values": [
+                    "http://digg.com/people/Ex_Boyfriend_Used_Craigslist_to_Arrange_Woman_s_Rape/t.jpg",
+                    "http://digg.com/health/Smoking_baby_Facebook_picture/t.jpg",
+                    "http://digg.com/gadgets/Python_Explosive_Snake_Saves_Soldiers_Opens_Gates_of_Hell/t.jpg",
+                    "http://digg.com/olympics/From_wooden_skis_to_Pakistan_s_1st_Winter_Olympian/t.jpg",
+                    "http://digg.com/pc_games/Bigger_Better_more_Badass_Bad_Company_2_Beta/t.jpg",
+                    "http://digg.com/pets_animals/Brooklyn_s_Rabbit_Killing_Seminar_Is_Not_for_the_Squeamish/t.jpg",
+                    "http://digg.com/movies/A_Brief_History_Of_Film_Censorship_In_The_USA_Pic/t.jpg",
+                    "http://digg.com/health/Researchers_Find_Study_Of_Medical_Marijuana_Discouraged/t.jpg",
+                    "http://digg.com/general_sciences/Insulators_Made_Into_Conductors/t.jpg",
+                    "http://digg.com/pets_animals/Pick_on_somebody_your_own_size/t.jpg",
+                    "http://digg.com/television/Leno_to_Conan_The_Tonight_Show_is_Yours/t.jpg",
+                    "http://digg.com/odd_stuff/US_Court_Rules_Zombies_Have_Free_Speech_Rights_Too/t.jpg",
+                    "http://digg.com/gadgets/Amazon_Hikes_Kindle_Royalties_to_70_with_a_Catch/t.jpg",
+                    "http://digg.com/television/Benjamin_Linus_Valentine/t.jpg",
+                    "http://digg.com/space/Physicists_seeking_to_shed_more_light_on_dark_matter/t.gif",
+                    "http://digg.com/world_news/Nuke_fears_rise_as_Iran_ramps_up_uranium_enrichment/t.jpg",
+                    "http://digg.com/odd_stuff/PICTURE_The_New_Slanket_Siamese_A_Snuggie_For_Couples/t.jpg",
+                    "http://digg.com/music/This_Kid_Will_Make_You_Cry_Seriously/t.jpg",
+                    "http://digg.com/arts_culture/500_Years_of_Cougar_History/t.jpg",
+                    "http://digg.com/food_drink/McItaly_Burger_Creates_McControversy/t.jpg"
+                  ]
+                }
+              }
+            },
+            "width": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 691,
+                  "ndistinct": 1.0,
+                  "values": [
+                    80
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "originalheight": 468,
+              "originalwidth": 600,
+              "src": "http://digg.com/people/Ex_Boyfriend_Used_Craigslist_to_Arrange_Woman_s_Rape/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 360,
+              "originalwidth": 224,
+              "src": "http://digg.com/health/Smoking_baby_Facebook_picture/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 480,
+              "originalwidth": 640,
+              "src": "http://digg.com/gadgets/Python_Explosive_Snake_Saves_Soldiers_Opens_Gates_of_Hell/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 381,
+              "originalwidth": 512,
+              "src": "http://digg.com/olympics/From_wooden_skis_to_Pakistan_s_1st_Winter_Olympian/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 309,
+              "originalwidth": 550,
+              "src": "http://digg.com/pc_games/Bigger_Better_more_Badass_Bad_Company_2_Beta/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 75,
+              "originalwidth": 75,
+              "src": "http://digg.com/pets_animals/Brooklyn_s_Rabbit_Killing_Seminar_Is_Not_for_the_Squeamish/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 1036,
+              "originalwidth": 2700,
+              "src": "http://digg.com/movies/A_Brief_History_Of_Film_Censorship_In_The_USA_Pic/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 283,
+              "originalwidth": 190,
+              "src": "http://digg.com/health/Researchers_Find_Study_Of_Medical_Marijuana_Discouraged/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 352,
+              "originalwidth": 300,
+              "src": "http://digg.com/general_sciences/Insulators_Made_Into_Conductors/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 406,
+              "originalwidth": 634,
+              "src": "http://digg.com/pets_animals/Pick_on_somebody_your_own_size/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 84,
+              "originalwidth": 80,
+              "src": "http://digg.com/television/Leno_to_Conan_The_Tonight_Show_is_Yours/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 289,
+              "originalwidth": 409,
+              "src": "http://digg.com/odd_stuff/US_Court_Rules_Zombies_Have_Free_Speech_Rights_Too/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 169,
+              "originalwidth": 300,
+              "src": "http://digg.com/gadgets/Amazon_Hikes_Kindle_Royalties_to_70_with_a_Catch/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 500,
+              "originalwidth": 357,
+              "src": "http://digg.com/television/Benjamin_Linus_Valentine/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 111,
+              "originalwidth": 251,
+              "src": "http://digg.com/space/Physicists_seeking_to_shed_more_light_on_dark_matter/t.gif",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/gif"
+            },
+            {
+              "originalheight": 360,
+              "originalwidth": 640,
+              "src": "http://digg.com/world_news/Nuke_fears_rise_as_Iran_ramps_up_uranium_enrichment/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 263,
+              "originalwidth": 460,
+              "src": "http://digg.com/odd_stuff/PICTURE_The_New_Slanket_Siamese_A_Snuggie_For_Couples/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 90,
+              "originalwidth": 120,
+              "src": "http://digg.com/music/This_Kid_Will_Make_You_Cry_Seriously/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 410,
+              "originalwidth": 325,
+              "src": "http://digg.com/arts_culture/500_Years_of_Cougar_History/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            },
+            {
+              "originalheight": 270,
+              "originalwidth": 450,
+              "src": "http://digg.com/food_drink/McItaly_Burger_Creates_McControversy/t.jpg",
+              "height": 80,
+              "width": 80,
+              "contentType": "image/jpeg"
+            }
+          ]
+        },
+        "Undefined": {
+          "probability": 0.309,
+          "sampled": 309
+        }
+      }
+    },
+    "title": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 959.0,
+          "values": [
+            "Ex-Boyfriend Used Craigslist to Arrange Woman's Rape",
+            " 'Smoking' baby Facebook picture",
+            "Python Explosive Snake Saves Soldiers, Opens Gates of Hell",
+            "From wooden skis to Pakistan's 1st Winter Olympian",
+            "Bigger, Better, more Badass - Bad Company 2 Beta",
+            "Brooklyn's Rabbit-Killing Seminar Is Not for the Squeamish",
+            "U.S. Navy rescues Tanzanian ship, nabs 8 pirates",
+            "A Brief History Of Film Censorship In The USA (Pic)",
+            "Researchers Find Study Of Medical Marijuana Discouraged",
+            "Study: Cheating on Zzzzs invites health problems",
+            "Insulators Made Into Conductors",
+            "Pick on somebody your own size!",
+            "Woman Decapitated in 'Freak' Lawnmower Accident ",
+            "New Super Mario Bros. Wii vs. Modern Warfare 2 the Winner is",
+            "Leno to Conan: 'The Tonight Show' is Yours",
+            "MTV Says No More Daily Show for Small Towns",
+            "Hackers Steal $4 Million in Carbon Credits",
+            "US Court Rules Zombies Have Free Speech Rights Too",
+            "Amazon Hikes Kindle Royalties to 70%, with a Catch",
+            "Benjamin Linus Valentine"
+          ]
+        }
+      }
+    },
+    "topic": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "name": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 50.0,
+                  "values": [
+                    "People",
+                    "Health",
+                    "Gadgets",
+                    "Olympics",
+                    "PC Games",
+                    "Pets & Animals",
+                    "World News",
+                    "Movies",
+                    "General Sciences",
+                    "Gaming Industry News",
+                    "Television",
+                    "Environment",
+                    "Odd Stuff",
+                    "Design",
+                    "Space",
+                    "Arts & Culture",
+                    "Music",
+                    "Political News",
+                    "Food & Drink",
+                    "Political Opinion"
+                  ]
+                }
+              }
+            },
+            "short_name": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 50.0,
+                  "values": [
+                    "people",
+                    "health",
+                    "gadgets",
+                    "olympics",
+                    "pc_games",
+                    "pets_animals",
+                    "world_news",
+                    "movies",
+                    "general_sciences",
+                    "gaming_news",
+                    "television",
+                    "environment",
+                    "odd_stuff",
+                    "design",
+                    "space",
+                    "arts_culture",
+                    "music",
+                    "politics",
+                    "food_drink",
+                    "political_opinion"
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "name": "People",
+              "short_name": "people"
+            },
+            {
+              "name": "Health",
+              "short_name": "health"
+            },
+            {
+              "name": "Gadgets",
+              "short_name": "gadgets"
+            },
+            {
+              "name": "Olympics",
+              "short_name": "olympics"
+            },
+            {
+              "name": "PC Games",
+              "short_name": "pc_games"
+            },
+            {
+              "name": "Pets & Animals",
+              "short_name": "pets_animals"
+            },
+            {
+              "name": "World News",
+              "short_name": "world_news"
+            },
+            {
+              "name": "Movies",
+              "short_name": "movies"
+            },
+            {
+              "name": "General Sciences",
+              "short_name": "general_sciences"
+            },
+            {
+              "name": "Gaming Industry News",
+              "short_name": "gaming_news"
+            },
+            {
+              "name": "Television",
+              "short_name": "television"
+            },
+            {
+              "name": "Environment",
+              "short_name": "environment"
+            },
+            {
+              "name": "Odd Stuff",
+              "short_name": "odd_stuff"
+            },
+            {
+              "name": "Design",
+              "short_name": "design"
+            },
+            {
+              "name": "Space",
+              "short_name": "space"
+            },
+            {
+              "name": "Arts & Culture",
+              "short_name": "arts_culture"
+            },
+            {
+              "name": "Music",
+              "short_name": "music"
+            },
+            {
+              "name": "Political News",
+              "short_name": "politics"
+            },
+            {
+              "name": "Food & Drink",
+              "short_name": "food_drink"
+            },
+            {
+              "name": "Political Opinion",
+              "short_name": "political_opinion"
+            }
+          ]
+        }
+      }
+    },
+    "user": {
+      "probability": 1.0,
+      "types": {
+        "Object": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "object": {
+            "fullname": {
+              "probability": 0.53,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 530,
+                  "ndistinct": 187.0,
+                  "values": [
+                    "Katherine",
+                    "Scarlett Madison",
+                    "Nouman",
+                    "Weird Ralph",
+                    "Steve Elliott",
+                    "Daxxer",
+                    "Robert Wright",
+                    "Eric Anas",
+                    "FYI: WAS ON TRAVEL UNTIL 2/14",
+                    "Mike K",
+                    "Sonny",
+                    "Ivan",
+                    "Slum Dog Millionaire",
+                    "HAPPY ST. PATRICK\\'S DAY!!",
+                    "Jimmysh (Cleaned, Keep Digging)",
+                    "Sparkle Princess",
+                    "Ian S",
+                    "Currently Moving! Back soon!",
+                    "Cuisinart",
+                    "Tal Siach "
+                  ]
+                },
+                "Undefined": {
+                  "probability": 0.47,
+                  "sampled": 470
+                }
+              }
+            },
+            "icon": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 335.0,
+                  "values": [
+                    "http://digg.com/users/shroomtime/l.png",
+                    "http://digg.com/users/Luzo33/l.png",
+                    "http://digg.com/users/mklopez/l.png",
+                    "http://digg.com/users/ScarlettMadi/l.png",
+                    "http://digg.com/users/nouman1989/l.png",
+                    "http://digg.com/users/weirdralph/l.png",
+                    "http://digg.com/users/bossm4n/l.png",
+                    "http://digg.com/users/alapoet/l.png",
+                    "http://digg.com/users/daxxer/l.png",
+                    "http://digg.com/users/oteque/l.png",
+                    "http://digg.com/users/THC55/l.png",
+                    "http://digg.com/users/alanocu/l.png",
+                    "http://digg.com/users/RobertWright/l.png",
+                    "http://digg.com/users/anasek/l.png",
+                    "http://digg.com/users/RandomEyes/l.png",
+                    "http://digg.com/users/jerryjamesstone/l.png",
+                    "http://digg.com/users/itc518/l.png",
+                    "http://digg.com/users/CB810/l.png",
+                    "http://digg.com/users/kolding/l.png",
+                    "http://digg.com/users/mikek814/l.png"
+                  ]
+                }
+              }
+            },
+            "name": {
+              "probability": 1.0,
+              "types": {
+                "String": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 345.0,
+                  "values": [
+                    "shroomtime",
+                    "Luzo33",
+                    "mklopez",
+                    "ScarlettMadi",
+                    "nouman1989",
+                    "weirdralph",
+                    "bossm4n",
+                    "alapoet",
+                    "daxxer",
+                    "oteque",
+                    "THC55",
+                    "alanocu",
+                    "RobertWright",
+                    "anasek",
+                    "RandomEyes",
+                    "jerryjamesstone",
+                    "itc518",
+                    "CB810",
+                    "kolding",
+                    "mikek814"
+                  ]
+                }
+              }
+            },
+            "profileviews": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 604.0,
+                  "values": [
+                    5377,
+                    7277,
+                    140218,
+                    13179,
+                    15372,
+                    39223,
+                    32178,
+                    13181,
+                    43045,
+                    20143,
+                    23518,
+                    5149,
+                    52724,
+                    27192,
+                    557,
+                    41842,
+                    40214,
+                    25957,
+                    23522,
+                    28547
+                  ]
+                }
+              }
+            },
+            "registered": {
+              "probability": 1.0,
+              "types": {
+                "Number": {
+                  "probability": 1.0,
+                  "sampled": 1000,
+                  "ndistinct": 345.0,
+                  "values": [
+                    1260648616,
+                    1256559757,
+                    1121877948,
+                    1219271208,
+                    1247335765,
+                    1182484810,
+                    1130119097,
+                    1207348661,
+                    1212782445,
+                    1236308780,
+                    1216830828,
+                    1143855796,
+                    1245085730,
+                    1204735567,
+                    1203539444,
+                    1210370689,
+                    1174605597,
+                    1134664656,
+                    1184329889,
+                    1211317121
+                  ]
+                }
+              }
+            }
+          },
+          "values": [
+            {
+              "name": "shroomtime",
+              "registered": 1260648616,
+              "icon": "http://digg.com/users/shroomtime/l.png",
+              "profileviews": 5377
+            },
+            {
+              "name": "Luzo33",
+              "registered": 1256559757,
+              "fullname": "Katherine",
+              "icon": "http://digg.com/users/Luzo33/l.png",
+              "profileviews": 7277
+            },
+            {
+              "name": "mklopez",
+              "registered": 1121877948,
+              "icon": "http://digg.com/users/mklopez/l.png",
+              "profileviews": 140218
+            },
+            {
+              "name": "ScarlettMadi",
+              "registered": 1219271208,
+              "fullname": "Scarlett Madison",
+              "icon": "http://digg.com/users/ScarlettMadi/l.png",
+              "profileviews": 13179
+            },
+            {
+              "name": "nouman1989",
+              "registered": 1247335765,
+              "fullname": "Nouman",
+              "icon": "http://digg.com/users/nouman1989/l.png",
+              "profileviews": 15372
+            },
+            {
+              "name": "weirdralph",
+              "registered": 1182484810,
+              "fullname": "Weird Ralph",
+              "icon": "http://digg.com/users/weirdralph/l.png",
+              "profileviews": 39223
+            },
+            {
+              "name": "bossm4n",
+              "registered": 1130119097,
+              "icon": "http://digg.com/users/bossm4n/l.png",
+              "profileviews": 32178
+            },
+            {
+              "name": "ScarlettMadi",
+              "registered": 1219271208,
+              "fullname": "Scarlett Madison",
+              "icon": "http://digg.com/users/ScarlettMadi/l.png",
+              "profileviews": 13181
+            },
+            {
+              "name": "alapoet",
+              "registered": 1207348661,
+              "fullname": "Steve Elliott",
+              "icon": "http://digg.com/users/alapoet/l.png",
+              "profileviews": 43045
+            },
+            {
+              "name": "daxxer",
+              "registered": 1212782445,
+              "fullname": "Daxxer",
+              "icon": "http://digg.com/users/daxxer/l.png",
+              "profileviews": 20143
+            },
+            {
+              "name": "oteque",
+              "registered": 1236308780,
+              "icon": "http://digg.com/users/oteque/l.png",
+              "profileviews": 23518
+            },
+            {
+              "name": "THC55",
+              "registered": 1216830828,
+              "icon": "http://digg.com/users/THC55/l.png",
+              "profileviews": 5149
+            },
+            {
+              "name": "alanocu",
+              "registered": 1143855796,
+              "icon": "http://digg.com/users/alanocu/l.png",
+              "profileviews": 52724
+            },
+            {
+              "name": "RobertWright",
+              "registered": 1245085730,
+              "fullname": "Robert Wright",
+              "icon": "http://digg.com/users/RobertWright/l.png",
+              "profileviews": 27192
+            },
+            {
+              "name": "anasek",
+              "registered": 1204735567,
+              "fullname": "Eric Anas",
+              "icon": "http://digg.com/users/anasek/l.png",
+              "profileviews": 557
+            },
+            {
+              "name": "RandomEyes",
+              "registered": 1203539444,
+              "icon": "http://digg.com/users/RandomEyes/l.png",
+              "profileviews": 41842
+            },
+            {
+              "name": "jerryjamesstone",
+              "registered": 1210370689,
+              "fullname": "FYI: WAS ON TRAVEL UNTIL 2/14",
+              "icon": "http://digg.com/users/jerryjamesstone/l.png",
+              "profileviews": 40214
+            },
+            {
+              "name": "itc518",
+              "registered": 1174605597,
+              "icon": "http://digg.com/users/itc518/l.png",
+              "profileviews": 25957
+            },
+            {
+              "name": "oteque",
+              "registered": 1236308780,
+              "icon": "http://digg.com/users/oteque/l.png",
+              "profileviews": 23522
+            },
+            {
+              "name": "CB810",
+              "registered": 1134664656,
+              "icon": "http://digg.com/users/CB810/l.png",
+              "profileviews": 28547
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+documents_in_collection: 29470
+documents_sampled: 1000
+width_top_level: 6
+width_max: 6
+width_max_level: 1
+depth_max: 2
+branch_total: 8
+branch_per_level:
+  L1: 6
+  L2: 2
+top_level_types:
+  _id: ObjectId
+  city: String
+  loc: Object
+  pop: Number
+  state: String
+  zip: String
