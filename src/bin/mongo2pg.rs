@@ -117,6 +117,9 @@ struct InferArgs {
 
 #[derive(Parser, Debug)]
 struct ToPgArgs {
+    #[command(flatten)]
+    mongo: UriArg,
+
     /// Optional collection name; if omitted all collections under source/collections/ are processed
     collection: Option<String>,
 
@@ -150,6 +153,9 @@ struct InitArgs {
 
 #[derive(Parser, Debug)]
 struct ReportArgs {
+    #[command(flatten)]
+    mongo: UriArg,
+
     /// Path to the project config file (.conf) – derives source/collections and output paths
     #[arg(short = 'c', long = "config", conflicts_with_all = ["collections_dir", "output"])]
     config: Option<PathBuf>,
@@ -169,6 +175,9 @@ struct ReportArgs {
 
 #[derive(Parser, Debug)]
 struct SchemaArgs {
+    #[command(flatten)]
+    mongo: UriArg,
+
     /// Path to the project config file (.conf) – derives schema/tables and reports paths
     #[arg(short = 'c', long = "config", conflicts_with = "tables_dir")]
     config: Option<PathBuf>,
@@ -503,7 +512,7 @@ fn run_init(args: InitArgs) -> Result<()> {
             .as_deref()
             .map(|u| format!("URI = {}\n", u))
             .unwrap_or_else(|| "# URI = mongodb://localhost:27017\n".to_owned()),
-        format!("# NAMESPACE = {}\n", args.project_name),
+        format!("NAMESPACE = {}\n", args.project_name),
     );
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;
