@@ -1,17 +1,13 @@
 documents_in_collection: 9500
 documents_sampled: 1000
 width_top_level: 42
-width_max: 68
-width_max_level: 3
-depth_max: 6
-branch_total: 178
+width_max: 42.0
+width_max_level: 1
+depth_max: 2
+branch_total: 55.0
 branch_per_level:
-  L1: 42
-  L2: 30
-  L3: 68
-  L4: 23
-  L5: 7
-  L6: 8
+  L1: 42.0
+  L2: 13.0
 top_level_types:
   _id: ObjectId
   acquisition: 'Null'
@@ -55,3 +51,6 @@ top_level_types:
   twitter_username: String
   updated_at: String
   video_embeds: Array
+array_field_count: 13
+avg_fields_per_doc: 42.0
+migrability_score: 15.0

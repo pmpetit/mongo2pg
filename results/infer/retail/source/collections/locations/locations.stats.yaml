@@ -1,12 +1,12 @@
 documents_in_collection: 6
 documents_sampled: 6
 width_top_level: 8
-width_max: 8
+width_max: 7.67
 width_max_level: 1
 depth_max: 1
-branch_total: 8
+branch_total: 7.67
 branch_per_level:
-  L1: 8
+  L1: 7.67
 top_level_types:
   _id: ObjectId
   city: String

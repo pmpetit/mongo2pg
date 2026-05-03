@@ -137,6 +137,7 @@ CREATE TABLE tweets_geo_coordinates (
 CREATE TABLE tweets_place_attributes (
     id BIGSERIAL PRIMARY KEY,
     tweets_place_id BIGINT NOT NULL,
+    street_address TEXT,
     FOREIGN KEY (tweets_place_id) REFERENCES tweets_place (id) DEFERRABLE INITIALLY DEFERRED
 );
 
@@ -226,6 +227,7 @@ CREATE TABLE tweets_retweeted_status_entities_hashtags (
 CREATE TABLE tweets_retweeted_status_entities_urls (
     id BIGSERIAL PRIMARY KEY,
     tweets_retweeted_status_entities_id BIGINT NOT NULL,
+    expanded_url TEXT,
     url TEXT NOT NULL,
     FOREIGN KEY (tweets_retweeted_status_entities_id) REFERENCES tweets_retweeted_status_entities (id) DEFERRABLE INITIALLY DEFERRED
 );

@@ -1,15 +1,13 @@
 documents_in_collection: 5000
 documents_sampled: 1000
 width_top_level: 7
-width_max: 7
+width_max: 7.0
 width_max_level: 1
-depth_max: 4
-branch_total: 17
+depth_max: 2
+branch_total: 8.0
 branch_per_level:
-  L1: 7
-  L2: 5
-  L3: 4
-  L4: 1
+  L1: 7.0
+  L2: 1.0
 top_level_types:
   _id: ObjectId
   couponUsed: Boolean
@@ -18,3 +16,6 @@ top_level_types:
   purchaseMethod: String
   saleDate: Date
   storeLocation: String
+array_field_count: 1
+avg_fields_per_doc: 7.0
+migrability_score: 3.0

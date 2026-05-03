@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mongo2pg – Migration Report</title>
+  <title>mongo2pg – retail @ localhost:2717</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -85,18 +85,48 @@
       font-family: monospace;
     }
     .level { color: #95a5a6; font-size: 0.8rem; }
+    .score-badge { font-size: 0.95rem; }
+    .complexity-badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+    }
     footer { margin-top: 2rem; font-size: 0.75rem; color: #aaa; }
+    .score-explainer { margin-top: 1rem; margin-bottom: 2rem; font-size: 0.82rem; color: #7f8c8d; }
+    .score-explainer code { background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }
   </style>
 </head>
 <body>
   <h1>mongo2pg – Migration Report</h1>
-  <p class="subtitle">Database: <strong>retail</strong> &nbsp;|&nbsp; Generated: 2026-05-03 09:06:27 UTC</p>
+  <p class="subtitle">Cluster: <strong>localhost:2717</strong> &nbsp;|&nbsp; Database: <strong>retail</strong> &nbsp;|&nbsp; Generated: 2026-05-03 16:03:44 UTC</p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">7</div></div>
     <div class="card"><div class="label">Total Documents</div><div class="value">786</div></div>
     <div class="card"><div class="label">PG Tables</div><div class="value">21</div></div>
+    <div class="card">
+      <div class="label">Complexity Score</div>
+      <div class="value" style="color:#e67e22">32.3</div>
+    </div>
+    <div class="card">
+      <div class="label">Complexity</div>
+      <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
+        <span class="complexity-badge" style="background:#e67e22">Medium</span>
+      </div>
+    </div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">3.13</div></div>
+    <div class="card"><div class="label">Score (max collection)</div><div class="value" style="font-size:1.3rem">4.00</div></div>
   </div>
+
+  <p class="score-explainer">
+    <strong>Complexity score</strong> per collection:
+    <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
+    DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+  </p>
 
   <table>
     <thead>
@@ -108,6 +138,7 @@
         <th class="num">Width (max)</th>
         <th class="num">Depth (max)</th>
         <th class="num">Fields (total)</th>
+        <th class="num">Score</th>
         <th class="num">PG Tables</th>
       </tr>
     </thead>
@@ -119,13 +150,14 @@
           <td class="num">4</td>
           <td class="num">4</td>
           <td class="num">3</td>
-          <td class="num">3 <span class="level">(L1)</span></td>
+          <td class="num">3.0 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">4</td>
+          <td class="num">4.0</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.00</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-carts" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">carts</span> <span class="pill">carts_products</span></div>
           </td>
         </tr>
@@ -136,13 +168,14 @@
           <td class="num">4</td>
           <td class="num">4</td>
           <td class="num">9</td>
-          <td class="num">26 <span class="level">(L3)</span></td>
-          <td class="num">4</td>
-          <td class="num">45</td>
+          <td class="num">9.0 <span class="level">(L1)</span></td>
+          <td class="num">2</td>
+          <td class="num">11.0</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">4.00</span></td>
           <td class="num">5</td>
         </tr>
         <tr class="detail-row" id="detail-invoices" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">invoices</span> <span class="pill">invoices_items</span> <span class="pill">invoices_recommendations</span> <span class="pill">invoices_items_image</span> <span class="pill">invoices_items_price</span></div>
           </td>
         </tr>
@@ -153,13 +186,14 @@
           <td class="num">6</td>
           <td class="num">6</td>
           <td class="num">8</td>
-          <td class="num">8 <span class="level">(L1)</span></td>
+          <td class="num">7.7 <span class="level">(L1)</span></td>
           <td class="num">1</td>
-          <td class="num">8</td>
+          <td class="num">7.7</td>
+          <td class="num"><span class="score-badge" style="color:#27ae60;font-weight:700">1.54</span></td>
           <td class="num">1</td>
         </tr>
         <tr class="detail-row" id="detail-locations" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">locations</span></div>
           </td>
         </tr>
@@ -170,13 +204,14 @@
           <td class="num">4</td>
           <td class="num">4</td>
           <td class="num">7</td>
-          <td class="num">10 <span class="level">(L3)</span></td>
-          <td class="num">4</td>
-          <td class="num">22</td>
+          <td class="num">7.0 <span class="level">(L1)</span></td>
+          <td class="num">2</td>
+          <td class="num">9.0</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">4.00</span></td>
           <td class="num">5</td>
         </tr>
         <tr class="detail-row" id="detail-orders" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">orders</span> <span class="pill">orders_products</span> <span class="pill">orders_status_history</span> <span class="pill">orders_products_image</span> <span class="pill">orders_products_price</span></div>
           </td>
         </tr>
@@ -187,13 +222,14 @@
           <td class="num">760</td>
           <td class="num">760</td>
           <td class="num">14</td>
-          <td class="num">14 <span class="level">(L1)</span></td>
+          <td class="num">12.4 <span class="level">(L1)</span></td>
           <td class="num">2</td>
-          <td class="num">18</td>
+          <td class="num">13.4</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.13</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-products" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">products</span> <span class="pill">products_vai_text_embedding</span></div>
           </td>
         </tr>
@@ -204,13 +240,14 @@
           <td class="num">4</td>
           <td class="num">4</td>
           <td class="num">5</td>
-          <td class="num">6 <span class="level">(L3)</span></td>
-          <td class="num">4</td>
-          <td class="num">15</td>
+          <td class="num">5.0 <span class="level">(L1)</span></td>
+          <td class="num">2</td>
+          <td class="num">6.0</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.00</span></td>
           <td class="num">4</td>
         </tr>
         <tr class="detail-row" id="detail-recommendations" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">recommendations</span> <span class="pill">recommendations_items</span> <span class="pill">recommendations_items_image</span> <span class="pill">recommendations_items_price</span></div>
           </td>
         </tr>
@@ -221,13 +258,14 @@
           <td class="num">4</td>
           <td class="num">4</td>
           <td class="num">8</td>
-          <td class="num">8 <span class="level">(L1)</span></td>
-          <td class="num">3</td>
-          <td class="num">20</td>
+          <td class="num">7.2 <span class="level">(L1)</span></td>
+          <td class="num">2</td>
+          <td class="num">8.2</td>
+          <td class="num"><span class="score-badge" style="color:#e67e22;font-weight:700">3.10</span></td>
           <td class="num">2</td>
         </tr>
         <tr class="detail-row" id="detail-users" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="table-list"><span class="pill">users</span> <span class="pill">users_lastrecommendations</span></div>
           </td>
         </tr>

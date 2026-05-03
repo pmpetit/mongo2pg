@@ -91,9 +91,9 @@ CREATE TABLE movies_writers (
 CREATE TABLE movies_tomatoes_critic (
     id BIGSERIAL PRIMARY KEY,
     movies_tomatoes_id BIGINT NOT NULL,
-    meter INTEGER NOT NULL,
-    numreviews INTEGER NOT NULL,
-    rating DOUBLE PRECISION NOT NULL,
+    meter INTEGER,
+    numreviews INTEGER,
+    rating DOUBLE PRECISION,
     FOREIGN KEY (movies_tomatoes_id) REFERENCES movies_tomatoes (id) DEFERRABLE INITIALLY DEFERRED
 );
 

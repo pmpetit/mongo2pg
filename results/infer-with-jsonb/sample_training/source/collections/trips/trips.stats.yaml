@@ -1,14 +1,12 @@
 documents_in_collection: 10000
 documents_sampled: 1000
 width_top_level: 14
-width_max: 14
+width_max: 14.0
 width_max_level: 1
-depth_max: 3
-branch_total: 20
+depth_max: 1
+branch_total: 14.0
 branch_per_level:
-  L1: 14
-  L2: 4
-  L3: 2
+  L1: 14.0
 top_level_types:
   _id: ObjectId
   bikeid: Number
@@ -24,3 +22,6 @@ top_level_types:
   stop time: Date
   tripduration: Number
   usertype: String
+array_field_count: 0
+avg_fields_per_doc: 14.0
+migrability_score: 1.5

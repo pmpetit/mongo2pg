@@ -191,6 +191,6 @@ fn test_stats_branch_count() {
     let docs = vec![doc! { "_id": 1, "a": 1, "b": 2, "c": 3 }];
     let schema = analyze_docs(&docs);
     let stats = SchemaStats::compute(&schema);
-    assert_eq!(stats.branch, 4); // _id, a, b, c
-    assert_eq!(stats.branches_by_level, vec![4]); // all 4 fields at level 1
+    assert_eq!(stats.branch, 4.0); // _id, a, b, c
+    assert_eq!(stats.branches_by_level, vec![4.0]); // all 4 fields at level 1
 }

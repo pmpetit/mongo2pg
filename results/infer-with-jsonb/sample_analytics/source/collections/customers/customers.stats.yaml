@@ -1,15 +1,13 @@
 documents_in_collection: 500
 documents_sampled: 500
 width_top_level: 9
-width_max: 1824
-width_max_level: 3
-depth_max: 4
-branch_total: 2746
+width_max: 8.0
+width_max_level: 1
+depth_max: 2
+branch_total: 9.0
 branch_per_level:
-  L1: 9
-  L2: 457
-  L3: 1824
-  L4: 456
+  L1: 8.0
+  L2: 1.0
 top_level_types:
   _id: ObjectId
   accounts: Array
@@ -20,3 +18,6 @@ top_level_types:
   name: String
   tier_and_details: Object
   username: String
+array_field_count: 1
+avg_fields_per_doc: 8.0
+migrability_score: 3.12

@@ -1,6 +1,6 @@
 Documents in collection : 1746
 Documents sampled       : 1000
-Width (top-level / max)  : 6 / 6 (L3)
+Width (top-level / max)  : 6 / 6.0 (L3)
 Depth (max nesting)     : 3
-Branch (per level)      : L1:6  L2:1  L3:6
+Branch (per level)      : L1:6.0  L2:1.0  L3:6.0
 Top-level types         : _id:ObjectId, account_id:Number, bucket_end_date:Date, bucket_start_date:Date, transaction_count:Number, transactions:Array

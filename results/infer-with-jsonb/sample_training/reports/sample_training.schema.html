@@ -66,7 +66,7 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_training</h1>
-    <small>Generated: 2026-05-03 09:06 UTC</small>
+    <small>Generated: 2026-05-03 16:03 UTC</small>
   </header>
   <div class="layout">
     <aside>
@@ -105,7 +105,7 @@
 <li><a href="#" onclick="return false">posts_comments <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
 <li><a href="#" onclick="return false">posts_tags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">routes</a> <small>(7 cols)</small></li>
-<li><a href="#" onclick="return false">stories</a> <small>(16 cols)</small></li>
+<li><a href="#" onclick="return false">stories</a> <small>(19 cols)</small></li>
 <li><a href="#" onclick="return false">stories_shorturl <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">trips</a> <small>(14 cols)</small></li>
 <li><a href="#" onclick="return false">tweets</a> <small>(17 cols)</small></li>
@@ -151,7 +151,7 @@ erDiagram
     UUID companies_id FK
     INTEGER acquired_day
     INTEGER acquired_month
-    INTEGER acquired_year
+    INTEGER acquired_year "NOT NULL"
     BIGINT price_amount
     VARCHAR(3) price_currency_code "NOT NULL"
     TEXT source_description "NOT NULL"
@@ -215,8 +215,8 @@ erDiagram
     BIGINT id PK
     UUID companies_id FK
     TEXT homepage_url "NOT NULL"
-    TEXT link_1_name "NOT NULL"
-    TEXT link_1_url "NOT NULL"
+    TEXT link_1_name
+    TEXT link_1_url
     TEXT link_2_name
     TEXT link_2_url
     TEXT partner_name "NOT NULL"
@@ -270,12 +270,12 @@ erDiagram
     BIGINT companies_investments_id FK
     INTEGER funded_day
     INTEGER funded_month
-    INTEGER funded_year "NOT NULL"
+    INTEGER funded_year
     INTEGER raised_amount
     VARCHAR(3) raised_currency_code
     TEXT round_code "NOT NULL"
-    TEXT source_description
-    TEXT source_url
+    TEXT source_description "NOT NULL"
+    TEXT source_url "NOT NULL"
   }
   companies_milestones_stoneable {
     BIGINT id PK
@@ -341,7 +341,7 @@ erDiagram
     UUID id PK
     JSONB address "NOT NULL"
     TEXT business_name "NOT NULL"
-    INTEGER certificate_number "NOT NULL"
+    TEXT certificate_number "NOT NULL"
     TEXT date "NOT NULL"
     TEXT field_id "NOT NULL"
     TEXT result "NOT NULL"
@@ -384,11 +384,14 @@ erDiagram
     INTEGER diggs "NOT NULL"
     TEXT href "NOT NULL"
     TEXT field_id "NOT NULL"
+    INTEGER inaccurate
     TEXT link "NOT NULL"
     TEXT media "NOT NULL"
     INTEGER promote_date "NOT NULL"
     TEXT status "NOT NULL"
     INTEGER submit_date "NOT NULL"
+    INTEGER takedowndays
+    TEXT takedownuri
     JSONB thumbnail
     TEXT title "NOT NULL"
     JSONB topic "NOT NULL"

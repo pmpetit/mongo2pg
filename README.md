@@ -87,7 +87,9 @@ Tests cover:
 - Reservoir value sampling
 - Stats (width / depth / branch)
 
-### Migration score
+---
+
+## Migration score
 
 Each collection gets a **complexity score** that estimates how much effort its migration to PostgreSQL will require:
 
@@ -123,6 +125,28 @@ Three summary metrics are shown in the HTML report:
 
 > **⚠️ Scores are strategy-dependent and not cross-comparable.**
 > Running `infer` with `--jsonb` lowers the $depth_{max}$ term because nested Object fields become a single JSONB column — their internal nesting is never traversed relationally and is therefore not penalised. A lower score obtained with `--jsonb` does **not** mean the database is inherently simpler; it means you are trading relational depth for opaque JSON storage. Compare scores only within the same strategy (both with or both without `--jsonb`).
+
+---
+
+## Naming convention
+
+`mongo2pg` flattens nested objects and arrays into child tables. Child table names are formed by concatenating the **full ancestor chain** with underscores:
+
+```
+<collection>_<field>[_<nested_field>…]
+```
+
+For example, a collection `orders` with an array field `products` that itself contains an array field `images` produces:
+
+| MongoDB path | PostgreSQL table |
+|---|---|
+| `orders` | `orders` |
+| `orders[].products` | `orders_products` |
+| `orders[].products[].images` | `orders_products_images` |
+
+**Why the full prefix matters:** if two different collections both have an array field called `tags`, they would both try to create a table named `tags` — causing a conflict in the shared `schema/tables/` directory and preventing `CREATE TABLE` from succeeding. By always prepending the full ancestor path, every generated table name is unique across the entire database regardless of how many collections share identically-named sub-fields.
+
+> **Tip:** keep collection names reasonably short. Very deep nesting combined with long field names can produce table names that exceed PostgreSQL's 63-character identifier limit (`NAMEDATALEN - 1`). PostgreSQL will silently truncate them, which can cause duplicate-table errors. If you hit this, consider using `--jsonb` on deeply-nested collections to collapse those branches into a single JSONB column instead.
 
 ---
 

@@ -1,6 +1,6 @@
 Documents in collection : 1
 Documents sampled       : 1
-Width (top-level / max)  : 3 / 3 (L1)
+Width (top-level / max)  : 3 / 3.0 (L1)
 Depth (max nesting)     : 1
-Branch (per level)      : L1:3
+Branch (per level)      : L1:3.0
 Top-level types         : _id:ObjectId, jwt:String, user_id:String

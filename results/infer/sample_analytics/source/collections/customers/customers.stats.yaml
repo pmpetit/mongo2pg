@@ -1,15 +1,15 @@
 documents_in_collection: 500
 documents_sampled: 500
 width_top_level: 9
-width_max: 1824
-width_max_level: 3
+width_max: 8.0
+width_max_level: 1
 depth_max: 4
-branch_total: 2746
+branch_total: 14.47
 branch_per_level:
-  L1: 9
-  L2: 457
-  L3: 1824
-  L4: 456
+  L1: 8.0
+  L2: 1.91
+  L3: 3.65
+  L4: 0.91
 top_level_types:
   _id: ObjectId
   accounts: Array

@@ -1,15 +1,15 @@
 documents_in_collection: 5000
 documents_sampled: 1000
 width_top_level: 7
-width_max: 7
+width_max: 7.0
 width_max_level: 1
 depth_max: 4
-branch_total: 17
+branch_total: 17.0
 branch_per_level:
-  L1: 7
-  L2: 5
-  L3: 4
-  L4: 1
+  L1: 7.0
+  L2: 5.0
+  L3: 4.0
+  L4: 1.0
 top_level_types:
   _id: ObjectId
   couponUsed: Boolean

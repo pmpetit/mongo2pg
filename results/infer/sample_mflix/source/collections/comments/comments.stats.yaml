@@ -1,12 +1,12 @@
 documents_in_collection: 50304
 documents_sampled: 1000
 width_top_level: 6
-width_max: 6
+width_max: 6.0
 width_max_level: 1
 depth_max: 1
-branch_total: 6
+branch_total: 6.0
 branch_per_level:
-  L1: 6
+  L1: 6.0
 top_level_types:
   _id: ObjectId
   date: Date

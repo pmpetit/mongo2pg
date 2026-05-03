@@ -1,17 +1,12 @@
 documents_in_collection: 24832
 documents_sampled: 1000
 width_top_level: 19
-width_max: 65
-width_max_level: 2
-depth_max: 6
-branch_total: 156
+width_max: 18.08
+width_max_level: 1
+depth_max: 1
+branch_total: 18.08
 branch_per_level:
-  L1: 19
-  L2: 65
-  L3: 42
-  L4: 13
-  L5: 13
-  L6: 4
+  L1: 18.08
 top_level_types:
   _id: ObjectId
   contributors: 'Null'
@@ -32,3 +27,6 @@ top_level_types:
   text: String
   truncated: Boolean
   user: Object
+array_field_count: 0
+avg_fields_per_doc: 18.08
+migrability_score: 1.55

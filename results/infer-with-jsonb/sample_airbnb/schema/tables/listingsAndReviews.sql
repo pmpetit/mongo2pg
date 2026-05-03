@@ -51,7 +51,7 @@ CREATE TABLE listingsandreviews_amenities (
 CREATE TABLE listingsandreviews_reviews (
     id BIGSERIAL PRIMARY KEY,
     listingsandreviews_id BIGINT NOT NULL,
-    comments TEXT,
+    comments TEXT NOT NULL,
     date TIMESTAMP WITH TIME ZONE NOT NULL,
     listing_id INTEGER NOT NULL,
     reviewer_id INTEGER NOT NULL,

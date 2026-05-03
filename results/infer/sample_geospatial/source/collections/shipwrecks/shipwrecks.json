@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "578f6fa3df35c7fbdbaeefcb",
-            "578f6fa3df35c7fbdbaedba9",
-            "578f6fa3df35c7fbdbaef679",
-            "578f6fa3df35c7fbdbaee936",
-            "578f6fa3df35c7fbdbaedf7d",
-            "578f6fa3df35c7fbdbaeeacb",
-            "578f6fa3df35c7fbdbaee0dd",
-            "578f6fa3df35c7fbdbaee46a",
-            "578f6fa3df35c7fbdbaee829",
-            "578f6fa3df35c7fbdbaefd7f",
-            "578f6fa3df35c7fbdbaeed11",
-            "578f6fa3df35c7fbdbaeff61",
-            "578f6fa3df35c7fbdbaf0375",
-            "578f6fa3df35c7fbdbaef1a2",
-            "578f6fa3df35c7fbdbaeee7c",
-            "578f6fa3df35c7fbdbaedc58",
-            "578f6fa3df35c7fbdbaef135",
-            "578f6fa3df35c7fbdbaeee5b",
-            "578f6fa3df35c7fbdbaf02fc",
-            "578f6fa3df35c7fbdbaef329"
+            "578f6fa3df35c7fbdbaef063",
+            "578f6fa3df35c7fbdbaee14c",
+            "578f6fa3df35c7fbdbaedac3",
+            "578f6fa3df35c7fbdbaefc46",
+            "578f6fa3df35c7fbdbaeeab8",
+            "578f6fa3df35c7fbdbaeecf1",
+            "578f6fa3df35c7fbdbaedbd9",
+            "578f6fa3df35c7fbdbaedfbf",
+            "578f6fa3df35c7fbdbaf0303",
+            "578f6fa3df35c7fbdbaedb8d",
+            "578f6fa3df35c7fbdbaee186",
+            "578f6fa3df35c7fbdbaee281",
+            "578f6fa3df35c7fbdbaedf1c",
+            "578f6fa3df35c7fbdbaeeeef",
+            "578f6fa3df35c7fbdbaefbde",
+            "578f6fa3df35c7fbdbaef8cd",
+            "578f6fa3df35c7fbdbaef1f7",
+            "578f6fa3df35c7fbdbaef99e",
+            "578f6fa3df35c7fbdbaeed59",
+            "578f6fa3df35c7fbdbaee9d1"
           ]
         }
       }
@@ -40,28 +40,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 538.0,
+          "ndistinct": 556.0,
           "values": [
-            "US,US,graph,Chart 25649",
-            "US,US,graph,Chart 18754",
-            "US,US,graph,Chart 14785",
-            "US,US,graph,Chart 11537",
-            "US,US,graph,Chart 11404",
-            "US,US,graph,Chart 12333",
-            "US,US,graph,Chart 11442",
-            "US,US,graph,Chart 13253",
-            "US,US,graph,Chart 11372",
-            "US,US,graph,Chart 11371",
-            "Us,US,reprt,L1324/14",
-            "US,US,graph,chart 11321",
-            "US,US,graph,Chart 11520",
-            "US,US,graph,Chart 83116",
-            "US,US,graph,Chart 12352",
-            "US,US,graph,DD-18424",
-            "US,US,graph,Chart 11534",
-            "US,US,reprt,DD-24842",
+            "US,US,graph,Chart 13215",
+            "US,US,graph,DD-9005",
+            "US,US,graph,Chart 18660",
+            "US,US,graph,Chart 13267",
+            "US,US,graph,Chart 12332",
+            "US,US,graph,chart 12402",
+            "US,US,graph,BP-191412, 15, DD-9613-4",
+            "US,US,reprt,8thCGD,LNM 43/06",
             "US,US,graph,Chart 11420",
-            "US,US,graph,DB-10666-obs"
+            "US,US,graph,Chart 18773",
+            "US,US,graph,Chart 19367",
+            "US,US,graph,Chart 11355",
+            "US,US,graph,Chart 11390",
+            "US,US,graph,chart 14847",
+            "US,US,reprt,8thCGD,LNM 44/08",
+            "US,US,graph,Chart 11407",
+            "US,US,graph,Chart 11314",
+            "US,US,graph,Chart 11439",
+            "US,US,graph,chart 12345",
+            "US,US,graph,Chart 11554"
           ]
         }
       }
@@ -81,110 +81,110 @@
                 "sampled": 2000,
                 "ndistinct": 1000.0,
                 "values": [
-                  -64.9628586,
-                  18.3142873,
-                  -117.8841707,
-                  33.599994,
-                  -73.217084,
-                  44.468707,
-                  -77.9949534,
-                  33.9002877,
-                  -84.625049,
-                  29.81702,
-                  -74.1637728,
-                  40.6478494,
-                  -81.8842208,
-                  24.656481,
-                  -70.659646,
-                  41.958877,
-                  -88.866695,
-                  30.300261,
-                  -89.3134414,
-                  30.1351772
+                  -71.5189452,
+                  41.261309,
+                  -81.0380716,
+                  32.0840529,
+                  -121.6847962,
+                  38.0165212,
+                  -70.2496293,
+                  42.5502294,
+                  -74.2845947,
+                  40.5032523,
+                  -74.001171,
+                  40.586032,
+                  -73.3952933,
+                  41.0085808,
+                  -87.3366694,
+                  30.3263917,
+                  -82.499015,
+                  25.2845444,
+                  -117.2409213,
+                  32.6572936
                 ]
               }
             }
           },
           "values": [
             [
-              -64.9628586,
-              18.3142873
+              -71.5189452,
+              41.261309
             ],
             [
-              -117.8841707,
-              33.599994
+              -81.0380716,
+              32.0840529
             ],
             [
-              -73.217084,
-              44.468707
+              -121.6847962,
+              38.0165212
             ],
             [
-              -77.9949534,
-              33.9002877
+              -70.2496293,
+              42.5502294
             ],
             [
-              -84.625049,
-              29.81702
+              -74.2845947,
+              40.5032523
             ],
             [
-              -74.1637728,
-              40.6478494
+              -74.001171,
+              40.586032
             ],
             [
-              -81.8842208,
-              24.656481
+              -73.3952933,
+              41.0085808
             ],
             [
-              -70.659646,
-              41.958877
+              -87.3366694,
+              30.3263917
             ],
             [
-              -88.866695,
-              30.300261
+              -82.499015,
+              25.2845444
             ],
             [
-              -89.3134414,
-              30.1351772
+              -117.2409213,
+              32.6572936
             ],
             [
-              -73.9512778,
-              40.5827222
+              -157.88848,
+              21.3095695
             ],
             [
-              -95.569727,
-              28.708716
+              -90.7216836,
+              29.4345044
             ],
             [
-              -75.7507922,
-              34.9017378
+              -85.645007,
+              30.256692
             ],
             [
-              -159.99287,
-              -0.380609
+              -83.534048,
+              41.6239792
             ],
             [
-              -73.0168295,
-              40.7435035
+              -90.0863333,
+              30.0695
             ],
             [
-              -72.2695,
-              41.2723611
+              -83.4192903,
+              29.4739347
             ],
             [
-              -79.0872914,
-              33.5643354
+              -97.121739,
+              28.05512
             ],
             [
-              -73.9241719,
-              40.5911169
+              -82.2252352,
+              24.4917046
             ],
             [
-              -82.4474841,
-              25.4501719
+              -73.9162856,
+              40.9014751
             ],
             [
-              -94.9327024,
-              29.4812472
+              -76.683833,
+              35.336342
             ]
           ]
         }
@@ -194,35 +194,35 @@
       "probability": 1.0,
       "types": {
         "Number": {
-          "probability": 0.222,
-          "sampled": 222,
-          "ndistinct": 95.0,
+          "probability": 0.226,
+          "sampled": 226,
+          "ndistinct": 92.0,
           "values": [
-            16.1,
-            7.3,
-            1.8,
-            16.4,
-            6.4,
-            0.6,
-            14.3,
-            1.2,
+            42.9,
+            8.8,
+            27.4,
+            5.7,
+            4.8,
+            12.8,
+            29.2,
+            23.1,
             15.2,
-            0.3,
-            5.1,
-            17.9,
-            17,
-            7.6,
-            3.3,
-            5.4,
-            17.3,
-            4.2,
-            64.6,
-            25.9
+            10.6,
+            8.5,
+            2.7,
+            10.9,
+            16.4,
+            21.6,
+            3,
+            6,
+            13.4,
+            10.3,
+            29.5
           ]
         },
         "String": {
-          "probability": 0.778,
-          "sampled": 778,
+          "probability": 0.774,
+          "sampled": 774,
           "ndistinct": 1.0,
           "values": [
             ""
@@ -238,11 +238,11 @@
           "sampled": 1000,
           "ndistinct": 5.0,
           "values": [
-            "",
-            "Wrecks - Submerged, dangerous",
             "Wrecks - Submerged, nondangerous",
+            "Wrecks - Submerged, dangerous",
             "Wrecks - Visible",
-            "distributed remains of wreck"
+            "distributed remains of wreck",
+            ""
           ]
         }
       }
@@ -266,28 +266,27 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 20.0,
+          "ndistinct": 19.0,
           "values": [
             "",
-            "Possible wreck",
-            "Vessel 32-35 FT Length",
-            "M/V Melissa Desagnes",
-            "Scuttled barge",
-            "Wrecks",
-            "Partially covered by mangrove",
-            "Reported",
-            "Plane",
-            "Reported 1998",
-            "sunken barge",
-            "Target",
-            "Masts",
-            "40 FT F/V \"Two C's\"",
-            "6.4 meters/21 feet",
-            "Multiple Wrecks",
+            "The bow of the wreck is reportedly 4.5 meters/15 feet above the water",
             "Multiple wrecks",
-            "Ship Govenor",
-            "Sunk vessel now completely submerged just north of ono island south of intercostal orange beach .al",
-            "Steel deck barge, scuttled on 9/27/07"
+            "Target",
+            "Reported",
+            "9.7 meters/32 foot F/V Captain K",
+            "6.4 meters/21 feet",
+            "5.4 meters/18 feet pleasure craft",
+            "Barge",
+            "Awash",
+            "rep 2000",
+            "Existance Reported",
+            "Wrecks",
+            "23.7 meters/78 feet Fishing Vessel",
+            "wrecks",
+            "Stone debris",
+            "Reported 1994",
+            "Sunken barge",
+            "Same as AWOIS #4187 \"Lenore.\""
           ]
         }
       }
@@ -298,28 +297,28 @@
         "Number": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 999.0,
+          "ndistinct": 1000.0,
           "values": [
-            18.3142873,
-            33.599994,
-            44.468707,
-            33.9002877,
-            29.81702,
-            40.6478494,
-            24.656481,
-            41.958877,
-            30.300261,
-            30.1351772,
-            40.5827222,
-            28.708716,
-            34.9017378,
-            -0.380609,
-            40.7435035,
-            41.2723611,
-            33.5643354,
-            40.5911169,
-            25.4501719,
-            29.4812472
+            41.261309,
+            32.0840529,
+            38.0165212,
+            42.5502294,
+            40.5032523,
+            40.586032,
+            41.0085808,
+            30.3263917,
+            25.2845444,
+            32.6572936,
+            21.3095695,
+            29.4345044,
+            30.256692,
+            41.6239792,
+            30.0695,
+            29.4739347,
+            28.05512,
+            24.4917046,
+            40.9014751,
+            35.336342
           ]
         }
       }
@@ -332,26 +331,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            -64.9628586,
-            -117.8841707,
-            -73.217084,
-            -77.9949534,
-            -84.625049,
-            -74.1637728,
-            -81.8842208,
-            -70.659646,
-            -88.866695,
-            -89.3134414,
-            -73.9512778,
-            -95.569727,
-            -75.7507922,
-            -159.99287,
-            -73.0168295,
-            -72.2695,
-            -79.0872914,
-            -73.9241719,
-            -82.4474841,
-            -94.9327024
+            -71.5189452,
+            -81.0380716,
+            -121.6847962,
+            -70.2496293,
+            -74.2845947,
+            -74.001171,
+            -73.3952933,
+            -87.3366694,
+            -82.499015,
+            -117.2409213,
+            -157.88848,
+            -90.7216836,
+            -85.645007,
+            -83.534048,
+            -90.0863333,
+            -83.4192903,
+            -97.121739,
+            -82.2252352,
+            -73.9162856,
+            -76.683833
           ]
         }
       }
@@ -362,13 +361,12 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 7.0,
+          "ndistinct": 6.0,
           "values": [
             "least depth known",
-            "depth unknown",
             "",
+            "depth unknown",
             "value reported (not confirmed)",
-            "value reported (not surveyed)",
             "depth known",
             "least depth unknown, safe clearance at value shown"
           ]
@@ -394,10 +392,11 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 3.0,
+          "ndistinct": 4.0,
           "values": [
             "",
             "Wire-drag clearance, feet/fathoms",
+            "found by diver",
             "found by multi-beam"
           ]
         }
@@ -412,15 +411,15 @@
           "ndistinct": 10.0,
           "values": [
             "",
-            "Brandon Wreck",
-            "Nash",
-            "Big Mac",
-            "F/V Teachers Pet",
+            "L'ARPENTEUR",
+            "Maren 1",
+            "J.R. Williams",
             "Miss Betty III",
-            "F/V America Star",
-            "Mary M",
-            "Relief Lightship AWOIS 749",
-            "Reuben E.Lee"
+            "West Dock Barge",
+            "Northwest",
+            "M/V Boston Express",
+            "T&T",
+            "F/V Eleanor Warren"
           ]
         }
       }
@@ -431,13 +430,12 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 5.0,
+          "ndistinct": 4.0,
           "values": [
             "always under water/submerged",
-            "covers and uncovers",
             "always dry",
-            "partly submerged at high water",
-            "awash"
+            "covers and uncovers",
+            "partly submerged at high water"
           ]
         }
       }

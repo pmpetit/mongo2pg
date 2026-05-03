@@ -1,6 +1,6 @@
 Documents in collection : 760
 Documents sampled       : 760
-Width (top-level / max)  : 14 / 14 (L1)
+Width (top-level / max)  : 14 / 12.4 (L1)
 Depth (max nesting)     : 2
-Branch (per level)      : L1:14  L2:4
+Branch (per level)      : L1:12.4  L2:1.0
 Top-level types         : _id:ObjectId, articleType:String, baseColour:String, brand:String, code:String, description:String, gender:String, image:Object, masterCategory:String, name:String, price:Object, subCategory:String, vai_text_embedding:Array, year:Number
