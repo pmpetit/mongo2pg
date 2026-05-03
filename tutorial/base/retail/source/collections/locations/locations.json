@@ -10,12 +10,12 @@
           "sampled": 6,
           "ndistinct": 6.0,
           "values": [
-            "65a545fb4a8f64e8f88fb897",
-            "671fffa61ec726b417352706",
-            "65a545fb4a8f64e8f88fb896",
-            "671ffd201ec726b417352704",
+            "662a127ad31c9091c4feab45",
             "671ffeb41ec726b417352705",
-            "662a127ad31c9091c4feab45"
+            "65a545fb4a8f64e8f88fb897",
+            "65a545fb4a8f64e8f88fb896",
+            "671fffa61ec726b417352706",
+            "671ffd201ec726b417352704"
           ]
         }
       }
@@ -28,10 +28,10 @@
           "sampled": 4,
           "ndistinct": 4.0,
           "values": [
-            "Brisbane",
-            "Guadalajara",
+            "Ciudad de mexico",
             "Rogers",
-            "Ciudad de mexico"
+            "Brisbane",
+            "Guadalajara"
           ]
         },
         "Undefined": {
@@ -48,10 +48,10 @@
           "sampled": 6,
           "ndistinct": 4.0,
           "values": [
-            "Spain",
-            "Australia",
             "Mexico",
-            "USA"
+            "USA",
+            "Spain",
+            "Australia"
           ]
         }
       }
@@ -64,12 +64,12 @@
           "sampled": 6,
           "ndistinct": 6.0,
           "values": [
-            "62350",
-            "QLD 4000",
-            "62240",
-            "44030",
+            "62340",
             " AR 72756",
-            "62340"
+            "62350",
+            "62240",
+            "QLD 4000",
+            "44030"
           ]
         }
       }
@@ -82,12 +82,12 @@
           "sampled": 6,
           "ndistinct": 6.0,
           "values": [
-            "Glòries Store",
-            "Goodies Alley",
-            "Bogatell Store",
-            "Treasures Store",
+            ".localMX Store",
             "Vintage Vibes",
-            ".localMX Store"
+            "Glòries Store",
+            "Bogatell Store",
+            "Goodies Alley",
+            "Treasures Store"
           ]
         }
       }
@@ -100,11 +100,11 @@
           "sampled": 6,
           "ndistinct": 5.0,
           "values": [
+            "Ciudad de mexico",
+            "Arkansas",
             "Barcelona",
             "Queensland",
-            "Jalisco",
-            "Arkansas",
-            "Ciudad de mexico"
+            "Jalisco"
           ]
         }
       }
@@ -117,12 +117,12 @@
           "sampled": 6,
           "ndistinct": 6.0,
           "values": [
-            "las Ramblas 42",
-            "221-243 George St",
-            "Las ramblas 20",
-            "Av. Lázaro Cárdenas 305",
+            "Reforma 28",
             "1000 W Main St",
-            "Reforma 28"
+            "las Ramblas 42",
+            "Las ramblas 20",
+            "221-243 George St",
+            "Av. Lázaro Cárdenas 305"
           ]
         }
       }

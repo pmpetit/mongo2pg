@@ -92,8 +92,22 @@ pub fn collect_rows(base: &Path, tables_dir: Option<&Path>) -> Result<Vec<Collec
     Ok(rows)
 }
 
+/// Extract the host (and port) portion from a MongoDB URI for display purposes.
+/// `mongodb://user:pass@host:port/db?opts` → `host:port`
+pub fn cluster_from_uri(uri: &str) -> String {
+    let without_scheme = uri.split_once("://").map(|(_, r)| r).unwrap_or(uri);
+    let after_creds = without_scheme
+        .split_once('@')
+        .map(|(_, r)| r)
+        .unwrap_or(without_scheme);
+    let host = after_creds.split('/').next().unwrap_or(after_creds);
+    let host = host.split('?').next().unwrap_or(host);
+    host.to_owned()
+}
+
 /// Render the HTML report string.
-pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
+/// `cluster` is the MongoDB host shown in the header (pass an empty string to omit it).
+pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> String {
     let now = chrono::Utc::now()
         .format("%Y-%m-%d %H:%M:%S UTC")
         .to_string();
@@ -241,7 +255,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mongo2pg – Migration Report</title>
+  <title>mongo2pg – {namespace} @ {cluster}</title>
   <style>
     *, *::before, *::after {{ box-sizing: border-box; }}
     body {{
@@ -339,7 +353,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
 </head>
 <body>
   <h1>mongo2pg – Migration Report</h1>
-  <p class="subtitle">Database: <strong>{namespace}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+  <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Database: <strong>{namespace}</strong> &nbsp;|&nbsp; Generated: {now}</p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">{count}</div></div>
@@ -402,6 +416,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str) -> String {
 </html>
 "#,
         namespace = namespace,
+        cluster = cluster,
         now = now,
         count = rows.len(),
         total_docs = total_docs,
