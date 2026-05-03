@@ -4,10 +4,10 @@ width_top_level: 14
 width_max: 14
 width_max_level: 1
 depth_max: 2
-branch_total: 18
+branch_total: 15
 branch_per_level:
   L1: 14
-  L2: 4
+  L2: 1
 top_level_types:
   _id: ObjectId
   articleType: String
@@ -23,3 +23,6 @@ top_level_types:
   subCategory: String
   vai_text_embedding: Array
   year: Number
+array_field_count: 1
+avg_fields_per_doc: 12.43
+migrability_score: 3.13

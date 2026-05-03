@@ -7,14 +7,15 @@
       "types": {
         "ObjectId": {
           "probability": 1.0,
+          "sampled": 6,
           "ndistinct": 6.0,
           "values": [
+            "65a545fb4a8f64e8f88fb897",
+            "671fffa61ec726b417352706",
             "65a545fb4a8f64e8f88fb896",
             "671ffd201ec726b417352704",
             "671ffeb41ec726b417352705",
-            "65a545fb4a8f64e8f88fb897",
-            "662a127ad31c9091c4feab45",
-            "671fffa61ec726b417352706"
+            "662a127ad31c9091c4feab45"
           ]
         }
       }
@@ -24,16 +25,18 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 4,
           "ndistinct": 4.0,
           "values": [
+            "Brisbane",
             "Guadalajara",
             "Rogers",
-            "Ciudad de mexico",
-            "Brisbane"
+            "Ciudad de mexico"
           ]
         },
         "Undefined": {
-          "probability": 0.3333333333333333
+          "probability": 0.3333333333333333,
+          "sampled": 2
         }
       }
     },
@@ -42,12 +45,13 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 6,
           "ndistinct": 4.0,
           "values": [
             "Spain",
+            "Australia",
             "Mexico",
-            "USA",
-            "Australia"
+            "USA"
           ]
         }
       }
@@ -57,14 +61,15 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 6,
           "ndistinct": 6.0,
           "values": [
+            "62350",
+            "QLD 4000",
             "62240",
             "44030",
             " AR 72756",
-            "62350",
-            "62340",
-            "QLD 4000"
+            "62340"
           ]
         }
       }
@@ -74,14 +79,15 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 6,
           "ndistinct": 6.0,
           "values": [
+            "Glòries Store",
+            "Goodies Alley",
             "Bogatell Store",
             "Treasures Store",
             "Vintage Vibes",
-            "Glòries Store",
-            ".localMX Store",
-            "Goodies Alley"
+            ".localMX Store"
           ]
         }
       }
@@ -91,13 +97,14 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 6,
           "ndistinct": 5.0,
           "values": [
             "Barcelona",
+            "Queensland",
             "Jalisco",
             "Arkansas",
-            "Ciudad de mexico",
-            "Queensland"
+            "Ciudad de mexico"
           ]
         }
       }
@@ -107,14 +114,15 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 6,
           "ndistinct": 6.0,
           "values": [
+            "las Ramblas 42",
+            "221-243 George St",
             "Las ramblas 20",
             "Av. Lázaro Cárdenas 305",
             "1000 W Main St",
-            "las Ramblas 42",
-            "Reforma 28",
-            "221-243 George St"
+            "Reforma 28"
           ]
         }
       }
@@ -124,6 +132,7 @@
       "types": {
         "String": {
           "probability": 1.0,
+          "sampled": 6,
           "ndistinct": 1.0,
           "values": [
             "store"

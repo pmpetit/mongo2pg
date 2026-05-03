@@ -66,40 +66,32 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – retail</h1>
-    <small>Generated: 2026-05-01 17:06 UTC</small>
+    <small>Generated: 2026-05-03 15:13 UTC</small>
   </header>
   <div class="layout">
     <aside>
-      <h2>Tables (29)</h2>
+      <h2>Tables (21)</h2>
       <ul>
         <li><a href="#" onclick="return false">carts</a> <small>(2 cols)</small></li>
 <li><a href="#" onclick="return false">carts_products <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
-<li><a href="#" onclick="return false">invoices</a> <small>(6 cols)</small></li>
+<li><a href="#" onclick="return false">invoices</a> <small>(7 cols)</small></li>
 <li><a href="#" onclick="return false">invoices_items <span class="badge">1 FK</span></a> <small>(7 cols)</small></li>
-<li><a href="#" onclick="return false">invoices_metadata <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">invoices_recommendations <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
 <li><a href="#" onclick="return false">invoices_items_image <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">invoices_items_price <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
-<li><a href="#" onclick="return false">invoices_metadata_creditcardprocessing <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
-<li><a href="#" onclick="return false">invoices_metadata_erpdetails <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
-<li><a href="#" onclick="return false">invoices_metadata_frauddetection <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
-<li><a href="#" onclick="return false">invoices_metadata_loyaltyrewards <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">locations</a> <small>(8 cols)</small></li>
 <li><a href="#" onclick="return false">orders</a> <small>(5 cols)</small></li>
 <li><a href="#" onclick="return false">orders_products <span class="badge">1 FK</span></a> <small>(7 cols)</small></li>
 <li><a href="#" onclick="return false">orders_status_history <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">orders_products_image <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">orders_products_price <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
-<li><a href="#" onclick="return false">products</a> <small>(11 cols)</small></li>
-<li><a href="#" onclick="return false">products_image <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
-<li><a href="#" onclick="return false">products_price <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
+<li><a href="#" onclick="return false">products</a> <small>(13 cols)</small></li>
 <li><a href="#" onclick="return false">products_vai_text_embedding <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">recommendations</a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">recommendations_items <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
 <li><a href="#" onclick="return false">recommendations_items_image <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">recommendations_items_price <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
-<li><a href="#" onclick="return false">users</a> <small>(6 cols)</small></li>
-<li><a href="#" onclick="return false">users_address <span class="badge">1 FK</span></a> <small>(7 cols)</small></li>
+<li><a href="#" onclick="return false">users</a> <small>(7 cols)</small></li>
 <li><a href="#" onclick="return false">users_lastrecommendations <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
       </ul>
     </aside>
@@ -118,6 +110,7 @@ erDiagram
   invoices {
     UUID id PK
     TEXT createdat "NOT NULL"
+    JSONB metadata "NOT NULL"
     TEXT orderid "NOT NULL"
     TEXT status "NOT NULL"
     INTEGER totalamount "NOT NULL"
@@ -131,11 +124,6 @@ erDiagram
     TEXT code "NOT NULL"
     TEXT description "NOT NULL"
     TEXT name "NOT NULL"
-  }
-  invoices_metadata {
-    BIGINT id PK
-    UUID invoices_id FK
-    TEXT retrievedat "NOT NULL"
   }
   invoices_recommendations {
     BIGINT id PK
@@ -157,34 +145,6 @@ erDiagram
     BIGINT invoices_items_id FK
     INTEGER amount "NOT NULL"
     TEXT currency
-  }
-  invoices_metadata_creditcardprocessing {
-    BIGINT id PK
-    BIGINT invoices_metadata_id FK
-    TEXT approvalcode "NOT NULL"
-    TEXT transactionid "NOT NULL"
-  }
-  invoices_metadata_erpdetails {
-    BIGINT id PK
-    BIGINT invoices_metadata_id FK
-    TEXT duedate "NOT NULL"
-    TEXT invoicenumber "NOT NULL"
-    TEXT paymentterms "NOT NULL"
-    FLOAT subtotal "NOT NULL"
-    INTEGER totalamount "NOT NULL"
-    FLOAT totaltax "NOT NULL"
-  }
-  invoices_metadata_frauddetection {
-    BIGINT id PK
-    BIGINT invoices_metadata_id FK
-    INTEGER riskscore "NOT NULL"
-    TEXT status "NOT NULL"
-  }
-  invoices_metadata_loyaltyrewards {
-    BIGINT id PK
-    BIGINT invoices_metadata_id FK
-    INTEGER pointsearned "NOT NULL"
-    TEXT tier "NOT NULL"
   }
   locations {
     UUID id PK
@@ -237,21 +197,12 @@ erDiagram
     TEXT code "NOT NULL"
     TEXT description "NOT NULL"
     TEXT gender "NOT NULL"
+    JSONB image "NOT NULL"
     TEXT mastercategory
     TEXT name "NOT NULL"
+    JSONB price "NOT NULL"
     TEXT subcategory
     INTEGER year
-  }
-  products_image {
-    BIGINT id PK
-    UUID products_id FK
-    TEXT url "NOT NULL"
-  }
-  products_price {
-    BIGINT id PK
-    UUID products_id FK
-    INTEGER amount "NOT NULL"
-    TEXT currency "NOT NULL"
   }
   products_vai_text_embedding {
     BIGINT id PK
@@ -285,20 +236,12 @@ erDiagram
   }
   users {
     UUID id PK
+    JSONB address "NOT NULL"
     TEXT email "NOT NULL"
     TEXT name "NOT NULL"
     TEXT surname "NOT NULL"
     TEXT type "NOT NULL"
     INTEGER version
-  }
-  users_address {
-    BIGINT id PK
-    UUID users_id FK
-    TEXT city "NOT NULL"
-    TEXT country "NOT NULL"
-    TEXT cp "NOT NULL"
-    TEXT state "NOT NULL"
-    TEXT street_and_number "NOT NULL"
   }
   users_lastrecommendations {
     BIGINT id PK
@@ -313,25 +256,17 @@ erDiagram
 
   carts ||--o{ carts_products : "carts_id"
   invoices ||--o{ invoices_items : "invoices_id"
-  invoices ||--o{ invoices_metadata : "invoices_id"
   invoices ||--o{ invoices_recommendations : "invoices_id"
   invoices_items ||--o{ invoices_items_image : "invoices_items_id"
   invoices_items ||--o{ invoices_items_price : "invoices_items_id"
-  invoices_metadata ||--o{ invoices_metadata_creditcardprocessing : "invoices_metadata_id"
-  invoices_metadata ||--o{ invoices_metadata_erpdetails : "invoices_metadata_id"
-  invoices_metadata ||--o{ invoices_metadata_frauddetection : "invoices_metadata_id"
-  invoices_metadata ||--o{ invoices_metadata_loyaltyrewards : "invoices_metadata_id"
   orders ||--o{ orders_products : "orders_id"
   orders ||--o{ orders_status_history : "orders_id"
   orders_products ||--o{ orders_products_image : "orders_products_id"
   orders_products ||--o{ orders_products_price : "orders_products_id"
-  products ||--o{ products_image : "products_id"
-  products ||--o{ products_price : "products_id"
   products ||--o{ products_vai_text_embedding : "products_id"
   recommendations ||--o{ recommendations_items : "recommendations_id"
   recommendations_items ||--o{ recommendations_items_image : "recommendations_items_id"
   recommendations_items ||--o{ recommendations_items_price : "recommendations_items_id"
-  users ||--o{ users_address : "users_id"
   users ||--o{ users_lastrecommendations : "users_id"
 
       </div>

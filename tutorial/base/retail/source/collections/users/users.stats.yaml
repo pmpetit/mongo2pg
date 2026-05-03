@@ -3,12 +3,11 @@ documents_sampled: 4
 width_top_level: 8
 width_max: 8
 width_max_level: 1
-depth_max: 3
-branch_total: 20
+depth_max: 2
+branch_total: 9
 branch_per_level:
   L1: 8
-  L2: 6
-  L3: 6
+  L2: 1
 top_level_types:
   _id: ObjectId
   address: Object
@@ -18,3 +17,6 @@ top_level_types:
   surname: String
   type: String
   version: Number
+array_field_count: 1
+avg_fields_per_doc: 7.25
+migrability_score: 3.1

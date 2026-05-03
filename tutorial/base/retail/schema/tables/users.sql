@@ -1,21 +1,11 @@
 CREATE TABLE users (
     id UUID PRIMARY KEY,
+    address JSONB NOT NULL,
     email TEXT NOT NULL,
     name TEXT NOT NULL,
     surname TEXT NOT NULL,
     type TEXT NOT NULL,
     version INTEGER
-);
-
-CREATE TABLE users_address (
-    id BIGSERIAL PRIMARY KEY,
-    users_id UUID NOT NULL,
-    city TEXT NOT NULL,
-    country TEXT NOT NULL,
-    cp TEXT NOT NULL,
-    state TEXT NOT NULL,
-    street_and_number TEXT NOT NULL,
-    FOREIGN KEY (users_id) REFERENCES users (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE users_lastrecommendations (

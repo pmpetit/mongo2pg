@@ -16,3 +16,6 @@ top_level_types:
   state: String
   street_and_number: String
   type: String
+array_field_count: 0
+avg_fields_per_doc: 7.67
+migrability_score: 1.54
