@@ -1,6 +1,6 @@
 Documents in collection : 50304
 Documents sampled       : 1000
-Width (top-level / max)  : 6 / 6 (L1)
+Width (top-level / max)  : 6 / 6.0 (L1)
 Depth (max nesting)     : 1
-Branch (per level)      : L1:6
+Branch (per level)      : L1:6.0
 Top-level types         : _id:ObjectId, date:Date, email:String, movie_id:ObjectId, name:String, text:String

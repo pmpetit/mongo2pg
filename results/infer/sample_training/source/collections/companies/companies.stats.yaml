@@ -1,17 +1,17 @@
 documents_in_collection: 9500
 documents_sampled: 1000
 width_top_level: 42
-width_max: 68
+width_max: 66.11
 width_max_level: 3
 depth_max: 6
-branch_total: 178
+branch_total: 156.04
 branch_per_level:
-  L1: 42
-  L2: 30
-  L3: 68
-  L4: 23
-  L5: 7
-  L6: 8
+  L1: 42.0
+  L2: 16.04
+  L3: 66.11
+  L4: 22.85
+  L5: 6.43
+  L6: 2.61
 top_level_types:
   _id: ObjectId
   acquisition: 'Null'

@@ -66,13 +66,14 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_weatherdata</h1>
-    <small>Generated: 2026-05-03 09:06 UTC</small>
+    <small>Generated: 2026-05-03 16:03 UTC</small>
   </header>
   <div class="layout">
     <aside>
-      <h2>Tables (11)</h2>
+      <h2>Tables (12)</h2>
       <ul>
         <li><a href="#" onclick="return false">data</a> <small>(21 cols)</small></li>
+<li><a href="#" onclick="return false">data_extremeairtemperature <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
 <li><a href="#" onclick="return false">data_liquidprecipitation <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
 <li><a href="#" onclick="return false">data_pastweatherobservationmanual <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
 <li><a href="#" onclick="return false">data_presentweatherobservationmanual <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
@@ -97,7 +98,7 @@ erDiagram
     INTEGER datasource "NOT NULL"
     JSONB dewpoint "NOT NULL"
     INTEGER elevation "NOT NULL"
-    JSONB position "NOT NULL"
+    JSONB position
     JSONB precipitationestimatedobservation "NOT NULL"
     JSONB pressure "NOT NULL"
     TEXT qualitycontrolprocess "NOT NULL"
@@ -110,6 +111,14 @@ erDiagram
     JSONB visibility "NOT NULL"
     JSONB wavemeasurement
     JSONB wind "NOT NULL"
+  }
+  data_extremeairtemperature {
+    BIGINT id PK
+    UUID data_id FK
+    VARCHAR(1) code "NOT NULL"
+    FLOAT period "NOT NULL"
+    INTEGER quantity "NOT NULL"
+    FLOAT value "NOT NULL"
   }
   data_liquidprecipitation {
     BIGINT id PK
@@ -169,6 +178,7 @@ erDiagram
     INTEGER value "NOT NULL"
   }
 
+  data ||--o{ data_extremeairtemperature : "data_id"
   data ||--o{ data_liquidprecipitation : "data_id"
   data ||--o{ data_pastweatherobservationmanual : "data_id"
   data ||--o{ data_presentweatherobservationmanual : "data_id"

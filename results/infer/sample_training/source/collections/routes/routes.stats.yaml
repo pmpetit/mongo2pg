@@ -1,13 +1,13 @@
 documents_in_collection: 66985
 documents_sampled: 1000
 width_top_level: 7
-width_max: 7
+width_max: 7.0
 width_max_level: 1
 depth_max: 2
-branch_total: 11
+branch_total: 11.0
 branch_per_level:
-  L1: 7
-  L2: 4
+  L1: 7.0
+  L2: 4.0
 top_level_types:
   _id: ObjectId
   airline: Object

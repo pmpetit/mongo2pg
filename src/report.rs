@@ -13,10 +13,10 @@ pub struct CollectionStatsYaml {
     pub documents_in_collection: serde_yaml::Value,
     pub documents_sampled: u64,
     pub width_top_level: usize,
-    pub width_max: usize,
+    pub width_max: f64,
     pub width_max_level: usize,
     pub depth_max: usize,
-    pub branch_total: usize,
+    pub branch_total: f64,
     #[serde(default)]
     pub array_field_count: usize,
     #[serde(default)]
@@ -225,9 +225,9 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
           <td class="num">{doc_count}</td>
           <td class="num">{sampled}</td>
           <td class="num">{width_top}</td>
-          <td class="num">{width_max} <span class="level">(L{width_max_level})</span></td>
+          <td class="num">{width_max:.1} <span class="level">(L{width_max_level})</span></td>
           <td class="num">{depth}</td>
-          <td class="num">{branch}</td>
+          <td class="num">{branch:.1}</td>
           <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score:.2}</span></td>
           {tables_cell}
         </tr>

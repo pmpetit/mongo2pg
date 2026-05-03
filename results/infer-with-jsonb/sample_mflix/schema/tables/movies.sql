@@ -14,7 +14,7 @@ CREATE TABLE movies (
     title TEXT NOT NULL,
     tomatoes JSONB,
     type TEXT NOT NULL,
-    year TEXT NOT NULL
+    year INTEGER NOT NULL
 );
 
 CREATE TABLE movies__cast (

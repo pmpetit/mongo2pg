@@ -1,6 +1,6 @@
 Documents in collection : 4
 Documents sampled       : 4
-Width (top-level / max)  : 8 / 8 (L1)
-Depth (max nesting)     : 3
-Branch (per level)      : L1:8  L2:6  L3:6
+Width (top-level / max)  : 8 / 7.2 (L1)
+Depth (max nesting)     : 2
+Branch (per level)      : L1:7.2  L2:1.0
 Top-level types         : _id:ObjectId, address:Object, email:String, lastRecommendations:Array, name:String, surname:String, type:String, version:Number

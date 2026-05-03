@@ -1,13 +1,13 @@
 documents_in_collection: 11095
 documents_sampled: 1000
 width_top_level: 14
-width_max: 14
+width_max: 14.0
 width_max_level: 1
 depth_max: 2
-branch_total: 15
+branch_total: 15.0
 branch_per_level:
-  L1: 14
-  L2: 1
+  L1: 14.0
+  L2: 1.0
 top_level_types:
   _id: ObjectId
   chart: String
@@ -23,3 +23,6 @@ top_level_types:
   sounding_type: String
   vesslterms: String
   watlev: String
+array_field_count: 1
+avg_fields_per_doc: 14.0
+migrability_score: 3.0

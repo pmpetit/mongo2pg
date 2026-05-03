@@ -7,7 +7,7 @@ CREATE TABLE data (
     datasource INTEGER NOT NULL,
     dewpoint JSONB NOT NULL,
     elevation INTEGER NOT NULL,
-    position JSONB NOT NULL,
+    position JSONB,
     precipitationestimatedobservation JSONB NOT NULL,
     pressure JSONB NOT NULL,
     qualitycontrolprocess TEXT NOT NULL,
@@ -20,6 +20,16 @@ CREATE TABLE data (
     visibility JSONB NOT NULL,
     wavemeasurement JSONB,
     wind JSONB NOT NULL
+);
+
+CREATE TABLE data_extremeairtemperature (
+    id BIGSERIAL PRIMARY KEY,
+    data_id UUID NOT NULL,
+    code VARCHAR(1) NOT NULL,
+    period DOUBLE PRECISION NOT NULL,
+    quantity INTEGER NOT NULL,
+    value DOUBLE PRECISION NOT NULL,
+    FOREIGN KEY (data_id) REFERENCES data (id) DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE data_liquidprecipitation (

@@ -1,14 +1,14 @@
 documents_in_collection: 10000
 documents_sampled: 1000
 width_top_level: 14
-width_max: 14
+width_max: 14.0
 width_max_level: 1
 depth_max: 3
-branch_total: 20
+branch_total: 20.0
 branch_per_level:
-  L1: 14
-  L2: 4
-  L3: 2
+  L1: 14.0
+  L2: 4.0
+  L3: 2.0
 top_level_types:
   _id: ObjectId
   bikeid: Number

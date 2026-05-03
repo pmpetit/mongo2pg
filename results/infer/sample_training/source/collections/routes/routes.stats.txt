@@ -1,6 +1,6 @@
 Documents in collection : 66985
 Documents sampled       : 1000
-Width (top-level / max)  : 7 / 7 (L1)
+Width (top-level / max)  : 7 / 7.0 (L1)
 Depth (max nesting)     : 2
-Branch (per level)      : L1:7  L2:4
+Branch (per level)      : L1:7.0  L2:4.0
 Top-level types         : _id:ObjectId, airline:Object, airplane:String, codeshare:String, dst_airport:String, src_airport:String, stops:Number

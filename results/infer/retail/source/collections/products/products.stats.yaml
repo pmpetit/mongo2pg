@@ -1,13 +1,13 @@
 documents_in_collection: 760
 documents_sampled: 760
 width_top_level: 14
-width_max: 14
+width_max: 12.43
 width_max_level: 1
 depth_max: 2
-branch_total: 18
+branch_total: 16.43
 branch_per_level:
-  L1: 14
-  L2: 4
+  L1: 12.43
+  L2: 4.0
 top_level_types:
   _id: ObjectId
   articleType: String

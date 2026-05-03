@@ -1,15 +1,15 @@
 documents_in_collection: 4
 documents_sampled: 4
 width_top_level: 5
-width_max: 6
+width_max: 6.0
 width_max_level: 3
 depth_max: 4
-branch_total: 15
+branch_total: 15.0
 branch_per_level:
-  L1: 5
-  L2: 1
-  L3: 6
-  L4: 3
+  L1: 5.0
+  L2: 1.0
+  L3: 6.0
+  L4: 3.0
 top_level_types:
   _id: ObjectId
   createdAt: Date

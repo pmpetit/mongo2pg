@@ -32,7 +32,7 @@ CREATE TABLE companies_acquisition (
     companies_id UUID NOT NULL,
     acquired_day INTEGER,
     acquired_month INTEGER,
-    acquired_year INTEGER NOT NULL,
+    acquired_year INTEGER,
     price_amount BIGINT,
     price_currency_code VARCHAR(3) NOT NULL,
     source_description TEXT NOT NULL,
@@ -46,8 +46,8 @@ CREATE TABLE companies_acquisitions (
     companies_id UUID NOT NULL,
     acquired_day INTEGER,
     acquired_month INTEGER,
-    acquired_year INTEGER NOT NULL,
-    price_amount DOUBLE PRECISION,
+    acquired_year INTEGER,
+    price_amount BIGINT,
     price_currency_code VARCHAR(3) NOT NULL,
     source_description TEXT,
     source_url TEXT,
@@ -103,7 +103,7 @@ CREATE TABLE companies_ipo (
     pub_month INTEGER,
     pub_year INTEGER,
     stock_symbol TEXT NOT NULL,
-    valuation_amount INTEGER,
+    valuation_amount BIGINT,
     valuation_currency_code VARCHAR(3) NOT NULL,
     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
 );
@@ -146,8 +146,6 @@ CREATE TABLE companies_partners (
     link_1_url TEXT NOT NULL,
     link_2_name TEXT,
     link_2_url TEXT,
-    link_3_name TEXT,
-    link_3_url TEXT,
     partner_name TEXT NOT NULL,
     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
 );

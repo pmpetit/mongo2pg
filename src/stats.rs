@@ -9,16 +9,16 @@ use crate::analyzer::{CollectionSchema, FieldSchema, TYPE_ARRAY};
 pub struct SchemaStats {
     /// Number of top-level fields.
     pub width: usize,
-    /// Maximum number of fields at any single nesting level.
-    pub max_width: usize,
+    /// Maximum expected fields per document at any single nesting level (probability-weighted).
+    pub max_width: f64,
     /// The nesting level (1-based) where max_width was observed.
     pub max_width_level: usize,
     /// Maximum nesting depth (top-level fields are depth 1).
     pub depth: usize,
-    /// Total number of fields across all nesting levels.
-    pub branch: usize,
-    /// Number of fields at each nesting level (index 0 → level 1, index 1 → level 2, …).
-    pub branches_by_level: Vec<usize>,
+    /// Expected total fields per document across all nesting levels (probability-weighted sum).
+    pub branch: f64,
+    /// Expected fields per document at each nesting level (probability-weighted; index 0 → level 1, …).
+    pub branches_by_level: Vec<f64>,
     /// Average number of fields present per document (sum of field probabilities).
     pub avg_fields_per_doc: f64,
     /// Number of top-level fields that have an Array type.
@@ -29,12 +29,12 @@ impl SchemaStats {
     /// Compute stats for the given schema.
     pub fn compute(schema: &CollectionSchema) -> Self {
         let width = schema.object.len();
-        let mut total_branch = 0;
+        let mut total_branch: f64 = 0.0;
         let mut max_depth = 0;
-        let mut level_counts: Vec<usize> = Vec::new();
+        let mut level_counts: Vec<f64> = Vec::new();
 
-        for field in schema.object.values() {
-            let (d, b) = field_depth_branch(field, 1, &mut level_counts);
+        for field in schema.object.iter() {
+            let (d, b) = field_depth_branch(field.1, 1, &mut level_counts, field.1.probability);
             if d > max_depth {
                 max_depth = d;
             }
@@ -45,9 +45,9 @@ impl SchemaStats {
             .iter()
             .copied()
             .enumerate()
-            .max_by_key(|&(_, c)| c)
+            .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(i, c)| (c, i + 1))
-            .unwrap_or((width, 1));
+            .unwrap_or((width as f64, 1));
 
         // avg_fields_per_doc = sum of field probabilities (each field contributes its
         // presence probability to the expected key count per document).
@@ -94,22 +94,28 @@ impl SchemaStats {
     }
 }
 
-/// Returns `(max_depth, branch_count)` for a field schema starting at `current_depth`,
-/// and accumulates the per-level field count into `level_counts`.
+/// Returns `(max_depth, weighted_branch_count)` for a field schema starting at `current_depth`.
+///
+/// `weight` is the cumulative probability of this field being present in a document
+/// (top-level field probability × parent type probability × …). Using probability weights
+/// means `level_counts` and `branch` reflect *expected fields per document* rather than
+/// *total distinct fields observed*, which avoids inflated counts from map-pattern fields
+/// (e.g. UUID keys where each key appears in only a fraction of documents).
 fn field_depth_branch(
     field: &FieldSchema,
     current_depth: usize,
-    level_counts: &mut Vec<usize>,
-) -> (usize, usize) {
+    level_counts: &mut Vec<f64>,
+    weight: f64,
+) -> (usize, f64) {
     let mut max_depth = current_depth;
-    let mut branch = 1; // this field itself
+    let mut branch = weight; // this field contributes its probability weight
 
     // Ensure the vec is large enough for this level (1-indexed, stored at index depth-1).
     let idx = current_depth - 1;
     if level_counts.len() <= idx {
-        level_counts.resize(current_depth, 0);
+        level_counts.resize(current_depth, 0.0);
     }
-    level_counts[idx] += 1;
+    level_counts[idx] += weight;
 
     for type_schema in field.types.values() {
         // Object fields marked as_jsonb become a single opaque JSONB column —
@@ -118,7 +124,14 @@ fn field_depth_branch(
         if !type_schema.as_jsonb {
             if let Some(nested_obj) = &type_schema.object {
                 for nested_field in nested_obj.values() {
-                    let (d, b) = field_depth_branch(nested_field, current_depth + 1, level_counts);
+                    // Weight = parent field weight × this type's probability × sub-field's probability
+                    let nested_weight = weight * type_schema.probability * nested_field.probability;
+                    let (d, b) = field_depth_branch(
+                        nested_field,
+                        current_depth + 1,
+                        level_counts,
+                        nested_weight,
+                    );
                     if d > max_depth {
                         max_depth = d;
                     }
@@ -127,7 +140,10 @@ fn field_depth_branch(
             }
         }
         if let Some(array_items) = &type_schema.array {
-            let (d, b) = field_depth_branch(array_items, current_depth + 1, level_counts);
+            // Array items are counted as one logical entry; weight by the array type probability.
+            let array_weight = weight * type_schema.probability;
+            let (d, b) =
+                field_depth_branch(array_items, current_depth + 1, level_counts, array_weight);
             if d > max_depth {
                 max_depth = d;
             }
@@ -148,7 +164,7 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
         .branches_by_level
         .iter()
         .enumerate()
-        .map(|(i, &c)| format!("L{}:{}", i + 1, c))
+        .map(|(i, &c)| format!("L{}:{:.1}", i + 1, c))
         .collect::<Vec<_>>()
         .join("  ");
     let total_line = match total_docs {
@@ -159,7 +175,7 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
         total_line,
         format!("Documents sampled       : {}", schema.sampled),
         format!(
-            "Width (top-level / max)  : {} / {} (L{})",
+            "Width (top-level / max)  : {} / {:.1} (L{})",
             s.width, s.max_width, s.max_width_level
         ),
         format!("Depth (max nesting)     : {}", s.depth),
@@ -196,11 +212,11 @@ pub struct StatsYaml {
     pub documents_in_collection: serde_yaml::Value,
     pub documents_sampled: u64,
     pub width_top_level: usize,
-    pub width_max: usize,
+    pub width_max: f64,
     pub width_max_level: usize,
     pub depth_max: usize,
-    pub branch_total: usize,
-    pub branch_per_level: indexmap::IndexMap<String, usize>,
+    pub branch_total: f64,
+    pub branch_per_level: indexmap::IndexMap<String, f64>,
     pub top_level_types: indexmap::IndexMap<String, String>,
     /// Number of top-level fields that carry at least one Array value.
     pub array_field_count: usize,
@@ -214,11 +230,11 @@ pub struct StatsYaml {
 pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> StatsYaml {
     let s = SchemaStats::compute(schema);
 
-    let branch_per_level: indexmap::IndexMap<String, usize> = s
+    let branch_per_level: indexmap::IndexMap<String, f64> = s
         .branches_by_level
         .iter()
         .enumerate()
-        .map(|(i, &c)| (format!("L{}", i + 1), c))
+        .map(|(i, &c)| (format!("L{}", i + 1), (c * 100.0).round() / 100.0))
         .collect();
 
     let top_level_types: indexmap::IndexMap<String, String> = schema
@@ -249,10 +265,10 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         },
         documents_sampled: schema.sampled,
         width_top_level: s.width,
-        width_max: s.max_width,
+        width_max: (s.max_width * 100.0).round() / 100.0,
         width_max_level: s.max_width_level,
         depth_max: s.depth,
-        branch_total: s.branch,
+        branch_total: (s.branch * 100.0).round() / 100.0,
         branch_per_level,
         top_level_types,
         array_field_count: s.array_field_count,
@@ -302,7 +318,7 @@ mod tests {
         let stats = SchemaStats::compute(&schema);
         assert_eq!(stats.width, 1);
         assert_eq!(stats.depth, 1);
-        assert_eq!(stats.branch, 1);
-        assert_eq!(stats.branches_by_level, vec![1]);
+        assert_eq!(stats.branch, 1.0);
+        assert_eq!(stats.branches_by_level, vec![1.0]);
     }
 }

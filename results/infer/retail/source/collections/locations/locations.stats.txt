@@ -1,6 +1,6 @@
 Documents in collection : 6
 Documents sampled       : 6
-Width (top-level / max)  : 8 / 8 (L1)
+Width (top-level / max)  : 8 / 7.7 (L1)
 Depth (max nesting)     : 1
-Branch (per level)      : L1:8
+Branch (per level)      : L1:7.7
 Top-level types         : _id:ObjectId, city:String, country:String, cp:String, name:String, state:String, street_and_number:String, type:String

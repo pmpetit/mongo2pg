@@ -1,6 +1,6 @@
 Documents in collection : 500
 Documents sampled       : 500
-Width (top-level / max)  : 9 / 1824 (L3)
-Depth (max nesting)     : 4
-Branch (per level)      : L1:9  L2:457  L3:1824  L4:456
+Width (top-level / max)  : 9 / 8.0 (L1)
+Depth (max nesting)     : 2
+Branch (per level)      : L1:8.0  L2:1.0
 Top-level types         : _id:ObjectId, accounts:Array, active:Boolean, address:String, birthdate:Date, email:String, name:String, tier_and_details:Object, username:String
