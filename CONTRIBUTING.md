@@ -98,20 +98,20 @@ task infer-with-jsonb
 
 (...)
 📁 init sample_weatherdata
-Project 'sample_weatherdata' initialised at results/infer/sample_weatherdata
-  results/infer/sample_weatherdata/schema/tables
-  results/infer/sample_weatherdata/source/collections
-  results/infer/sample_weatherdata/data
-  results/infer/sample_weatherdata/config
-  results/infer/sample_weatherdata/reports
-  results/infer/sample_weatherdata/config/sample_weatherdata.conf
+Project 'sample_weatherdata' initialised at results/infer-with-jsonb/sample_weatherdata
+  results/infer-with-jsonb/sample_weatherdata/schema/tables
+  results/infer-with-jsonb/sample_weatherdata/source/collections
+  results/infer-with-jsonb/sample_weatherdata/data
+  results/infer-with-jsonb/sample_weatherdata/config
+  results/infer-with-jsonb/sample_weatherdata/reports
+  results/infer-with-jsonb/sample_weatherdata/config/sample_weatherdata.conf
 📐 infer sample_weatherdata.data
-🛠️  to-pg sample_weatherdata_data
-tables : 44
-columns: 169
-SQL written to results/infer/sample_weatherdata/schema/tables/sample_weatherdata_data.sql
+🛠️ to-pg sample_weatherdata_data
+tables : 11
+columns: 58
+SQL written to results/infer-with-jsonb/sample_weatherdata/schema/tables/sample_weatherdata_data.sql
 📊 report
-Report written to results/infer/sample_weatherdata/reports/report.html
-👉 results in results/infer
+Report written to results/infer-with-jsonb/sample_weatherdata/reports/report.html
+👉 results in results/infer-with-jsonb
 (...)
 ```
