@@ -1,6 +1,6 @@
 Documents in collection : 23539
 Documents sampled       : 1000
-Width (top-level / max)  : 22 / 20.2 (L1)
+Width (top-level / max)  : 22 / 20.1 (L1)
 Depth (max nesting)     : 3
-Branch (per level)      : L1:20.2  L2:17.5  L3:4.3
+Branch (per level)      : L1:20.1  L2:17.5  L3:4.3
 Top-level types         : _id:ObjectId, awards:Object, cast:Array, countries:Array, directors:Array, fullplot:String, genres:Array, imdb:Object, languages:Array, lastupdated:String, metacritic:Number, num_mflix_comments:Number, plot:String, poster:String, rated:String, released:Date, runtime:Number, title:String, tomatoes:Object, type:String, writers:Array, year:Number

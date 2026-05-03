@@ -66,7 +66,7 @@
 <body>
   <header>
     <h1>mongo2pg – Schema Diagram – sample_training</h1>
-    <small>Generated: 2026-05-03 16:01 UTC</small>
+    <small>Generated: 2026-05-03 16:36 UTC</small>
   </header>
   <div class="layout">
     <aside>
@@ -83,7 +83,7 @@
 <li><a href="#" onclick="return false">companies_ipo <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
 <li><a href="#" onclick="return false">companies_milestones <span class="badge">1 FK</span></a> <small>(11 cols)</small></li>
 <li><a href="#" onclick="return false">companies_offices <span class="badge">1 FK</span></a> <small>(11 cols)</small></li>
-<li><a href="#" onclick="return false">companies_partners <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
+<li><a href="#" onclick="return false">companies_partners <span class="badge">1 FK</span></a> <small>(10 cols)</small></li>
 <li><a href="#" onclick="return false">companies_products <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">companies_providerships <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">companies_relationships <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
@@ -112,7 +112,7 @@
 <li><a href="#" onclick="return false">posts_tags <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">routes</a> <small>(6 cols)</small></li>
 <li><a href="#" onclick="return false">routes_airline <span class="badge">1 FK</span></a> <small>(6 cols)</small></li>
-<li><a href="#" onclick="return false">stories</a> <small>(12 cols)</small></li>
+<li><a href="#" onclick="return false">stories</a> <small>(13 cols)</small></li>
 <li><a href="#" onclick="return false">stories_container <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">stories_shorturl <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">stories_thumbnail <span class="badge">1 FK</span></a> <small>(8 cols)</small></li>
@@ -135,7 +135,7 @@
 <li><a href="#" onclick="return false">tweets_entities_urls <span class="badge">1 FK</span></a> <small>(4 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_entities_user_mentions <span class="badge">1 FK</span></a> <small>(5 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_geo_coordinates <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
-<li><a href="#" onclick="return false">tweets_place_attributes <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
+<li><a href="#" onclick="return false">tweets_place_attributes <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_place_bounding_box <span class="badge">1 FK</span></a> <small>(3 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_retweeted_status_entities <span class="badge">1 FK</span></a> <small>(2 cols)</small></li>
 <li><a href="#" onclick="return false">tweets_retweeted_status__user <span class="badge">1 FK</span></a> <small>(31 cols)</small></li>
@@ -189,11 +189,11 @@ erDiagram
     UUID companies_id FK
     INTEGER acquired_day
     INTEGER acquired_month
-    INTEGER acquired_year
+    INTEGER acquired_year "NOT NULL"
     BIGINT price_amount
     VARCHAR(3) price_currency_code "NOT NULL"
-    TEXT source_description "NOT NULL"
-    TEXT source_url "NOT NULL"
+    TEXT source_description
+    TEXT source_url
     TEXT term_code
   }
   companies_acquisitions {
@@ -201,11 +201,11 @@ erDiagram
     UUID companies_id FK
     INTEGER acquired_day
     INTEGER acquired_month
-    INTEGER acquired_year
-    BIGINT price_amount
+    INTEGER acquired_year "NOT NULL"
+    INTEGER price_amount
     VARCHAR(3) price_currency_code "NOT NULL"
-    TEXT source_description
-    TEXT source_url
+    TEXT source_description "NOT NULL"
+    TEXT source_url "NOT NULL"
     TEXT term_code
   }
   companies_competitions {
@@ -246,7 +246,7 @@ erDiagram
     INTEGER pub_month
     INTEGER pub_year
     TEXT stock_symbol "NOT NULL"
-    BIGINT valuation_amount
+    INTEGER valuation_amount
     VARCHAR(3) valuation_currency_code "NOT NULL"
   }
   companies_milestones {
@@ -283,6 +283,8 @@ erDiagram
     TEXT link_1_url "NOT NULL"
     TEXT link_2_name
     TEXT link_2_url
+    TEXT link_3_name
+    TEXT link_3_url
     TEXT partner_name "NOT NULL"
   }
   companies_products {
@@ -345,11 +347,11 @@ erDiagram
     BIGINT companies_investments_id FK
     INTEGER funded_day
     INTEGER funded_month
-    INTEGER funded_year "NOT NULL"
+    INTEGER funded_year
     INTEGER raised_amount
     VARCHAR(3) raised_currency_code
     TEXT round_code "NOT NULL"
-    TEXT source_description "NOT NULL"
+    TEXT source_description
     TEXT source_url "NOT NULL"
   }
   companies_milestones_stoneable {
@@ -427,7 +429,7 @@ erDiagram
     TEXT city "NOT NULL"
     TEXT number "NOT NULL"
     TEXT street "NOT NULL"
-    INTEGER zip "NOT NULL"
+    TEXT zip "NOT NULL"
   }
   posts {
     UUID id PK
@@ -472,6 +474,7 @@ erDiagram
     INTEGER diggs "NOT NULL"
     TEXT href "NOT NULL"
     TEXT field_id "NOT NULL"
+    INTEGER inaccurate
     TEXT link "NOT NULL"
     TEXT media "NOT NULL"
     INTEGER promote_date "NOT NULL"
@@ -666,7 +669,6 @@ erDiagram
   tweets_place_attributes {
     BIGINT id PK
     BIGINT tweets_place_id FK
-    TEXT street_address
   }
   tweets_place_bounding_box {
     BIGINT id PK

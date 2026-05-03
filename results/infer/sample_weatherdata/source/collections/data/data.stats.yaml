@@ -1,15 +1,15 @@
 documents_in_collection: 10000
 documents_sampled: 1000
 width_top_level: 27
-width_max: 37.22
+width_max: 37.18
 width_max_level: 3
 depth_max: 4
-branch_total: 95.59
+branch_total: 95.63
 branch_per_level:
   L1: 22.28
-  L2: 32.09
-  L3: 37.22
-  L4: 4.0
+  L2: 32.06
+  L3: 37.18
+  L4: 4.11
 top_level_types:
   _id: ObjectId
   airTemperature: Object

@@ -10,26 +10,26 @@
           "sampled": 500,
           "ndistinct": 500.0,
           "values": [
-            "5ca4bbcea2dd94ee58162c5d",
-            "5ca4bbcea2dd94ee58162aff",
-            "5ca4bbcea2dd94ee58162bb2",
-            "5ca4bbcea2dd94ee58162b07",
-            "5ca4bbcea2dd94ee58162bb3",
-            "5ca4bbcea2dd94ee58162c34",
-            "5ca4bbcea2dd94ee58162b8b",
-            "5ca4bbcea2dd94ee58162ba5",
-            "5ca4bbcea2dd94ee58162b7b",
-            "5ca4bbcea2dd94ee58162a95",
-            "5ca4bbcea2dd94ee58162ba0",
-            "5ca4bbcea2dd94ee58162b14",
-            "5ca4bbcea2dd94ee58162acc",
-            "5ca4bbcea2dd94ee58162bce",
-            "5ca4bbcea2dd94ee58162a99",
-            "5ca4bbcea2dd94ee58162b99",
-            "5ca4bbcea2dd94ee58162ae6",
-            "5ca4bbcea2dd94ee58162b3f",
-            "5ca4bbcea2dd94ee58162c59",
-            "5ca4bbcea2dd94ee58162ae5"
+            "5ca4bbcea2dd94ee58162b7f",
+            "5ca4bbcea2dd94ee58162b4a",
+            "5ca4bbcea2dd94ee58162aad",
+            "5ca4bbcea2dd94ee58162ac5",
+            "5ca4bbcea2dd94ee58162aa3",
+            "5ca4bbcea2dd94ee58162c28",
+            "5ca4bbcea2dd94ee58162c45",
+            "5ca4bbcea2dd94ee58162c30",
+            "5ca4bbcea2dd94ee58162be9",
+            "5ca4bbcea2dd94ee58162ba4",
+            "5ca4bbcea2dd94ee58162ad4",
+            "5ca4bbcea2dd94ee58162c1a",
+            "5ca4bbcea2dd94ee58162c20",
+            "5ca4bbcea2dd94ee58162bfa",
+            "5ca4bbcea2dd94ee58162b9a",
+            "5ca4bbcea2dd94ee58162c49",
+            "5ca4bbcea2dd94ee58162a9e",
+            "5ca4bbcea2dd94ee58162b71",
+            "5ca4bbcea2dd94ee58162b7d",
+            "5ca4bbcea2dd94ee58162baa"
           ]
         }
       }
@@ -49,131 +49,133 @@
                 "sampled": 1746,
                 "ndistinct": 1000.0,
                 "values": [
-                  568852,
-                  351063,
-                  635650,
-                  229182,
-                  732327,
-                  89698,
-                  501408,
-                  302149,
-                  96431,
-                  987355,
-                  109478,
-                  188363,
-                  183253,
-                  429119,
-                  823908,
-                  618708,
-                  434613,
-                  942656,
-                  67224,
-                  904392
+                  624318,
+                  874631,
+                  96224,
+                  348140,
+                  751513,
+                  977774,
+                  852986,
+                  588722,
+                  171900,
+                  775273,
+                  212024,
+                  896644,
+                  212219,
+                  954953,
+                  558864,
+                  459245,
+                  385361,
+                  506711,
+                  719203,
+                  882090
                 ]
               }
             }
           },
           "values": [
             [
-              568852,
-              351063,
-              635650,
-              229182,
-              732327,
-              89698
+              624318,
+              874631,
+              96224
             ],
             [
-              501408
+              348140,
+              751513
             ],
             [
-              302149,
-              96431,
-              987355
+              977774
             ],
             [
-              109478
+              852986
             ],
             [
-              188363,
-              183253,
-              429119,
-              823908,
-              618708,
-              434613
+              588722,
+              171900,
+              775273,
+              212024
             ],
             [
-              942656
+              896644
             ],
             [
-              67224,
-              904392,
-              312854
+              212219,
+              954953,
+              558864,
+              459245
             ],
             [
-              223583,
-              222061,
-              889573,
-              509384,
-              471113
+              385361,
+              506711,
+              719203,
+              882090,
+              569420,
+              546211
             ],
             [
-              55104,
-              745028,
-              677943,
-              558048,
-              622628
+              142442,
+              90019,
+              270514
             ],
             [
-              146756,
-              120270
+              881765,
+              76339
             ],
             [
-              693557,
-              73934,
-              627788,
-              539248,
-              390126,
-              533671
+              857368,
+              303316,
+              118003,
+              292277,
+              131885
             ],
             [
-              423254,
-              838304,
-              475102,
-              981028,
-              982027,
-              348352
+              704067,
+              481754,
+              131371,
+              291224
             ],
             [
-              660732,
-              167939
+              288877,
+              147641,
+              565989,
+              740050,
+              748530
             ],
             [
-              494340,
-              363061,
-              323327
+              248380,
+              244782
             ],
             [
-              884748,
-              577112
+              452100,
+              339477,
+              657111,
+              372015,
+              831465
             ],
             [
-              385025,
-              412109,
-              201161
+              633806,
+              249810,
+              857050,
+              737623
             ],
             [
-              788442,
-              644552,
-              944119
+              870466
             ],
             [
-              523409
+              525945
             ],
             [
-              669413
+              89646,
+              610763,
+              925342,
+              570599,
+              355301
             ],
             [
-              878471
+              384335,
+              317449,
+              719393,
+              556338
             ]
           ]
         }
@@ -204,26 +206,26 @@
           "sampled": 500,
           "ndistinct": 500.0,
           "values": [
-            "79375 David Neck\nWest Matthewton, NJ 92863",
-            "4975 Davila Wall Apt. 503\nPort Christophershire, MO 37761",
-            "Unit 0999 Box 3326\nDPO AE 33827",
-            "0803 Sean Street\nWest Deborahmouth, ND 68572",
-            "3649 Richard Trace Suite 439\nNorth Mariahfort, NY 95065",
-            "7335 Mcmillan Port Suite 707\nWest Kristine, NE 13112",
-            "13671 Cheryl Harbor\nWilkersonside, NJ 44465",
-            "6182 Johnson Ridge\nSouth Jacob, VT 78879",
-            "84522 Raymond Stravenue\nEast Joshuahaven, OR 19575",
-            "USNS Thomas\nFPO AA 22336",
-            "84228 Alison Rest Suite 507\nTimothyshire, NC 75240",
-            "399 Murray Common Apt. 806\nNew Christopherport, NV 54779",
-            "PSC 9422, Box 2030\nAPO AP 62319",
-            "3831 Matthew Route Suite 791\nReynoldsburgh, OH 33846",
-            "6380 Paul Valleys\nVaughnmouth, MT 03247",
-            "942 Jennifer Forest\nWatkinsburgh, MI 96943",
-            "456 Jonathan Plains\nRogersmouth, MN 85128",
-            "89437 Nathan Ford\nKatietown, LA 03688",
-            "399 Fuentes Roads\nJoshuaborough, CO 64522",
-            "67199 West Gateway\nKimberlyhaven, NE 85650"
+            "2680 Mcgee View Suite 555\nSouth Jerryview, WY 26335",
+            "450 Gillespie Lights Suite 952\nEast Seanmouth, LA 65283",
+            "445 Malone Expressway Suite 655\nHillton, MS 47937",
+            "66205 Larry Burgs Apt. 081\nSanchezchester, WV 73468",
+            "666 Jones Forks Apt. 578\nWest Ashley, WA 61045",
+            "0323 Gaines Throughway\nSouth Johnnyfort, NJ 11202",
+            "363 Randall Path Suite 435\nSouth Alexanderfurt, ME 62392",
+            "8421 Samuel Creek Suite 357\nDavisstad, AR 45158",
+            "9820 Daniel Port Apt. 982\nPort Jacobmouth, MA 33146",
+            "720 Miller Circle\nParkschester, NM 03319",
+            "55313 Elliott Turnpike Suite 863\nRaymondborough, ME 31900",
+            "50661 Linda Brooks Suite 431\nNew Allenside, NV 91378",
+            "06321 Thompson Field\nSouth Bryan, IL 44627",
+            "165 Brittany Green\nNorth Eric, MN 84627",
+            "67599 Bradley Mount\nSouth Matthewmouth, OK 56749",
+            "521 Andre Court Apt. 157\nTravisland, CO 28051",
+            "7788 Megan Motorway Suite 038\nDonovanstad, IA 22054",
+            "1090 Danny Stravenue\nClarkville, IA 58766",
+            "44728 Amanda Green Suite 585\nNew Kathleen, HI 43588",
+            "4992 Lawson Pine\nNorth Ashleystad, RI 33284"
           ]
         }
       }
@@ -236,26 +238,26 @@
           "sampled": 500,
           "ndistinct": 500.0,
           "values": [
-            "1971-05-04 21:20:10.0 +00:00:00",
-            "1970-03-26 7:35:30.0 +00:00:00",
-            "1970-02-02 5:52:30.0 +00:00:00",
-            "1975-12-30 7:54:39.0 +00:00:00",
-            "1969-07-08 9:34:19.0 +00:00:00",
-            "1989-07-11 14:00:48.0 +00:00:00",
-            "1989-10-02 1:06:40.0 +00:00:00",
-            "1988-11-22 14:06:49.0 +00:00:00",
-            "1974-08-12 2:44:16.0 +00:00:00",
-            "1974-03-11 14:47:23.0 +00:00:00",
-            "1970-11-30 15:30:09.0 +00:00:00",
-            "1974-03-08 7:18:13.0 +00:00:00",
-            "1978-09-12 4:10:30.0 +00:00:00",
-            "1989-04-18 6:25:06.0 +00:00:00",
-            "1985-07-20 17:09:01.0 +00:00:00",
-            "1975-03-06 20:46:53.0 +00:00:00",
-            "1974-11-07 12:26:35.0 +00:00:00",
-            "1990-10-31 20:59:25.0 +00:00:00",
-            "1986-09-30 17:12:45.0 +00:00:00",
-            "1982-06-12 18:06:37.0 +00:00:00"
+            "1968-09-03 17:42:06.0 +00:00:00",
+            "1986-09-11 12:57:48.0 +00:00:00",
+            "1978-09-02 16:45:32.0 +00:00:00",
+            "1984-09-05 14:54:30.0 +00:00:00",
+            "1973-11-26 1:45:21.0 +00:00:00",
+            "1987-12-11 5:11:10.0 +00:00:00",
+            "1991-11-14 5:45:14.0 +00:00:00",
+            "1971-01-09 0:28:43.0 +00:00:00",
+            "1992-07-07 22:43:54.0 +00:00:00",
+            "1992-01-05 3:01:14.0 +00:00:00",
+            "1996-08-27 22:56:52.0 +00:00:00",
+            "1973-03-02 16:34:50.0 +00:00:00",
+            "1987-05-07 17:47:20.0 +00:00:00",
+            "1971-06-12 23:52:56.0 +00:00:00",
+            "1985-09-26 5:02:53.0 +00:00:00",
+            "1990-04-03 6:10:06.0 +00:00:00",
+            "1990-11-08 23:16:24.0 +00:00:00",
+            "1970-05-15 12:36:07.0 +00:00:00",
+            "1968-04-15 18:48:37.0 +00:00:00",
+            "1978-12-12 6:18:08.0 +00:00:00"
           ]
         }
       }
@@ -268,26 +270,26 @@
           "sampled": 500,
           "ndistinct": 499.0,
           "values": [
-            "erica98@gmail.com",
-            "paul16@hotmail.com",
-            "fharris@hotmail.com",
-            "jessicagrant@yahoo.com",
-            "lbutler@yahoo.com",
-            "johnharris@hotmail.com",
-            "karenmosley@hotmail.com",
-            "flewis@gmail.com",
-            "isweeney@hotmail.com",
-            "nicolehicks@gmail.com",
-            "cameron37@hotmail.com",
-            "alanfarley@gmail.com",
-            "emily47@hotmail.com",
-            "lbrown@hotmail.com",
-            "nicoleeaton@gmail.com",
-            "fmoore@hotmail.com",
-            "aaron15@yahoo.com",
-            "richard78@gmail.com",
-            "cynthia31@hotmail.com",
-            "scott89@gmail.com"
+            "jeffrey21@yahoo.com",
+            "rle@hotmail.com",
+            "ryan82@hotmail.com",
+            "kristinmartinez@hotmail.com",
+            "andrewlowe@yahoo.com",
+            "cpatterson@hotmail.com",
+            "kimberlyhunter@yahoo.com",
+            "james04@gmail.com",
+            "pferrell@yahoo.com",
+            "hatfieldcurtis@yahoo.com",
+            "donna47@hotmail.com",
+            "waltonkatherine@gmail.com",
+            "simsapril@gmail.com",
+            "mcguirejennifer@yahoo.com",
+            "mcintyrewhitney@yahoo.com",
+            "emily39@yahoo.com",
+            "clarkleah@gmail.com",
+            "brooke86@yahoo.com",
+            "wnelson@hotmail.com",
+            "jennifer79@yahoo.com"
           ]
         }
       }
@@ -300,26 +302,26 @@
           "sampled": 500,
           "ndistinct": 496.0,
           "values": [
-            "Gabriel Romero",
-            "Seth Gonzalez",
-            "Kenneth Green",
-            "Bobby Chan",
-            "Danielle Hancock",
-            "Andrew Reilly",
-            "Wendy Thomas",
-            "April Smith",
-            "David Chung",
-            "Ray Jenkins",
-            "Shawn Austin",
-            "Chad Ryan",
-            "Justin Bryant",
-            "Paul Rogers",
-            "Melanie Hernandez",
-            "Denise Curtis",
-            "Robert Pearson",
-            "Adam Miller",
-            "Linda Stephens",
-            "Melanie Scott"
+            "Thomas Barber",
+            "Matthew Montgomery",
+            "Christopher Lee",
+            "Wendy Lane",
+            "Andrea Mcmillan",
+            "Robert Vaughn",
+            "Rebecca Smith",
+            "Alex Chandler",
+            "Jeffery Lopez",
+            "Jennifer Carter",
+            "Bradley Roberts",
+            "Stacy Thompson",
+            "Tina Davis",
+            "Austin Johnson",
+            "Bryan Torres",
+            "Christopher Alvarado",
+            "Wendy Woods",
+            "Tonya Vega",
+            "Dennis Newton",
+            "Yolanda Harris"
           ]
         }
       }
@@ -42974,362 +42976,340 @@
           "values": [
             {},
             {
-              "6e48bb3fc9274330a2723d578f888c2b": {
-                "tier": "Silver",
+              "9036db8d7b3f4905adf0d0f0e102aceb": {
+                "tier": "Platinum",
                 "benefits": [
-                  "concierge services"
+                  "airline lounge access"
                 ],
                 "active": true,
-                "id": "6e48bb3fc9274330a2723d578f888c2b"
+                "id": "9036db8d7b3f4905adf0d0f0e102aceb"
               }
             },
             {
-              "2a4e63af172f4ecbbdf6b9dd3f28d8d2": {
+              "95dc13d9c62b42dbb93deed8ae4b3695": {
                 "tier": "Bronze",
                 "benefits": [
+                  "sports tickets",
                   "concert tickets"
                 ],
                 "active": true,
-                "id": "2a4e63af172f4ecbbdf6b9dd3f28d8d2"
+                "id": "95dc13d9c62b42dbb93deed8ae4b3695"
               },
-              "d9d02fec08e34608b27234d9fa2fd01c": {
-                "tier": "Silver",
+              "66f234cf1ca442a898c757d50012e3b0": {
+                "tier": "Bronze",
                 "benefits": [
-                  "shopping discounts",
-                  "travel insurance"
-                ],
-                "active": true,
-                "id": "d9d02fec08e34608b27234d9fa2fd01c"
-              }
-            },
-            {
-              "d1d506b88595478a8b716ca68118c63d": {
-                "tier": "Silver",
-                "benefits": [
-                  "car rental insurance",
                   "dedicated account representative"
                 ],
                 "active": true,
-                "id": "d1d506b88595478a8b716ca68118c63d"
+                "id": "66f234cf1ca442a898c757d50012e3b0"
               }
             },
             {
-              "2a3cec81cd26455499355a9098611ab0": {
-                "tier": "Silver",
+              "fa009b4a1ffa4a4084553358c20075f1": {
+                "tier": "Platinum",
                 "benefits": [
-                  "concierge services"
+                  "concert tickets",
+                  "24 hour dedicated line"
                 ],
                 "active": true,
-                "id": "2a3cec81cd26455499355a9098611ab0"
+                "id": "fa009b4a1ffa4a4084553358c20075f1"
+              }
+            },
+            {
+              "c4d34a634c9647448808097d8af1ab9a": {
+                "tier": "Platinum",
+                "benefits": [
+                  "24 hour dedicated line",
+                  "shopping discounts"
+                ],
+                "active": true,
+                "id": "c4d34a634c9647448808097d8af1ab9a"
               },
-              "1a293928a7344fc28d8e42485eeb1c77": {
+              "43f54863661d4405942976c0d95dcdd3": {
                 "tier": "Silver",
-                "benefits": [
-                  "car rental insurance",
-                  "sports tickets"
-                ],
-                "active": true,
-                "id": "1a293928a7344fc28d8e42485eeb1c77"
-              }
-            },
-            {
-              "d43e647fd3764999a1c334598d0fed74": {
-                "tier": "Bronze",
                 "benefits": [
                   "24 hour dedicated line",
                   "dedicated account representative"
                 ],
                 "active": true,
-                "id": "d43e647fd3764999a1c334598d0fed74"
+                "id": "43f54863661d4405942976c0d95dcdd3"
+              }
+            },
+            {
+              "698ed77ac4bc4294af1598d70a77ac19": {
+                "tier": "Bronze",
+                "benefits": [
+                  "travel insurance"
+                ],
+                "active": false,
+                "id": "698ed77ac4bc4294af1598d70a77ac19"
+              }
+            },
+            {
+              "0f4bd4b6eb8e46a7a8db87a39f7bca8a": {
+                "tier": "Silver",
+                "benefits": [
+                  "concert tickets",
+                  "financial planning assistance"
+                ],
+                "active": true,
+                "id": "0f4bd4b6eb8e46a7a8db87a39f7bca8a"
               },
-              "4d474eebd26a421fb51ed963748c310b": {
+              "da555c3a4a15430e8b5377e949c84799": {
+                "tier": "Gold",
+                "benefits": [
+                  "24 hour dedicated line",
+                  "sports tickets"
+                ],
+                "active": true,
+                "id": "da555c3a4a15430e8b5377e949c84799"
+              },
+              "bc2e9881858a4b21bf201d64b0142072": {
                 "tier": "Silver",
                 "benefits": [
                   "concert tickets",
                   "airline lounge access"
                 ],
                 "active": true,
-                "id": "4d474eebd26a421fb51ed963748c310b"
-              },
-              "e0080ecd7a9a42508614bd47158e7010": {
+                "id": "bc2e9881858a4b21bf201d64b0142072"
+              }
+            },
+            {
+              "d297af7d87fa4879be1ddab5d9a819ee": {
                 "tier": "Platinum",
                 "benefits": [
+                  "sports tickets",
+                  "concierge services"
+                ],
+                "active": true,
+                "id": "d297af7d87fa4879be1ddab5d9a819ee"
+              },
+              "ce8e1ea8a2a144898b44e6a307f34e10": {
+                "tier": "Bronze",
+                "benefits": [
+                  "sports tickets",
+                  "concierge services"
+                ],
+                "active": true,
+                "id": "ce8e1ea8a2a144898b44e6a307f34e10"
+              },
+              "a916c49e7df2421a9cdf6c7ec01969dd": {
+                "tier": "Platinum",
+                "benefits": [
+                  "shopping discounts"
+                ],
+                "active": true,
+                "id": "a916c49e7df2421a9cdf6c7ec01969dd"
+              }
+            },
+            {
+              "9239d9520c4641d2b4ea66333b9c54b4": {
+                "tier": "Gold",
+                "benefits": [
+                  "concierge services"
+                ],
+                "active": true,
+                "id": "9239d9520c4641d2b4ea66333b9c54b4"
+              },
+              "f07f745fd4864b57897182a34303c302": {
+                "tier": "Silver",
+                "benefits": [
+                  "dedicated account representative",
+                  "financial planning assistance"
+                ],
+                "active": true,
+                "id": "f07f745fd4864b57897182a34303c302"
+              }
+            },
+            {
+              "ab2bd7c517134db884dd3ee1f3b4e7c6": {
+                "tier": "Platinum",
+                "benefits": [
+                  "shopping discounts"
+                ],
+                "active": true,
+                "id": "ab2bd7c517134db884dd3ee1f3b4e7c6"
+              }
+            },
+            {
+              "8581f210b7994bcc83dfa4c50af72251": {
+                "tier": "Bronze",
+                "benefits": [
+                  "car rental insurance",
+                  "shopping discounts"
+                ],
+                "active": true,
+                "id": "8581f210b7994bcc83dfa4c50af72251"
+              },
+              "178843ff3bed4b75954bb8d7cf332d70": {
+                "tier": "Gold",
+                "benefits": [
                   "concierge services",
+                  "financial planning assistance"
+                ],
+                "active": true,
+                "id": "178843ff3bed4b75954bb8d7cf332d70"
+              },
+              "eccee50ae803455db26446538f829853": {
+                "tier": "Silver",
+                "benefits": [
+                  "sports tickets",
+                  "concierge services"
+                ],
+                "active": true,
+                "id": "eccee50ae803455db26446538f829853"
+              }
+            },
+            {
+              "67f2fd832ebc4b23ad6bcaa2aeed61f6": {
+                "tier": "Bronze",
+                "benefits": [
+                  "24 hour dedicated line",
                   "travel insurance"
                 ],
                 "active": true,
-                "id": "e0080ecd7a9a42508614bd47158e7010"
-              }
-            },
-            {
-              "4eb87d785d9849a098728185bad74bda": {
-                "tier": "Silver",
-                "benefits": [
-                  "financial planning assistance",
-                  "shopping discounts"
-                ],
-                "active": true,
-                "id": "4eb87d785d9849a098728185bad74bda"
+                "id": "67f2fd832ebc4b23ad6bcaa2aeed61f6"
               },
-              "a599ddc7921e47cca3ddcdca38b8241d": {
+              "5f0c84cd355647fda140919fd98f8121": {
                 "tier": "Platinum",
                 "benefits": [
-                  "concert tickets",
-                  "dedicated account representative"
-                ],
-                "active": true,
-                "id": "a599ddc7921e47cca3ddcdca38b8241d"
-              }
-            },
-            {
-              "44589276e6f84ed58ada0ad0887f2492": {
-                "tier": "Silver",
-                "benefits": [
-                  "shopping discounts",
-                  "airline lounge access"
-                ],
-                "active": false,
-                "id": "44589276e6f84ed58ada0ad0887f2492"
-              },
-              "9c4e072aba0644b090eddad2c74a506f": {
-                "tier": "Silver",
-                "benefits": [
-                  "dedicated account representative",
-                  "sports tickets"
-                ],
-                "active": false,
-                "id": "9c4e072aba0644b090eddad2c74a506f"
-              }
-            },
-            {
-              "77ad7324caa5446a8837df9d63aab981": {
-                "tier": "Silver",
-                "benefits": [
-                  "shopping discounts"
-                ],
-                "active": true,
-                "id": "77ad7324caa5446a8837df9d63aab981"
-              }
-            },
-            {
-              "921b3281d79d4f818be9906c5fa8e43f": {
-                "tier": "Gold",
-                "benefits": [
-                  "travel insurance",
-                  "financial planning assistance"
-                ],
-                "active": true,
-                "id": "921b3281d79d4f818be9906c5fa8e43f"
-              },
-              "28cf2d66a5944fa8a4c0ac9725ad1b62": {
-                "tier": "Silver",
-                "benefits": [
-                  "shopping discounts",
                   "concert tickets"
                 ],
                 "active": true,
-                "id": "28cf2d66a5944fa8a4c0ac9725ad1b62"
-              }
-            },
-            {
-              "6e60453c66a74458862f38f721bdf1aa": {
-                "tier": "Gold",
-                "benefits": [
-                  "sports tickets"
-                ],
-                "active": true,
-                "id": "6e60453c66a74458862f38f721bdf1aa"
+                "id": "5f0c84cd355647fda140919fd98f8121"
               },
-              "5d537a87f7c347ea9c5ee634c6d73e0d": {
+              "348e127cf32e462c9d5518dbca3b0d83": {
                 "tier": "Silver",
-                "benefits": [
-                  "sports tickets",
-                  "dedicated account representative"
-                ],
-                "active": true,
-                "id": "5d537a87f7c347ea9c5ee634c6d73e0d"
-              }
-            },
-            {
-              "3a2c2a6d7c65480fbf64d29ae7542481": {
-                "tier": "Silver",
-                "benefits": [
-                  "financial planning assistance",
-                  "concert tickets"
-                ],
-                "active": true,
-                "id": "3a2c2a6d7c65480fbf64d29ae7542481"
-              },
-              "fa8456a2fc0e4688b54d4911b1a3b3fe": {
-                "tier": "Bronze",
-                "benefits": [
-                  "concert tickets",
-                  "financial planning assistance"
-                ],
-                "active": true,
-                "id": "fa8456a2fc0e4688b54d4911b1a3b3fe"
-              }
-            },
-            {
-              "f57b65733ddd4600a2db53450b0f539a": {
-                "tier": "Gold",
-                "benefits": [
-                  "concert tickets",
-                  "dedicated account representative"
-                ],
-                "active": true,
-                "id": "f57b65733ddd4600a2db53450b0f539a"
-              },
-              "60502f6861f045d090662a935e712696": {
-                "tier": "Bronze",
-                "benefits": [
-                  "shopping discounts"
-                ],
-                "active": true,
-                "id": "60502f6861f045d090662a935e712696"
-              },
-              "7920f7f68c794ad6b469955944c31d7e": {
-                "tier": "Platinum",
-                "benefits": [
-                  "24 hour dedicated line"
-                ],
-                "active": true,
-                "id": "7920f7f68c794ad6b469955944c31d7e"
-              }
-            },
-            {
-              "7132dc3ba1724e409d0c26b9d94d5dc6": {
-                "tier": "Silver",
-                "benefits": [
-                  "sports tickets",
-                  "airline lounge access"
-                ],
-                "active": true,
-                "id": "7132dc3ba1724e409d0c26b9d94d5dc6"
-              },
-              "68691bda7f5c41e580f46498586bc1ee": {
-                "tier": "Silver",
-                "benefits": [
-                  "concierge services"
-                ],
-                "active": true,
-                "id": "68691bda7f5c41e580f46498586bc1ee"
-              },
-              "28440204c6da475d8e78f42b1550a6e0": {
-                "tier": "Bronze",
-                "benefits": [
-                  "concierge services",
-                  "dedicated account representative"
-                ],
-                "active": true,
-                "id": "28440204c6da475d8e78f42b1550a6e0"
-              }
-            },
-            {
-              "bc607ec8a5b5483f8baf7d2efd62f784": {
-                "tier": "Platinum",
-                "benefits": [
-                  "24 hour dedicated line"
-                ],
-                "active": true,
-                "id": "bc607ec8a5b5483f8baf7d2efd62f784"
-              },
-              "697c97e581a74af3ba54d4710588c505": {
-                "tier": "Gold",
-                "benefits": [
-                  "concierge services",
-                  "airline lounge access"
-                ],
-                "active": true,
-                "id": "697c97e581a74af3ba54d4710588c505"
-              }
-            },
-            {
-              "a0759192365b41f980b20277ef8e50dc": {
-                "tier": "Platinum",
                 "benefits": [
                   "airline lounge access",
                   "concierge services"
                 ],
                 "active": true,
-                "id": "a0759192365b41f980b20277ef8e50dc"
-              },
-              "9c1b880156184065bfbfc090a8f88542": {
+                "id": "348e127cf32e462c9d5518dbca3b0d83"
+              }
+            },
+            {
+              "c21c8e5c7c06445d95d70a2a6b9159a8": {
                 "tier": "Gold",
                 "benefits": [
-                  "concierge services"
-                ],
-                "active": true,
-                "id": "9c1b880156184065bfbfc090a8f88542"
-              },
-              "8a3f2c32f9d7405c81beb8b8e9d777ab": {
-                "tier": "Silver",
-                "benefits": [
                   "airline lounge access",
-                  "concert tickets"
+                  "financial planning assistance"
                 ],
                 "active": true,
-                "id": "8a3f2c32f9d7405c81beb8b8e9d777ab"
+                "id": "c21c8e5c7c06445d95d70a2a6b9159a8"
               }
             },
             {
-              "3c314ff0b9b44ef88def490f96e7ea77": {
+              "645a75793c704534a29e37f2a17ff0a5": {
                 "tier": "Platinum",
                 "benefits": [
-                  "financial planning assistance",
-                  "concierge services"
+                  "dedicated account representative"
                 ],
                 "active": true,
-                "id": "3c314ff0b9b44ef88def490f96e7ea77"
-              }
-            },
-            {
-              "953a307d9f3f4a5c85fab53b5d45b396": {
+                "id": "645a75793c704534a29e37f2a17ff0a5"
+              },
+              "11d77bf98b3c44c397f7ff5c2d3c89dc": {
                 "tier": "Silver",
                 "benefits": [
-                  "concierge services"
+                  "24 hour dedicated line",
+                  "shopping discounts"
                 ],
                 "active": true,
-                "id": "953a307d9f3f4a5c85fab53b5d45b396"
+                "id": "11d77bf98b3c44c397f7ff5c2d3c89dc"
               }
             },
             {
-              "ab726a9b9c9b47898d1a7fd567864df1": {
-                "tier": "Platinum",
+              "11e3a0bb90844b49be054f9723eebcae": {
+                "tier": "Gold",
                 "benefits": [
-                  "sports tickets",
+                  "financial planning assistance"
+                ],
+                "active": true,
+                "id": "11e3a0bb90844b49be054f9723eebcae"
+              }
+            },
+            {
+              "eccdc19282be4c42b79504c71d23937a": {
+                "tier": "Gold",
+                "benefits": [
+                  "airline lounge access"
+                ],
+                "active": true,
+                "id": "eccdc19282be4c42b79504c71d23937a"
+              }
+            },
+            {
+              "e44f437d96f64a88a4009c0d288d2395": {
+                "tier": "Bronze",
+                "benefits": [
                   "car rental insurance"
                 ],
                 "active": true,
-                "id": "ab726a9b9c9b47898d1a7fd567864df1"
+                "id": "e44f437d96f64a88a4009c0d288d2395"
               },
-              "27f5804deaa2459ea1102a8d784876a2": {
-                "tier": "Bronze",
+              "14b8d7848c14493dbb380abeb677db1b": {
+                "tier": "Gold",
                 "benefits": [
                   "sports tickets",
-                  "airline lounge access"
+                  "dedicated account representative"
                 ],
                 "active": true,
-                "id": "27f5804deaa2459ea1102a8d784876a2"
+                "id": "14b8d7848c14493dbb380abeb677db1b"
               },
-              "f1c61c41478f40268922381d0ee69e2b": {
-                "tier": "Platinum",
+              "9d7b2929849548d29c31d2cf660f9551": {
+                "tier": "Bronze",
                 "benefits": [
+                  "24 hour dedicated line",
                   "airline lounge access"
                 ],
                 "active": true,
-                "id": "f1c61c41478f40268922381d0ee69e2b"
+                "id": "9d7b2929849548d29c31d2cf660f9551"
               }
             },
             {
-              "838742a44c8d4d5585449eacc5f283cc": {
-                "tier": "Bronze",
+              "867524e78ca64c03a722d70be4e36168": {
+                "tier": "Gold",
                 "benefits": [
-                  "dedicated account representative",
-                  "sports tickets"
+                  "24 hour dedicated line"
                 ],
                 "active": true,
-                "id": "838742a44c8d4d5585449eacc5f283cc"
+                "id": "867524e78ca64c03a722d70be4e36168"
+              }
+            },
+            {
+              "a0d6feba862b47c3aafe04f8abe47946": {
+                "tier": "Bronze",
+                "benefits": [
+                  "concert tickets"
+                ],
+                "active": true,
+                "id": "a0d6feba862b47c3aafe04f8abe47946"
+              },
+              "9227229041164a1f8c2661f7bf92736b": {
+                "tier": "Bronze",
+                "benefits": [
+                  "concierge services"
+                ],
+                "active": true,
+                "id": "9227229041164a1f8c2661f7bf92736b"
+              }
+            },
+            {
+              "9d1bd70bd89d43cb9b36c9a5d3a4828e": {
+                "tier": "Platinum",
+                "benefits": [
+                  "car rental insurance"
+                ],
+                "active": true,
+                "id": "9d1bd70bd89d43cb9b36c9a5d3a4828e"
+              },
+              "c0f81d0bc1e042e5bdc0a168c7e0b268": {
+                "tier": "Bronze",
+                "benefits": [
+                  "car rental insurance"
+                ],
+                "active": true,
+                "id": "c0f81d0bc1e042e5bdc0a168c7e0b268"
               }
             }
           ]
@@ -43344,26 +43324,26 @@
           "sampled": 500,
           "ndistinct": 497.0,
           "values": [
-            "qknight",
-            "tknight",
-            "gwendolynwilliams",
-            "jason27",
-            "nguyenjulie",
-            "carrollanita",
-            "imurphy",
-            "johnsonbarbara",
-            "ncardenas",
-            "abrown",
-            "zcole",
-            "susanfranco",
-            "laura78",
-            "alvarezdavid",
-            "leonardbryan",
-            "christophercooper",
-            "stewartmichele",
-            "carolynmorris",
-            "davidsonomar",
-            "marylong"
+            "zimmermanchristopher",
+            "casey21",
+            "gonzalezjonathan",
+            "garymiller",
+            "fgibson",
+            "ronaldbarton",
+            "jennifer33",
+            "simpsonjared",
+            "shawn43",
+            "caroline49",
+            "allenhubbard",
+            "toneal",
+            "carla86",
+            "brenda56",
+            "mollyspencer",
+            "cynthiaunderwood",
+            "lisanavarro",
+            "beverly20",
+            "avaughan",
+            "lisapowell"
           ]
         }
       }

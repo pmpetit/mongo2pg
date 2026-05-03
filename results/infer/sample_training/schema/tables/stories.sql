@@ -5,6 +5,7 @@ CREATE TABLE stories (
     diggs INTEGER NOT NULL,
     href TEXT NOT NULL,
     field_id TEXT NOT NULL,
+    inaccurate INTEGER,
     link TEXT NOT NULL,
     media TEXT NOT NULL,
     promote_date INTEGER NOT NULL,

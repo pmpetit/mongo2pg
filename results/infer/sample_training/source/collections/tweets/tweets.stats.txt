@@ -1,6 +1,6 @@
 Documents in collection : 24832
 Documents sampled       : 1000
-Width (top-level / max)  : 19 / 36.5 (L2)
+Width (top-level / max)  : 19 / 36.4 (L2)
 Depth (max nesting)     : 6
-Branch (per level)      : L1:18.1  L2:36.5  L3:5.9  L4:9.3  L5:3.8  L6:0.3
+Branch (per level)      : L1:18.1  L2:36.4  L3:5.9  L4:9.2  L5:3.7  L6:0.2
 Top-level types         : _id:ObjectId, contributors:Null, coordinates:Null, created_at:String, entities:Object, favorited:Boolean, geo:Null, id:Number, in_reply_to_screen_name:Null, in_reply_to_status_id:Null, in_reply_to_user_id:Null, place:Null, retweet_count:Null, retweeted:Boolean, retweeted_status:Object, source:String, text:String, truncated:Boolean, user:Object

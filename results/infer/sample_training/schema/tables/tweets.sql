@@ -137,7 +137,6 @@ CREATE TABLE tweets_geo_coordinates (
 CREATE TABLE tweets_place_attributes (
     id BIGSERIAL PRIMARY KEY,
     tweets_place_id BIGINT NOT NULL,
-    street_address TEXT,
     FOREIGN KEY (tweets_place_id) REFERENCES tweets_place (id) DEFERRABLE INITIALLY DEFERRED
 );
 
