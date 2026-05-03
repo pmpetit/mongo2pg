@@ -1,0 +1,6 @@
+Documents in collection : 4
+Documents sampled       : 4
+Width (top-level / max)  : 3 / 3 (L1)
+Depth (max nesting)     : 2
+Branch (per level)      : L1:3  L2:1
+Top-level types         : _id:ObjectId, products:Array, user:ObjectId

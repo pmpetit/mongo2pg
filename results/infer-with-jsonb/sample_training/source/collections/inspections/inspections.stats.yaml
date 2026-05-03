@@ -1,0 +1,19 @@
+documents_in_collection: 80047
+documents_sampled: 1000
+width_top_level: 8
+width_max: 8
+width_max_level: 1
+depth_max: 2
+branch_total: 12
+branch_per_level:
+  L1: 8
+  L2: 4
+top_level_types:
+  _id: ObjectId
+  address: Object
+  business_name: String
+  certificate_number: Number
+  date: String
+  id: String
+  result: String
+  sector: String

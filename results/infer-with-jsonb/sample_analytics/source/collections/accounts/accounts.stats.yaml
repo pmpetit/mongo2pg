@@ -1,0 +1,15 @@
+documents_in_collection: 1746
+documents_sampled: 1000
+width_top_level: 4
+width_max: 4
+width_max_level: 1
+depth_max: 2
+branch_total: 5
+branch_per_level:
+  L1: 4
+  L2: 1
+top_level_types:
+  _id: ObjectId
+  account_id: Number
+  limit: Number
+  products: Array

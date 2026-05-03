@@ -1,0 +1,45 @@
+{
+  "count": 1,
+  "sampled": 1,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            "5a97f9c91c807bb9c6eb5fb4"
+          ]
+        }
+      }
+    },
+    "jwt": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1MTk5MDkzMjEsIm5iZiI6MTUxOTkwOTMyMSwianRpIjoiNmJlZDAwMWYtNTFiYi00NzVhLTgxZDAtMDcwNGE5Mjk0MWZlIiwiZXhwIjoxNTE5OTEwMjIxLCJpZGVudGl0eSI6eyJlbWFpbCI6InQzcXVsZmVlbUBrd2l2NS42dXIiLCJuYW1lIjoiM2lveHJtZnF4IiwicGFzc3dvcmQiOm51bGx9LCJmcmVzaCI6ZmFsc2UsInR5cGUiOiJhY2Nlc3MiLCJ1c2VyX2NsYWltcyI6eyJ1c2VyIjp7ImVtYWlsIjoidDNxdWxmZWVtQGt3aXY1LjZ1ciIsIm5hbWUiOiIzaW94cm1mcXgiLCJwYXNzd29yZCI6bnVsbH19fQ.ejtr_NyZyBronWMKuE0RFTjWej--T0zGrdc_iymGtVs"
+          ]
+        }
+      }
+    },
+    "user_id": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1,
+          "ndistinct": 1.0,
+          "values": [
+            "t3qulfeem@kwiv5.6ur"
+          ]
+        }
+      }
+    }
+  }
+}

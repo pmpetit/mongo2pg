@@ -1,0 +1,24 @@
+CREATE TABLE posts (
+    id UUID PRIMARY KEY,
+    author TEXT NOT NULL,
+    body TEXT NOT NULL,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
+    permalink TEXT NOT NULL,
+    title TEXT NOT NULL
+);
+
+CREATE TABLE posts_comments (
+    id BIGSERIAL PRIMARY KEY,
+    posts_id UUID NOT NULL,
+    author TEXT NOT NULL,
+    body TEXT NOT NULL,
+    email TEXT NOT NULL,
+    FOREIGN KEY (posts_id) REFERENCES posts (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE posts_tags (
+    id BIGSERIAL PRIMARY KEY,
+    posts_id UUID NOT NULL,
+    value TEXT NOT NULL,
+    FOREIGN KEY (posts_id) REFERENCES posts (id) DEFERRABLE INITIALLY DEFERRED
+);

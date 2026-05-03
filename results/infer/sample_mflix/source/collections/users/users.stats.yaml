@@ -1,0 +1,15 @@
+documents_in_collection: 185
+documents_sampled: 185
+width_top_level: 5
+width_max: 5
+width_max_level: 1
+depth_max: 1
+branch_total: 5
+branch_per_level:
+  L1: 5
+top_level_types:
+  _id: ObjectId
+  email: String
+  name: String
+  password: String
+  preferences: Object

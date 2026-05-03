@@ -1,0 +1,198 @@
+{
+  "count": 50304,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "5a9427658b0beebeb696dac0",
+            "5a9427658b0beebeb6975159",
+            "5a9427658b0beebeb6972e98",
+            "5a9427658b0beebeb696e69f",
+            "5a9427658b0beebeb6976809",
+            "5a9427658b0beebeb6968e30",
+            "5a9427658b0beebeb6971f73",
+            "5a9427658b0beebeb696b9c5",
+            "5a9427658b0beebeb69730a8",
+            "5a9427658b0beebeb697afe4",
+            "5a9427648b0beebeb695ca7a",
+            "5a9427658b0beebeb696e6c1",
+            "5a9427648b0beebeb6958ba9",
+            "5a9427658b0beebeb69718f0",
+            "5a9427648b0beebeb695fb00",
+            "5a9427658b0beebeb696e073",
+            "5a9427658b0beebeb696fbcc",
+            "5a9427658b0beebeb6968d45",
+            "5a9427648b0beebeb695a9dd",
+            "5a9427648b0beebeb695eb19"
+          ]
+        }
+      }
+    },
+    "date": {
+      "probability": 1.0,
+      "types": {
+        "Date": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "1984-04-08 15:41:19.0 +00:00:00",
+            "2001-08-18 4:09:24.0 +00:00:00",
+            "1999-10-05 8:41:18.0 +00:00:00",
+            "1993-04-09 16:26:05.0 +00:00:00",
+            "1993-04-18 1:45:29.0 +00:00:00",
+            "1972-11-30 16:22:04.0 +00:00:00",
+            "2008-01-03 8:26:54.0 +00:00:00",
+            "1976-08-24 4:20:32.0 +00:00:00",
+            "1975-12-12 16:50:25.0 +00:00:00",
+            "1996-05-27 6:48:31.0 +00:00:00",
+            "1989-10-04 21:24:23.0 +00:00:00",
+            "1979-12-23 11:17:47.0 +00:00:00",
+            "1977-11-12 10:01:51.0 +00:00:00",
+            "1975-06-03 23:03:36.0 +00:00:00",
+            "2001-12-18 17:13:36.0 +00:00:00",
+            "1991-05-14 13:15:31.0 +00:00:00",
+            "2001-09-05 0:20:35.0 +00:00:00",
+            "2017-08-15 0:20:19.0 +00:00:00",
+            "1994-06-18 6:20:00.0 +00:00:00",
+            "2003-07-16 4:51:18.0 +00:00:00"
+          ]
+        }
+      }
+    },
+    "email": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 183.0,
+          "values": [
+            "blake_sellers@fakegmail.com",
+            "carice_van_houten@gameofthron.es",
+            "ben_crompton@gameofthron.es",
+            "kit_harington@gameofthron.es",
+            "paul_bailey@fakegmail.com",
+            "blake_fitzgerald@fakegmail.com",
+            "nikolaj_coster-waldau@gameofthron.es",
+            "melissa_young@fakegmail.com",
+            "jeffrey_roberts@fakegmail.com",
+            "victor_fleming@fakegmail.com",
+            "taylor_hill@fakegmail.com",
+            "jason_momoa@gameofthron.es",
+            "sibel_kekilli@gameofthron.es",
+            "mercedes_tyler@fakegmail.com",
+            "anthony_smith@fakegmail.com",
+            "andrea_le@fakegmail.com",
+            "donna_russell@fakegmail.com",
+            "michael_moore@fakegmail.com",
+            "roxanne_mckee@gameofthron.es",
+            "aidan_gillen@gameofthron.es"
+          ]
+        }
+      }
+    },
+    "movie_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 458.0,
+          "values": [
+            "573a13aaf29313caabd22abb",
+            "573a13b9f29313caabd4db81",
+            "573a13b5f29313caabd42722",
+            "573a13acf29313caabd26d34",
+            "573a13bef29313caabd5b27a",
+            "573a13a3f29313caabd0d4c5",
+            "573a13b3f29313caabd3c93e",
+            "573a13a7f29313caabd19f82",
+            "573a13b5f29313caabd42c2f",
+            "573a13ddf29313caabdb477b",
+            "573a1398f29313caabce98ff",
+            "573a1394f29313caabcde6d7",
+            "573a13b3f29313caabd3ae45",
+            "573a1399f29313caabcedd9e",
+            "573a13abf29313caabd24a7f",
+            "573a13b0f29313caabd32bdd",
+            "573a13a3f29313caabd0d1e3",
+            "573a1396f29313caabce4a9a",
+            "573a1399f29313caabcecb80",
+            "573a13a0f29313caabd04b3a"
+          ]
+        }
+      }
+    },
+    "name": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 183.0,
+          "values": [
+            "Blake Sellers",
+            "Melisandre",
+            "Eddison Tollett",
+            "Jon Snow",
+            "Paul Bailey",
+            "Blake Fitzgerald",
+            "Jaime Lannister",
+            "Melissa Young",
+            "Jeffrey Roberts",
+            "Victor Fleming",
+            "Taylor Hill",
+            "Khal Drogo",
+            "Shae",
+            "Mercedes Tyler",
+            "Anthony Smith",
+            "Andrea Le",
+            "Donna Russell",
+            "Michael Moore",
+            "Doreah",
+            "Petyr Baelish"
+          ]
+        }
+      }
+    },
+    "text": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 999.0,
+          "values": [
+            "Cum rerum magnam dolor praesentium soluta. Amet numquam eius ratione et.",
+            "Neque illo beatae maiores. Repudiandae tempora pariatur cumque facilis. Perferendis animi accusamus quod illo labore.",
+            "Nostrum perferendis veritatis assumenda repellendus. Asperiores sunt officia nemo recusandae perspiciatis possimus. Odio recusandae dolores accusantium repellendus ea.",
+            "Magni maiores aut tempore nesciunt dolores possimus. Dolores perferendis nemo nostrum dolore animi. Neque dolores recusandae aspernatur explicabo.",
+            "Facere dolores similique cum temporibus. Suscipit eius veritatis illum vero repudiandae assumenda. Aspernatur consequuntur ipsum repellendus quasi. Doloremque debitis dolorem ipsam quas fugiat aut.",
+            "Commodi pariatur possimus inventore dolorum. Labore architecto perspiciatis mollitia laudantium. Magnam consequatur nemo nulla.",
+            "Aliquid soluta totam quo cumque. Quod odio iusto molestiae dolorum. Harum animi delectus ex officiis debitis atque nisi.",
+            "Temporibus optio facilis quas excepturi tenetur impedit. Aut aliquid voluptas quo tempora perferendis. Corrupti deserunt nemo praesentium. Hic harum et iste cumque.",
+            "Assumenda molestiae molestias veritatis nesciunt. Porro eum quibusdam omnis voluptates. Sequi mollitia labore et voluptates doloribus autem error qui.",
+            "Optio dicta ipsa eveniet reiciendis quas. Sed quasi voluptate sapiente ex voluptate voluptatem maxime.",
+            "Aut culpa commodi reprehenderit possimus eius totam dolor odio. Iusto ut illo culpa tempore. Porro at quo asperiores dolorem eaque quibusdam. Nihil ut totam dignissimos.",
+            "Aspernatur debitis odio consectetur. Veritatis error provident voluptates saepe. Culpa error cupiditate libero. Voluptatem assumenda exercitationem iusto tempore assumenda officiis nulla.",
+            "Tempore cumque reprehenderit ducimus asperiores. Unde et sunt modi amet veniam facere provident. Asperiores quas quasi molestias odit dolor vel.",
+            "Recusandae itaque iusto voluptate. Officiis recusandae deserunt ratione illum nostrum. Magnam impedit non natus quasi eos fugiat. Accusamus aspernatur fugiat quo est accusamus.",
+            "Tempore itaque nobis quisquam. Veritatis magni repellendus illum quibusdam optio. Corporis dolorem reiciendis suscipit blanditiis.",
+            "Rem aperiam rem dicta maiores praesentium. Harum aut pariatur ab neque magnam dignissimos. Veritatis dolor consectetur dignissimos eius maiores quas reprehenderit.",
+            "Eius voluptatibus reiciendis atque quibusdam ab. Autem dolorum nesciunt in soluta corporis. Nesciunt dolor nulla autem dicta. Earum consequuntur molestias minima illum accusantium laborum.",
+            "Soluta recusandae aliquid necessitatibus quisquam in unde earum. Doloribus cum officia ducimus commodi sint. Voluptatum repellendus numquam molestiae quibusdam voluptatem a aliquid.",
+            "Iure doloremque officia fuga mollitia labore nam. Quasi neque repellendus debitis officiis. Quia ea eum mollitia occaecati aliquam error laborum. Repellendus corrupti cum nostrum officiis corporis.",
+            "Occaecati cum repudiandae aperiam. Sit facere odit veniam fugiat quas illum facere. Temporibus et nesciunt provident ex doloribus. Hic delectus minus nam iusto voluptate."
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,446 @@
+{
+  "count": 11095,
+  "sampled": 1000,
+  "object": {
+    "_id": {
+      "probability": 1.0,
+      "types": {
+        "ObjectId": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            "578f6fa3df35c7fbdbaef398",
+            "578f6fa3df35c7fbdbaeffb5",
+            "578f6fa3df35c7fbdbaee7ae",
+            "578f6fa3df35c7fbdbaedd8c",
+            "578f6fa3df35c7fbdbaeeb53",
+            "578f6fa3df35c7fbdbaef1e7",
+            "578f6fa3df35c7fbdbaef77d",
+            "578f6fa3df35c7fbdbaee6b2",
+            "578f6fa3df35c7fbdbaef2c4",
+            "578f6fa3df35c7fbdbaf0017",
+            "578f6fa3df35c7fbdbaef091",
+            "578f6fa3df35c7fbdbaf036c",
+            "578f6fa3df35c7fbdbaef144",
+            "578f6fa3df35c7fbdbaf0251",
+            "578f6fa3df35c7fbdbaefd59",
+            "578f6fa3df35c7fbdbaef1ff",
+            "578f6fa3df35c7fbdbaef8b6",
+            "578f6fa3df35c7fbdbaee528",
+            "578f6fa3df35c7fbdbaf0129",
+            "578f6fa3df35c7fbdbaefe7e"
+          ]
+        }
+      }
+    },
+    "chart": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 550.0,
+          "values": [
+            "US,US,reprt,8thCGD,DD-8525",
+            "US,US,reprt,FE-357SS",
+            "US,US,graph,chart 14884",
+            "US,US,graph,Chart 11468",
+            "US,US,graph,Chart 12316",
+            "US,US,graph,Chart 11309",
+            "US,US,reprt,DD-24040",
+            "US,US,graph,Chart 12211",
+            "US,US,graph,reprt 11324",
+            "US,US,graph,DD-22394",
+            "US,US,graph,Chart 13224",
+            "US,US,graph,Chart 18600",
+            "US,US,graph,chart 81054",
+            "US,US,graph,Chart 11340",
+            "US,US,graph,Chart 14907",
+            "US,US,graph,Chart 11314",
+            "US,US,graph,Chart 11409",
+            "US,US,graph,Chart 12270",
+            "US,US,graph,Chart 13204",
+            "US,US,graph,Chart 12323"
+          ]
+        }
+      }
+    },
+    "coordinates": {
+      "probability": 1.0,
+      "types": {
+        "Array": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 2.0,
+          "array": {
+            "probability": 2.0,
+            "types": {
+              "Number": {
+                "probability": 1.0,
+                "sampled": 2000,
+                "ndistinct": 1000.0,
+                "values": [
+                  -93.9045317,
+                  29.7622915,
+                  -93.8003377,
+                  29.3666644,
+                  -84.285974,
+                  46.462567,
+                  -80.1766686,
+                  25.8114786,
+                  -74.6945034,
+                  39.1151526,
+                  -97.2497222,
+                  27.704337,
+                  -79.8078995,
+                  9.4198227,
+                  -75.0943795,
+                  38.3225078,
+                  -94.711624,
+                  29.3666883,
+                  -122.6240028,
+                  47.2124056
+                ]
+              }
+            }
+          },
+          "values": [
+            [
+              -93.9045317,
+              29.7622915
+            ],
+            [
+              -93.8003377,
+              29.3666644
+            ],
+            [
+              -84.285974,
+              46.462567
+            ],
+            [
+              -80.1766686,
+              25.8114786
+            ],
+            [
+              -74.6945034,
+              39.1151526
+            ],
+            [
+              -97.2497222,
+              27.704337
+            ],
+            [
+              -79.8078995,
+              9.4198227
+            ],
+            [
+              -75.0943795,
+              38.3225078
+            ],
+            [
+              -94.711624,
+              29.3666883
+            ],
+            [
+              -122.6240028,
+              47.2124056
+            ],
+            [
+              -71.256646,
+              41.6432759
+            ],
+            [
+              -124.2944174,
+              41.5480305
+            ],
+            [
+              144.6524786,
+              13.4580879
+            ],
+            [
+              -92.2157808,
+              28.5000631
+            ],
+            [
+              -86.463455,
+              43.7602292
+            ],
+            [
+              -96.994857,
+              28.035101
+            ],
+            [
+              -82.730154,
+              28.346575
+            ],
+            [
+              -76.4013684,
+              38.8988179
+            ],
+            [
+              -67.1327516,
+              41.8519469
+            ],
+            [
+              -73.6678433,
+              40.0055545
+            ]
+          ]
+        }
+      }
+    },
+    "depth": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 0.241,
+          "sampled": 241,
+          "ndistinct": 103.0,
+          "values": [
+            3,
+            159.1,
+            19.5,
+            15.8,
+            5.4,
+            17.9,
+            14.9,
+            7.3,
+            0.6,
+            7,
+            0.3,
+            14.6,
+            22.5,
+            23.7,
+            3.3,
+            2.1,
+            6,
+            5.1,
+            17,
+            9.3
+          ]
+        },
+        "String": {
+          "probability": 0.759,
+          "sampled": 759,
+          "ndistinct": 1.0,
+          "values": [
+            ""
+          ]
+        }
+      }
+    },
+    "feature_type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 5.0,
+          "values": [
+            "Wrecks - Submerged, dangerous",
+            "Wrecks - Visible",
+            "",
+            "Wrecks - Submerged, nondangerous",
+            "distributed remains of wreck"
+          ]
+        }
+      }
+    },
+    "gp_quality": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            ""
+          ]
+        }
+      }
+    },
+    "history": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 23.0,
+          "values": [
+            "",
+            "reported",
+            "Masts",
+            "Wreck not visible in imagery (GC-10601)",
+            "Reported",
+            "Awash at mean lower low water",
+            "Wrecks",
+            "197 ft barge",
+            "Possible wreck submerged",
+            "Wrecks, Reported",
+            "4.9 meters/16 feet pleasure craft",
+            "Two Wrecks",
+            "Reported 1998",
+            "Sailboat sunk in roberts bayou",
+            "Less than 8.2 meters/27 feet",
+            "Submerged houseboat has reportedly sunk near Mile 138.0, WHL (West of Harvey Lock in New Orleans, LA).The wreck has reportedly sunk on the south side and the channel is reportedly open for one-way traffic only. The wreck is reportedly marked with a green",
+            "Awash at mean high water",
+            "Engine, submerged",
+            "48 foot sailing vessel Shawna Lee",
+            "Barge"
+          ]
+        }
+      }
+    },
+    "latdec": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            29.7622915,
+            29.3666644,
+            46.462567,
+            25.8114786,
+            39.1151526,
+            27.704337,
+            9.4198227,
+            38.3225078,
+            29.3666883,
+            47.2124056,
+            41.6432759,
+            41.5480305,
+            13.4580879,
+            28.5000631,
+            43.7602292,
+            28.035101,
+            28.346575,
+            38.8988179,
+            41.8519469,
+            40.0055545
+          ]
+        }
+      }
+    },
+    "londec": {
+      "probability": 1.0,
+      "types": {
+        "Number": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1000.0,
+          "values": [
+            -93.9045317,
+            -93.8003377,
+            -84.285974,
+            -80.1766686,
+            -74.6945034,
+            -97.2497222,
+            -79.8078995,
+            -75.0943795,
+            -94.711624,
+            -122.6240028,
+            -71.256646,
+            -124.2944174,
+            144.6524786,
+            -92.2157808,
+            -86.463455,
+            -96.994857,
+            -82.730154,
+            -76.4013684,
+            -67.1327516,
+            -73.6678433
+          ]
+        }
+      }
+    },
+    "quasou": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 6.0,
+          "values": [
+            "depth unknown",
+            "least depth known",
+            "",
+            "value reported (not confirmed)",
+            "least depth unknown, safe clearance at value shown",
+            "depth known"
+          ]
+        }
+      }
+    },
+    "recrd": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 1.0,
+          "values": [
+            ""
+          ]
+        }
+      }
+    },
+    "sounding_type": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 4.0,
+          "values": [
+            "",
+            "Wire-drag clearance, feet/fathoms",
+            "found by multi-beam",
+            "found by diver"
+          ]
+        }
+      }
+    },
+    "vesslterms": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 10.0,
+          "values": [
+            "",
+            "Sandy Hook AWOIS 1615",
+            "F/V Teachers Pet",
+            "FORT YUKON",
+            "USCSS Robert J Walker",
+            "Northwest",
+            "Renegade",
+            "AWOIS 3191",
+            "CGD8 289-08",
+            "Karma"
+          ]
+        }
+      }
+    },
+    "watlev": {
+      "probability": 1.0,
+      "types": {
+        "String": {
+          "probability": 1.0,
+          "sampled": 1000,
+          "ndistinct": 5.0,
+          "values": [
+            "always under water/submerged",
+            "always dry",
+            "covers and uncovers",
+            "partly submerged at high water",
+            "awash"
+          ]
+        }
+      }
+    }
+  }
+}

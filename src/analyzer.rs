@@ -18,6 +18,10 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
+fn is_false(b: &bool) -> bool {
+    !b
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Internal type-name constants
 // ──────────────────────────────────────────────────────────────────────────────
@@ -71,6 +75,12 @@ pub struct FieldSchema {
 pub struct TypeSchema {
     /// `count / field.count` – probability of this type given the field exists.
     pub probability: f64,
+    /// Number of documents/items in which this type was observed (denominator for nested probabilities).
+    pub sampled: u64,
+    /// When `true`, `to-pg` emits a `JSONB` column for this Object field
+    /// instead of creating a separate child table. Set by `infer --jsonb`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub as_jsonb: bool,
     /// Average number of array elements per document (only set when `type_name == "Array"`).
     /// Equivalent to PostgreSQL `n_distinct` when positive: an absolute average cardinality.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -334,6 +344,8 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
     if undefined_count > 0 {
         let undef_schema = TypeSchema {
             probability: undefined_count as f64 / total_docs as f64,
+            sampled: undefined_count,
+            as_jsonb: false,
             ndistinct: None,
             object: None,
             array: None,
@@ -417,10 +429,44 @@ fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSche
 
     TypeSchema {
         probability,
+        sampled: ta.count,
+        as_jsonb: false,
         ndistinct,
         object,
         array,
         values,
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// JSONB marking
+// ──────────────────────────────────────────────────────────────────────────────
+
+impl CollectionSchema {
+    /// Mark every `Object`-typed field in the schema with `as_jsonb = true`.
+    /// `to-pg` will then emit a `JSONB` column instead of a child table.
+    /// Array-of-objects fields are left untouched (they still become child tables),
+    /// but any Object sub-fields *inside* array items are also marked.
+    pub fn mark_objects_as_jsonb(&mut self) {
+        for field in self.object.values_mut() {
+            mark_field_as_jsonb(field);
+        }
+    }
+}
+
+fn mark_field_as_jsonb(field: &mut FieldSchema) {
+    for (type_name, type_schema) in field.types.iter_mut() {
+        if type_name == TYPE_OBJECT {
+            type_schema.as_jsonb = true;
+            // No need to recurse: once the field is JSONB the sub-schema
+            // is ignored by to-pg.
+        } else if type_name == TYPE_ARRAY {
+            // Recurse into array items so any Object sub-fields within
+            // array rows are also marked.
+            if let Some(items) = type_schema.array.as_mut() {
+                mark_field_as_jsonb(items);
+            }
+        }
     }
 }
 

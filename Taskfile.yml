@@ -1,0 +1,71 @@
+version: "3"
+
+vars:
+  URI: "mongodb://user:pass@localhost:2717/?authSource=admin"
+  RESULTS_DIR: results
+  BIN: "{{.ROOT_DIR}}/target/debug/mongo2pg"
+  DATABASES: >-
+    sample_airbnb
+    sample_analytics
+    sample_geospatial
+    sample_mflix
+    sample_supplies
+    sample_training
+    sample_weatherdata
+    retail
+
+tasks:
+  build:
+    desc: Build the mongo2pg binary (debug)
+    cmds:
+      - cargo build
+    sources:
+      - src/**/*.rs
+      - Cargo.toml
+      - Cargo.lock
+    generates:
+      - target/debug/mongo2pg
+
+  infer:
+    desc: Infer schemas for all sample databases, generate SQL DDL into {{.RESULTS_DIR}}/infer/
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "{{.RESULTS_DIR}}/infer"
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - |
+        for db in {{.DATABASES}}
+        do
+          echo "📁 init $db"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --uri "{{.URI}}"
+          echo "📐 infer $db"
+          "{{.BIN}}" infer --uri "{{.URI}}" -c "{{.OUT}}/$db/config/$db.conf" --no-output 2>/dev/null
+          echo "🛠️  to-pg $db"
+          "{{.BIN}}" to-pg -c "{{.OUT}}/$db/config/$db.conf"
+          echo "📊 report"
+          "{{.BIN}}" report -c "{{.OUT}}/$db/config/$db.conf"          
+        done
+      - echo "👉 results in {{.OUT}}"
+
+  infer-with-jsonb:
+    desc: Infer schemas with --jsonb 🪆, generate SQL DDL and HTML report into {{.RESULTS_DIR}}/infer-with-jsonb/
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "{{.RESULTS_DIR}}/infer-with-jsonb"
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - |
+        for db in {{.DATABASES}}
+        do
+          echo "📁 init $db"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --uri "{{.URI}}"
+          echo "📐 infer $db"
+          "{{.BIN}}" infer --uri "{{.URI}}" -c "{{.OUT}}/$db/config/$db.conf" --jsonb --no-output 2>/dev/null
+          echo "🛠️  to-pg $db"
+          "{{.BIN}}" to-pg -c "{{.OUT}}/$db/config/$db.conf"
+          echo "📊 report"
+          "{{.BIN}}" report -c "{{.OUT}}/$db/config/$db.conf"          
+        done
+      - echo "👉 results in {{.OUT}}"
