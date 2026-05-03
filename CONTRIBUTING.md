@@ -115,3 +115,5 @@ Report written to results/infer-with-jsonb/sample_weatherdata/reports/report.htm
 👉 results in results/infer-with-jsonb
 (...)
 ```
+
+I have added the results/ folder to give you an idea of the results.
