@@ -7,6 +7,115 @@ use serde::Deserialize;
 
 use crate::schema_diagram::parse_sql;
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Cluster-level data structures
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Aggregated migrability scores for a single database, derived from its
+/// per-collection [`CollectionRow`] data.
+pub struct DatabaseScore {
+    /// Database / project name.
+    pub name: String,
+    /// Total complexity score: `1.5 × N + Σ C_i` (where N = collection count).
+    pub score_db: f64,
+    /// Document-count-weighted average of per-collection scores.
+    pub score_avg: f64,
+    /// Maximum per-collection score across all collections.
+    pub score_max: f64,
+    /// Total number of documents across all collections.
+    pub total_docs: u64,
+    /// Number of collections.
+    pub collection_count: usize,
+}
+
+/// Aggregated migrability scores for a whole cluster, derived from
+/// per-database [`DatabaseScore`] values.
+pub struct ClusterScore {
+    /// Total cluster complexity: `1.5 × D + Σ score_db_j` (D = database count).
+    pub score_total: f64,
+    /// Total-document-weighted average of per-database `score_avg` values.
+    pub score_avg: f64,
+    /// Maximum `score_db` across all databases.
+    pub score_max: f64,
+    /// Number of databases.
+    pub db_count: usize,
+}
+
+/// Compute a [`DatabaseScore`] from a slice of [`CollectionRow`]s for one database.
+pub fn compute_db_score(name: &str, rows: &[CollectionRow]) -> DatabaseScore {
+    let total_docs: u64 = rows
+        .iter()
+        .map(|r| match &r.stats.documents_in_collection {
+            serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0),
+            _ => 0,
+        })
+        .sum();
+
+    let n = rows.len() as f64;
+    let score_sum: f64 = rows.iter().map(|r| r.stats.migrability_score).sum();
+    let score_db = ((1.5 * n + score_sum) * 100.0).round() / 100.0;
+
+    let score_max: f64 = rows
+        .iter()
+        .map(|r| r.stats.migrability_score)
+        .fold(0.0_f64, f64::max);
+
+    let total_weighted: f64 = rows
+        .iter()
+        .map(|r| {
+            let docs = match &r.stats.documents_in_collection {
+                serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0) as f64,
+                _ => 0.0,
+            };
+            r.stats.migrability_score * docs
+        })
+        .sum();
+    let score_avg = if total_docs > 0 {
+        (total_weighted / total_docs as f64 * 100.0).round() / 100.0
+    } else {
+        0.0
+    };
+
+    DatabaseScore {
+        name: name.to_owned(),
+        score_db,
+        score_avg,
+        score_max: (score_max * 100.0).round() / 100.0,
+        total_docs,
+        collection_count: rows.len(),
+    }
+}
+
+/// Compute a [`ClusterScore`] from a slice of [`DatabaseScore`]s.
+pub fn compute_cluster_score(dbs: &[DatabaseScore]) -> ClusterScore {
+    let d = dbs.len() as f64;
+    let score_db_sum: f64 = dbs.iter().map(|db| db.score_db).sum();
+    let score_total = ((1.5 * d + score_db_sum) * 100.0).round() / 100.0;
+
+    let total_docs: u64 = dbs.iter().map(|db| db.total_docs).sum();
+    let total_weighted: f64 = dbs
+        .iter()
+        .map(|db| db.score_avg * db.total_docs as f64)
+        .sum();
+    let score_avg = if total_docs > 0 {
+        (total_weighted / total_docs as f64 * 100.0).round() / 100.0
+    } else {
+        0.0
+    };
+
+    let score_max: f64 = dbs
+        .iter()
+        .map(|db| db.score_db)
+        .fold(0.0_f64, f64::max);
+
+    ClusterScore {
+        score_total,
+        score_avg,
+        score_max: (score_max * 100.0).round() / 100.0,
+        db_count: dbs.len(),
+    }
+}
+
 /// Subset of [`crate::stats::StatsYaml`] we need for the report.
 #[derive(Debug, Deserialize)]
 pub struct CollectionStatsYaml {
@@ -107,7 +216,7 @@ pub fn cluster_from_uri(uri: &str) -> String {
     host.to_owned()
 }
 
-/// Render the HTML report string.
+/// Render the per-database HTML report string.
 /// `cluster` is the MongoDB host shown in the header (pass an empty string to omit it).
 pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> String {
     let now = chrono::Utc::now()
@@ -454,5 +563,199 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
         } else {
             ""
         },
+    )
+}
+
+/// Render a cluster-level HTML report from a slice of [`DatabaseScore`]s.
+///
+/// The report shows one row per database and summary cards for the cluster score,
+/// doc-weighted average, and the worst-database score.
+/// `cluster` is the MongoDB host shown in the header.
+pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
+
+    let cs = compute_cluster_score(dbs);
+
+    let total_docs: u64 = dbs.iter().map(|db| db.total_docs).sum();
+    let total_collections: usize = dbs.iter().map(|db| db.collection_count).sum();
+
+    // Thresholds scale with D so that a cluster of D databases is graded on the
+    // same relative scale as a single database.
+    let d = dbs.len() as f64;
+    let threshold_easy = 30.0 * d;
+    let threshold_hard = 80.0 * d;
+    let complexity_label = if cs.score_total < threshold_easy {
+        ("Easy", "#27ae60")
+    } else if cs.score_total < threshold_hard {
+        ("Medium", "#e67e22")
+    } else {
+        ("Hard", "#c0392b")
+    };
+
+    let table_rows: String = dbs
+        .iter()
+        .map(|db| {
+            let score_color = if db.score_db < 30.0 {
+                "#27ae60"
+            } else if db.score_db < 80.0 {
+                "#e67e22"
+            } else {
+                "#c0392b"
+            };
+            format!(
+                r#"<tr class="collection-row">
+          <td class="name">{name}</td>
+          <td class="num">{collections}</td>
+          <td class="num">{total_docs}</td>
+          <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score_db:.2}</span></td>
+          <td class="num">{score_avg:.2}</td>
+          <td class="num">{score_max:.2}</td>
+        </tr>"#,
+                name = db.name,
+                collections = db.collection_count,
+                total_docs = db.total_docs,
+                score_db = db.score_db,
+                score_avg = db.score_avg,
+                score_max = db.score_max,
+                score_color = score_color,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mongo2pg – Cluster Report @ {cluster}</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      margin: 0;
+      padding: 2rem;
+    }}
+    h1 {{ color: #2c3e50; margin-bottom: 0.25rem; }}
+    .subtitle {{ color: #7f8c8d; font-size: 0.9rem; margin-bottom: 2rem; }}
+    .summary-grid {{
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }}
+    .card {{
+      background: white;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      min-width: 160px;
+    }}
+    .card .label {{ font-size: 0.75rem; text-transform: uppercase; color: #7f8c8d; }}
+    .card .value {{ font-size: 1.6rem; font-weight: 700; color: #2c3e50; }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }}
+    thead {{ background: #2c3e50; color: white; }}
+    th {{
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    th.num, td.num {{ text-align: right; }}
+    td {{
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #ecf0f1;
+      font-size: 0.9rem;
+    }}
+    tr:last-child td {{ border-bottom: none; }}
+    tr.collection-row:hover td {{ background: #f0f4f8; }}
+    td.name {{ font-weight: 600; color: #2c3e50; }}
+    .score-badge {{ font-size: 0.95rem; }}
+    .complexity-badge {{
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+    }}
+    footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
+    .score-explainer {{ margin-top: 1rem; margin-bottom: 2rem; font-size: 0.82rem; color: #7f8c8d; }}
+    .score-explainer code {{ background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }}
+  </style>
+</head>
+<body>
+  <h1>mongo2pg – Cluster Report</h1>
+  <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="label">Databases</div><div class="value">{db_count}</div></div>
+    <div class="card"><div class="label">Collections</div><div class="value">{total_collections}</div></div>
+    <div class="card"><div class="label">Total Documents</div><div class="value">{total_docs}</div></div>
+    <div class="card">
+      <div class="label">Cluster Score</div>
+      <div class="value" style="color:{complexity_color}">{score_total:.1}</div>
+    </div>
+    <div class="card">
+      <div class="label">Complexity</div>
+      <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
+        <span class="complexity-badge" style="background:{complexity_color}">{complexity_label}</span>
+      </div>
+    </div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
+    <div class="card"><div class="label">Score (max database)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
+  </div>
+
+  <p class="score-explainer">
+    <strong>DB complexity score</strong>: <code>1.5 × collections + Σ C<sub>i</sub></code>
+    where <code>C<sub>i</sub> = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.<br>
+    <strong>Cluster score</strong>: <code>1.5 × databases + Σ score_db<sub>j</sub></code>.
+    Thresholds (per database): &lt;30 Easy · 30–80 Medium · &gt;80 Hard (scaled by database count for the cluster).
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Database</th>
+        <th class="num">Collections</th>
+        <th class="num">Documents</th>
+        <th class="num" title="1.5 × collections + Σ collection scores">Score (total)</th>
+        <th class="num" title="Document-count-weighted average of per-collection scores">Score (avg weighted)</th>
+        <th class="num" title="Highest per-collection score in this database">Score (max collection)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {table_rows}
+    </tbody>
+  </table>
+
+  <footer>Generated by <a href="https://github.com/pmpetit/mongo2pg">mongo2pg</a></footer>
+</body>
+</html>
+"#,
+        cluster = cluster,
+        now = now,
+        db_count = cs.db_count,
+        total_collections = total_collections,
+        total_docs = total_docs,
+        score_total = cs.score_total,
+        score_avg = cs.score_avg,
+        score_max = cs.score_max,
+        complexity_label = complexity_label.0,
+        complexity_color = complexity_label.1,
+        table_rows = table_rows,
     )
 }

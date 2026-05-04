@@ -24,7 +24,7 @@ use futures::TryStreamExt;
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
 use mongo2pg::export::export_collection;
-use mongo2pg::report::{collect_rows, render_html};
+use mongo2pg::report::{collect_rows, compute_db_score, render_cluster_html, render_html};
 use mongo2pg::schema_diagram::{load_tables, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
@@ -77,6 +77,8 @@ enum Command {
     Report(ReportArgs),
     /// Export MongoDB data to gzipped CSV files (one per SQL table)
     Export(ExportArgs),
+    /// Generate a cluster-level HTML report aggregating scores across multiple databases
+    ClusterReport(ClusterReportArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -208,6 +210,21 @@ struct ExportArgs {
     output_dir: Option<PathBuf>,
 }
 
+#[derive(Parser, Debug)]
+struct ClusterReportArgs {
+    /// One or more project config (.conf) files; can be repeated or comma-separated
+    #[arg(long = "configs", value_delimiter = ',', num_args = 1..)]
+    configs: Vec<PathBuf>,
+
+    /// Where to write the HTML cluster report (default: cluster.html)
+    #[arg(short = 'o', long = "output")]
+    output: Option<PathBuf>,
+
+    /// MongoDB cluster label shown in the report header (derived from the first config URI when omitted)
+    #[arg(long = "cluster", default_value = "")]
+    cluster_label: String,
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ──────────────────────────────────────────────────────────────────────────────
@@ -222,6 +239,7 @@ async fn main() -> Result<()> {
         Some(Command::Report(args)) => run_report(args),
         Some(Command::Export(args)) => run_export(args).await,
         Some(Command::Infer(args)) => run_infer(args).await,
+        Some(Command::ClusterReport(args)) => run_cluster_report(args),
         None => run_infer(cli.infer.expect("clap ensures args are present")).await,
     }
 }
@@ -695,6 +713,57 @@ fn run_report(args: ReportArgs) -> Result<()> {
             }
         }
     }
+
+    Ok(())
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// `cluster-report` subcommand
+// ──────────────────────────────────────────────────────────────────────────────
+
+fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
+    if args.configs.is_empty() {
+        return Err(anyhow!(
+            "Provide at least one config path via --configs"
+        ));
+    }
+
+    let mut db_scores = Vec::new();
+    let mut cluster_label = args.cluster_label.clone();
+
+    for conf_path in &args.configs {
+        let c = read_conf(conf_path)?;
+
+        // Derive the database label: NAMESPACE from config, or fall back to PROJECT_DIR.
+        let db_name = c.namespace.clone().unwrap_or_else(|| c.project_dir.clone());
+
+        // Derive the cluster label from the first config that has a URI.
+        if cluster_label.is_empty() {
+            if let Some(ref uri) = c.uri {
+                cluster_label = mongo2pg::report::cluster_from_uri(uri);
+            }
+        }
+
+        let collections_dir = c
+            .base_dir
+            .join(&c.project_dir)
+            .join("source")
+            .join("collections");
+
+        let rows = collect_rows(&collections_dir, None)
+            .with_context(|| format!("Failed to read collections for {db_name}"))?;
+
+        db_scores.push(compute_db_score(&db_name, &rows));
+    }
+
+    let html = render_cluster_html(&db_scores, &cluster_label);
+
+    let output_path = args
+        .output
+        .unwrap_or_else(|| PathBuf::from("cluster.html"));
+    std::fs::write(&output_path, &html)
+        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+    println!("Cluster report written to {}", output_path.display());
 
     Ok(())
 }
