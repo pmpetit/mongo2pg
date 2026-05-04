@@ -171,6 +171,11 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
         Some(n) => format!("Documents in collection : {}", n),
         None => "Documents in collection : (unknown)".to_owned(),
     };
+    let distinct_over_avg = if s.avg_fields_per_doc > 0.0 {
+        s.width as f64 / s.avg_fields_per_doc
+    } else {
+        0.0
+    };
     vec![
         total_line,
         format!("Documents sampled       : {}", schema.sampled),
@@ -180,6 +185,11 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
         ),
         format!("Depth (max nesting)     : {}", s.depth),
         format!("Branch (per level)      : {}", branch_by_level),
+        format!("Avg fields / doc        : {:.4}", s.avg_fields_per_doc),
+        format!(
+            "Distinct fields / avg    : {:.4}",
+            distinct_over_avg
+        ),
         format!("Top-level types         : {}", type_summary),
     ]
 }
@@ -222,6 +232,9 @@ pub struct StatsYaml {
     pub array_field_count: usize,
     /// Average number of fields present per document (sum of field probabilities).
     pub avg_fields_per_doc: f64,
+    /// Ratio of distinct top-level fields to average fields per document
+    /// (`width / avg_fields_per_doc`; `0` when `avg_fields_per_doc == 0`).
+    pub distinct_fields_over_avg_fields_per_doc: f64,
     /// Per-collection migrability complexity score.
     pub migrability_score: f64,
 }
@@ -257,6 +270,11 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         .collect();
 
     let score = (s.migrability_score() * 100.0).round() / 100.0;
+    let distinct_over_avg = if s.avg_fields_per_doc > 0.0 {
+        (s.width as f64 / s.avg_fields_per_doc * 10000.0).round() / 10000.0
+    } else {
+        0.0
+    };
 
     StatsYaml {
         documents_in_collection: match total_docs {
@@ -273,6 +291,7 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         top_level_types,
         array_field_count: s.array_field_count,
         avg_fields_per_doc: (s.avg_fields_per_doc * 100.0).round() / 100.0,
+        distinct_fields_over_avg_fields_per_doc: distinct_over_avg,
         migrability_score: score,
     }
 }
@@ -320,5 +339,85 @@ mod tests {
         assert_eq!(stats.depth, 1);
         assert_eq!(stats.branch, 1.0);
         assert_eq!(stats.branches_by_level, vec![1.0]);
+    }
+
+    // Build a schema where two fields are always present (probability 1.0).
+    fn two_field_schema() -> CollectionSchema {
+        let make_field = |p: f64| {
+            let mut types = IndexMap::new();
+            types.insert(
+                "String".to_owned(),
+                TypeSchema {
+                    probability: p,
+                    sampled: 0,
+                    as_jsonb: false,
+                    ndistinct: None,
+                    object: None,
+                    array: None,
+                    values: None,
+                },
+            );
+            FieldSchema { probability: p, types }
+        };
+        let mut object = IndexMap::new();
+        object.insert("a".to_owned(), make_field(1.0));
+        object.insert("b".to_owned(), make_field(0.5)); // expected to be present in 50% of docs (probability 0.5)
+        CollectionSchema { count: 2, sampled: 2, object }
+    }
+
+    #[test]
+    fn stats_to_yaml_includes_distinct_over_avg() {
+        let schema = two_field_schema();
+        // width=2, avg_fields_per_doc = 1.0 + 0.5 = 1.5
+        // distinct_over_avg = 2 / 1.5 ≈ 1.3333
+        let yaml = stats_to_yaml(&schema, Some(2));
+        let expected = (2.0_f64 / 1.5 * 10000.0).round() / 10000.0;
+        assert!(
+            (yaml.distinct_fields_over_avg_fields_per_doc - expected).abs() < 1e-9,
+            "expected {expected}, got {}",
+            yaml.distinct_fields_over_avg_fields_per_doc
+        );
+    }
+
+    #[test]
+    fn stats_to_yaml_distinct_over_avg_zero_when_no_avg() {
+        // A schema with no fields → avg_fields_per_doc == 0 → field must be 0.
+        let empty = CollectionSchema {
+            count: 0,
+            sampled: 0,
+            object: IndexMap::new(),
+        };
+        let yaml = stats_to_yaml(&empty, None);
+        assert_eq!(
+            yaml.distinct_fields_over_avg_fields_per_doc, 0.0,
+            "should be 0 when avg_fields_per_doc is 0"
+        );
+    }
+
+    #[test]
+    fn format_stats_includes_distinct_over_avg() {
+        let schema = two_field_schema();
+        let lines = format_stats(&schema, Some(2));
+        let joined = lines.join("\n");
+        assert!(
+            joined.contains("Distinct fields / avg"),
+            "format_stats output must contain 'Distinct fields / avg'; got:\n{joined}"
+        );
+    }
+
+    #[test]
+    fn format_stats_distinct_over_avg_zero_when_no_avg() {
+        let empty = CollectionSchema {
+            count: 0,
+            sampled: 0,
+            object: IndexMap::new(),
+        };
+        let lines = format_stats(&empty, None);
+        let joined = lines.join("\n");
+        // The value line must show 0.0000
+        assert!(
+            joined.contains("Distinct fields / avg    : 0.0000"),
+            "expected '0.0000' in output; got:\n{joined}"
+        );
     }
 }
