@@ -5,6 +5,7 @@
 
 use bson::{doc, Bson};
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
+use mongo2pg::report::{compute_cluster_score, render_cluster_html, DatabaseScore};
 use mongo2pg::stats::SchemaStats;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -193,4 +194,116 @@ fn test_stats_branch_count() {
     let stats = SchemaStats::compute(&schema);
     assert_eq!(stats.branch, 4.0); // _id, a, b, c
     assert_eq!(stats.branches_by_level, vec![4.0]); // all 4 fields at level 1
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Cluster score tests
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Helper to build a DatabaseScore directly (no filesystem required).
+fn make_db_score(name: &str, score_db: f64, score_avg: f64, score_max: f64, total_docs: u64, collection_count: usize) -> DatabaseScore {
+    DatabaseScore {
+        name: name.to_owned(),
+        score_db,
+        score_avg,
+        score_max,
+        total_docs,
+        collection_count,
+    }
+}
+
+#[test]
+fn test_cluster_score_single_db() {
+    // A cluster with exactly one database should add 1.5 × 1 to that database's score.
+    let db = make_db_score("mydb", 10.0, 2.5, 5.0, 1000, 3);
+    let cs = compute_cluster_score(&[db]);
+
+    assert_eq!(cs.db_count, 1);
+    // score_total = 1.5 * 1 + 10.0 = 11.5
+    assert!(
+        (cs.score_total - 11.5).abs() < 1e-6,
+        "expected score_total=11.5, got {}",
+        cs.score_total
+    );
+    // score_max = the only database's score_db
+    assert!(
+        (cs.score_max - 10.0).abs() < 1e-6,
+        "expected score_max=10.0, got {}",
+        cs.score_max
+    );
+    // score_avg: only one db, so equals that db's score_avg
+    assert!(
+        (cs.score_avg - 2.5).abs() < 1e-3,
+        "expected score_avg=2.5, got {}",
+        cs.score_avg
+    );
+}
+
+#[test]
+fn test_cluster_score_weighted_avg() {
+    // Two databases with different doc counts; the weighted average should favour
+    // the database that has more documents.
+    let db1 = make_db_score("db1", 10.0, 4.0, 5.0, 1000, 2);
+    let db2 = make_db_score("db2", 20.0, 8.0, 12.0, 3000, 3);
+    let cs = compute_cluster_score(&[db1, db2]);
+
+    // score_total = 1.5 * 2 + 10.0 + 20.0 = 33.0
+    assert!(
+        (cs.score_total - 33.0).abs() < 1e-6,
+        "expected score_total=33.0, got {}",
+        cs.score_total
+    );
+    // score_avg = (4.0*1000 + 8.0*3000) / (1000+3000) = 28000/4000 = 7.0
+    assert!(
+        (cs.score_avg - 7.0).abs() < 1e-3,
+        "expected score_avg=7.0, got {}",
+        cs.score_avg
+    );
+    // score_max = max(10.0, 20.0) = 20.0
+    assert!(
+        (cs.score_max - 20.0).abs() < 1e-6,
+        "expected score_max=20.0, got {}",
+        cs.score_max
+    );
+    assert_eq!(cs.db_count, 2);
+}
+
+#[test]
+fn test_cluster_score_zero_docs() {
+    // When all databases have 0 documents the doc-weighted average should fall back
+    // to 0.0, matching the existing per-database behaviour in render_html.
+    let db = make_db_score("emptydb", 5.0, 0.0, 3.0, 0, 1);
+    let cs = compute_cluster_score(&[db]);
+
+    assert!(
+        (cs.score_avg - 0.0).abs() < 1e-6,
+        "expected score_avg=0.0 when total_docs=0, got {}",
+        cs.score_avg
+    );
+    // score_total = 1.5 * 1 + 5.0 = 6.5
+    assert!(
+        (cs.score_total - 6.5).abs() < 1e-6,
+        "expected score_total=6.5, got {}",
+        cs.score_total
+    );
+}
+
+#[test]
+fn test_render_cluster_html_contains_scores() {
+    let db = make_db_score("testdb", 12.0, 3.5, 7.0, 500, 2);
+    let html = render_cluster_html(&[db], "localhost:27017");
+
+    // Header information
+    assert!(html.contains("localhost:27017"), "cluster label should appear in report");
+    assert!(html.contains("testdb"), "database name should appear in report");
+
+    // Cluster score = 1.5 * 1 + 12.0 = 13.5
+    assert!(
+        html.contains("13.5") || html.contains("13.50"),
+        "cluster score 13.5 should appear in report; html snippet: {}",
+        &html[..500.min(html.len())]
+    );
+
+    // Per-database score_db
+    assert!(html.contains("12.00"), "db score 12.00 should appear in report");
 }
