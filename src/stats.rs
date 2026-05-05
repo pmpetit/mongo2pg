@@ -23,6 +23,12 @@ pub struct SchemaStats {
     pub avg_fields_per_doc: f64,
     /// Number of top-level fields that have an Array type.
     pub array_field_count: usize,
+    /// Maximum polymorphism ratio (`distinct_fields / avg_fields_per_doc`) observed at any
+    /// nesting level (including the top level). 1.0 = every document has all fields (dense);
+    /// higher values indicate sparsity. This is used as the `poly_term` in the score.
+    pub max_poly_ratio: f64,
+    /// The nesting level (1-based) where `max_poly_ratio` was observed.
+    pub max_poly_level: usize,
 }
 
 impl SchemaStats {
@@ -60,6 +66,8 @@ impl SchemaStats {
             .filter(|f| f.types.contains_key(TYPE_ARRAY))
             .count();
 
+        let (max_poly_ratio, max_poly_level) = compute_max_poly_ratio(schema);
+
         SchemaStats {
             width,
             max_width,
@@ -69,28 +77,77 @@ impl SchemaStats {
             branches_by_level: level_counts,
             avg_fields_per_doc,
             array_field_count,
+            max_poly_ratio,
+            max_poly_level,
         }
     }
 
     /// Per-collection migrability complexity score.
     ///
     /// ```text
-    /// C = depth_max / 2  +  array_fields  +  distinct_fields / avg_fields_per_doc
+    /// C = depth_max / 2  +  array_fields  +  max_poly_ratio
     /// ```
     ///
-    /// * `depth_max / 2`  – penalises nesting (halved so it doesn't dominate)
-    /// * `array_fields`   – each array field adds a child table
-    /// * `distinct / avg` – polymorphism ratio: 1.0 = perfectly flat,
-    ///                      > 5 = highly sparse/polymorphic
+    /// * `depth_max / 2`   – penalises nesting (halved so it doesn't dominate)
+    /// * `array_fields`    – each array field adds a child table
+    /// * `max_poly_ratio`  – maximum `distinct_fields / avg_fields_per_doc` across
+    ///                       all nesting levels. 1.0 = perfectly flat; higher values
+    ///                       indicate sparsity/polymorphism. Previously only the
+    ///                       top-level ratio was used, which severely underestimated
+    ///                       collections with sparse nested objects (e.g. audit-log
+    ///                       documents where `newValues`/`oldValues` can hold any
+    ///                       subset of hundreds of possible sub-fields).
     pub fn migrability_score(&self) -> f64 {
         let depth_term = self.depth as f64 / 2.0;
         let array_term = self.array_field_count as f64;
-        let poly_term = if self.avg_fields_per_doc > 0.0 {
-            self.width as f64 / self.avg_fields_per_doc
-        } else {
-            0.0
-        };
+        let poly_term = self.max_poly_ratio;
         depth_term + array_term + poly_term
+    }
+}
+
+/// Traverse all nested Object schemas (skipping `as_jsonb` fields) and return the
+/// maximum `distinct / avg` polymorphism ratio found, together with its nesting level.
+///
+/// The top-level ratio is included as the baseline.
+fn compute_max_poly_ratio(schema: &CollectionSchema) -> (f64, usize) {
+    let avg_top: f64 = schema.object.values().map(|f| f.probability).sum();
+    let ratio_top = if avg_top > 0.0 {
+        schema.object.len() as f64 / avg_top
+    } else {
+        0.0
+    };
+    let mut max_ratio = ratio_top;
+    let mut max_level = 1usize;
+
+    for field in schema.object.values() {
+        visit_field_poly(field, 2, &mut max_ratio, &mut max_level);
+    }
+    (max_ratio, max_level)
+}
+
+/// Recursively visit a [`FieldSchema`] and update `max_ratio` / `max_level` whenever
+/// a nested Object sub-schema has a higher `distinct / avg` ratio.
+fn visit_field_poly(field: &FieldSchema, level: usize, max_ratio: &mut f64, max_level: &mut usize) {
+    for type_schema in field.types.values() {
+        // Skip objects that will be stored as JSONB – their internal structure is opaque.
+        if !type_schema.as_jsonb {
+            if let Some(obj) = &type_schema.object {
+                if !obj.is_empty() {
+                    let distinct = obj.len() as f64;
+                    let avg: f64 = obj.values().map(|f| f.probability).sum();
+                    if avg > 0.0 {
+                        let ratio = distinct / avg;
+                        if ratio > *max_ratio {
+                            *max_ratio = ratio;
+                            *max_level = level;
+                        }
+                    }
+                    for nested_field in obj.values() {
+                        visit_field_poly(nested_field, level + 1, max_ratio, max_level);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -187,6 +244,10 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
         format!("Branch (per level)      : {}", branch_by_level),
         format!("Avg fields / doc        : {:.4}", s.avg_fields_per_doc),
         format!("Distinct fields / avg    : {:.4}", distinct_over_avg),
+        format!(
+            "Max poly ratio           : {:.4} (L{})",
+            s.max_poly_ratio, s.max_poly_level
+        ),
         format!("Migrability score       : {:.2}", s.migrability_score()),
         format!("Top-level types         : {}", type_summary),
     ]
@@ -233,6 +294,10 @@ pub struct StatsYaml {
     /// Ratio of distinct top-level fields to average fields per document
     /// (`width / avg_fields_per_doc`; `0` when `avg_fields_per_doc == 0`).
     pub distinct_fields_over_avg_fields_per_doc: f64,
+    /// Maximum polymorphism ratio (`distinct / avg`) across all nesting levels.
+    pub max_poly_ratio: f64,
+    /// The nesting level (1-based) where `max_poly_ratio` was observed.
+    pub max_poly_level: usize,
     /// Per-collection migrability complexity score.
     pub migrability_score: f64,
 }
@@ -290,6 +355,8 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         array_field_count: s.array_field_count,
         avg_fields_per_doc: (s.avg_fields_per_doc * 100.0).round() / 100.0,
         distinct_fields_over_avg_fields_per_doc: distinct_over_avg,
+        max_poly_ratio: (s.max_poly_ratio * 10000.0).round() / 10000.0,
+        max_poly_level: s.max_poly_level,
         migrability_score: score,
     }
 }
