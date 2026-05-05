@@ -186,10 +186,8 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
         format!("Depth (max nesting)     : {}", s.depth),
         format!("Branch (per level)      : {}", branch_by_level),
         format!("Avg fields / doc        : {:.4}", s.avg_fields_per_doc),
-        format!(
-            "Distinct fields / avg    : {:.4}",
-            distinct_over_avg
-        ),
+        format!("Distinct fields / avg    : {:.4}", distinct_over_avg),
+        format!("Migrability score       : {:.2}", s.migrability_score()),
         format!("Top-level types         : {}", type_summary),
     ]
 }
@@ -357,12 +355,19 @@ mod tests {
                     values: None,
                 },
             );
-            FieldSchema { probability: p, types }
+            FieldSchema {
+                probability: p,
+                types,
+            }
         };
         let mut object = IndexMap::new();
         object.insert("a".to_owned(), make_field(1.0));
         object.insert("b".to_owned(), make_field(0.5)); // expected to be present in 50% of docs (probability 0.5)
-        CollectionSchema { count: 2, sampled: 2, object }
+        CollectionSchema {
+            count: 2,
+            sampled: 2,
+            object,
+        }
     }
 
     #[test]

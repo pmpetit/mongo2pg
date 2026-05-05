@@ -12,8 +12,8 @@
           "values": [
             "671ff2451ec726b417352703",
             "65a546ae4a8f64e8f88fb89e",
-            "671ff0081ec726b417352702",
-            "66fe219d625d93a100528224"
+            "66fe219d625d93a100528224",
+            "671ff0081ec726b417352702"
           ]
         }
       }
@@ -35,8 +35,8 @@
                   "values": [
                     "Parice",
                     "Mexico City",
-                    "London",
-                    "New York City"
+                    "New York City",
+                    "London"
                   ]
                 }
               }
@@ -51,8 +51,8 @@
                   "values": [
                     "France",
                     "Mexico",
-                    "UK",
-                    "USA"
+                    "USA",
+                    "UK"
                   ]
                 }
               }
@@ -67,8 +67,8 @@
                   "values": [
                     "75009",
                     "62240",
-                    "SW1Y 4JU",
-                    "NY 10025"
+                    "NY 10025",
+                    "SW1Y 4JU"
                   ]
                 }
               }
@@ -83,8 +83,8 @@
                   "values": [
                     "Île-de-France",
                     "Mexico City",
-                    "England",
-                    "New York"
+                    "New York",
+                    "England"
                   ]
                 }
               }
@@ -99,8 +99,8 @@
                   "values": [
                     "45 Rue Laffitte",
                     "Calle de Londres 247",
-                    "3 St James's Square",
-                    "226 W 108th St"
+                    "226 W 108th St",
+                    "3 St James's Square"
                   ]
                 }
               }
@@ -122,18 +122,18 @@
               "state": "Mexico City"
             },
             {
-              "street_and_number": "3 St James's Square",
-              "cp": "SW1Y 4JU",
-              "country": "UK",
-              "state": "England",
-              "city": "London"
-            },
-            {
               "street_and_number": "226 W 108th St",
               "cp": "NY 10025",
               "country": "USA",
               "state": "New York",
               "city": "New York City"
+            },
+            {
+              "street_and_number": "3 St James's Square",
+              "cp": "SW1Y 4JU",
+              "country": "UK",
+              "state": "England",
+              "city": "London"
             }
           ]
         }
@@ -149,8 +149,8 @@
           "values": [
             "claude.monet@gmail.com",
             "frida.klo@gmail.com",
-            "ada.lovelace@gmail.com",
-            "grace.hopper@gmail.com"
+            "grace.hopper@gmail.com",
+            "ada.lovelace@gmail.com"
           ]
         }
       }
@@ -839,168 +839,6 @@
             ],
             [
               {
-                "productId": "67192b3f64d161905fbe77a5",
-                "name": "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
-                "brand": "AmazonBasics",
-                "price": 63,
-                "image": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg",
-                "vectorSearchScore": 1.0
-              },
-              {
-                "productId": "67192b4164d161905fbe7e3a",
-                "name": "AmazonBasics Velvet Clothing Hangers - 50-Pack, Black - AQ-W0001",
-                "brand": "AmazonBasics",
-                "price": 22,
-                "image": "https://m.media-amazon.com/images/I/61Ju3ZUPuDL.jpg",
-                "vectorSearchScore": 0.9369443655014038
-              },
-              {
-                "productId": "67192b4264d161905fbe831a",
-                "name": "AmazonBasics Velvet Clothing Hangers - 50-Pack, Black (Renewed)",
-                "brand": "AmazonBasics",
-                "price": 32,
-                "image": "https://m.media-amazon.com/images/I/819Lhgr-sgL.jpg",
-                "vectorSearchScore": 0.9343161582946777
-              },
-              {
-                "productId": "67192b4464d161905fbe899a",
-                "name": "Amazon Basics Wooden Pants & Skirts Hangers with Clips, 10-Pack, Cherry",
-                "brand": "AmazonBasics",
-                "price": 83,
-                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
-                "vectorSearchScore": 0.9022113084793091
-              },
-              {
-                "productId": "67192b4164d161905fbe7eaf",
-                "name": "Amazon Basics Wooden Pants & Skirts Hangers with Clips, 10-Pack, Natural",
-                "brand": "AmazonBasics",
-                "price": 100,
-                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
-                "vectorSearchScore": 0.900714099407196
-              },
-              {
-                "productId": "67192b4364d161905fbe8464",
-                "name": "AmazonBasics Trouser/Slack Hangers Easy Slide Organizers - 20-Pack (Renewed)",
-                "brand": "AmazonBasics",
-                "price": 41,
-                "image": "https://m.media-amazon.com/images/I/71T5rBwu0iL.jpg",
-                "vectorSearchScore": 0.893616795539856
-              },
-              {
-                "productId": "67192b4264d161905fbe8019",
-                "name": "AmazonBasics Metal Pants and Skirt Hangers with Clips - 20-Pack (Renewed)",
-                "brand": "AmazonBasics",
-                "price": 92,
-                "image": "https://m.media-amazon.com/images/I/61MsDrGhD9L.jpg",
-                "vectorSearchScore": 0.8907135725021362
-              },
-              {
-                "productId": "67192b4364d161905fbe849f",
-                "name": "Amazon Brand - Solimo Printed Fabric Hanging Closet Organiser, 3 Shelves, Pink",
-                "brand": "Amazon Brand - Solimo",
-                "price": 51,
-                "image": "https://m.media-amazon.com/images/I/510EUPNqR7L.jpg",
-                "vectorSearchScore": 0.8638238906860352
-              },
-              {
-                "productId": "67192b4264d161905fbe82b2",
-                "name": "AmazonBasics Wall Mounted Coat Rack - 8 Standard Hook",
-                "brand": "AmazonBasics",
-                "price": 57,
-                "image": "https://m.media-amazon.com/images/I/6189CrsyqlL.jpg",
-                "vectorSearchScore": 0.8630868196487427
-              },
-              {
-                "productId": "67192b4364d161905fbe836b",
-                "name": "AmazonBasics Standing Metal Coat and Hat Rack - Black",
-                "brand": "AmazonBasics",
-                "price": 77,
-                "image": "https://m.media-amazon.com/images/I/71xPjHpUQAL.jpg",
-                "vectorSearchScore": 0.8521050214767456
-              },
-              {
-                "productId": "67192b4564d161905fbe8b60",
-                "name": "AmazonBasics Over-the-Door Double Hooks, White",
-                "brand": "AmazonBasics",
-                "price": 15,
-                "image": "https://m.media-amazon.com/images/I/61TupbaxyOL.jpg",
-                "vectorSearchScore": 0.8509092330932617
-              },
-              {
-                "productId": "67192b4364d161905fbe853e",
-                "name": "(Renewed) Amazon Brand - Solimo U Steel Drying Rack",
-                "brand": "Amazon Brand - Solimo",
-                "price": 86,
-                "image": "https://m.media-amazon.com/images/I/51KDO7jfWwL.jpg",
-                "vectorSearchScore": 0.8406727313995361
-              },
-              {
-                "productId": "67192b4164d161905fbe7df0",
-                "name": "AmazonBasics Triple Laundry Basket Hamper, Black",
-                "brand": "AmazonBasics",
-                "price": 67,
-                "image": "https://m.media-amazon.com/images/I/81dO0HfwilL.jpg",
-                "vectorSearchScore": 0.8402054309844971
-              },
-              {
-                "productId": "67192b4564d161905fbe8b4a",
-                "name": "AmazonBasics Single Laundry Basket Hamper, Black",
-                "brand": "AmazonBasics",
-                "price": 56,
-                "image": "https://m.media-amazon.com/images/I/81OAICPHunL.jpg",
-                "vectorSearchScore": 0.8393269181251526
-              },
-              {
-                "productId": "67192b4264d161905fbe800b",
-                "name": "Amazon Brand - Solimo Printed Fabric Shirt Stacker Organiser, Set of 1, Red",
-                "brand": "Amazon Brand - Solimo",
-                "price": 45,
-                "image": "https://m.media-amazon.com/images/I/61mtCcP5VWL.jpg",
-                "vectorSearchScore": 0.8391951322555542
-              },
-              {
-                "productId": "67192b3f64d161905fbe7914",
-                "name": "AmazonBasics Decorative Curtain/Drapery Holdback, Set of 2, Black, 4-Pack",
-                "brand": "AmazonBasics",
-                "price": 17,
-                "image": "https://m.media-amazon.com/images/I/61MhcLwuw6L.jpg",
-                "vectorSearchScore": 0.8373140096664429
-              },
-              {
-                "productId": "67192b4264d161905fbe821b",
-                "name": "AmazonBasics Collapsible Fabric Storage Cubes with Oval Grommets - 6-Pack, Light Grey",
-                "brand": "AmazonBasics",
-                "price": 32,
-                "image": "https://m.media-amazon.com/images/I/81i10+pt9wL.jpg",
-                "vectorSearchScore": 0.8324379920959473
-              },
-              {
-                "productId": "67192b4164d161905fbe7c7a",
-                "name": "Amazon Brand - Solimo Fabric Shirt Stacker Organiser, Set of 3, Multicolor",
-                "brand": "Amazon Brand - Solimo",
-                "price": 86,
-                "image": "https://m.media-amazon.com/images/I/61IYn8rH4XL.jpg",
-                "vectorSearchScore": 0.8316413164138794
-              },
-              {
-                "productId": "67192b4264d161905fbe8267",
-                "name": "AmazonBasics Wall Wire Grid Panel, Rose Gold (Renewed)",
-                "brand": "AmazonBasics",
-                "price": 111,
-                "image": "https://m.media-amazon.com/images/I/81M1-WMrcNL.jpg",
-                "vectorSearchScore": 0.8310959339141846
-              },
-              {
-                "productId": "67192b3f64d161905fbe7a00",
-                "name": "AmazonBasics Ironing Board for Shirt Sleeves (Grey)",
-                "brand": "AmazonBasics",
-                "price": 42,
-                "image": "https://m.media-amazon.com/images/I/71djC4F-4gL.jpg",
-                "vectorSearchScore": 0.8299871683120728
-              }
-            ],
-            [
-              {
                 "productId": "67192b3f64d161905fbe7a5a",
                 "name": "AmazonBasics Combo Plastic Cutlery",
                 "brand": "AmazonBasics",
@@ -1160,6 +998,168 @@
                 "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
                 "vectorSearchScore": 0.8421430587768555
               }
+            ],
+            [
+              {
+                "productId": "67192b3f64d161905fbe77a5",
+                "name": "AmazonBasics Kids Velvet Non-Slip Clothes Hangers, 50-Pack, Purple",
+                "brand": "AmazonBasics",
+                "price": 63,
+                "image": "https://m.media-amazon.com/images/I/61C6OPPh1eL.jpg",
+                "vectorSearchScore": 1.0
+              },
+              {
+                "productId": "67192b4164d161905fbe7e3a",
+                "name": "AmazonBasics Velvet Clothing Hangers - 50-Pack, Black - AQ-W0001",
+                "brand": "AmazonBasics",
+                "price": 22,
+                "image": "https://m.media-amazon.com/images/I/61Ju3ZUPuDL.jpg",
+                "vectorSearchScore": 0.9369443655014038
+              },
+              {
+                "productId": "67192b4264d161905fbe831a",
+                "name": "AmazonBasics Velvet Clothing Hangers - 50-Pack, Black (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 32,
+                "image": "https://m.media-amazon.com/images/I/819Lhgr-sgL.jpg",
+                "vectorSearchScore": 0.9343161582946777
+              },
+              {
+                "productId": "67192b4464d161905fbe899a",
+                "name": "Amazon Basics Wooden Pants & Skirts Hangers with Clips, 10-Pack, Cherry",
+                "brand": "AmazonBasics",
+                "price": 83,
+                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
+                "vectorSearchScore": 0.9022113084793091
+              },
+              {
+                "productId": "67192b4164d161905fbe7eaf",
+                "name": "Amazon Basics Wooden Pants & Skirts Hangers with Clips, 10-Pack, Natural",
+                "brand": "AmazonBasics",
+                "price": 100,
+                "image": "https://m.media-amazon.com/images/I/61OnkGVhMWL.jpg",
+                "vectorSearchScore": 0.900714099407196
+              },
+              {
+                "productId": "67192b4364d161905fbe8464",
+                "name": "AmazonBasics Trouser/Slack Hangers Easy Slide Organizers - 20-Pack (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 41,
+                "image": "https://m.media-amazon.com/images/I/71T5rBwu0iL.jpg",
+                "vectorSearchScore": 0.893616795539856
+              },
+              {
+                "productId": "67192b4264d161905fbe8019",
+                "name": "AmazonBasics Metal Pants and Skirt Hangers with Clips - 20-Pack (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 92,
+                "image": "https://m.media-amazon.com/images/I/61MsDrGhD9L.jpg",
+                "vectorSearchScore": 0.8907135725021362
+              },
+              {
+                "productId": "67192b4364d161905fbe849f",
+                "name": "Amazon Brand - Solimo Printed Fabric Hanging Closet Organiser, 3 Shelves, Pink",
+                "brand": "Amazon Brand - Solimo",
+                "price": 51,
+                "image": "https://m.media-amazon.com/images/I/510EUPNqR7L.jpg",
+                "vectorSearchScore": 0.8638238906860352
+              },
+              {
+                "productId": "67192b4264d161905fbe82b2",
+                "name": "AmazonBasics Wall Mounted Coat Rack - 8 Standard Hook",
+                "brand": "AmazonBasics",
+                "price": 57,
+                "image": "https://m.media-amazon.com/images/I/6189CrsyqlL.jpg",
+                "vectorSearchScore": 0.8630868196487427
+              },
+              {
+                "productId": "67192b4364d161905fbe836b",
+                "name": "AmazonBasics Standing Metal Coat and Hat Rack - Black",
+                "brand": "AmazonBasics",
+                "price": 77,
+                "image": "https://m.media-amazon.com/images/I/71xPjHpUQAL.jpg",
+                "vectorSearchScore": 0.8521050214767456
+              },
+              {
+                "productId": "67192b4564d161905fbe8b60",
+                "name": "AmazonBasics Over-the-Door Double Hooks, White",
+                "brand": "AmazonBasics",
+                "price": 15,
+                "image": "https://m.media-amazon.com/images/I/61TupbaxyOL.jpg",
+                "vectorSearchScore": 0.8509092330932617
+              },
+              {
+                "productId": "67192b4364d161905fbe853e",
+                "name": "(Renewed) Amazon Brand - Solimo U Steel Drying Rack",
+                "brand": "Amazon Brand - Solimo",
+                "price": 86,
+                "image": "https://m.media-amazon.com/images/I/51KDO7jfWwL.jpg",
+                "vectorSearchScore": 0.8406727313995361
+              },
+              {
+                "productId": "67192b4164d161905fbe7df0",
+                "name": "AmazonBasics Triple Laundry Basket Hamper, Black",
+                "brand": "AmazonBasics",
+                "price": 67,
+                "image": "https://m.media-amazon.com/images/I/81dO0HfwilL.jpg",
+                "vectorSearchScore": 0.8402054309844971
+              },
+              {
+                "productId": "67192b4564d161905fbe8b4a",
+                "name": "AmazonBasics Single Laundry Basket Hamper, Black",
+                "brand": "AmazonBasics",
+                "price": 56,
+                "image": "https://m.media-amazon.com/images/I/81OAICPHunL.jpg",
+                "vectorSearchScore": 0.8393269181251526
+              },
+              {
+                "productId": "67192b4264d161905fbe800b",
+                "name": "Amazon Brand - Solimo Printed Fabric Shirt Stacker Organiser, Set of 1, Red",
+                "brand": "Amazon Brand - Solimo",
+                "price": 45,
+                "image": "https://m.media-amazon.com/images/I/61mtCcP5VWL.jpg",
+                "vectorSearchScore": 0.8391951322555542
+              },
+              {
+                "productId": "67192b3f64d161905fbe7914",
+                "name": "AmazonBasics Decorative Curtain/Drapery Holdback, Set of 2, Black, 4-Pack",
+                "brand": "AmazonBasics",
+                "price": 17,
+                "image": "https://m.media-amazon.com/images/I/61MhcLwuw6L.jpg",
+                "vectorSearchScore": 0.8373140096664429
+              },
+              {
+                "productId": "67192b4264d161905fbe821b",
+                "name": "AmazonBasics Collapsible Fabric Storage Cubes with Oval Grommets - 6-Pack, Light Grey",
+                "brand": "AmazonBasics",
+                "price": 32,
+                "image": "https://m.media-amazon.com/images/I/81i10+pt9wL.jpg",
+                "vectorSearchScore": 0.8324379920959473
+              },
+              {
+                "productId": "67192b4164d161905fbe7c7a",
+                "name": "Amazon Brand - Solimo Fabric Shirt Stacker Organiser, Set of 3, Multicolor",
+                "brand": "Amazon Brand - Solimo",
+                "price": 86,
+                "image": "https://m.media-amazon.com/images/I/61IYn8rH4XL.jpg",
+                "vectorSearchScore": 0.8316413164138794
+              },
+              {
+                "productId": "67192b4264d161905fbe8267",
+                "name": "AmazonBasics Wall Wire Grid Panel, Rose Gold (Renewed)",
+                "brand": "AmazonBasics",
+                "price": 111,
+                "image": "https://m.media-amazon.com/images/I/81M1-WMrcNL.jpg",
+                "vectorSearchScore": 0.8310959339141846
+              },
+              {
+                "productId": "67192b3f64d161905fbe7a00",
+                "name": "AmazonBasics Ironing Board for Shirt Sleeves (Grey)",
+                "brand": "AmazonBasics",
+                "price": 42,
+                "image": "https://m.media-amazon.com/images/I/71djC4F-4gL.jpg",
+                "vectorSearchScore": 0.8299871683120728
+              }
             ]
           ]
         }
@@ -1175,8 +1175,8 @@
           "values": [
             "Claude",
             "Frida",
-            "Ada",
-            "Grace"
+            "Grace",
+            "Ada"
           ]
         }
       }
@@ -1191,8 +1191,8 @@
           "values": [
             "Monet",
             "Kahlo",
-            "Lovelace",
-            "Hopper"
+            "Hopper",
+            "Lovelace"
           ]
         }
       }

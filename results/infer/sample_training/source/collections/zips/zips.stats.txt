@@ -5,4 +5,5 @@ Depth (max nesting)     : 2
 Branch (per level)      : L1:6.0  L2:2.0
 Avg fields / doc        : 6.0000
 Distinct fields / avg    : 1.0000
+Migrability score       : 2.00
 Top-level types         : _id:ObjectId, city:String, loc:Object, pop:Number, state:String, zip:String

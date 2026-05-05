@@ -1,8 +1,9 @@
 Documents in collection : 24832
 Documents sampled       : 1000
-Width (top-level / max)  : 19 / 36.6 (L2)
-Depth (max nesting)     : 7
-Branch (per level)      : L1:18.1  L2:36.6  L3:6.1  L4:9.3  L5:3.8  L6:0.3  L7:0.0
-Avg fields / doc        : 18.0860
-Distinct fields / avg    : 1.0505
+Width (top-level / max)  : 19 / 36.2 (L2)
+Depth (max nesting)     : 6
+Branch (per level)      : L1:18.1  L2:36.2  L3:5.4  L4:9.2  L5:3.6  L6:0.2
+Avg fields / doc        : 18.0670
+Distinct fields / avg    : 1.0516
+Migrability score       : 4.05
 Top-level types         : _id:ObjectId, contributors:Null, coordinates:Null, created_at:String, entities:Object, favorited:Boolean, geo:Null, id:Number, in_reply_to_screen_name:Null, in_reply_to_status_id:Null, in_reply_to_user_id:Null, place:Null, retweet_count:Null, retweeted:Boolean, retweeted_status:Object, source:String, text:String, truncated:Boolean, user:Object

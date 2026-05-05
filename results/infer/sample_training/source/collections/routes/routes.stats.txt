@@ -5,4 +5,5 @@ Depth (max nesting)     : 2
 Branch (per level)      : L1:7.0  L2:4.0
 Avg fields / doc        : 7.0000
 Distinct fields / avg    : 1.0000
+Migrability score       : 2.00
 Top-level types         : _id:ObjectId, airline:Object, airplane:String, codeshare:String, dst_airport:String, src_airport:String, stops:Number

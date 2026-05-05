@@ -5,4 +5,5 @@ Depth (max nesting)     : 4
 Branch (per level)      : L1:7.0  L2:5.0  L3:4.0  L4:1.0
 Avg fields / doc        : 7.0000
 Distinct fields / avg    : 1.0000
+Migrability score       : 4.00
 Top-level types         : _id:ObjectId, couponUsed:Boolean, customer:Object, items:Array, purchaseMethod:String, saleDate:Date, storeLocation:String

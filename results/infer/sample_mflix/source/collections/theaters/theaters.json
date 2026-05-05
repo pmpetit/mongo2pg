@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "59a47287cfa9a3a73e51e8c0",
-            "59a47287cfa9a3a73e51ec20",
-            "59a47287cfa9a3a73e51e9c7",
-            "59a47287cfa9a3a73e51eb51",
-            "59a47287cfa9a3a73e51ea05",
-            "59a47287cfa9a3a73e51ecf9",
-            "59a47287cfa9a3a73e51ea31",
-            "59a47286cfa9a3a73e51e80f",
-            "59a47287cfa9a3a73e51e8c6",
-            "59a47287cfa9a3a73e51ecfc",
-            "59a47286cfa9a3a73e51e841",
-            "59a47287cfa9a3a73e51ecaf",
-            "59a47286cfa9a3a73e51e7b0",
-            "59a47287cfa9a3a73e51ea4e",
-            "59a47287cfa9a3a73e51ebcf",
-            "59a47287cfa9a3a73e51eb26",
-            "59a47286cfa9a3a73e51e859",
-            "59a47287cfa9a3a73e51ead3",
-            "59a47287cfa9a3a73e51ecb2",
-            "59a47287cfa9a3a73e51e9e3"
+            "59a47287cfa9a3a73e51e875",
+            "59a47287cfa9a3a73e51ecd0",
+            "59a47287cfa9a3a73e51e867",
+            "59a47287cfa9a3a73e51e9ec",
+            "59a47287cfa9a3a73e51e9c5",
+            "59a47287cfa9a3a73e51ed34",
+            "59a47286cfa9a3a73e51e80b",
+            "59a47287cfa9a3a73e51ea80",
+            "59a47287cfa9a3a73e51ec98",
+            "59a47286cfa9a3a73e51e7c1",
+            "59a47287cfa9a3a73e51eb2e",
+            "59a47286cfa9a3a73e51e800",
+            "59a47287cfa9a3a73e51ea82",
+            "59a47286cfa9a3a73e51e7d5",
+            "59a47286cfa9a3a73e51e79a",
+            "59a47287cfa9a3a73e51ec66",
+            "59a47287cfa9a3a73e51eab9",
+            "59a47287cfa9a3a73e51ec7d",
+            "59a47287cfa9a3a73e51ebfc",
+            "59a47287cfa9a3a73e51eac3"
           ]
         }
       }
@@ -54,28 +54,28 @@
                         "String": {
                           "probability": 1.0,
                           "sampled": 1000,
-                          "ndistinct": 657.0,
+                          "ndistinct": 681.0,
                           "values": [
-                            "Chula Vista",
-                            "Roseville",
-                            "Little Rock",
-                            "Grandville",
-                            "West Des Moines",
-                            "Darien",
-                            "Sarasota",
-                            "Wesley Chapel",
-                            "Culver City",
-                            "Bakersfield",
-                            "San Antonio",
-                            "Charlotte",
-                            "Oro Valley",
-                            "Sunrise",
-                            "Willow Grove",
                             "Richmond",
-                            "Hiram",
-                            "Dickson City",
-                            "Bentonville",
-                            "Sacramento"
+                            "Battle Creek",
+                            "Kansas City",
+                            "Portage",
+                            "Eau Claire",
+                            "Hollywood",
+                            "American Fork",
+                            "Abilene",
+                            "Honolulu",
+                            "Alabaster",
+                            "Monroeville",
+                            "New Braunfels",
+                            "Clovis",
+                            "Bourbonnais",
+                            "Columbus",
+                            "Burbank",
+                            "Houston",
+                            "Sunnyvale",
+                            "Countryside",
+                            "Burlington"
                           ]
                         }
                       }
@@ -86,28 +86,28 @@
                         "String": {
                           "probability": 1.0,
                           "sampled": 1000,
-                          "ndistinct": 52.0,
+                          "ndistinct": 51.0,
                           "values": [
-                            "CA",
-                            "MN",
-                            "AR",
-                            "MI",
-                            "IA",
-                            "CT",
-                            "FL",
                             "TX",
-                            "NC",
-                            "AZ",
-                            "PA",
-                            "VA",
-                            "GA",
-                            "NY",
-                            "NV",
-                            "OH",
-                            "SC",
-                            "DE",
+                            "MI",
+                            "MO",
+                            "WI",
+                            "CA",
                             "UT",
-                            "MA"
+                            "HI",
+                            "AL",
+                            "PA",
+                            "IL",
+                            "OH",
+                            "MA",
+                            "KY",
+                            "NY",
+                            "MN",
+                            "LA",
+                            "VA",
+                            "NH",
+                            "NC",
+                            "AK"
                           ]
                         }
                       }
@@ -118,73 +118,73 @@
                         "String": {
                           "probability": 1.0,
                           "sampled": 1000,
-                          "ndistinct": 945.0,
+                          "ndistinct": 946.0,
                           "values": [
-                            "2015 Birch Rd ",
-                            "1643 County Road B2",
-                            "11800 Chenal Pkwy",
-                            "4830 Wilson Ave SW",
-                            "101 Jordan Creek Pkwy",
-                            "I-95 Northbound past exit 12",
-                            "8201 S Tamiami Trail",
-                            "5947 Wesley Grove Blvd",
-                            "10799 Washington Blvd",
-                            "8300 Rosedale Hwy",
-                            "5419 W Loop 1604 N",
-                            "5501 R C Josh Birmingham Parkway",
-                            "11855 N Oracle Rd",
-                            "12801 W Sunrise Blvd",
-                            "1130 Easton Rd",
-                            "1560 W Koger Center Blvd",
-                            "5025 Jimmy Lee Smith Pkwy",
-                            "959 Viewmont Dr",
-                            "1 Airport Boulevard #100",
-                            "1689 Arden Way"
+                            "5340 West Grand Parkway South",
+                            "12765 Harper Village Dr",
+                            "9130 N Skyview Ave",
+                            "6650 S. Westnedge Avenue",
+                            "4800 Golf Road",
+                            "6801 Hollywood Blvd",
+                            "763 W Grasslands Dr",
+                            "4310 Buffalo Gap Rd",
+                            "300 Rodgers Boulevard",
+                            "100 S Colonial Dr",
+                            "200 Mall Circle Dr",
+                            "187 Creekside Way",
+                            "145 Mall Circle Dr",
+                            "655 W Herndon Ave",
+                            "1584 N State Route 50",
+                            "4600 International Gateway",
+                            "7600 S Cicero Ave",
+                            "2800 North Terminal Rd.",
+                            "760 E El Camino Real",
+                            "11 Countryside Plz"
                           ]
                         }
                       }
                     },
                     "street2": {
-                      "probability": 0.349,
+                      "probability": 0.362,
                       "types": {
                         "Null": {
-                          "probability": 0.3495702005730659,
-                          "sampled": 122,
+                          "probability": 0.3314917127071823,
+                          "sampled": 120,
                           "ndistinct": 1.0,
                           "values": [
                             null
                           ]
                         },
                         "String": {
-                          "probability": 0.6504297994269341,
-                          "sampled": 227,
-                          "ndistinct": 215.0,
+                          "probability": 0.6685082872928176,
+                          "sampled": 242,
+                          "ndistinct": 231.0,
                           "values": [
-                            "Ste 2300",
-                            "Ste. 12060",
-                            "#A13",
-                            "Ste 835",
-                            "#2054",
-                            "Ste 1324",
-                            "#1097",
-                            "Ste A",
-                            "Ste EL520",
-                            "#N115",
-                            "#147",
-                            "#632",
-                            "Suite C",
-                            "Ste 1019",
-                            "Unit 420",
-                            "Ste FC9",
-                            "Ste 2100",
-                            "#765",
-                            "#64",
-                            "Ste F18A"
+                            "Ste 160",
+                            "#209",
+                            "#402",
+                            "Ste 1110",
+                            "Ste A07",
+                            "#2148",
+                            "#N137",
+                            "#F03",
+                            "Ste 201",
+                            "#23",
+                            "Spc 0161",
+                            "#2090",
+                            "#B11B",
+                            "Ste 1420",
+                            "#B10",
+                            "#180",
+                            "Space H09",
+                            "Ste 732",
+                            "Ste 209",
+                            "#480"
                           ]
                         },
                         "Undefined": {
-                          "probability": 0.651,
-                          "sampled": 651
+                          "probability": 0.638,
+                          "sampled": 638
                         }
                       }
                     },
@@ -194,28 +194,28 @@
                         "String": {
                           "probability": 1.0,
                           "sampled": 1000,
-                          "ndistinct": 849.0,
+                          "ndistinct": 855.0,
                           "values": [
-                            "91915",
-                            "55113",
-                            "72211",
-                            "49418",
-                            "50266",
-                            "6820",
-                            "34238",
-                            "33544",
-                            "90232",
-                            "93312",
-                            "78253",
-                            "28208",
-                            "85737",
-                            "33323",
-                            "19090",
-                            "23235",
-                            "30141",
-                            "18519",
-                            "72712",
-                            "95815"
+                            "77406",
+                            "49014",
+                            "64154",
+                            "49024",
+                            "54701",
+                            "90028",
+                            "84003",
+                            "79606",
+                            "96819",
+                            "35007",
+                            "15146",
+                            "78130",
+                            "93612",
+                            "60914",
+                            "43219",
+                            "60459",
+                            "77032",
+                            "94087",
+                            "60525",
+                            "01803"
                           ]
                         }
                       }
@@ -223,132 +223,133 @@
                   },
                   "values": [
                     {
-                      "street1": "2015 Birch Rd ",
-                      "street2": "Ste 2300",
-                      "city": "Chula Vista",
-                      "state": "CA",
-                      "zipcode": "91915"
-                    },
-                    {
-                      "street1": "1643 County Road B2",
-                      "city": "Roseville",
-                      "state": "MN",
-                      "zipcode": "55113"
-                    },
-                    {
-                      "street1": "11800 Chenal Pkwy",
-                      "city": "Little Rock",
-                      "state": "AR",
-                      "zipcode": "72211"
-                    },
-                    {
-                      "street1": "4830 Wilson Ave SW",
-                      "city": "Grandville",
-                      "state": "MI",
-                      "zipcode": "49418"
-                    },
-                    {
-                      "street1": "101 Jordan Creek Pkwy",
-                      "street2": "Ste. 12060",
-                      "city": "West Des Moines",
-                      "state": "IA",
-                      "zipcode": "50266"
-                    },
-                    {
-                      "street1": "I-95 Northbound past exit 12",
-                      "street2": null,
-                      "city": "Darien",
-                      "state": "CT",
-                      "zipcode": "6820"
-                    },
-                    {
-                      "street1": "8201 S Tamiami Trail",
-                      "street2": "#A13",
-                      "city": "Sarasota",
-                      "state": "FL",
-                      "zipcode": "34238"
-                    },
-                    {
-                      "street1": "5947 Wesley Grove Blvd",
-                      "city": "Wesley Chapel",
-                      "state": "FL",
-                      "zipcode": "33544"
-                    },
-                    {
-                      "street1": "10799 Washington Blvd",
-                      "city": "Culver City",
-                      "state": "CA",
-                      "zipcode": "90232"
-                    },
-                    {
-                      "street1": "8300 Rosedale Hwy",
-                      "city": "Bakersfield",
-                      "state": "CA",
-                      "zipcode": "93312"
-                    },
-                    {
-                      "street1": "5419 W Loop 1604 N",
-                      "city": "San Antonio",
-                      "state": "TX",
-                      "zipcode": "78253"
-                    },
-                    {
-                      "street1": "5501 R C Josh Birmingham Parkway",
-                      "street2": null,
-                      "city": "Charlotte",
-                      "state": "NC",
-                      "zipcode": "28208"
-                    },
-                    {
-                      "street1": "11855 N Oracle Rd",
-                      "city": "Oro Valley",
-                      "state": "AZ",
-                      "zipcode": "85737"
-                    },
-                    {
-                      "street1": "12801 W Sunrise Blvd",
-                      "street2": "Ste 835",
-                      "city": "Sunrise",
-                      "state": "FL",
-                      "zipcode": "33323"
-                    },
-                    {
-                      "street1": "1130 Easton Rd",
-                      "city": "Willow Grove",
-                      "state": "PA",
-                      "zipcode": "19090"
-                    },
-                    {
-                      "street1": "1560 W Koger Center Blvd",
+                      "street1": "5340 West Grand Parkway South",
                       "city": "Richmond",
-                      "state": "VA",
-                      "zipcode": "23235"
+                      "state": "TX",
+                      "zipcode": "77406"
                     },
                     {
-                      "street1": "5025 Jimmy Lee Smith Pkwy",
-                      "city": "Hiram",
-                      "state": "GA",
-                      "zipcode": "30141"
+                      "street1": "12765 Harper Village Dr",
+                      "street2": "Ste 160",
+                      "city": "Battle Creek",
+                      "state": "MI",
+                      "zipcode": "49014"
                     },
                     {
-                      "street1": "959 Viewmont Dr",
-                      "city": "Dickson City",
-                      "state": "PA",
-                      "zipcode": "18519"
+                      "street1": "9130 N Skyview Ave",
+                      "city": "Kansas City",
+                      "state": "MO",
+                      "zipcode": "64154"
                     },
                     {
-                      "street1": "1 Airport Boulevard #100",
+                      "street1": "6650 S. Westnedge Avenue",
+                      "street2": "#209",
+                      "city": "Portage",
+                      "state": "MI",
+                      "zipcode": "49024"
+                    },
+                    {
+                      "street1": "4800 Golf Road",
+                      "street2": "#402",
+                      "city": "Eau Claire",
+                      "state": "WI",
+                      "zipcode": "54701"
+                    },
+                    {
+                      "street1": "6801 Hollywood Blvd",
                       "street2": null,
-                      "city": "Bentonville",
-                      "state": "AR",
-                      "zipcode": "72712"
+                      "city": "Hollywood",
+                      "state": "CA",
+                      "zipcode": "90028"
                     },
                     {
-                      "street1": "1689 Arden Way",
-                      "street2": "#2054",
-                      "city": "Sacramento",
+                      "street1": "763 W Grasslands Dr",
+                      "city": "American Fork",
+                      "state": "UT",
+                      "zipcode": "84003"
+                    },
+                    {
+                      "street1": "4310 Buffalo Gap Rd",
+                      "street2": "Ste 1110",
+                      "city": "Abilene",
+                      "state": "TX",
+                      "zipcode": "79606"
+                    },
+                    {
+                      "street1": "300 Rodgers Boulevard",
+                      "street2": null,
+                      "city": "Honolulu",
+                      "state": "HI",
+                      "zipcode": "96819"
+                    },
+                    {
+                      "street1": "100 S Colonial Dr",
+                      "city": "Alabaster",
+                      "state": "AL",
+                      "zipcode": "35007"
+                    },
+                    {
+                      "street1": "200 Mall Circle Dr",
+                      "city": "Monroeville",
+                      "state": "PA",
+                      "zipcode": "15146"
+                    },
+                    {
+                      "street1": "187 Creekside Way",
+                      "city": "New Braunfels",
+                      "state": "TX",
+                      "zipcode": "78130"
+                    },
+                    {
+                      "street1": "145 Mall Circle Dr",
+                      "street2": "Ste A07",
+                      "city": "Monroeville",
+                      "state": "PA",
+                      "zipcode": "15146"
+                    },
+                    {
+                      "street1": "655 W Herndon Ave",
+                      "city": "Clovis",
                       "state": "CA",
-                      "zipcode": "95815"
+                      "zipcode": "93612"
+                    },
+                    {
+                      "street1": "1584 N State Route 50",
+                      "city": "Bourbonnais",
+                      "state": "IL",
+                      "zipcode": "60914"
+                    },
+                    {
+                      "street1": "4600 International Gateway",
+                      "street2": null,
+                      "city": "Columbus",
+                      "state": "OH",
+                      "zipcode": "43219"
+                    },
+                    {
+                      "street1": "7600 S Cicero Ave",
+                      "city": "Burbank",
+                      "state": "IL",
+                      "zipcode": "60459"
+                    },
+                    {
+                      "street1": "2800 North Terminal Rd.",
+                      "street2": null,
+                      "city": "Houston",
+                      "state": "TX",
+                      "zipcode": "77032"
+                    },
+                    {
+                      "street1": "760 E El Camino Real",
+                      "city": "Sunnyvale",
+                      "state": "CA",
+                      "zipcode": "94087"
+                    },
+                    {
+                      "street1": "11 Countryside Plz",
+                      "city": "Countryside",
+                      "state": "IL",
+                      "zipcode": "60525"
                     }
                   ]
                 }
@@ -376,110 +377,110 @@
                                 "sampled": 2000,
                                 "ndistinct": 1000.0,
                                 "values": [
-                                  -116.96856,
-                                  32.62447,
-                                  -93.168518,
-                                  45.01651,
-                                  -92.40596,
-                                  34.749939,
-                                  -85.761253,
-                                  42.877113,
-                                  -93.804642,
-                                  41.569112,
-                                  -73.448065,
-                                  41.09751,
-                                  -82.497577,
-                                  27.23332,
-                                  -82.353157,
-                                  28.240932,
-                                  -118.40641,
-                                  34.016224,
-                                  -119.09827,
-                                  35.385105
+                                  -95.7068975,
+                                  29.6425663,
+                                  -85.178268,
+                                  42.264992,
+                                  -94.6572,
+                                  39.25906,
+                                  -85.589405,
+                                  42.221258,
+                                  -91.438715,
+                                  44.7757,
+                                  -118.340261,
+                                  34.102593,
+                                  -111.81945,
+                                  40.383049,
+                                  -99.761614,
+                                  32.401052,
+                                  -157.919795,
+                                  21.332003,
+                                  -86.804466,
+                                  33.225689
                                 ]
                               }
                             }
                           },
                           "values": [
                             [
-                              -116.96856,
-                              32.62447
+                              -95.7068975,
+                              29.6425663
                             ],
                             [
-                              -93.168518,
-                              45.01651
+                              -85.178268,
+                              42.264992
                             ],
                             [
-                              -92.40596,
-                              34.749939
+                              -94.6572,
+                              39.25906
                             ],
                             [
-                              -85.761253,
-                              42.877113
+                              -85.589405,
+                              42.221258
                             ],
                             [
-                              -93.804642,
-                              41.569112
+                              -91.438715,
+                              44.7757
                             ],
                             [
-                              -73.448065,
-                              41.09751
+                              -118.340261,
+                              34.102593
                             ],
                             [
-                              -82.497577,
-                              27.23332
+                              -111.81945,
+                              40.383049
                             ],
                             [
-                              -82.353157,
-                              28.240932
+                              -99.761614,
+                              32.401052
                             ],
                             [
-                              -118.40641,
-                              34.016224
+                              -157.919795,
+                              21.332003
                             ],
                             [
-                              -119.09827,
-                              35.385105
+                              -86.804466,
+                              33.225689
                             ],
                             [
-                              -98.70968,
-                              29.49046
+                              -79.800148,
+                              40.431396
                             ],
                             [
-                              -80.944165,
-                              35.223517
+                              -98.07806,
+                              29.72633
                             ],
                             [
-                              -110.93728,
-                              32.42561
+                              -79.793928,
+                              40.434593
                             ],
                             [
-                              -80.323966,
-                              26.144876
+                              -119.72599,
+                              36.84002
                             ],
                             [
-                              -75.123978,
-                              40.158539
+                              -87.850174,
+                              41.172596
                             ],
                             [
-                              -77.611366,
-                              37.509003
+                              -82.889208,
+                              39.99822
                             ],
                             [
-                              -84.74411,
-                              33.889713
+                              -87.742494,
+                              41.755972
                             ],
                             [
-                              -75.653275,
-                              41.456394
+                              -95.347925,
+                              29.986715
                             ],
                             [
-                              -94.297207,
-                              36.275599
+                              -122.01905,
+                              37.356812
                             ],
                             [
-                              -121.427554,
-                              38.601935
+                              -87.872665,
+                              41.783432
                             ]
                           ]
                         }
@@ -503,141 +504,141 @@
                     {
                       "type": "Point",
                       "coordinates": [
-                        -116.96856,
-                        32.62447
+                        -95.7068975,
+                        29.6425663
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -93.168518,
-                        45.01651
+                        -85.178268,
+                        42.264992
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -92.40596,
-                        34.749939
+                        -94.6572,
+                        39.25906
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -85.761253,
-                        42.877113
+                        -85.589405,
+                        42.221258
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -93.804642,
-                        41.569112
+                        -91.438715,
+                        44.7757
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -73.448065,
-                        41.09751
+                        -118.340261,
+                        34.102593
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -82.497577,
-                        27.23332
+                        -111.81945,
+                        40.383049
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -82.353157,
-                        28.240932
+                        -99.761614,
+                        32.401052
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -118.40641,
-                        34.016224
+                        -157.919795,
+                        21.332003
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -119.09827,
-                        35.385105
+                        -86.804466,
+                        33.225689
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -98.70968,
-                        29.49046
+                        -79.800148,
+                        40.431396
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -80.944165,
-                        35.223517
+                        -98.07806,
+                        29.72633
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -110.93728,
-                        32.42561
+                        -79.793928,
+                        40.434593
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -80.323966,
-                        26.144876
+                        -119.72599,
+                        36.84002
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -75.123978,
-                        40.158539
+                        -87.850174,
+                        41.172596
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -77.611366,
-                        37.509003
+                        -82.889208,
+                        39.99822
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -84.74411,
-                        33.889713
+                        -87.742494,
+                        41.755972
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -75.653275,
-                        41.456394
+                        -95.347925,
+                        29.986715
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -94.297207,
-                        36.275599
+                        -122.01905,
+                        37.356812
                       ]
                     },
                     {
                       "type": "Point",
                       "coordinates": [
-                        -121.427554,
-                        38.601935
+                        -87.872665,
+                        41.783432
                       ]
                     }
                   ]
@@ -648,309 +649,310 @@
           "values": [
             {
               "address": {
-                "street1": "2015 Birch Rd ",
-                "street2": "Ste 2300",
-                "city": "Chula Vista",
-                "state": "CA",
-                "zipcode": "91915"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -116.96856,
-                  32.62447
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "1643 County Road B2",
-                "city": "Roseville",
-                "state": "MN",
-                "zipcode": "55113"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -93.168518,
-                  45.01651
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "11800 Chenal Pkwy",
-                "city": "Little Rock",
-                "state": "AR",
-                "zipcode": "72211"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -92.40596,
-                  34.749939
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "4830 Wilson Ave SW",
-                "city": "Grandville",
-                "state": "MI",
-                "zipcode": "49418"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -85.761253,
-                  42.877113
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "101 Jordan Creek Pkwy",
-                "street2": "Ste. 12060",
-                "city": "West Des Moines",
-                "state": "IA",
-                "zipcode": "50266"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -93.804642,
-                  41.569112
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "I-95 Northbound past exit 12",
-                "street2": null,
-                "city": "Darien",
-                "state": "CT",
-                "zipcode": "6820"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -73.448065,
-                  41.09751
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "8201 S Tamiami Trail",
-                "street2": "#A13",
-                "city": "Sarasota",
-                "state": "FL",
-                "zipcode": "34238"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -82.497577,
-                  27.23332
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "5947 Wesley Grove Blvd",
-                "city": "Wesley Chapel",
-                "state": "FL",
-                "zipcode": "33544"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -82.353157,
-                  28.240932
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "10799 Washington Blvd",
-                "city": "Culver City",
-                "state": "CA",
-                "zipcode": "90232"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -118.40641,
-                  34.016224
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "8300 Rosedale Hwy",
-                "city": "Bakersfield",
-                "state": "CA",
-                "zipcode": "93312"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -119.09827,
-                  35.385105
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "5419 W Loop 1604 N",
-                "city": "San Antonio",
-                "state": "TX",
-                "zipcode": "78253"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -98.70968,
-                  29.49046
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "5501 R C Josh Birmingham Parkway",
-                "street2": null,
-                "city": "Charlotte",
-                "state": "NC",
-                "zipcode": "28208"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -80.944165,
-                  35.223517
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "11855 N Oracle Rd",
-                "city": "Oro Valley",
-                "state": "AZ",
-                "zipcode": "85737"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -110.93728,
-                  32.42561
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "12801 W Sunrise Blvd",
-                "street2": "Ste 835",
-                "city": "Sunrise",
-                "state": "FL",
-                "zipcode": "33323"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -80.323966,
-                  26.144876
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "1130 Easton Rd",
-                "city": "Willow Grove",
-                "state": "PA",
-                "zipcode": "19090"
-              },
-              "geo": {
-                "type": "Point",
-                "coordinates": [
-                  -75.123978,
-                  40.158539
-                ]
-              }
-            },
-            {
-              "address": {
-                "street1": "1560 W Koger Center Blvd",
+                "street1": "5340 West Grand Parkway South",
                 "city": "Richmond",
-                "state": "VA",
-                "zipcode": "23235"
+                "state": "TX",
+                "zipcode": "77406"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -77.611366,
-                  37.509003
+                  -95.7068975,
+                  29.6425663
                 ]
               }
             },
             {
               "address": {
-                "street1": "5025 Jimmy Lee Smith Pkwy",
-                "city": "Hiram",
-                "state": "GA",
-                "zipcode": "30141"
+                "street1": "12765 Harper Village Dr",
+                "street2": "Ste 160",
+                "city": "Battle Creek",
+                "state": "MI",
+                "zipcode": "49014"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -84.74411,
-                  33.889713
+                  -85.178268,
+                  42.264992
                 ]
               }
             },
             {
               "address": {
-                "street1": "959 Viewmont Dr",
-                "city": "Dickson City",
-                "state": "PA",
-                "zipcode": "18519"
+                "street1": "9130 N Skyview Ave",
+                "city": "Kansas City",
+                "state": "MO",
+                "zipcode": "64154"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -75.653275,
-                  41.456394
+                  -94.6572,
+                  39.25906
                 ]
               }
             },
             {
               "address": {
-                "street1": "1 Airport Boulevard #100",
+                "street1": "6650 S. Westnedge Avenue",
+                "street2": "#209",
+                "city": "Portage",
+                "state": "MI",
+                "zipcode": "49024"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -85.589405,
+                  42.221258
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "4800 Golf Road",
+                "street2": "#402",
+                "city": "Eau Claire",
+                "state": "WI",
+                "zipcode": "54701"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -91.438715,
+                  44.7757
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "6801 Hollywood Blvd",
                 "street2": null,
-                "city": "Bentonville",
-                "state": "AR",
-                "zipcode": "72712"
+                "city": "Hollywood",
+                "state": "CA",
+                "zipcode": "90028"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -94.297207,
-                  36.275599
+                  -118.340261,
+                  34.102593
                 ]
               }
             },
             {
               "address": {
-                "street1": "1689 Arden Way",
-                "street2": "#2054",
-                "city": "Sacramento",
-                "state": "CA",
-                "zipcode": "95815"
+                "street1": "763 W Grasslands Dr",
+                "city": "American Fork",
+                "state": "UT",
+                "zipcode": "84003"
               },
               "geo": {
                 "type": "Point",
                 "coordinates": [
-                  -121.427554,
-                  38.601935
+                  -111.81945,
+                  40.383049
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "4310 Buffalo Gap Rd",
+                "street2": "Ste 1110",
+                "city": "Abilene",
+                "state": "TX",
+                "zipcode": "79606"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -99.761614,
+                  32.401052
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "300 Rodgers Boulevard",
+                "street2": null,
+                "city": "Honolulu",
+                "state": "HI",
+                "zipcode": "96819"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -157.919795,
+                  21.332003
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "100 S Colonial Dr",
+                "city": "Alabaster",
+                "state": "AL",
+                "zipcode": "35007"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -86.804466,
+                  33.225689
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "200 Mall Circle Dr",
+                "city": "Monroeville",
+                "state": "PA",
+                "zipcode": "15146"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -79.800148,
+                  40.431396
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "187 Creekside Way",
+                "city": "New Braunfels",
+                "state": "TX",
+                "zipcode": "78130"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -98.07806,
+                  29.72633
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "145 Mall Circle Dr",
+                "street2": "Ste A07",
+                "city": "Monroeville",
+                "state": "PA",
+                "zipcode": "15146"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -79.793928,
+                  40.434593
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "655 W Herndon Ave",
+                "city": "Clovis",
+                "state": "CA",
+                "zipcode": "93612"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -119.72599,
+                  36.84002
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "1584 N State Route 50",
+                "city": "Bourbonnais",
+                "state": "IL",
+                "zipcode": "60914"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -87.850174,
+                  41.172596
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "4600 International Gateway",
+                "street2": null,
+                "city": "Columbus",
+                "state": "OH",
+                "zipcode": "43219"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -82.889208,
+                  39.99822
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "7600 S Cicero Ave",
+                "city": "Burbank",
+                "state": "IL",
+                "zipcode": "60459"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -87.742494,
+                  41.755972
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "2800 North Terminal Rd.",
+                "street2": null,
+                "city": "Houston",
+                "state": "TX",
+                "zipcode": "77032"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -95.347925,
+                  29.986715
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "760 E El Camino Real",
+                "city": "Sunnyvale",
+                "state": "CA",
+                "zipcode": "94087"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -122.01905,
+                  37.356812
+                ]
+              }
+            },
+            {
+              "address": {
+                "street1": "11 Countryside Plz",
+                "city": "Countryside",
+                "state": "IL",
+                "zipcode": "60525"
+              },
+              "geo": {
+                "type": "Point",
+                "coordinates": [
+                  -87.872665,
+                  41.783432
                 ]
               }
             }
@@ -966,26 +968,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            1769,
-            7,
-            275,
-            464,
-            2828,
-            8544,
-            2878,
-            1405,
-            179,
-            856,
-            1459,
-            8169,
-            1143,
-            2904,
-            576,
-            422,
-            1486,
-            341,
-            8173,
-            2781
+            1517,
+            840,
+            1501,
+            2800,
+            2757,
+            8900,
+            1402,
+            2954,
+            8140,
+            1162,
+            432,
+            1387,
+            2956,
+            1188,
+            1123,
+            8077,
+            311,
+            8089,
+            685,
+            324
           ]
         }
       }
