@@ -11,6 +11,8 @@ CREATE TABLE stories (
     promote_date INTEGER NOT NULL,
     status TEXT NOT NULL,
     submit_date INTEGER NOT NULL,
+    takedowndays INTEGER,
+    takedownuri TEXT,
     title TEXT NOT NULL
 );
 
