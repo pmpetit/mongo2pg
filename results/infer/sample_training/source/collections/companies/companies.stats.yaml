@@ -1,17 +1,17 @@
 documents_in_collection: 9500
 documents_sampled: 1000
 width_top_level: 42
-width_max: 66.12
+width_max: 66.16
 width_max_level: 3
 depth_max: 6
-branch_total: 156.04
+branch_total: 156.27
 branch_per_level:
   L1: 42.0
-  L2: 16.02
-  L3: 66.12
+  L2: 16.22
+  L3: 66.16
   L4: 22.86
   L5: 6.43
-  L6: 2.61
+  L6: 2.6
 top_level_types:
   _id: ObjectId
   acquisition: 'Null'
@@ -57,4 +57,5 @@ top_level_types:
   video_embeds: Array
 array_field_count: 13
 avg_fields_per_doc: 42.0
+distinct_fields_over_avg_fields_per_doc: 1.0
 migrability_score: 17.0

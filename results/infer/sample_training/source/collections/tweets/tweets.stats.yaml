@@ -1,17 +1,18 @@
 documents_in_collection: 24832
 documents_sampled: 1000
 width_top_level: 19
-width_max: 36.26
+width_max: 36.56
 width_max_level: 2
-depth_max: 6
-branch_total: 72.87
+depth_max: 7
+branch_total: 74.01
 branch_per_level:
-  L1: 18.07
-  L2: 36.26
-  L3: 5.47
-  L4: 9.22
-  L5: 3.63
-  L6: 0.22
+  L1: 18.09
+  L2: 36.56
+  L3: 6.06
+  L4: 9.27
+  L5: 3.78
+  L6: 0.27
+  L7: 0.0
 top_level_types:
   _id: ObjectId
   contributors: 'Null'
@@ -33,5 +34,6 @@ top_level_types:
   truncated: Boolean
   user: Object
 array_field_count: 0
-avg_fields_per_doc: 18.07
-migrability_score: 4.05
+avg_fields_per_doc: 18.09
+distinct_fields_over_avg_fields_per_doc: 1.0505
+migrability_score: 4.55

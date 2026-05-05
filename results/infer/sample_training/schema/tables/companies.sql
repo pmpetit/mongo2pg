@@ -161,7 +161,7 @@ CREATE TABLE companies_products (
 CREATE TABLE companies_providerships (
     id BIGSERIAL PRIMARY KEY,
     companies_id UUID NOT NULL,
-    is_past BOOLEAN,
+    is_past BOOLEAN NOT NULL,
     title TEXT NOT NULL,
     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
 );
@@ -229,13 +229,13 @@ CREATE TABLE companies_investments_funding_round (
     id BIGSERIAL PRIMARY KEY,
     companies_investments_id BIGINT NOT NULL,
     funded_day INTEGER,
-    funded_month INTEGER NOT NULL,
-    funded_year INTEGER NOT NULL,
+    funded_month INTEGER,
+    funded_year INTEGER,
     raised_amount INTEGER,
     raised_currency_code VARCHAR(3),
     round_code TEXT NOT NULL,
-    source_description TEXT,
-    source_url TEXT,
+    source_description TEXT NOT NULL,
+    source_url TEXT NOT NULL,
     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
 );
 

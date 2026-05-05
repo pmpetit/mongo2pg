@@ -1,13 +1,13 @@
 documents_in_collection: 5555
 documents_sampled: 1000
 width_top_level: 42
-width_max: 38.01
+width_max: 38.09
 width_max_level: 1
 depth_max: 4
-branch_total: 86.53
+branch_total: 86.77
 branch_per_level:
-  L1: 38.01
-  L2: 37.51
+  L1: 38.09
+  L2: 37.68
   L3: 10.0
   L4: 1.0
 top_level_types:
@@ -54,5 +54,6 @@ top_level_types:
   transit: String
   weekly_price: Decimal128
 array_field_count: 2
-avg_fields_per_doc: 38.01
+avg_fields_per_doc: 38.09
+distinct_fields_over_avg_fields_per_doc: 1.1027
 migrability_score: 5.1

@@ -3,4 +3,6 @@ Documents sampled       : 6
 Width (top-level / max)  : 8 / 7.7 (L1)
 Depth (max nesting)     : 1
 Branch (per level)      : L1:7.7
+Avg fields / doc        : 7.6667
+Distinct fields / avg    : 1.0435
 Top-level types         : _id:ObjectId, city:String, country:String, cp:String, name:String, state:String, street_and_number:String, type:String

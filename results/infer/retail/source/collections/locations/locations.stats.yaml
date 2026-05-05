@@ -18,4 +18,5 @@ top_level_types:
   type: String
 array_field_count: 0
 avg_fields_per_doc: 7.67
+distinct_fields_over_avg_fields_per_doc: 1.0435
 migrability_score: 1.54

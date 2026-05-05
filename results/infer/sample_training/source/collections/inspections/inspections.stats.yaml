@@ -19,4 +19,5 @@ top_level_types:
   sector: String
 array_field_count: 0
 avg_fields_per_doc: 8.0
+distinct_fields_over_avg_fields_per_doc: 1.0
 migrability_score: 2.0

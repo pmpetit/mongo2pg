@@ -14,4 +14,5 @@ top_level_types:
   user: ObjectId
 array_field_count: 1
 avg_fields_per_doc: 3.0
+distinct_fields_over_avg_fields_per_doc: 1.0
 migrability_score: 3.0

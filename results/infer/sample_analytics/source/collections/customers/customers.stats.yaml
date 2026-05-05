@@ -22,4 +22,5 @@ top_level_types:
   username: String
 array_field_count: 1
 avg_fields_per_doc: 8.0
+distinct_fields_over_avg_fields_per_doc: 1.1247
 migrability_score: 4.12
