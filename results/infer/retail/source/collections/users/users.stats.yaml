@@ -20,4 +20,5 @@ top_level_types:
   version: Number
 array_field_count: 1
 avg_fields_per_doc: 7.25
+distinct_fields_over_avg_fields_per_doc: 1.1034
 migrability_score: 3.6

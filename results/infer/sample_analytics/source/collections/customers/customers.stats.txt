@@ -3,4 +3,6 @@ Documents sampled       : 500
 Width (top-level / max)  : 9 / 8.0 (L1)
 Depth (max nesting)     : 4
 Branch (per level)      : L1:8.0  L2:1.9  L3:3.6  L4:0.9
+Avg fields / doc        : 8.0020
+Distinct fields / avg    : 1.1247
 Top-level types         : _id:ObjectId, accounts:Array, active:Boolean, address:String, birthdate:Date, email:String, name:String, tier_and_details:Object, username:String

@@ -147,9 +147,36 @@ CREATE TABLE tweets_place_bounding_box (
     FOREIGN KEY (tweets_place_id) REFERENCES tweets_place (id) DEFERRABLE INITIALLY DEFERRED
 );
 
+CREATE TABLE tweets_retweeted_status_coordinates (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_id BIGINT NOT NULL,
+    type TEXT NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_id) REFERENCES tweets_retweeted_status (id) DEFERRABLE INITIALLY DEFERRED
+);
+
 CREATE TABLE tweets_retweeted_status_entities (
     id BIGSERIAL PRIMARY KEY,
     tweets_retweeted_status_id BIGINT NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_id) REFERENCES tweets_retweeted_status (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE tweets_retweeted_status_geo (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_id BIGINT NOT NULL,
+    type TEXT NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_id) REFERENCES tweets_retweeted_status (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE tweets_retweeted_status_place (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_id BIGINT NOT NULL,
+    country TEXT NOT NULL,
+    country_code VARCHAR(2) NOT NULL,
+    full_name TEXT NOT NULL,
+    field_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    place_type TEXT NOT NULL,
+    url TEXT NOT NULL,
     FOREIGN KEY (tweets_retweeted_status_id) REFERENCES tweets_retweeted_status (id) DEFERRABLE INITIALLY DEFERRED
 );
 
@@ -216,6 +243,13 @@ CREATE TABLE tweets_place_bounding_box_coordinates (
     FOREIGN KEY (tweets_place_bounding_box_id) REFERENCES tweets_place_bounding_box (id) DEFERRABLE INITIALLY DEFERRED
 );
 
+CREATE TABLE tweets_retweeted_status_coordinates_coordinates (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_coordinates_id BIGINT NOT NULL,
+    value DOUBLE PRECISION NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_coordinates_id) REFERENCES tweets_retweeted_status_coordinates (id) DEFERRABLE INITIALLY DEFERRED
+);
+
 CREATE TABLE tweets_retweeted_status_entities_hashtags (
     id BIGSERIAL PRIMARY KEY,
     tweets_retweeted_status_entities_id BIGINT NOT NULL,
@@ -239,6 +273,26 @@ CREATE TABLE tweets_retweeted_status_entities_user_mentions (
     FOREIGN KEY (tweets_retweeted_status_entities_id) REFERENCES tweets_retweeted_status_entities (id) DEFERRABLE INITIALLY DEFERRED
 );
 
+CREATE TABLE tweets_retweeted_status_geo_coordinates (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_geo_id BIGINT NOT NULL,
+    value DOUBLE PRECISION NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_geo_id) REFERENCES tweets_retweeted_status_geo (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE tweets_retweeted_status_place_attributes (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_place_id BIGINT NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_place_id) REFERENCES tweets_retweeted_status_place (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE tweets_retweeted_status_place_bounding_box (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_place_id BIGINT NOT NULL,
+    type TEXT NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_place_id) REFERENCES tweets_retweeted_status_place (id) DEFERRABLE INITIALLY DEFERRED
+);
+
 CREATE TABLE tweets_retweeted_status_entities_hashtags_indices (
     id BIGSERIAL PRIMARY KEY,
     tweets_retweeted_status_entities_hashtags_id BIGINT NOT NULL,
@@ -258,4 +312,11 @@ CREATE TABLE tweets_retweeted_status_entities_user_mentions_indices (
     tweets_retweeted_status_entities_user_mentions_id BIGINT NOT NULL,
     value INTEGER NOT NULL,
     FOREIGN KEY (tweets_retweeted_status_entities_user_mentions_id) REFERENCES tweets_retweeted_status_entities_user_mentions (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE tweets_retweeted_status_place_bounding_box_coordinates (
+    id BIGSERIAL PRIMARY KEY,
+    tweets_retweeted_status_place_bounding_box_id BIGINT NOT NULL,
+    value TEXT NOT NULL,
+    FOREIGN KEY (tweets_retweeted_status_place_bounding_box_id) REFERENCES tweets_retweeted_status_place_bounding_box (id) DEFERRABLE INITIALLY DEFERRED
 );

@@ -1,15 +1,15 @@
 documents_in_collection: 10000
 documents_sampled: 1000
 width_top_level: 26
-width_max: 36.95
+width_max: 36.72
 width_max_level: 3
 depth_max: 4
-branch_total: 95.16
+branch_total: 94.69
 branch_per_level:
-  L1: 22.23
-  L2: 31.94
-  L3: 36.95
-  L4: 4.03
+  L1: 22.18
+  L2: 31.81
+  L3: 36.72
+  L4: 3.98
 top_level_types:
   _id: ObjectId
   airTemperature: Object
@@ -38,5 +38,6 @@ top_level_types:
   waveMeasurement: Object
   wind: Object
 array_field_count: 5
-avg_fields_per_doc: 22.23
+avg_fields_per_doc: 22.18
+distinct_fields_over_avg_fields_per_doc: 1.1722
 migrability_score: 8.17

@@ -3,4 +3,6 @@ Documents sampled       : 1000
 Width (top-level / max)  : 4 / 4.0 (L1)
 Depth (max nesting)     : 3
 Branch (per level)      : L1:4.0  L2:1.0  L3:2.0
+Avg fields / doc        : 4.0000
+Distinct fields / avg    : 1.0000
 Top-level types         : _id:ObjectId, class_id:Number, scores:Array, student_id:Number

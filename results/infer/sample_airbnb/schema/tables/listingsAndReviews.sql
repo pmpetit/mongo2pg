@@ -4,7 +4,7 @@ CREATE TABLE listingsandreviews (
     accommodates INTEGER NOT NULL,
     bathrooms NUMERIC,
     bed_type TEXT NOT NULL,
-    bedrooms INTEGER NOT NULL,
+    bedrooms INTEGER,
     beds INTEGER,
     calendar_last_scraped TIMESTAMP WITH TIME ZONE NOT NULL,
     cancellation_policy TEXT NOT NULL,
@@ -112,7 +112,7 @@ CREATE TABLE listingsandreviews_review_scores (
 CREATE TABLE listingsandreviews_reviews (
     id BIGSERIAL PRIMARY KEY,
     listingsandreviews_id BIGINT NOT NULL,
-    comments TEXT,
+    comments TEXT NOT NULL,
     date TIMESTAMP WITH TIME ZONE NOT NULL,
     listing_id INTEGER NOT NULL,
     reviewer_id INTEGER NOT NULL,

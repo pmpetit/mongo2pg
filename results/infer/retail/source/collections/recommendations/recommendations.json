@@ -11,9 +11,9 @@
           "ndistinct": 4.0,
           "values": [
             "682b79076684614c29d14ff1",
-            "682b73a36684614c29d14fee",
             "682b77d26684614c29d14fef",
-            "682b78746684614c29d14ff0"
+            "682b78746684614c29d14ff0",
+            "682b73a36684614c29d14fee"
           ]
         }
       }
@@ -27,9 +27,9 @@
           "ndistinct": 4.0,
           "values": [
             "2025-05-19 18:31:35.669 +00:00:00",
-            "2025-05-19 18:08:35.135 +00:00:00",
             "2025-05-19 18:26:26.362 +00:00:00",
-            "2025-05-19 18:29:08.995 +00:00:00"
+            "2025-05-19 18:29:08.995 +00:00:00",
+            "2025-05-19 18:08:35.135 +00:00:00"
           ]
         }
       }
@@ -43,9 +43,9 @@
           "ndistinct": 4.0,
           "values": [
             "682b79076b1445af06f9912b",
-            "682b73a26b1445af06f99128",
             "682b77d26b1445af06f99129",
-            "682b78746b1445af06f9912a"
+            "682b78746b1445af06f9912a",
+            "682b73a26b1445af06f99128"
           ]
         }
       }
@@ -74,9 +74,9 @@
                         "values": [
                           "AmazonBasics",
                           "Whole Paws",
-                          "Amazon Collection",
                           "Amazon Brand - Solimo",
-                          "AmazonCommercial"
+                          "AmazonCommercial",
+                          "Amazon Collection"
                         ]
                       }
                     }
@@ -252,7 +252,7 @@
                                   96,
                                   41,
                                   53,
-                                  116
+                                  118
                                 ]
                               }
                             }
@@ -349,7 +349,7 @@
                             "currency": "USD"
                           },
                           {
-                            "amount": 116,
+                            "amount": 118,
                             "currency": "USD"
                           }
                         ]
@@ -951,268 +951,6 @@
             ],
             [
               {
-                "productId": "67192b4164d161905fbe7df3",
-                "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 116,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
-                },
-                "vectorSearchScore": 1.0
-              },
-              {
-                "productId": "67192b4264d161905fbe80fd",
-                "name": "Amazon Collection Sterling Silver Birthstone Halo Heart Stud Earrings, Garnet",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 77,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71N+6KrQo5L.jpg"
-                },
-                "vectorSearchScore": 0.9097891449928284
-              },
-              {
-                "productId": "67192b4464d161905fbe894f",
-                "name": "Sterling Silver Rose Gold Plated Polished Bead Post 12mm Stud Earrings",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 53,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61ewDxCP2hL.jpg"
-                },
-                "vectorSearchScore": 0.8680694699287415
-              },
-              {
-                "productId": "67192b4164d161905fbe7b78",
-                "name": "Platinum-Plated Sterling Silver and Swarovski Zirconia Solitaire Pendant Necklace, 16 Inch",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 49,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61-Xq5MXdZL.jpg"
-                },
-                "vectorSearchScore": 0.8678881525993347
-              },
-              {
-                "productId": "67192b4164d161905fbe7f09",
-                "name": "Silver Plated Swarovski Emerald Crystal Birthstone Pendant Necklace (May)",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 47,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61LKi+Zz10L.jpg"
-                },
-                "vectorSearchScore": 0.8649834394454956
-              },
-              {
-                "productId": "67192b4164d161905fbe7bf0",
-                "name": "Yellow Gold Plated Sterling Silver Stud Earrings set with Round Cut Swarovski Zirconia (4 cttw)",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 107,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71fkA0jXPUL.jpg"
-                },
-                "vectorSearchScore": 0.864978551864624
-              },
-              {
-                "productId": "67192b4464d161905fbe87ef",
-                "name": "10k Gold Made with Swarovski Birthstone November Stud Earrings",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 82,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61oUoKCakXL.jpg"
-                },
-                "vectorSearchScore": 0.8646925091743469
-              },
-              {
-                "productId": "67192b4164d161905fbe7e53",
-                "name": "Amazon Collection Women 14 K Yellow Gold and Sterling Sterling Silver Heart Shape Design Round Shape I-J Diamond & Blue Topaz, White",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 118,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71L5iucX4RL.jpg"
-                },
-                "vectorSearchScore": 0.8644770383834839
-              },
-              {
-                "productId": "67192b4364d161905fbe86f7",
-                "name": "Sterling Silver Genuine or Created Gemstone Butterfly Stud Earrings",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 24,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71LomtWbmyL.jpg"
-                },
-                "vectorSearchScore": 0.861723780632019
-              },
-              {
-                "productId": "67192b4464d161905fbe87ad",
-                "name": "Sterling Silver Created Emerald Flower Pendant Necklace, 18\"",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 56,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71wONFW5v8L.jpg"
-                },
-                "vectorSearchScore": 0.861472487449646
-              },
-              {
-                "productId": "67192b4164d161905fbe7edb",
-                "name": "Sterling Silver Wishbone Pendant Necklace, 18\"",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 80,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71kk0N6dR2L.jpg"
-                },
-                "vectorSearchScore": 0.8609851598739624
-              },
-              {
-                "productId": "67192b4364d161905fbe851c",
-                "name": "Sterling Silver Celtic Knot Earrings",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 106,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/81e8zyzLE+L.jpg"
-                },
-                "vectorSearchScore": 0.8604781031608582
-              },
-              {
-                "productId": "67192b4564d161905fbe8bb6",
-                "name": "Sterling Silver Created Ruby 5mm and 3mm Three Stone July Birthstone Leverback Dangle Earrings",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 83,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/61T9X+l-3lL.jpg"
-                },
-                "vectorSearchScore": 0.8596803545951843
-              },
-              {
-                "productId": "67192b4164d161905fbe7d4f",
-                "name": "Sterling Silver Stationed Mini State Oregon Pendant Necklace, 16\"+2\" Extender",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 11,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71tKUPjL0qL.jpg"
-                },
-                "vectorSearchScore": 0.8591042160987854
-              },
-              {
-                "productId": "67192b3f64d161905fbe7968",
-                "name": "Women's 14K Plated Sterling Silver Open Circle Cubic Zirconia Drop Earrings, Rose Gold, One Size",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 83,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71S+OBkPb5L.jpg"
-                },
-                "vectorSearchScore": 0.8586016893386841
-              },
-              {
-                "productId": "67192b3f64d161905fbe7b12",
-                "name": "Sterling Silver White-Topaz and Diamond Accent Open Halo Heart Ring, Size 6",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 41,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71f0katHUoL.jpg"
-                },
-                "vectorSearchScore": 0.8585289716720581
-              },
-              {
-                "productId": "67192b4464d161905fbe89a3",
-                "name": "Women's Sterling Silver Filigree Hoop Earrings, Rose Gold, One Size",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 58,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/81xO1RewKiL.jpg"
-                },
-                "vectorSearchScore": 0.8582565188407898
-              },
-              {
-                "productId": "67192b4264d161905fbe8101",
-                "name": "Sterling Silver Stationed Mini State Pennsylvania Pendant Necklace, 16\"+2\" Extender",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 88,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/71OjYpm+OxL.jpg"
-                },
-                "vectorSearchScore": 0.8565768003463745
-              },
-              {
-                "productId": "67192b3f64d161905fbe7ab8",
-                "name": "Sterling Silver Oval Amethyst Dangle Earrings",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 98,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/717rX+L5mgL.jpg"
-                },
-                "vectorSearchScore": 0.8537488579750061
-              },
-              {
-                "productId": "67192b4464d161905fbe8a43",
-                "name": "Sterling Silver Orange Pressed Flower Teardrop Earrings",
-                "brand": "Amazon Collection",
-                "price": {
-                  "amount": 29,
-                  "currency": "USD"
-                },
-                "image": {
-                  "url": "https://m.media-amazon.com/images/I/81NZfrYpkTL.jpg"
-                },
-                "vectorSearchScore": 0.8531463146209717
-              }
-            ],
-            [
-              {
                 "productId": "67192b3f64d161905fbe7a5a",
                 "name": "AmazonBasics Combo Plastic Cutlery",
                 "brand": "AmazonBasics",
@@ -1734,6 +1472,268 @@
                 },
                 "vectorSearchScore": 0.8299871683120728
               }
+            ],
+            [
+              {
+                "productId": "67192b4164d161905fbe7df3",
+                "name": "Girls' Petite Sterling Silver Birthstone Open Heart Stud Earrings and 16\" Pendant Necklace Jewelry Set",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 116,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71IORaOBEcL.jpg"
+                },
+                "vectorSearchScore": 1.0
+              },
+              {
+                "productId": "67192b4264d161905fbe80fd",
+                "name": "Amazon Collection Sterling Silver Birthstone Halo Heart Stud Earrings, Garnet",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 77,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71N+6KrQo5L.jpg"
+                },
+                "vectorSearchScore": 0.9097891449928284
+              },
+              {
+                "productId": "67192b4464d161905fbe894f",
+                "name": "Sterling Silver Rose Gold Plated Polished Bead Post 12mm Stud Earrings",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 53,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61ewDxCP2hL.jpg"
+                },
+                "vectorSearchScore": 0.8680694699287415
+              },
+              {
+                "productId": "67192b4164d161905fbe7b78",
+                "name": "Platinum-Plated Sterling Silver and Swarovski Zirconia Solitaire Pendant Necklace, 16 Inch",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 49,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61-Xq5MXdZL.jpg"
+                },
+                "vectorSearchScore": 0.8678881525993347
+              },
+              {
+                "productId": "67192b4164d161905fbe7f09",
+                "name": "Silver Plated Swarovski Emerald Crystal Birthstone Pendant Necklace (May)",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 47,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61LKi+Zz10L.jpg"
+                },
+                "vectorSearchScore": 0.8649834394454956
+              },
+              {
+                "productId": "67192b4164d161905fbe7bf0",
+                "name": "Yellow Gold Plated Sterling Silver Stud Earrings set with Round Cut Swarovski Zirconia (4 cttw)",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 107,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71fkA0jXPUL.jpg"
+                },
+                "vectorSearchScore": 0.864978551864624
+              },
+              {
+                "productId": "67192b4464d161905fbe87ef",
+                "name": "10k Gold Made with Swarovski Birthstone November Stud Earrings",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 82,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61oUoKCakXL.jpg"
+                },
+                "vectorSearchScore": 0.8646925091743469
+              },
+              {
+                "productId": "67192b4164d161905fbe7e53",
+                "name": "Amazon Collection Women 14 K Yellow Gold and Sterling Sterling Silver Heart Shape Design Round Shape I-J Diamond & Blue Topaz, White",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 118,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71L5iucX4RL.jpg"
+                },
+                "vectorSearchScore": 0.8644770383834839
+              },
+              {
+                "productId": "67192b4364d161905fbe86f7",
+                "name": "Sterling Silver Genuine or Created Gemstone Butterfly Stud Earrings",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 24,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71LomtWbmyL.jpg"
+                },
+                "vectorSearchScore": 0.861723780632019
+              },
+              {
+                "productId": "67192b4464d161905fbe87ad",
+                "name": "Sterling Silver Created Emerald Flower Pendant Necklace, 18\"",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 56,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71wONFW5v8L.jpg"
+                },
+                "vectorSearchScore": 0.861472487449646
+              },
+              {
+                "productId": "67192b4164d161905fbe7edb",
+                "name": "Sterling Silver Wishbone Pendant Necklace, 18\"",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 80,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71kk0N6dR2L.jpg"
+                },
+                "vectorSearchScore": 0.8609851598739624
+              },
+              {
+                "productId": "67192b4364d161905fbe851c",
+                "name": "Sterling Silver Celtic Knot Earrings",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 106,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/81e8zyzLE+L.jpg"
+                },
+                "vectorSearchScore": 0.8604781031608582
+              },
+              {
+                "productId": "67192b4564d161905fbe8bb6",
+                "name": "Sterling Silver Created Ruby 5mm and 3mm Three Stone July Birthstone Leverback Dangle Earrings",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 83,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/61T9X+l-3lL.jpg"
+                },
+                "vectorSearchScore": 0.8596803545951843
+              },
+              {
+                "productId": "67192b4164d161905fbe7d4f",
+                "name": "Sterling Silver Stationed Mini State Oregon Pendant Necklace, 16\"+2\" Extender",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 11,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71tKUPjL0qL.jpg"
+                },
+                "vectorSearchScore": 0.8591042160987854
+              },
+              {
+                "productId": "67192b3f64d161905fbe7968",
+                "name": "Women's 14K Plated Sterling Silver Open Circle Cubic Zirconia Drop Earrings, Rose Gold, One Size",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 83,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71S+OBkPb5L.jpg"
+                },
+                "vectorSearchScore": 0.8586016893386841
+              },
+              {
+                "productId": "67192b3f64d161905fbe7b12",
+                "name": "Sterling Silver White-Topaz and Diamond Accent Open Halo Heart Ring, Size 6",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 41,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71f0katHUoL.jpg"
+                },
+                "vectorSearchScore": 0.8585289716720581
+              },
+              {
+                "productId": "67192b4464d161905fbe89a3",
+                "name": "Women's Sterling Silver Filigree Hoop Earrings, Rose Gold, One Size",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 58,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/81xO1RewKiL.jpg"
+                },
+                "vectorSearchScore": 0.8582565188407898
+              },
+              {
+                "productId": "67192b4264d161905fbe8101",
+                "name": "Sterling Silver Stationed Mini State Pennsylvania Pendant Necklace, 16\"+2\" Extender",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 88,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/71OjYpm+OxL.jpg"
+                },
+                "vectorSearchScore": 0.8565768003463745
+              },
+              {
+                "productId": "67192b3f64d161905fbe7ab8",
+                "name": "Sterling Silver Oval Amethyst Dangle Earrings",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 98,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/717rX+L5mgL.jpg"
+                },
+                "vectorSearchScore": 0.8537488579750061
+              },
+              {
+                "productId": "67192b4464d161905fbe8a43",
+                "name": "Sterling Silver Orange Pressed Flower Teardrop Earrings",
+                "brand": "Amazon Collection",
+                "price": {
+                  "amount": 29,
+                  "currency": "USD"
+                },
+                "image": {
+                  "url": "https://m.media-amazon.com/images/I/81NZfrYpkTL.jpg"
+                },
+                "vectorSearchScore": 0.8531463146209717
+              }
             ]
           ]
         }
@@ -1748,9 +1748,9 @@
           "ndistinct": 4.0,
           "values": [
             "671ff2451ec726b417352703",
-            "65a546ae4a8f64e8f88fb89e",
             "66fe219d625d93a100528224",
-            "671ff0081ec726b417352702"
+            "671ff0081ec726b417352702",
+            "65a546ae4a8f64e8f88fb89e"
           ]
         }
       }

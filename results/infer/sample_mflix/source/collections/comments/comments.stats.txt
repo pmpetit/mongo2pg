@@ -3,4 +3,6 @@ Documents sampled       : 1000
 Width (top-level / max)  : 6 / 6.0 (L1)
 Depth (max nesting)     : 1
 Branch (per level)      : L1:6.0
+Avg fields / doc        : 6.0000
+Distinct fields / avg    : 1.0000
 Top-level types         : _id:ObjectId, date:Date, email:String, movie_id:ObjectId, name:String, text:String
