@@ -399,7 +399,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             .context("Failed to list collections")?;
 
         let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
-        for coll_name in &coll_names {
+        for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
             let schema = infer_collection(&client, &namespace, coll_name, &args).await?;
             all_schemas.insert(coll_name.clone(), schema);
         }
@@ -723,9 +723,7 @@ fn run_report(args: ReportArgs) -> Result<()> {
 
 fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
     if args.configs.is_empty() {
-        return Err(anyhow!(
-            "Provide at least one config path via --configs"
-        ));
+        return Err(anyhow!("Provide at least one config path via --configs"));
     }
 
     let mut db_scores = Vec::new();
@@ -758,9 +756,7 @@ fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
 
     let html = render_cluster_html(&db_scores, &cluster_label);
 
-    let output_path = args
-        .output
-        .unwrap_or_else(|| PathBuf::from("cluster.html"));
+    let output_path = args.output.unwrap_or_else(|| PathBuf::from("cluster.html"));
     std::fs::write(&output_path, &html)
         .with_context(|| format!("Failed to write {}", output_path.display()))?;
     println!("Cluster report written to {}", output_path.display());
