@@ -352,13 +352,10 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             (uri, args.output_dir.clone(), None, None, None, false)
         };
 
-    let namespace = args
-        .namespace
-        .clone()
-        .or(conf_namespace)
-        .ok_or_else(|| {
-            anyhow!("No namespace provided: pass <db> or <db>.<collection> as an argument or add NAMESPACE to the config file")
-        })?;
+    let namespace = args.namespace.clone().or(conf_namespace).ok_or_else(|| {
+        eprintln!("Warning: namespace is missing – pass <db> or <db>.<collection> via --namespace or add NAMESPACE to the config file");
+        anyhow!("No namespace provided: pass <db> or <db>.<collection> as an argument or add NAMESPACE to the config file")
+    })?;
 
     let client_options = ClientOptions::parse(&resolved_uri)
         .await
@@ -383,9 +380,39 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         ..args
     };
 
+    // Warn if the database referenced in the namespace does not exist.
+    {
+        let db_name = if let Some(dot) = namespace.find('.') {
+            &namespace[..dot]
+        } else {
+            namespace.as_str()
+        };
+        let existing_dbs = client
+            .list_database_names()
+            .await
+            .context("Failed to list databases")?;
+        if !existing_dbs.iter().any(|d| d == db_name) {
+            eprintln!(
+                "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
+                existing_dbs.join(", ")
+            );
+        }
+    }
+
     if namespace.contains('.') {
         // Single collection: <db>.<collection>
         let (db_name, coll_name) = parse_namespace(&namespace)?;
+        let existing_colls = client
+            .database(db_name)
+            .list_collection_names()
+            .await
+            .context("Failed to list collections")?;
+        if !existing_colls.iter().any(|c| c == coll_name) {
+            eprintln!(
+                "Warning: collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
+                existing_colls.join(", ")
+            );
+        }
         let schema = infer_collection(&client, db_name, coll_name, &args).await?;
         if !args.no_output {
             println!("{}", serde_json::to_string_pretty(&schema)?);
@@ -488,20 +515,24 @@ fn write_collection_files(
     schema: &CollectionSchema,
     stats_lines: &[String],
 ) -> Result<()> {
-    let dir = base.join(coll_name);
+    // Sanitize collection name for use as a filesystem path component:
+    // MongoDB allows '/' in collection names; replace with '_' to avoid
+    // path traversal issues when constructing output directories/files.
+    let safe_name = coll_name.replace('/', "_");
+    let dir = base.join(&safe_name);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("Failed to create directory {}", dir.display()))?;
 
-    let json_path = dir.join(format!("{coll_name}.json"));
+    let json_path = dir.join(format!("{safe_name}.json"));
     std::fs::write(&json_path, serde_json::to_string_pretty(schema)?)
         .with_context(|| format!("Failed to write {}", json_path.display()))?;
 
-    let stats_path = dir.join(format!("{coll_name}.stats.txt"));
+    let stats_path = dir.join(format!("{safe_name}.stats.txt"));
     std::fs::write(&stats_path, stats_lines.join("\n") + "\n")
         .with_context(|| format!("Failed to write {}", stats_path.display()))?;
 
     let yaml_stats = stats_to_yaml(schema, Some(schema.count));
-    let yaml_path = dir.join(format!("{coll_name}.stats.yaml"));
+    let yaml_path = dir.join(format!("{safe_name}.stats.yaml"));
     std::fs::write(&yaml_path, serde_yaml::to_string(&yaml_stats)?)
         .with_context(|| format!("Failed to write {}", yaml_path.display()))?;
 
