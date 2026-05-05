@@ -10,26 +10,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            "578f6fa3df35c7fbdbaefed5",
-            "578f6fa3df35c7fbdbaedf81",
-            "578f6fa3df35c7fbdbaeed80",
-            "578f6fa3df35c7fbdbaee267",
-            "578f6fa3df35c7fbdbaefaaf",
-            "578f6fa3df35c7fbdbaee528",
-            "578f6fa3df35c7fbdbaef614",
-            "578f6fa3df35c7fbdbaf023d",
-            "578f6fa3df35c7fbdbaef265",
-            "578f6fa3df35c7fbdbaef3f2",
-            "578f6fa3df35c7fbdbaedca5",
-            "578f6fa3df35c7fbdbaef681",
-            "578f6fa3df35c7fbdbaf0329",
-            "578f6fa3df35c7fbdbaee487",
-            "578f6fa3df35c7fbdbaee603",
-            "578f6fa3df35c7fbdbaf0203",
-            "578f6fa3df35c7fbdbaeeb7c",
-            "578f6fa3df35c7fbdbaee47c",
-            "578f6fa3df35c7fbdbaefd11",
-            "578f6fa3df35c7fbdbaee1d9"
+            "578f6fa3df35c7fbdbaefa7a",
+            "578f6fa3df35c7fbdbaef55d",
+            "578f6fa3df35c7fbdbaf03c4",
+            "578f6fa3df35c7fbdbaee01e",
+            "578f6fa3df35c7fbdbaee622",
+            "578f6fa3df35c7fbdbaedc87",
+            "578f6fa3df35c7fbdbaee397",
+            "578f6fa3df35c7fbdbaef256",
+            "578f6fa3df35c7fbdbaef745",
+            "578f6fa3df35c7fbdbaeddfb",
+            "578f6fa3df35c7fbdbaefbc1",
+            "578f6fa3df35c7fbdbaee752",
+            "578f6fa3df35c7fbdbaee456",
+            "578f6fa3df35c7fbdbaefbad",
+            "578f6fa3df35c7fbdbaf03a4",
+            "578f6fa3df35c7fbdbaee7e2",
+            "578f6fa3df35c7fbdbaee366",
+            "578f6fa3df35c7fbdbaee969",
+            "578f6fa3df35c7fbdbaf00f7",
+            "578f6fa3df35c7fbdbaedcfd"
           ]
         }
       }
@@ -40,28 +40,28 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 542.0,
+          "ndistinct": 533.0,
           "values": [
-            "US,US,graph,chart 14826",
-            "US,US,graph,Chart 11404",
-            "US,US,graph,chart 14814",
-            "US,US,graph,Chart 11353",
-            "US,US,graph,Chart 11354",
-            "US,US,graph,Chart 12270",
-            "US,US,graph,Chart 12251",
-            "US,US,graph,Chart 11340",
-            "US,US,graph,Chart 11319",
-            "US,US,graph,Chart 11343",
-            "US,US,graph,Chart 12311",
-            "US,US,graph,Chart 18485",
-            "US,US,graph,Chart 12300",
-            "US,US,graph,H-12007",
-            "US,US,graph,Chart 12261",
-            "US,US,graph,Chart 11330",
-            "US,US,graph,Chart 12324",
-            "US,US,graph,Chart 13241",
-            "US,US,graph,Chart 14863",
-            "US,US,graph,Chart 11350"
+            "US,US,graph,Chart 11351",
+            "US,US,graph,Chart 12233",
+            "US,US,graph,Chart 11013",
+            "US,US,graph,Chart 11485",
+            "US,US,graph,Chart 12284",
+            "US,US,graph,Chart 12216",
+            "US,US,graph,Chart 13270",
+            "US,US,graph,H-10412",
+            "US,US,graph,Chart 18502",
+            "US,US,graph,Chart 11449",
+            "US,US,graph,Chart 11369",
+            "US,US,graph,Chart 14854",
+            "US,US,graph,Chart 13233",
+            "US,US,graph,Chart 11364",
+            "US,US,reprt,L-1134/10",
+            "US,US,graph,Chart 14970",
+            "US,US,graph,Chart 13281",
+            "US,US,graph,Chart 11542",
+            "US,US,graph,Chart 13203",
+            "US,US,graph,H-12016"
           ]
         }
       }
@@ -81,110 +81,110 @@
                 "sampled": 2000,
                 "ndistinct": 1000.0,
                 "values": [
-                  -82.3576516,
-                  41.4303554,
-                  -84.657968,
-                  29.781545,
-                  -76.9819206,
-                  43.2683009,
-                  -89.2091807,
-                  29.5508414,
-                  -91.2648186,
-                  30.4319839,
-                  -76.4013684,
-                  38.8988179,
-                  -77.083179,
-                  37.274994,
-                  -91.4484537,
-                  28.2159108,
-                  -96.422236,
-                  28.321875,
-                  -94.0914582,
-                  30.0934644
+                  -91.483829,
+                  28.976187,
+                  -76.389818,
+                  38.041275,
+                  -77.3327826,
+                  25.0986448,
+                  -81.21407,
+                  29.645108,
+                  -76.44913,
+                  38.3317558,
+                  -75.2026803,
+                  38.8024369,
+                  -70.8847897,
+                  42.3948948,
+                  -96.3454476,
+                  28.4334891,
+                  -123.88445,
+                  46.982026,
+                  -80.866581,
+                  24.701163
                 ]
               }
             }
           },
           "values": [
             [
-              -82.3576516,
-              41.4303554
+              -91.483829,
+              28.976187
             ],
             [
-              -84.657968,
-              29.781545
+              -76.389818,
+              38.041275
             ],
             [
-              -76.9819206,
-              43.2683009
+              -77.3327826,
+              25.0986448
             ],
             [
-              -89.2091807,
-              29.5508414
+              -81.21407,
+              29.645108
             ],
             [
-              -91.2648186,
-              30.4319839
+              -76.44913,
+              38.3317558
             ],
             [
-              -76.4013684,
-              38.8988179
+              -75.2026803,
+              38.8024369
             ],
             [
-              -77.083179,
-              37.274994
+              -70.8847897,
+              42.3948948
             ],
             [
-              -91.4484537,
-              28.2159108
+              -96.3454476,
+              28.4334891
             ],
             [
-              -96.422236,
-              28.321875
+              -123.88445,
+              46.982026
             ],
             [
-              -94.0914582,
-              30.0934644
+              -80.866581,
+              24.701163
             ],
             [
-              -75.523302,
-              39.665863
+              -90.132949,
+              30.3334621
             ],
             [
-              -124.7098341,
-              48.2568261
+              -83.1502908,
+              42.2965366
             ],
             [
-              -72.8335811,
-              39.4392356
+              -70.8175143,
+              41.2726217
             ],
             [
-              -70.2445211,
-              41.4538592
+              -89.416607,
+              29.4837398
             ],
             [
-              -76.082737,
-              38.279011
+              -125.7874117,
+              48.0006736
             ],
             [
-              -92.8330448,
-              29.0332965
+              -87.3912135,
+              46.540562
             ],
             [
-              -74.136123,
-              39.776215
+              -70.648652,
+              42.614172
             ],
             [
-              -70.046923,
-              41.295704
+              -77.430001,
+              34.759727
             ],
             [
-              -83.2501156,
-              44.5009278
+              -69.11603,
+              42.19892
             ],
             [
-              -91.4634725,
-              29.7676432
+              -82.4457708,
+              27.8151873
             ]
           ]
         }
@@ -194,35 +194,35 @@
       "probability": 1.0,
       "types": {
         "Number": {
-          "probability": 0.227,
-          "sampled": 227,
-          "ndistinct": 99.0,
+          "probability": 0.231,
+          "sampled": 231,
+          "ndistinct": 96.0,
           "values": [
-            17.9,
-            6.4,
-            16.7,
-            5.1,
-            1.5,
-            13.1,
-            14.9,
-            1.2,
-            20.4,
-            19.4,
-            8.5,
-            25.9,
             4.5,
-            15.2,
-            3.9,
-            7.9,
+            2.7,
+            26.2,
+            1.8,
+            18.8,
+            3.6,
+            6.4,
             3.3,
-            38.4,
-            12.1,
-            17
+            25.6,
+            38.7,
+            50.5,
+            13.4,
+            15.2,
+            14,
+            0.3,
+            18.2,
+            24,
+            5.4,
+            6,
+            17.6
           ]
         },
         "String": {
-          "probability": 0.773,
-          "sampled": 773,
+          "probability": 0.769,
+          "sampled": 769,
           "ndistinct": 1.0,
           "values": [
             ""
@@ -266,21 +266,27 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 13.0,
+          "ndistinct": 19.0,
           "values": [
             "",
             "Wrecks",
-            "Barge",
             "Reported",
+            "4.9 meters/16 feet pleasure craft",
+            "Partially covered by mangrove",
+            "barge",
+            "Multiple wrecks",
+            "48 foot sailing vessel Shawna Lee",
+            "Barge",
+            "Reported in 1995",
             "6.7 meters/22 feet F/V",
             "reported",
-            "24 ft sailing vessel",
-            "Partially covered by mangrove",
-            "10.1 meters/33 feet F/V",
-            "Awash at Mean High Water",
-            "Existance Reported",
-            "Destroyed",
-            "Target"
+            "Sunken barge in 40 feet/12.2 meters of water.",
+            "Remains of marine propulsion plant",
+            "Boom above Mean lower low water",
+            "197 ft barge",
+            "Home Land Security Project S-G606-WH-02",
+            "Bow",
+            "Multiple Wrecks"
           ]
         }
       }
@@ -293,26 +299,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            41.4303554,
-            29.781545,
-            43.2683009,
-            29.5508414,
-            30.4319839,
-            38.8988179,
-            37.274994,
-            28.2159108,
-            28.321875,
-            30.0934644,
-            39.665863,
-            48.2568261,
-            39.4392356,
-            41.4538592,
-            38.279011,
-            29.0332965,
-            39.776215,
-            41.295704,
-            44.5009278,
-            29.7676432
+            28.976187,
+            38.041275,
+            25.0986448,
+            29.645108,
+            38.3317558,
+            38.8024369,
+            42.3948948,
+            28.4334891,
+            46.982026,
+            24.701163,
+            30.3334621,
+            42.2965366,
+            41.2726217,
+            29.4837398,
+            48.0006736,
+            46.540562,
+            42.614172,
+            34.759727,
+            42.19892,
+            27.8151873
           ]
         }
       }
@@ -325,26 +331,26 @@
           "sampled": 1000,
           "ndistinct": 1000.0,
           "values": [
-            -82.3576516,
-            -84.657968,
-            -76.9819206,
-            -89.2091807,
-            -91.2648186,
-            -76.4013684,
-            -77.083179,
-            -91.4484537,
-            -96.422236,
-            -94.0914582,
-            -75.523302,
-            -124.7098341,
-            -72.8335811,
-            -70.2445211,
-            -76.082737,
-            -92.8330448,
-            -74.136123,
-            -70.046923,
-            -83.2501156,
-            -91.4634725
+            -91.483829,
+            -76.389818,
+            -77.3327826,
+            -81.21407,
+            -76.44913,
+            -75.2026803,
+            -70.8847897,
+            -96.3454476,
+            -123.88445,
+            -80.866581,
+            -90.132949,
+            -83.1502908,
+            -70.8175143,
+            -89.416607,
+            -125.7874117,
+            -87.3912135,
+            -70.648652,
+            -77.430001,
+            -69.11603,
+            -82.4457708
           ]
         }
       }
@@ -355,12 +361,13 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 5.0,
+          "ndistinct": 6.0,
           "values": [
-            "",
             "depth unknown",
-            "least depth known",
             "value reported (not confirmed)",
+            "",
+            "least depth known",
+            "value reported (not surveyed)",
             "least depth unknown, safe clearance at value shown"
           ]
         }
@@ -385,13 +392,11 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 5.0,
+          "ndistinct": 3.0,
           "values": [
             "",
             "Wire-drag clearance, feet/fathoms",
-            "found by multi-beam",
-            "found by diver",
-            "found by side scan sonar"
+            "found by multi-beam"
           ]
         }
       }
@@ -402,21 +407,17 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 13.0,
+          "ndistinct": 9.0,
           "values": [
             "",
-            "Dryland AWOIS 1607",
-            "Podunk Queen",
-            "F\\V Sea Goose",
-            "Dredge Honey Island",
-            "Titan",
-            "F/V Sea Angel",
-            "5.5 meters/18 feet P/C",
-            "12.8 meters/42 feet F/V Sand Dollar",
-            "MARGIE B",
-            "F/V Genie Maru No.7",
-            "CGD8 164-03",
-            "CGD8 289-08"
+            "F/V Harriet Stone",
+            "Ami Rae",
+            "Albemarle",
+            "Lady D",
+            "Karma",
+            "FORT YUKON",
+            "Brandt Eymard",
+            "GI Joe"
           ]
         }
       }
@@ -427,11 +428,13 @@
         "String": {
           "probability": 1.0,
           "sampled": 1000,
-          "ndistinct": 4.0,
+          "ndistinct": 6.0,
           "values": [
             "always under water/submerged",
             "always dry",
             "covers and uncovers",
+            "",
+            "awash",
             "partly submerged at high water"
           ]
         }

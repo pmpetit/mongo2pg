@@ -4,14 +4,14 @@ width_top_level: 42
 width_max: 66.16
 width_max_level: 3
 depth_max: 6
-branch_total: 156.27
+branch_total: 156.2
 branch_per_level:
   L1: 42.0
-  L2: 16.22
+  L2: 16.15
   L3: 66.16
   L4: 22.86
   L5: 6.43
-  L6: 2.6
+  L6: 2.61
 top_level_types:
   _id: ObjectId
   acquisition: 'Null'

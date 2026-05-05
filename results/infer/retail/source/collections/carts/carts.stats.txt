@@ -5,4 +5,5 @@ Depth (max nesting)     : 2
 Branch (per level)      : L1:3.0  L2:1.0
 Avg fields / doc        : 3.0000
 Distinct fields / avg    : 1.0000
+Migrability score       : 3.00
 Top-level types         : _id:ObjectId, products:Array, user:ObjectId

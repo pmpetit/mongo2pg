@@ -5,4 +5,5 @@ Depth (max nesting)     : 2
 Branch (per level)      : L1:12.4  L2:4.0
 Avg fields / doc        : 12.4329
 Distinct fields / avg    : 1.1260
+Migrability score       : 3.13
 Top-level types         : _id:ObjectId, articleType:String, baseColour:String, brand:String, code:String, description:String, gender:String, image:Object, masterCategory:String, name:String, price:Object, subCategory:String, vai_text_embedding:Array, year:Number
