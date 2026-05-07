@@ -4,6 +4,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
+use crate::analyzer::CollectionSchema;
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Data model
 // ──────────────────────────────────────────────────────────────────────────────
@@ -320,6 +322,167 @@ pub fn render_schema_html(tables: &[Table], project_name: &str) -> String {
         project_name = project_name,
         now = now,
         count = tables.len(),
+        sidebar = sidebar,
+        mermaid = mermaid,
+    )
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MongoDB collection schema Mermaid renderer
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Build a Mermaid `erDiagram` block from inferred MongoDB collection schemas.
+///
+/// Each collection is rendered as an entity whose attributes are its top-level
+/// fields together with their dominant BSON type.
+pub fn build_mongo_mermaid(collections: &[(&str, &CollectionSchema)]) -> String {
+    let mut out = String::from("erDiagram\n");
+    for (name, schema) in collections {
+        // Mermaid entity names must be alphanumeric / underscored.
+        let safe_name = sanitize_mermaid_id(name);
+        out.push_str(&format!("  {safe_name} {{\n"));
+        for (field_name, field) in &schema.object {
+            // Pick the dominant (highest-probability non-Undefined) type.
+            let type_str = field
+                .types
+                .iter()
+                .filter(|(t, _)| t.as_str() != "Undefined")
+                .max_by(|a, b| {
+                    a.1.probability
+                        .partial_cmp(&b.1.probability)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(t, _)| t.as_str())
+                .unwrap_or("Mixed");
+            let safe_field = sanitize_mermaid_id(field_name);
+            out.push_str(&format!("    {type_str} {safe_field}\n"));
+        }
+        out.push_str("  }\n");
+    }
+    out
+}
+
+/// Replace characters that are not valid in Mermaid entity/attribute identifiers
+/// with underscores.
+fn sanitize_mermaid_id(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// Render an HTML page with a Mermaid ER diagram built from inferred MongoDB
+/// collection schemas.
+///
+/// This is the MongoDB-schema counterpart of [`render_schema_html`], produced
+/// during `infer` (before `to-pg` generates PostgreSQL DDL).
+pub fn render_mongo_schema_html(collections: &[(&str, &CollectionSchema)], db_name: &str) -> String {
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+    let mermaid = build_mongo_mermaid(collections);
+
+    let sidebar: String = collections
+        .iter()
+        .map(|(name, schema)| {
+            format!(
+                "<li><a href=\"#\" onclick=\"return false\">{name}</a> <small>({} fields)</small></li>",
+                schema.object.len()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mongo2pg – Schema Diagram – {db_name}</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }}
+    header {{
+      background: #2c3e50;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }}
+    header h1 {{ margin: 0; font-size: 1.2rem; }}
+    header small {{ opacity: 0.6; font-size: 0.75rem; }}
+    .layout {{
+      display: flex;
+      flex: 1;
+    }}
+    aside {{
+      width: 220px;
+      background: white;
+      border-right: 1px solid #ddd;
+      padding: 1rem;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }}
+    aside h2 {{ font-size: 0.8rem; text-transform: uppercase; color: #7f8c8d; margin: 0 0 0.75rem; }}
+    aside ul {{ list-style: none; margin: 0; padding: 0; }}
+    aside li {{ margin-bottom: 0.4rem; font-size: 0.85rem; }}
+    aside a {{ color: #2c3e50; text-decoration: none; font-weight: 600; }}
+    main {{
+      flex: 1;
+      padding: 2rem;
+      overflow: auto;
+    }}
+    .mermaid {{
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }}
+    footer {{ padding: 0.75rem 2rem; font-size: 0.75rem; color: #aaa; text-align: right; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>mongo2pg – MongoDB Schema – {db_name}</h1>
+    <small>Generated: {now}</small>
+  </header>
+  <div class="layout">
+    <aside>
+      <h2>Collections ({count})</h2>
+      <ul>
+        {sidebar}
+      </ul>
+    </aside>
+    <main>
+      <div class="mermaid">
+{mermaid}
+      </div>
+    </main>
+  </div>
+  <footer>Generated by <a href="https://github.com/pmpetit/mongo2pg">mongo2pg</a></footer>
+  <script>
+    mermaid.initialize({{ startOnLoad: true, theme: 'default', er: {{ diagramPadding: 40 }} }});
+  </script>
+</body>
+</html>
+"#,
+        db_name = db_name,
+        now = now,
+        count = collections.len(),
         sidebar = sidebar,
         mermaid = mermaid,
     )

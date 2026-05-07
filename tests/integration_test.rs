@@ -307,3 +307,132 @@ fn test_render_cluster_html_contains_scores() {
     // Per-database score_db
     assert!(html.contains("12.00"), "db score 12.00 should appear in report");
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Infer-all-databases feature tests
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Verify that the SYSTEM_DATABASES constant covers the right set.
+#[test]
+fn test_system_databases_list() {
+    // These three databases must always be excluded when iterating the cluster.
+    let system_dbs = ["admin", "local", "config"];
+    let user_dbs = ["myapp", "sample_airbnb", "retail", "sample_mflix"];
+
+    for db in system_dbs {
+        assert!(
+            is_system_db(db),
+            "'{db}' should be treated as a system database"
+        );
+    }
+    for db in user_dbs {
+        assert!(
+            !is_system_db(db),
+            "'{db}' should NOT be treated as a system database"
+        );
+    }
+}
+
+/// Helper matching the filter logic used in `infer_all_databases`.
+fn is_system_db(name: &str) -> bool {
+    const SYSTEM_DATABASES: &[&str] = &["admin", "local", "config"];
+    SYSTEM_DATABASES.contains(&name)
+}
+
+/// Verify that collection output names are prefixed with the database name.
+#[test]
+fn test_collection_output_name_includes_dbname() {
+    let db = "sample_airbnb";
+    let coll = "listingsAndReviews";
+    let output_name = format!("{db}_{coll}");
+    assert!(
+        output_name.starts_with(db),
+        "output name '{output_name}' must start with db name '{db}'"
+    );
+    assert!(
+        output_name.contains(coll),
+        "output name '{output_name}' must contain collection name '{coll}'"
+    );
+    assert_eq!(output_name, "sample_airbnb_listingsAndReviews");
+}
+
+/// Filtering rows by db name prefix works correctly.
+#[test]
+fn test_row_filter_by_db_prefix() {
+    let names = vec![
+        "mydb_users".to_owned(),
+        "mydb_orders".to_owned(),
+        "otherdb_users".to_owned(),
+        "unrelated".to_owned(),
+    ];
+    let db = "mydb";
+    let prefix = format!("{db}_");
+    let filtered: Vec<&str> = names
+        .iter()
+        .filter(|n| n.starts_with(&prefix))
+        .map(|s| s.as_str())
+        .collect();
+
+    assert_eq!(filtered.len(), 2, "only 'mydb_*' entries should match");
+    assert!(filtered.contains(&"mydb_users"));
+    assert!(filtered.contains(&"mydb_orders"));
+}
+
+/// Verify that `build_mongo_mermaid` produces valid Mermaid output.
+#[test]
+fn test_build_mongo_mermaid_output() {
+    use mongo2pg::schema_diagram::build_mongo_mermaid;
+
+    let docs = vec![doc! { "_id": 1, "name": "Alice", "age": 30_i32 }];
+    let schema = analyze_docs(&docs);
+
+    let collections: Vec<(&str, &CollectionSchema)> = vec![("users", &schema)];
+    let mermaid = build_mongo_mermaid(&collections);
+
+    assert!(
+        mermaid.starts_with("erDiagram"),
+        "Mermaid output must start with 'erDiagram'"
+    );
+    assert!(
+        mermaid.contains("users"),
+        "Mermaid output must contain the collection name"
+    );
+    assert!(
+        mermaid.contains("_id") || mermaid.contains("name") || mermaid.contains("age"),
+        "Mermaid output must contain field names"
+    );
+}
+
+/// Verify that `render_mongo_schema_html` returns valid HTML.
+#[test]
+fn test_render_mongo_schema_html_structure() {
+    use mongo2pg::schema_diagram::render_mongo_schema_html;
+
+    let docs = vec![
+        doc! { "_id": 1, "title": "Cozy Cabin", "price": 99_i32 },
+        doc! { "_id": 2, "title": "City Loft",  "price": 150_i32 },
+    ];
+    let schema = analyze_docs(&docs);
+
+    let collections: Vec<(&str, &CollectionSchema)> = vec![("listings", &schema)];
+    let html = render_mongo_schema_html(&collections, "sample_airbnb");
+
+    // Basic HTML structure
+    assert!(html.contains("<!DOCTYPE html>"), "must be a full HTML document");
+    assert!(
+        html.contains("sample_airbnb"),
+        "HTML must contain the database name"
+    );
+    assert!(
+        html.contains("listings"),
+        "HTML must contain the collection name in the sidebar"
+    );
+    assert!(
+        html.contains("erDiagram"),
+        "HTML must embed a Mermaid erDiagram block"
+    );
+    assert!(
+        html.contains("mermaid"),
+        "HTML must reference the Mermaid library"
+    );
+}

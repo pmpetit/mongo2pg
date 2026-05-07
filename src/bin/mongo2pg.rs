@@ -25,7 +25,7 @@ use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
 use mongo2pg::export::export_collection;
 use mongo2pg::report::{collect_rows, compute_db_score, render_cluster_html, render_html};
-use mongo2pg::schema_diagram::{load_tables, render_schema_html};
+use mongo2pg::schema_diagram::{load_tables, render_mongo_schema_html, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
@@ -86,9 +86,11 @@ struct InferArgs {
     #[command(flatten)]
     mongo: UriArg,
 
-    /// Namespace: either <db>.<collection> to infer one collection,
-    /// or just <db> to infer all collections in the database – required unless -c is given
-    #[arg(long = "namespace", required_unless_present = "config")]
+    /// Namespace: either <db>.<collection> to infer one collection, or just <db> to infer all
+    /// collections in the database. When omitted (and -c is not given) all user databases on the
+    /// server are enumerated and inferred (admin, local, and config are skipped). Can also be set
+    /// via NAMESPACE in the config file.
+    #[arg(long = "namespace")]
     namespace: Option<String>,
 
     /// Number of documents to sample (mutually exclusive with --percent); default 1000
@@ -348,14 +350,11 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .mongo
                 .uri
                 .clone()
-                .expect("clap ensures uri is present when -c is absent");
+                .ok_or_else(|| anyhow!("No URI provided: pass --uri or -c <config>"))?;
             (uri, args.output_dir.clone(), None, None, None, false)
         };
 
-    let namespace = args.namespace.clone().or(conf_namespace).ok_or_else(|| {
-        eprintln!("Warning: namespace is missing – pass <db> or <db>.<collection> via --namespace or add NAMESPACE to the config file");
-        anyhow!("No namespace provided: pass <db> or <db>.<collection> as an argument or add NAMESPACE to the config file")
-    })?;
+    let namespace = args.namespace.clone().or(conf_namespace);
 
     let client_options = ClientOptions::parse(&resolved_uri)
         .await
@@ -371,7 +370,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         mongo: UriArg {
             uri: Some(resolved_uri),
         },
-        namespace: Some(namespace.clone()),
+        namespace: namespace.clone(),
         output_dir: effective_output_dir,
         number: resolved_number,
         percent: resolved_percent,
@@ -380,68 +379,195 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         ..args
     };
 
-    // Warn if the database referenced in the namespace does not exist.
-    {
-        let db_name = if let Some(dot) = namespace.find('.') {
-            &namespace[..dot]
-        } else {
-            namespace.as_str()
-        };
-        let existing_dbs = client
-            .list_database_names()
-            .await
-            .context("Failed to list databases")?;
-        if !existing_dbs.iter().any(|d| d == db_name) {
-            eprintln!(
-                "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
-                existing_dbs.join(", ")
-            );
+    match namespace {
+        None => {
+            // No namespace provided: enumerate all user databases and infer each.
+            infer_all_databases(&client, &args).await?;
         }
-    }
+        Some(ref ns) if ns.contains('.') => {
+            // Single collection: <db>.<collection>
+            let (db_name, coll_name) = parse_namespace(ns)?;
+            let existing_dbs = client
+                .list_database_names()
+                .await
+                .context("Failed to list databases")?;
+            if !existing_dbs.iter().any(|d| d == db_name) {
+                eprintln!(
+                    "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
+                    existing_dbs.join(", ")
+                );
+            }
+            let existing_colls = client
+                .database(db_name)
+                .list_collection_names()
+                .await
+                .context("Failed to list collections")?;
+            if !existing_colls.iter().any(|c| c == coll_name) {
+                eprintln!(
+                    "Warning: collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
+                    existing_colls.join(", ")
+                );
+            }
+            let schema = infer_collection(&client, db_name, coll_name, coll_name, &args).await?;
+            if !args.no_output {
+                println!("{}", serde_json::to_string_pretty(&schema)?);
+            }
+        }
+        Some(ref ns) => {
+            // Whole single database: infer every collection.
+            let db_name = ns.as_str();
+            let existing_dbs = client
+                .list_database_names()
+                .await
+                .context("Failed to list databases")?;
+            if !existing_dbs.iter().any(|d| d == db_name) {
+                eprintln!(
+                    "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
+                    existing_dbs.join(", ")
+                );
+            }
+            let db = client.database(db_name);
+            let coll_names = db
+                .list_collection_names()
+                .await
+                .context("Failed to list collections")?;
 
-    if namespace.contains('.') {
-        // Single collection: <db>.<collection>
-        let (db_name, coll_name) = parse_namespace(&namespace)?;
-        let existing_colls = client
-            .database(db_name)
-            .list_collection_names()
-            .await
-            .context("Failed to list collections")?;
-        if !existing_colls.iter().any(|c| c == coll_name) {
-            eprintln!(
-                "Warning: collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
-                existing_colls.join(", ")
-            );
-        }
-        let schema = infer_collection(&client, db_name, coll_name, &args).await?;
-        if !args.no_output {
-            println!("{}", serde_json::to_string_pretty(&schema)?);
-        }
-    } else {
-        // Whole database: infer every collection
-        let db = client.database(&namespace);
-        let coll_names = db
-            .list_collection_names()
-            .await
-            .context("Failed to list collections")?;
-
-        let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
-        for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
-            let schema = infer_collection(&client, &namespace, coll_name, &args).await?;
-            all_schemas.insert(coll_name.clone(), schema);
-        }
-        if !args.no_output {
-            println!("{}", serde_json::to_string_pretty(&all_schemas)?);
+            let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+            for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+                let schema =
+                    infer_collection(&client, db_name, coll_name, coll_name, &args).await?;
+                all_schemas.insert(coll_name.clone(), schema);
+            }
+            if !args.no_output {
+                println!("{}", serde_json::to_string_pretty(&all_schemas)?);
+            }
         }
     }
     Ok(())
 }
 
+/// System databases that are always skipped when iterating the whole cluster.
+const SYSTEM_DATABASES: &[&str] = &["admin", "local", "config"];
+
+/// Infer schemas for all user databases on the server (skipping system databases).
+///
+/// For each database every non-system collection is inferred. Output files (when
+/// `-o` was given) are written as `<output_dir>/<dbname>_<collname>/`; a
+/// per-database HTML report is generated in `<output_dir>/reports/<dbname>.html`.
+async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
+    let all_dbs = client
+        .list_database_names()
+        .await
+        .context("Failed to list databases")?;
+
+    let user_dbs: Vec<String> = all_dbs
+        .into_iter()
+        .filter(|db| !SYSTEM_DATABASES.contains(&db.as_str()))
+        .collect();
+
+    if user_dbs.is_empty() {
+        eprintln!("No user databases found on the server.");
+        return Ok(());
+    }
+
+    eprintln!(
+        "Inferring {} database(s): {}",
+        user_dbs.len(),
+        user_dbs.join(", ")
+    );
+
+    for db_name in &user_dbs {
+        let db = client.database(db_name);
+        let coll_names = db
+            .list_collection_names()
+            .await
+            .with_context(|| format!("Failed to list collections for database '{db_name}'"))?;
+
+        let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+
+        for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+            // Prefix collection output name with the database name so that
+            // source/collections/ entries are unique across all databases.
+            let output_name = format!("{db_name}_{coll_name}");
+            let schema =
+                infer_collection(client, db_name, coll_name, &output_name, args).await?;
+            db_schemas.insert(coll_name.clone(), schema);
+        }
+
+        if !args.no_output && args.output_dir.is_none() {
+            // Print to stdout when no output dir was configured.
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&IndexMap::from([(
+                    db_name.clone(),
+                    &db_schemas
+                )]))?
+            );
+        }
+
+        // Generate per-database HTML reports when an output directory is set.
+        if let Some(ref out_dir) = args.output_dir {
+            // When output_dir is a project's source/collections dir (created by `init`),
+            // place reports alongside it (../../reports → <project>/reports/).
+            // For a plain -o <dir>, place reports inside that dir.
+            let reports_dir = if out_dir.ends_with("source/collections") {
+                out_dir
+                    .parent()
+                    .and_then(|p| p.parent())
+                    .map(|root| root.join("reports"))
+                    .unwrap_or_else(|| out_dir.join("reports"))
+            } else {
+                out_dir.join("reports")
+            };
+            std::fs::create_dir_all(&reports_dir).with_context(|| {
+                format!("Failed to create reports directory {}", reports_dir.display())
+            })?;
+
+            // Build collection rows from the stats YAML files that were just written.
+            let rows = mongo2pg::report::collect_rows(out_dir, None)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|r| r.name.starts_with(&format!("{db_name}_")))
+                .collect::<Vec<_>>();
+
+            let cluster = args
+                .mongo
+                .uri
+                .as_deref()
+                .map(mongo2pg::report::cluster_from_uri)
+                .unwrap_or_default();
+
+            let stats_html = mongo2pg::report::render_html(&rows, db_name, &cluster);
+            let stats_path = reports_dir.join(format!("{db_name}.html"));
+            std::fs::write(&stats_path, &stats_html)
+                .with_context(|| format!("Failed to write {}", stats_path.display()))?;
+            println!("Report written to {}", stats_path.display());
+
+            // Generate a Mermaid schema diagram from the inferred MongoDB schemas.
+            let collections_for_mermaid: Vec<(&str, &CollectionSchema)> = db_schemas
+                .iter()
+                .map(|(name, schema)| (name.as_str(), schema))
+                .collect();
+            let schema_html = render_mongo_schema_html(&collections_for_mermaid, db_name);
+            let schema_path = reports_dir.join(format!("{db_name}.schema.html"));
+            std::fs::write(&schema_path, &schema_html)
+                .with_context(|| format!("Failed to write {}", schema_path.display()))?;
+            println!("Schema diagram written to {}", schema_path.display());
+        }
+    }
+
+    Ok(())
+}
+
 /// Infer the schema for a single collection, print stats to stderr, and optionally write output files.
+///
+/// `output_name` controls the directory and file names under `output_dir`;
+/// it may differ from `coll_name` (e.g. when prefixed with the database name).
 async fn infer_collection(
     client: &Client,
     db_name: &str,
     coll_name: &str,
+    output_name: &str,
     args: &InferArgs,
 ) -> Result<CollectionSchema> {
     let output_dir = args.output_dir.as_deref();
@@ -501,8 +627,8 @@ async fn infer_collection(
     drop(handle);
 
     if let Some(out_dir) = output_dir {
-        write_collection_files(out_dir, coll_name, &schema, &stats_lines)
-            .with_context(|| format!("Failed to write output files for {coll_name}"))?;
+        write_collection_files(out_dir, output_name, &schema, &stats_lines)
+            .with_context(|| format!("Failed to write output files for {output_name}"))?;
     }
 
     Ok(schema)

@@ -489,16 +489,16 @@ Creates the project directory tree and writes a config file:
 ## `infer` – sample a MongoDB collection and infer its schema
 
 ```
-mongo2pg [infer] [URI] [NAMESPACE] [OPTIONS]
-mongo2pg [infer] -c <CONFIG> [NAMESPACE] [OPTIONS]
+mongo2pg [infer] --uri <URI> [--namespace <NAMESPACE>] [OPTIONS]
+mongo2pg [infer] -c <CONFIG> [OPTIONS]
 ```
 
 **Arguments**
 
 | Argument | Description |
 |---|---|
-| `[URI]` | MongoDB connection URI – required unless `-c` is given |
-| `[NAMESPACE]` | `<db>.<collection>` for a single collection, or just `<db>` for all collections in the database. Can also be set via `NAMESPACE` in the config file. |
+| `--uri <URI>` | MongoDB connection URI – required unless `-c` is given |
+| `--namespace <NAMESPACE>` | `<db>.<collection>` for a single collection, `<db>` for all collections in the database, or omit to infer **all user databases** on the server (see below). Can also be set via `NAMESPACE` in the config file. |
 
 **Options**
 
@@ -507,7 +507,7 @@ mongo2pg [infer] -c <CONFIG> [NAMESPACE] [OPTIONS]
 | `-n, --number <N>` | Number of documents to sample (default: 1000) |
 | `-p, --percent <PCT>` | Percentage of the collection to sample |
 | `-c, --config <FILE>` | Project config file – derives URI and output paths automatically |
-| `-o, --output-dir <DIR>` | Write output files into `<dir>/<collection>/` |
+| `-o, --output-dir <DIR>` | Write output files into `<dir>/` for each collection |
 | `--no-output` | Suppress JSON schema output to stdout |
 
 When `-c` or `-o` is given, each collection produces three files:
@@ -517,6 +517,32 @@ source/collections/<name>/
     <name>.json          ← inferred schema (JSON)
     <name>.stats.txt     ← human-readable stats
     <name>.stats.yaml    ← structured stats (consumed by report)
+```
+
+### Inferring all databases (no `--namespace`)
+
+When `--namespace` is omitted (and `-c` is not given, or the config has no `NAMESPACE`),
+`mongo2pg` automatically enumerates **all user databases** on the server, skipping
+`admin`, `local`, and `config`.
+
+For each database every non-system collection is inferred.  Output files (when `-o` is
+given) are named `<dbname>_<collname>` to avoid collisions:
+
+```
+<output-dir>/
+    <dbname>_<collname>/
+        <dbname>_<collname>.json
+        <dbname>_<collname>.stats.txt
+        <dbname>_<collname>.stats.yaml
+    reports/
+        <dbname>.html          ← per-database migration stats report
+        <dbname>.schema.html   ← Mermaid ER diagram of the MongoDB collections
+```
+
+Example:
+
+```bash
+mongo2pg infer --uri mongodb://localhost:27017 -o /tmp/output
 ```
 
 ---
