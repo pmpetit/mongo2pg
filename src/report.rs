@@ -5,8 +5,6 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::schema_diagram::parse_sql;
-
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
@@ -143,9 +141,9 @@ pub struct CollectionStatsYaml {
 pub struct CollectionRow {
     pub name: String,
     pub stats: CollectionStatsYaml,
-    /// PostgreSQL table names generated for this collection (from the `.sql` file).
+    /// PostgreSQL tables generated for this collection: `(table_name, ddl)`.
     /// Empty when no `schema/tables/` directory was provided.
-    pub table_names: Vec<String>,
+    pub table_names: Vec<(String, String)>,
 }
 
 impl CollectionRow {
@@ -188,12 +186,23 @@ pub fn collect_rows(base: &Path, tables_dir: Option<&Path>) -> Result<Vec<Collec
         let stats: CollectionStatsYaml = serde_yaml::from_str(&content)
             .with_context(|| format!("Cannot parse {}", yaml_path.display()))?;
 
-        let table_names = tables_dir
+        let table_names: Vec<(String, String)> = tables_dir
             .and_then(|dir| {
                 let sql_path = dir.join(format!("{name}.sql"));
                 std::fs::read_to_string(&sql_path).ok()
             })
-            .map(|sql| parse_sql(&sql).into_iter().map(|t| t.name).collect())
+            .map(|sql| {
+                sql.split("CREATE TABLE ")
+                    .skip(1)
+                    .filter_map(|chunk| {
+                        let paren = chunk.find('(')?;
+                        let close = chunk.find(");")?;
+                        let tname = chunk[..paren].trim().to_owned();
+                        let ddl = format!("CREATE TABLE {}", &chunk[..close + 2]);
+                        Some((tname, ddl))
+                    })
+                    .collect()
+            })
             .unwrap_or_default();
 
         rows.push(CollectionRow {
@@ -299,9 +308,25 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
                 let pills: String = r
                     .table_names
                     .iter()
-                    .map(|t| format!(r#"<span class="pill">{t}</span>"#))
+                    .map(|(tname, ddl)| {
+                        let safe_id = format!(
+                            "ddl-{}-{}",
+                            r.name.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>(),
+                            tname.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>(),
+                        );
+                        let ddl_esc = ddl
+                            .replace('&', "&amp;")
+                            .replace('<', "&lt;")
+                            .replace('>', "&gt;");
+                        format!(
+                            r#"<div class="pill-block"><span class="pill clickable-pill" onclick="toggleDDL('{sid}')" title="Click to show DDL"><span class="pill-arrow" id="arr-{sid}">&#9658;</span> {tname}</span><pre class="ddl-block" id="{sid}" style="display:none">{ddl_esc}</pre></div>"#,
+                            sid = safe_id,
+                            tname = tname,
+                            ddl_esc = ddl_esc,
+                        )
+                    })
                     .collect::<Vec<_>>()
-                    .join(" ");
+                    .join("");
                 let detail_id = format!("detail-{}", r.name);
                 let icon_id = format!("icon-{}", r.name);
                 let name_cell = format!(
@@ -459,6 +484,31 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
       font-size: 0.78rem;
       font-family: monospace;
     }}
+    .pill-block {{ display: inline-flex; flex-direction: column; }}
+    .clickable-pill {{ cursor: pointer; user-select: none; }}
+    .clickable-pill:hover {{ background: #d6eaf8; }}
+    .pill-arrow {{
+      display: inline-block;
+      font-size: 0.6rem;
+      color: #5d8aa8;
+      margin-right: 0.25rem;
+      transition: transform 0.15s;
+    }}
+    .pill-arrow.open {{ transform: rotate(90deg); }}
+    .ddl-block {{
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border: 1px solid #45475a;
+      border-radius: 4px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.78rem;
+      font-family: monospace;
+      white-space: pre;
+      margin-top: 0.25rem;
+      text-align: left;
+      max-width: 100%;
+      overflow-x: auto;
+    }}
     .level {{ color: #95a5a6; font-size: 0.8rem; }}
     .score-badge {{ font-size: 0.95rem; }}
     .complexity-badge {{
@@ -538,6 +588,15 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
       row.style.display = open ? 'none' : '';
       if (open) {{ icon.classList.remove('open'); }}
       else      {{ icon.classList.add('open');    }}
+    }}
+    function toggleDDL(id) {{
+      var block = document.getElementById(id);
+      var arr   = document.getElementById('arr-' + id);
+      if (!block) return;
+      var open = block.style.display !== 'none';
+      block.style.display = open ? 'none' : '';
+      if (open) {{ arr.classList.remove('open'); }}
+      else      {{ arr.classList.add('open');    }}
     }}
   </script>
 </body>
@@ -879,9 +938,26 @@ pub fn render_multi_db_html(
                         let pills: String = r
                             .table_names
                             .iter()
-                            .map(|t| format!(r#"<span class="pill">{t}</span>"#))
+                            .map(|(tname, ddl)| {
+                                let safe_id = format!(
+                                    "ddl-{}-{}-{}",
+                                    db_name.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>(),
+                                    r.name.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>(),
+                                    tname.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect::<String>(),
+                                );
+                                let ddl_esc = ddl
+                                    .replace('&', "&amp;")
+                                    .replace('<', "&lt;")
+                                    .replace('>', "&gt;");
+                                format!(
+                                    r#"<div class="pill-block"><span class="pill clickable-pill" onclick="toggleDDL('{sid}')" title="Click to show DDL"><span class="pill-arrow" id="arr-{sid}">&#9658;</span> {tname}</span><pre class="ddl-block" id="{sid}" style="display:none">{ddl_esc}</pre></div>"#,
+                                    sid = safe_id,
+                                    tname = tname,
+                                    ddl_esc = ddl_esc,
+                                )
+                            })
                             .collect::<Vec<_>>()
-                            .join(" ");
+                            .join("");
                         let detail_id = format!("detail-{db_name}-{}", r.name);
                         let icon_id = format!("icon-{db_name}-{}", r.name);
                         let key = format!("{db_name}-{}", r.name);
@@ -1089,6 +1165,31 @@ pub fn render_multi_db_html(
       font-size: 0.78rem;
       font-family: monospace;
     }}
+    .pill-block {{ display: inline-flex; flex-direction: column; }}
+    .clickable-pill {{ cursor: pointer; user-select: none; }}
+    .clickable-pill:hover {{ background: #d6eaf8; }}
+    .pill-arrow {{
+      display: inline-block;
+      font-size: 0.6rem;
+      color: #5d8aa8;
+      margin-right: 0.25rem;
+      transition: transform 0.15s;
+    }}
+    .pill-arrow.open {{ transform: rotate(90deg); }}
+    .ddl-block {{
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border: 1px solid #45475a;
+      border-radius: 4px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.78rem;
+      font-family: monospace;
+      white-space: pre;
+      margin-top: 0.25rem;
+      text-align: left;
+      max-width: 100%;
+      overflow-x: auto;
+    }}
     .level {{ color: #95a5a6; font-size: 0.8rem; }}
     .score-badge {{ font-size: 0.95rem; }}
     .complexity-badge {{
@@ -1162,6 +1263,15 @@ pub fn render_multi_db_html(
       row.style.display = open ? 'none' : '';
       if (open) {{ icon.classList.remove('open'); }}
       else      {{ icon.classList.add('open');    }}
+    }}
+    function toggleDDL(id) {{
+      var block = document.getElementById(id);
+      var arr   = document.getElementById('arr-' + id);
+      if (!block) return;
+      var open = block.style.display !== 'none';
+      block.style.display = open ? 'none' : '';
+      if (open) {{ arr.classList.remove('open'); }}
+      else      {{ arr.classList.add('open');    }}
     }}
   </script>
 </body>
