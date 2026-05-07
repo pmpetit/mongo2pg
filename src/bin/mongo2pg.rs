@@ -24,8 +24,10 @@ use futures::TryStreamExt;
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
 use mongo2pg::export::export_collection;
-use mongo2pg::report::{collect_rows, compute_db_score, render_cluster_html, render_html};
-use mongo2pg::schema_diagram::{load_tables, render_schema_html};
+use mongo2pg::report::{
+    collect_rows, compute_db_score, render_cluster_html, render_html, SYSTEM_DATABASES,
+};
+use mongo2pg::schema_diagram::{load_tables_by_db, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
@@ -86,9 +88,11 @@ struct InferArgs {
     #[command(flatten)]
     mongo: UriArg,
 
-    /// Namespace: either <db>.<collection> to infer one collection,
-    /// or just <db> to infer all collections in the database – required unless -c is given
-    #[arg(long = "namespace", required_unless_present = "config")]
+    /// Namespace: either <db>.<collection> to infer one collection, or just <db> to infer all
+    /// collections in the database. When omitted (and -c is not given) all user databases on the
+    /// server are enumerated and inferred (admin, local, and config are skipped). Can also be set
+    /// via NAMESPACE in the config file.
+    #[arg(long = "namespace")]
     namespace: Option<String>,
 
     /// Number of documents to sample (mutually exclusive with --percent); default 1000
@@ -119,9 +123,6 @@ struct InferArgs {
 
 #[derive(Parser, Debug)]
 struct ToPgArgs {
-    #[command(flatten)]
-    mongo: UriArg,
-
     /// Optional collection name; if omitted all collections under source/collections/ are processed
     collection: Option<String>,
 
@@ -267,25 +268,70 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
         (dir.clone(), dir)
     };
 
-    // Collect the JSON files to process
-    let json_files: Vec<(String, PathBuf)> = if let Some(ref name) = args.collection {
-        let json = collections_dir.join(name).join(format!("{name}.json"));
-        vec![(name.clone(), json)]
+    // Collect (output_subpath, json_path) pairs to process.
+    //
+    // Two layouts are supported:
+    //   Flat:    <collections_dir>/<name>/<name>.json          → SQL: <output_dir>/<name>.sql
+    //   Per-db:  <collections_dir>/<db>/<coll>/<coll>.json     → SQL: <output_dir>/<db>/<coll>.sql
+    //
+    // A directory is treated as a db folder when it contains no direct .json file
+    // but does contain subdirectories.
+    let json_files: Vec<(PathBuf, PathBuf)> = if let Some(ref name) = args.collection {
+        // Single collection specified – try flat layout first, then per-db.
+        let flat = collections_dir.join(name).join(format!("{name}.json"));
+        if flat.exists() {
+            vec![(PathBuf::from(format!("{name}.sql")), flat)]
+        } else if name.contains('/') {
+            // Caller passed "db/collection"
+            let json = collections_dir.join(name).join({
+                let coll = name.split('/').next_back().unwrap_or(name);
+                format!("{coll}.json")
+            });
+            vec![(PathBuf::from(format!("{name}.sql")), json)]
+        } else {
+            return Err(anyhow!(
+                "Collection '{}' not found under {}",
+                name,
+                collections_dir.display()
+            ));
+        }
     } else {
-        let mut entries: Vec<(String, PathBuf)> = std::fs::read_dir(&collections_dir)
+        let mut entries: Vec<(PathBuf, PathBuf)> = Vec::new();
+
+        let top_dirs = std::fs::read_dir(&collections_dir)
             .with_context(|| format!("Cannot read {}", collections_dir.display()))?
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .filter_map(|e| {
-                let name = e.file_name().to_string_lossy().into_owned();
-                let json = e.path().join(format!("{name}.json"));
-                if json.exists() {
-                    Some((name, json))
-                } else {
-                    None
-                }
-            })
-            .collect();
+            .filter(|e| e.path().is_dir());
+
+        for top in top_dirs {
+            let top_path = top.path();
+            let top_name = top.file_name().to_string_lossy().into_owned();
+            let direct_json = top_path.join(format!("{top_name}.json"));
+
+            if direct_json.exists() {
+                // Flat layout: <collections_dir>/<name>/<name>.json
+                entries.push((PathBuf::from(format!("{top_name}.sql")), direct_json));
+            } else {
+                // Per-db layout: treat this dir as a database folder
+                let mut sub_dirs: Vec<(PathBuf, PathBuf)> = std::fs::read_dir(&top_path)
+                    .with_context(|| format!("Cannot read {}", top_path.display()))?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().is_dir())
+                    .filter_map(|e| {
+                        let coll_name = e.file_name().to_string_lossy().into_owned();
+                        let json = e.path().join(format!("{coll_name}.json"));
+                        if json.exists() {
+                            Some((PathBuf::from(format!("{top_name}/{coll_name}.sql")), json))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                sub_dirs.sort_by(|a, b| a.0.cmp(&b.0));
+                entries.extend(sub_dirs);
+            }
+        }
+
         entries.sort_by(|a, b| a.0.cmp(&b.0));
         entries
     };
@@ -298,17 +344,23 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
         return Ok(());
     }
 
-    std::fs::create_dir_all(&output_dir)
-        .with_context(|| format!("Failed to create directory {}", output_dir.display()))?;
-
-    for (name, json_path) in &json_files {
-        let table_name = args.table.as_deref().unwrap_or(name);
+    for (rel_sql, json_path) in &json_files {
+        let sql_path = output_dir.join(rel_sql);
+        if let Some(parent) = sql_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+        }
+        let table_name = args.table.as_deref().unwrap_or_else(|| {
+            rel_sql
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("table")
+        });
         let content = std::fs::read_to_string(json_path)
             .with_context(|| format!("Failed to read {}", json_path.display()))?;
         let schema: CollectionSchema = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse {}", json_path.display()))?;
         let ddl = schema_to_ddl(&schema, table_name);
-        let sql_path = output_dir.join(format!("{table_name}.sql"));
         std::fs::write(&sql_path, &ddl)
             .with_context(|| format!("Failed to write {}", sql_path.display()))?;
         println!("SQL written to {}", sql_path.display());
@@ -348,14 +400,11 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .mongo
                 .uri
                 .clone()
-                .expect("clap ensures uri is present when -c is absent");
+                .ok_or_else(|| anyhow!("No URI provided: pass --uri or -c <config>"))?;
             (uri, args.output_dir.clone(), None, None, None, false)
         };
 
-    let namespace = args.namespace.clone().or(conf_namespace).ok_or_else(|| {
-        eprintln!("Warning: namespace is missing – pass <db> or <db>.<collection> via --namespace or add NAMESPACE to the config file");
-        anyhow!("No namespace provided: pass <db> or <db>.<collection> as an argument or add NAMESPACE to the config file")
-    })?;
+    let namespace = args.namespace.clone().or(conf_namespace);
 
     let client_options = ClientOptions::parse(&resolved_uri)
         .await
@@ -371,7 +420,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         mongo: UriArg {
             uri: Some(resolved_uri),
         },
-        namespace: Some(namespace.clone()),
+        namespace: namespace.clone(),
         output_dir: effective_output_dir,
         number: resolved_number,
         percent: resolved_percent,
@@ -380,71 +429,147 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         ..args
     };
 
-    // Warn if the database referenced in the namespace does not exist.
-    {
-        let db_name = if let Some(dot) = namespace.find('.') {
-            &namespace[..dot]
-        } else {
-            namespace.as_str()
-        };
-        let existing_dbs = client
-            .list_database_names()
-            .await
-            .context("Failed to list databases")?;
-        if !existing_dbs.iter().any(|d| d == db_name) {
-            eprintln!(
-                "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
-                existing_dbs.join(", ")
-            );
+    match namespace {
+        None => {
+            // No namespace provided: enumerate all user databases and infer each.
+            infer_all_databases(&client, &args).await?;
         }
-    }
+        Some(ref ns) if ns.contains('.') => {
+            // Single collection: <db>.<collection>
+            let (db_name, coll_name) = parse_namespace(ns)?;
+            let existing_dbs = client
+                .list_database_names()
+                .await
+                .context("Failed to list databases")?;
+            if !existing_dbs.iter().any(|d| d == db_name) {
+                eprintln!(
+                    "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
+                    existing_dbs.join(", ")
+                );
+            }
+            let existing_colls = client
+                .database(db_name)
+                .list_collection_names()
+                .await
+                .context("Failed to list collections")?;
+            if !existing_colls.iter().any(|c| c == coll_name) {
+                eprintln!(
+                    "Warning: collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
+                    existing_colls.join(", ")
+                );
+            }
+            let schema =
+                infer_collection(&client, db_name, coll_name, coll_name, &args, None).await?;
+            if !args.no_output {
+                println!("{}", serde_json::to_string_pretty(&schema)?);
+            }
+        }
+        Some(ref ns) => {
+            // Whole single database: infer every collection.
+            let db_name = ns.as_str();
+            let existing_dbs = client
+                .list_database_names()
+                .await
+                .context("Failed to list databases")?;
+            if !existing_dbs.iter().any(|d| d == db_name) {
+                eprintln!(
+                    "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
+                    existing_dbs.join(", ")
+                );
+            }
+            let db = client.database(db_name);
+            let coll_names = db
+                .list_collection_names()
+                .await
+                .context("Failed to list collections")?;
 
-    if namespace.contains('.') {
-        // Single collection: <db>.<collection>
-        let (db_name, coll_name) = parse_namespace(&namespace)?;
-        let existing_colls = client
-            .database(db_name)
-            .list_collection_names()
-            .await
-            .context("Failed to list collections")?;
-        if !existing_colls.iter().any(|c| c == coll_name) {
-            eprintln!(
-                "Warning: collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
-                existing_colls.join(", ")
-            );
-        }
-        let schema = infer_collection(&client, db_name, coll_name, &args).await?;
-        if !args.no_output {
-            println!("{}", serde_json::to_string_pretty(&schema)?);
-        }
-    } else {
-        // Whole database: infer every collection
-        let db = client.database(&namespace);
-        let coll_names = db
-            .list_collection_names()
-            .await
-            .context("Failed to list collections")?;
-
-        let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
-        for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
-            let schema = infer_collection(&client, &namespace, coll_name, &args).await?;
-            all_schemas.insert(coll_name.clone(), schema);
-        }
-        if !args.no_output {
-            println!("{}", serde_json::to_string_pretty(&all_schemas)?);
+            let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+            for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+                let schema =
+                    infer_collection(&client, db_name, coll_name, coll_name, &args, None).await?;
+                all_schemas.insert(coll_name.clone(), schema);
+            }
+            if !args.no_output {
+                println!("{}", serde_json::to_string_pretty(&all_schemas)?);
+            }
         }
     }
     Ok(())
 }
 
+/// Infer schemas for all user databases on the server (skipping system databases).
+///
+/// Output files are written as `<output_dir>/<dbname>/<collname>/`.
+/// Report generation is handled separately by the `report` command.
+async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
+    let all_dbs = client
+        .list_database_names()
+        .await
+        .context("Failed to list databases")?;
+
+    let user_dbs: Vec<String> = all_dbs
+        .into_iter()
+        .filter(|db| !SYSTEM_DATABASES.contains(&db.as_str()))
+        .collect();
+
+    if user_dbs.is_empty() {
+        eprintln!("No user databases found on the server.");
+        return Ok(());
+    }
+
+    eprintln!(
+        "Inferring {} database(s): {}",
+        user_dbs.len(),
+        user_dbs.join(", ")
+    );
+
+    for db_name in &user_dbs {
+        let db = client.database(db_name);
+        let coll_names = db
+            .list_collection_names()
+            .await
+            .with_context(|| format!("Failed to list collections for database '{db_name}'"))?;
+
+        let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+
+        for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+            let db_out_dir = args.output_dir.as_deref().map(|d| d.join(db_name));
+            let schema = infer_collection(
+                client,
+                db_name,
+                coll_name,
+                coll_name,
+                args,
+                db_out_dir.as_deref(),
+            )
+            .await?;
+            db_schemas.insert(coll_name.clone(), schema);
+        }
+
+        if !args.no_output && args.output_dir.is_none() {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&IndexMap::from([(db_name.clone(), &db_schemas)]))?
+            );
+        }
+    }
+
+    Ok(())
+}
+
 /// Infer the schema for a single collection, print stats to stderr, and optionally write output files.
+///
+/// `output_name` controls the directory and file names under `output_dir`.
+/// `output_dir_override`, when provided, is used instead of `args.output_dir`.
 async fn infer_collection(
     client: &Client,
     db_name: &str,
     coll_name: &str,
+    output_name: &str,
     args: &InferArgs,
+    output_dir_override: Option<&Path>,
 ) -> Result<CollectionSchema> {
-    let output_dir = args.output_dir.as_deref();
+    let output_dir = output_dir_override.or(args.output_dir.as_deref());
     let db = client.database(db_name);
     let collection = db.collection::<bson::Document>(coll_name);
 
@@ -501,8 +626,8 @@ async fn infer_collection(
     drop(handle);
 
     if let Some(out_dir) = output_dir {
-        write_collection_files(out_dir, coll_name, &schema, &stats_lines)
-            .with_context(|| format!("Failed to write output files for {coll_name}"))?;
+        write_collection_files(out_dir, output_name, &schema, &stats_lines)
+            .with_context(|| format!("Failed to write output files for {output_name}"))?;
     }
 
     Ok(schema)
@@ -664,8 +789,8 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn run_report(args: ReportArgs) -> Result<()> {
-    // Resolve collections dir and namespace from -c or explicit flags
-    let (collections_dir, namespace, cluster, default_output_dir) =
+    // Resolve collections dir, cluster label, reports dir and project name
+    let (collections_dir, namespace, cluster, reports_dir, project_name) =
         if let Some(ref conf) = args.config {
             let c = read_conf(conf)?;
             let ns = args.namespace.clone();
@@ -684,62 +809,130 @@ fn run_report(args: ReportArgs) -> Result<()> {
                 .join(&c.project_dir)
                 .join("source")
                 .join("collections");
-            let out_dir = c.base_dir.join(&c.project_dir).join("reports");
-            (cols_dir, ns, cluster, Some((out_dir, c.project_dir)))
+            let rep_dir = c.base_dir.join(&c.project_dir).join("reports");
+            let proj = c.project_dir.clone();
+            (cols_dir, ns, cluster, Some(rep_dir), Some(proj))
         } else {
             let dir = args
                 .collections_dir
                 .clone()
                 .ok_or_else(|| anyhow!("Provide --collections-dir or -c <config>"))?;
-            (dir, args.namespace.clone(), String::new(), None)
+            (dir, args.namespace.clone(), String::new(), None, None)
         };
 
-    // Resolve tables dir for the PG tables count column (only when using a conf file)
-    let tables_dir_for_report: Option<std::path::PathBuf> =
-        default_output_dir.as_ref().map(|(reports_dir, _)| {
-            reports_dir
-                .parent()
-                .unwrap_or(reports_dir)
-                .join("schema")
-                .join("tables")
-        });
-    let tables_dir_opt = tables_dir_for_report.as_deref().filter(|p| p.is_dir());
-
-    let rows = collect_rows(&collections_dir, tables_dir_opt)?;
-
-    let html = render_html(&rows, &namespace, &cluster);
+    // Detect whether source/collections has the per-db layout:
+    // a per-db layout has subdirs that contain further subdirs (not direct .stats.yaml files).
+    let is_multi_db = std::fs::read_dir(&collections_dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .any(|e| {
+                    // It's a db folder if it contains at least one subdir
+                    std::fs::read_dir(e.path())
+                        .map(|sub| sub.filter_map(|s| s.ok()).any(|s| s.path().is_dir()))
+                        .unwrap_or(false)
+                })
+        })
+        .unwrap_or(false);
 
     let output_path = if let Some(ref o) = args.output {
         o.clone()
-    } else if let Some((ref dir, ref project_name)) = default_output_dir {
+    } else if let (Some(ref dir), Some(ref proj)) = (&reports_dir, &project_name) {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("Failed to create reports dir {}", dir.display()))?;
-        dir.join(format!("{project_name}.html"))
+        dir.join(format!("{proj}.html"))
     } else {
         PathBuf::from("report.html")
     };
 
-    std::fs::write(&output_path, &html)
-        .with_context(|| format!("Failed to write {}", output_path.display()))?;
-    println!("Report written to {}", output_path.display());
+    if is_multi_db {
+        // ── Per-db layout ──────────────────────────────────────────────────────
+        // Enumerate database subfolders and collect rows per db.
+        let mut db_names: Vec<String> = std::fs::read_dir(&collections_dir)
+            .with_context(|| format!("Cannot read {}", collections_dir.display()))?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        db_names.sort();
 
-    // Also generate the schema ERD diagram if SQL tables exist
-    if let Some((ref reports_dir, ref project_name)) = default_output_dir {
-        let tables_dir = reports_dir
+        // Resolve SQL tables dir for PG tables column (per-db: schema/tables/<db>/)
+        let tables_root: Option<PathBuf> = reports_dir
+            .as_ref()
+            .map(|r| r.parent().unwrap_or(r).join("schema").join("tables"));
+
+        let db_rows: Vec<(String, Vec<mongo2pg::report::CollectionRow>)> = db_names
+            .iter()
+            .map(|db_name| {
+                let db_dir = collections_dir.join(db_name);
+                let tables_dir_opt = tables_root
+                    .as_deref()
+                    .map(|t| t.join(db_name))
+                    .filter(|p| p.is_dir());
+                let rows = mongo2pg::report::collect_rows(&db_dir, tables_dir_opt.as_deref())
+                    .unwrap_or_default();
+                (db_name.clone(), rows)
+            })
+            .collect();
+
+        let entries: Vec<(&str, &[mongo2pg::report::CollectionRow])> = db_rows
+            .iter()
+            .map(|(name, rows)| (name.as_str(), rows.as_slice()))
+            .collect();
+
+        let proj = project_name.as_deref().unwrap_or("project");
+        let html = mongo2pg::report::render_multi_db_html(&entries, &cluster, proj);
+        std::fs::write(&output_path, &html)
+            .with_context(|| format!("Failed to write {}", output_path.display()))?;
+        println!("Report written to {}", output_path.display());
+    } else {
+        // ── Flat / single-db layout ────────────────────────────────────────────
+        let tables_dir_for_report: Option<PathBuf> = reports_dir
+            .as_ref()
+            .map(|r| r.parent().unwrap_or(r).join("schema").join("tables"));
+        let tables_dir_opt = tables_dir_for_report.as_deref().filter(|p| p.is_dir());
+
+        let rows = collect_rows(&collections_dir, tables_dir_opt)?;
+        let html = render_html(&rows, &namespace, &cluster);
+        std::fs::write(&output_path, &html)
+            .with_context(|| format!("Failed to write {}", output_path.display()))?;
+        println!("Report written to {}", output_path.display());
+    }
+
+    // Generate per-database schema ERD diagrams if SQL tables exist
+    if let (Some(ref rep_dir), Some(ref proj)) = (&reports_dir, &project_name) {
+        let tables_dir = rep_dir
             .parent()
-            .unwrap_or(reports_dir)
+            .unwrap_or(rep_dir)
             .join("schema")
             .join("tables");
         if tables_dir.is_dir() {
-            match load_tables(&tables_dir) {
-                Ok(tables) if !tables.is_empty() => {
-                    let schema_html = render_schema_html(&tables, project_name);
-                    let schema_path = reports_dir.join(format!("{project_name}.schema.html"));
-                    std::fs::write(&schema_path, &schema_html)
-                        .with_context(|| format!("Failed to write {}", schema_path.display()))?;
-                    println!("Schema diagram written to {}", schema_path.display());
+            match load_tables_by_db(&tables_dir) {
+                Ok(db_tables) => {
+                    for (db_name, tables) in &db_tables {
+                        if tables.is_empty() {
+                            continue;
+                        }
+                        // flat layout: use project name; per-db: use db name
+                        let label = if db_name.is_empty() {
+                            proj.as_str()
+                        } else {
+                            db_name.as_str()
+                        };
+                        let filename = if db_name.is_empty() {
+                            format!("{proj}.schema.html")
+                        } else {
+                            format!("{db_name}.schema.html")
+                        };
+                        let schema_html = render_schema_html(tables, label);
+                        let schema_path = rep_dir.join(&filename);
+                        std::fs::write(&schema_path, &schema_html).with_context(|| {
+                            format!("Failed to write {}", schema_path.display())
+                        })?;
+                        println!("Schema diagram written to {}", schema_path.display());
+                    }
                 }
-                Ok(_) => {}
                 Err(e) => eprintln!("Warning: could not generate schema diagram: {e}"),
             }
         }
