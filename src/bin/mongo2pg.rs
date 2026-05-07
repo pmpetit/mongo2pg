@@ -123,9 +123,6 @@ struct InferArgs {
 
 #[derive(Parser, Debug)]
 struct ToPgArgs {
-    #[command(flatten)]
-    mongo: UriArg,
-
     /// Optional collection name; if omitted all collections under source/collections/ are processed
     collection: Option<String>,
 
