@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.7] - 2026-05-07
+
+### Added
+
+- **Expandable DDL in HTML reports**: PG table pills in the per-collection detail row are now clickable
+  - Clicking a table pill toggles a dark-themed `<pre>` block showing the full `CREATE TABLE` DDL
+  - An animated `▶` arrow indicates the collapsed/expanded state
+  - Works in both single-database and multi-database reports
+
+---
+
 ## [0.3.6] - 2026-05-07
 
 ### Added
