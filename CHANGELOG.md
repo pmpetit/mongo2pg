@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.6] - 2026-05-07
+
+### Added
+
+- **Database and server-level `infer` iteration**
+  - `--namespace <db>` (no collection) now infers every collection in the database
+  - Omitting `--namespace` entirely enumerates all user databases on the server and infers all their collections (`admin`, `local`, and `config` are always skipped)
+  - Output files are named `<dbname>_<collname>.json` / `<dbname>_<collname>.stats.txt`
+  - Per-database HTML report (`reports/<dbname>.html`) and Mermaid ER diagram (`reports/<dbname>.schema.html`) are generated automatically
+- `build_mongo_mermaid` and `render_mongo_schema_html` helpers in `schema_diagram.rs` for ER diagram generation from inferred schemas
+- `SYSTEM_DATABASES` constant exported from the library crate to avoid duplication
+
+### Fixed
+
+- `--uri` was erroneously accepted by `to-pg` (which does not connect to MongoDB) – option removed
+
+---
+
+## [0.3.5] - 2026-05-05
+
+### Added
+
+- Score surfaced in the cluster-level report
+
+### Fixed
+
+- Score computation was incorrectly limited to the first 20 sampled values – now uses all sampled values
+- System views are excluded from collection inference
+- Warning emitted when a referenced database is not found on the server
+
+---
+
+## [0.3.4] - 2026-05-05
+
+### Added
+
+- `cluster-report` subcommand: aggregates migration scores across multiple databases into a single cluster-level HTML report
+  - Accepts one or more `--configs` paths (comma-separated or repeated)
+  - Cluster label derived from the first config URI when `--cluster` is not provided
+- `distinct_fields_over_avg_fields_per_doc` metric added to both text (`.stats.txt`) and YAML (`.stats.yaml`) stats outputs
+
+---
+
 ## [0.3.3] - 2026-05-03
 
 ### Added
@@ -112,7 +155,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema analysis with type detection, nested objects, arrays, and probability scores
 - CI pipeline with GitHub Actions
 
-[Unreleased]: https://github.com/pmpetit/mongo2pg/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/pmpetit/mongo2pg/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/pmpetit/mongo2pg/compare/v0.3.5...v0.3.6
+[0.3.5]: https://github.com/pmpetit/mongo2pg/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/pmpetit/mongo2pg/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/pmpetit/mongo2pg/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/pmpetit/mongo2pg/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/pmpetit/mongo2pg/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pmpetit/mongo2pg/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/pmpetit/mongo2pg/compare/v0.2.1...v0.2.2
