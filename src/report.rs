@@ -110,10 +110,7 @@ pub fn compute_cluster_score(dbs: &[DatabaseScore]) -> ClusterScore {
         0.0
     };
 
-    let score_max: f64 = dbs
-        .iter()
-        .map(|db| db.score_db)
-        .fold(0.0_f64, f64::max);
+    let score_max: f64 = dbs.iter().map(|db| db.score_db).fold(0.0_f64, f64::max);
 
     ClusterScore {
         score_total,
@@ -764,5 +761,424 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
         complexity_label = complexity_label.0,
         complexity_color = complexity_label.1,
         table_rows = table_rows,
+    )
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Multi-database combined report
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Render a single HTML report combining all databases in one page.
+///
+/// Structure:
+/// 1. Cluster-level summary cards (score, db count, collection count, doc count)
+/// 2. Per-database summary table (one row per db with its own score/avg/max)
+/// 3. Per-database section: mini score cards + full collection details table
+pub fn render_multi_db_html(
+    entries: &[(&str, &[CollectionRow])],
+    cluster: &str,
+    project_name: &str,
+) -> String {
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
+
+    // ── Compute per-db and cluster scores ─────────────────────────────────────
+    let db_scores: Vec<DatabaseScore> = entries
+        .iter()
+        .map(|(name, rows)| compute_db_score(name, rows))
+        .collect();
+    let cs = compute_cluster_score(&db_scores);
+
+    let total_collections: usize = db_scores.iter().map(|d| d.collection_count).sum();
+    let total_docs: u64 = db_scores.iter().map(|d| d.total_docs).sum();
+
+    let d = db_scores.len() as f64;
+    let threshold_easy = 30.0 * d;
+    let threshold_hard = 80.0 * d;
+    let (complexity_label, complexity_color) = if cs.score_total < threshold_easy {
+        ("Easy", "#27ae60")
+    } else if cs.score_total < threshold_hard {
+        ("Medium", "#e67e22")
+    } else {
+        ("Hard", "#c0392b")
+    };
+
+    // ── DB summary table rows ─────────────────────────────────────────────────
+    let db_summary_rows: String = db_scores
+        .iter()
+        .map(|db| {
+            let score_color = if db.score_db < 30.0 {
+                "#27ae60"
+            } else if db.score_db < 80.0 {
+                "#e67e22"
+            } else {
+                "#c0392b"
+            };
+            format!(
+                r##"<tr class="collection-row">
+          <td class="name"><a href="#{name}">{name}</a></td>
+          <td class="num">{collections}</td>
+          <td class="num">{docs}</td>
+          <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score_db:.2}</span></td>
+          <td class="num">{score_avg:.2}</td>
+          <td class="num">{score_max:.2}</td>
+        </tr>"##,
+                name = db.name,
+                collections = db.collection_count,
+                docs = db.total_docs,
+                score_db = db.score_db,
+                score_avg = db.score_avg,
+                score_max = db.score_max,
+                score_color = score_color,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // ── Per-db collection sections ────────────────────────────────────────────
+    let db_sections: String = entries
+        .iter()
+        .zip(db_scores.iter())
+        .map(|((db_name, rows), db_score)| {
+            let (db_complexity_label, db_complexity_color) = if db_score.score_db < 30.0 {
+                ("Easy", "#27ae60")
+            } else if db_score.score_db < 80.0 {
+                ("Medium", "#e67e22")
+            } else {
+                ("Hard", "#c0392b")
+            };
+            let score_max: f64 = rows
+                .iter()
+                .map(|r| r.stats.migrability_score)
+                .fold(0.0_f64, f64::max);
+
+            let has_tables = rows.iter().any(|r| !r.table_names.is_empty());
+            let col_count = 8 + if has_tables { 1 } else { 0 };
+
+            let collection_rows: String = rows
+                .iter()
+                .map(|r| {
+                    let doc_count = match &r.stats.documents_in_collection {
+                        serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
+                        _ => "unknown".to_owned(),
+                    };
+                    let score_color = if r.stats.migrability_score < 3.0 {
+                        "#27ae60"
+                    } else if r.stats.migrability_score < 8.0 {
+                        "#e67e22"
+                    } else {
+                        "#c0392b"
+                    };
+                    let (name_cell, detail_row) = if r.table_names.is_empty() {
+                        (
+                            format!(r#"<td class="name">{}</td>"#, r.name),
+                            String::new(),
+                        )
+                    } else {
+                        let pills: String = r
+                            .table_names
+                            .iter()
+                            .map(|t| format!(r#"<span class="pill">{t}</span>"#))
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        let detail_id = format!("detail-{db_name}-{}", r.name);
+                        let icon_id = format!("icon-{db_name}-{}", r.name);
+                        let key = format!("{db_name}-{}", r.name);
+                        let name_cell = format!(
+                            r#"<td class="name expandable" onclick="toggleDetail('{key}')" title="Click to expand PG tables">
+              <span class="expand-icon" id="{icon_id}">▶</span> {coll}
+            </td>"#,
+                            key = key,
+                            icon_id = icon_id,
+                            coll = r.name,
+                        );
+                        let detail_row = format!(
+                            r#"<tr class="detail-row" id="{detail_id}" style="display:none">
+          <td colspan="{col_count}" class="detail-cell">
+            <div class="table-list">{pills}</div>
+          </td>
+        </tr>"#,
+                        );
+                        (name_cell, detail_row)
+                    };
+                    let tables_cell = if has_tables {
+                        format!(
+                            r#"<td class="num">{}</td>"#,
+                            r.tables_count().map_or("-".to_owned(), |n| n.to_string())
+                        )
+                    } else {
+                        String::new()
+                    };
+                    format!(
+                        r#"<tr class="collection-row">
+          {name_cell}
+          <td class="num">{doc_count}</td>
+          <td class="num">{sampled}</td>
+          <td class="num">{width_top}</td>
+          <td class="num">{width_max:.1} <span class="level">(L{width_max_level})</span></td>
+          <td class="num">{depth}</td>
+          <td class="num" title="{branch_tooltip}">{branch:.1}</td>
+          <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score:.2}</span></td>
+          {tables_cell}
+        </tr>
+        {detail_row}"#,
+                        doc_count = doc_count,
+                        sampled = r.stats.documents_sampled,
+                        width_top = r.stats.width_top_level,
+                        width_max = r.stats.width_max,
+                        width_max_level = r.stats.width_max_level,
+                        depth = r.stats.depth_max,
+                        branch = r.stats.branch_total,
+                        branch_tooltip = {
+                            let levels = r
+                                .stats
+                                .branch_per_level
+                                .iter()
+                                .map(|(k, v)| format!("{}: {:.2}", k, v))
+                                .collect::<Vec<_>>()
+                                .join("  ");
+                            format!("Expected fields/doc by level — {}", levels)
+                        },
+                        score = r.stats.migrability_score,
+                        score_color = score_color,
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            let tables_header = if has_tables {
+                r#"<th class="num">PG Tables</th>"#
+            } else {
+                ""
+            };
+
+            format!(
+                r#"  <div class="db-section" id="{db_name}">
+    <h2 class="db-heading">{db_name}</h2>
+    <div class="summary-grid" style="margin-bottom:1rem">
+      <div class="card"><div class="label">Collections</div><div class="value">{coll_count}</div></div>
+      <div class="card"><div class="label">Documents</div><div class="value">{docs}</div></div>
+      <div class="card"><div class="label">Score (total)</div><div class="value" style="color:{db_complexity_color}">{score_db:.1}</div></div>
+      <div class="card"><div class="label">Complexity</div><div class="value" style="font-size:1.2rem;margin-top:0.3rem"><span class="complexity-badge" style="background:{db_complexity_color}">{db_complexity_label}</span></div></div>
+      <div class="card"><div class="label">Score (avg)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
+      <div class="card"><div class="label">Score (max coll)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Collection</th>
+          <th class="num">Documents</th>
+          <th class="num">Sampled</th>
+          <th class="num" title="Number of top-level fields">Width (top)</th>
+          <th class="num" title="Highest field count at any nesting level">Width (max)</th>
+          <th class="num" title="Maximum nesting depth">Depth (max)</th>
+          <th class="num" title="Expected total fields per doc (probability-weighted)">Fields (total)</th>
+          <th class="num">Score</th>
+          {tables_header}
+        </tr>
+      </thead>
+      <tbody>
+        {collection_rows}
+      </tbody>
+    </table>
+  </div>"#,
+                db_name = db_name,
+                coll_count = db_score.collection_count,
+                docs = db_score.total_docs,
+                score_db = db_score.score_db,
+                score_avg = db_score.score_avg,
+                score_max = score_max,
+                db_complexity_label = db_complexity_label,
+                db_complexity_color = db_complexity_color,
+                tables_header = tables_header,
+                collection_rows = collection_rows,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mongo2pg – {project_name} @ {cluster}</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      margin: 0;
+      padding: 2rem;
+    }}
+    h1 {{ color: #2c3e50; margin-bottom: 0.25rem; }}
+    h2 {{ color: #2c3e50; margin-top: 0; margin-bottom: 0.75rem; font-size: 1.25rem; }}
+    .subtitle {{ color: #7f8c8d; font-size: 0.9rem; margin-bottom: 2rem; }}
+    .summary-grid {{
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }}
+    .card {{
+      background: white;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      min-width: 160px;
+    }}
+    .card .label {{ font-size: 0.75rem; text-transform: uppercase; color: #7f8c8d; }}
+    .card .value {{ font-size: 1.6rem; font-weight: 700; color: #2c3e50; }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }}
+    thead {{ background: #2c3e50; color: white; }}
+    th[title] {{ cursor: help; }}
+    th {{
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    th.num, td.num {{ text-align: right; }}
+    td {{
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #ecf0f1;
+      font-size: 0.9rem;
+    }}
+    tr:last-child td {{ border-bottom: none; }}
+    tr.collection-row:hover td {{ background: #f0f4f8; }}
+    td.name {{ font-weight: 600; color: #2c3e50; }}
+    td.name a {{ color: inherit; text-decoration: none; }}
+    td.name a:hover {{ text-decoration: underline; color: #2980b9; }}
+    td.expandable {{
+      cursor: pointer;
+      user-select: none;
+    }}
+    td.expandable:hover {{ color: #2980b9; }}
+    .expand-icon {{
+      display: inline-block;
+      font-size: 0.65rem;
+      color: #95a5a6;
+      margin-right: 0.3rem;
+      transition: transform 0.15s;
+    }}
+    .expand-icon.open {{ transform: rotate(90deg); }}
+    .detail-row td.detail-cell {{
+      background: #f8fafc;
+      padding: 0.5rem 1rem 0.75rem 2.5rem;
+      border-top: none;
+    }}
+    .table-list {{ display: flex; flex-wrap: wrap; gap: 0.4rem; }}
+    .pill {{
+      display: inline-block;
+      background: #eaf4fb;
+      color: #2471a3;
+      border: 1px solid #aed6f1;
+      border-radius: 4px;
+      padding: 0.15rem 0.55rem;
+      font-size: 0.78rem;
+      font-family: monospace;
+    }}
+    .level {{ color: #95a5a6; font-size: 0.8rem; }}
+    .score-badge {{ font-size: 0.95rem; }}
+    .complexity-badge {{
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: white;
+    }}
+    .db-section {{ margin-top: 3rem; }}
+    .db-heading {{
+      font-size: 1.4rem;
+      color: #2c3e50;
+      padding-bottom: 0.4rem;
+      border-bottom: 2px solid #bdc3c7;
+      margin-bottom: 1rem;
+    }}
+    footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
+  </style>
+</head>
+<body>
+  <h1>mongo2pg – Migration Report</h1>
+  <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Project: <strong>{project_name}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="label">Databases</div><div class="value">{db_count}</div></div>
+    <div class="card"><div class="label">Collections</div><div class="value">{total_collections}</div></div>
+    <div class="card"><div class="label">Total Documents</div><div class="value">{total_docs}</div></div>
+    <div class="card">
+      <div class="label">Cluster Score</div>
+      <div class="value" style="color:{complexity_color}">{score_total:.1}</div>
+    </div>
+    <div class="card">
+      <div class="label">Complexity</div>
+      <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
+        <span class="complexity-badge" style="background:{complexity_color}">{complexity_label}</span>
+      </div>
+    </div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
+    <div class="card"><div class="label">Score (max db)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
+  </div>
+
+  <h2>Databases</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Database</th>
+        <th class="num">Collections</th>
+        <th class="num">Documents</th>
+        <th class="num" title="1.5 × collections + Σ collection scores">Score (total)</th>
+        <th class="num" title="Document-count-weighted average of per-collection scores">Score (avg)</th>
+        <th class="num" title="Highest per-collection score">Score (max)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {db_summary_rows}
+    </tbody>
+  </table>
+
+  {db_sections}
+
+  <footer>Generated by <a href="https://github.com/pmpetit/mongo2pg">mongo2pg</a></footer>
+
+  <script>
+    function toggleDetail(key) {{
+      var row  = document.getElementById('detail-' + key);
+      var icon = document.getElementById('icon-'   + key);
+      if (!row) return;
+      var open = row.style.display !== 'none';
+      row.style.display = open ? 'none' : '';
+      if (open) {{ icon.classList.remove('open'); }}
+      else      {{ icon.classList.add('open');    }}
+    }}
+  </script>
+</body>
+</html>
+"#,
+        project_name = project_name,
+        cluster = cluster,
+        now = now,
+        db_count = cs.db_count,
+        total_collections = total_collections,
+        total_docs = total_docs,
+        score_total = cs.score_total,
+        score_avg = cs.score_avg,
+        score_max = cs.score_max,
+        complexity_label = complexity_label,
+        complexity_color = complexity_color,
+        db_summary_rows = db_summary_rows,
+        db_sections = db_sections,
     )
 }
