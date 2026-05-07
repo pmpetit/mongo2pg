@@ -152,6 +152,11 @@ struct InitArgs {
     /// MongoDB connection URI to store in the project config
     #[arg(long)]
     uri: Option<String>,
+
+    /// Namespace to store in the project config (e.g. mydb or mydb.mycollection);
+    /// omit to leave NAMESPACE out of the config file
+    #[arg(long)]
+    namespace: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -695,7 +700,10 @@ fn run_init(args: InitArgs) -> Result<()> {
             .as_deref()
             .map(|u| format!("URI = {}\n", u))
             .unwrap_or_else(|| "# URI = mongodb://localhost:27017\n".to_owned()),
-        format!("NAMESPACE = {}\n", args.project_name),
+        args.namespace
+            .as_deref()
+            .map(|ns| format!("NAMESPACE = {}\n", ns))
+            .unwrap_or_default(),
     );
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;
