@@ -24,7 +24,9 @@ use futures::TryStreamExt;
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
 use mongo2pg::export::export_collection;
-use mongo2pg::report::{collect_rows, compute_db_score, render_cluster_html, render_html};
+use mongo2pg::report::{
+    collect_rows, compute_db_score, render_cluster_html, render_html, SYSTEM_DATABASES,
+};
 use mongo2pg::schema_diagram::{load_tables, render_mongo_schema_html, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
@@ -445,9 +447,6 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     }
     Ok(())
 }
-
-/// System databases that are always skipped when iterating the whole cluster.
-const SYSTEM_DATABASES: &[&str] = &["admin", "local", "config"];
 
 /// Infer schemas for all user databases on the server (skipping system databases).
 ///

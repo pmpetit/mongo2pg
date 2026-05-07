@@ -5,7 +5,7 @@
 
 use bson::{doc, Bson};
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
-use mongo2pg::report::{compute_cluster_score, render_cluster_html, DatabaseScore};
+use mongo2pg::report::{compute_cluster_score, render_cluster_html, DatabaseScore, SYSTEM_DATABASES};
 use mongo2pg::stats::SchemaStats;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -321,22 +321,16 @@ fn test_system_databases_list() {
 
     for db in system_dbs {
         assert!(
-            is_system_db(db),
+            SYSTEM_DATABASES.contains(&db),
             "'{db}' should be treated as a system database"
         );
     }
     for db in user_dbs {
         assert!(
-            !is_system_db(db),
+            !SYSTEM_DATABASES.contains(&db),
             "'{db}' should NOT be treated as a system database"
         );
     }
-}
-
-/// Helper matching the filter logic used in `infer_all_databases`.
-fn is_system_db(name: &str) -> bool {
-    const SYSTEM_DATABASES: &[&str] = &["admin", "local", "config"];
-    SYSTEM_DATABASES.contains(&name)
 }
 
 /// Verify that collection output names are prefixed with the database name.

@@ -8,6 +8,13 @@ use serde::Deserialize;
 use crate::schema_diagram::parse_sql;
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Constants
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// MongoDB system databases that are skipped when enumerating user databases.
+pub const SYSTEM_DATABASES: &[&str] = &["admin", "local", "config"];
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Cluster-level data structures
 // ──────────────────────────────────────────────────────────────────────────────
 
