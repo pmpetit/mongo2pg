@@ -153,8 +153,8 @@ struct InitArgs {
     #[arg(long)]
     uri: Option<String>,
 
-    /// Namespace to store in the project config (e.g. mydb or mydb.mycollection);
-    /// omit to leave NAMESPACE out of the config file
+    /// Namespace to store in the project config (e.g. mydb or mydb.mycoll); when omitted,
+    /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
     #[arg(long)]
     namespace: Option<String>,
 }
@@ -703,7 +703,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         args.namespace
             .as_deref()
             .map(|ns| format!("NAMESPACE = {}\n", ns))
-            .unwrap_or_default(),
+            .unwrap_or_else(|| "# NAMESPACE = mydb\n".to_owned()),
     );
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;

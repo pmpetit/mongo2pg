@@ -550,7 +550,9 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
     <strong>Complexity score</strong> per collection:
     <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
     DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
-    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.<br>
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+    Effective: {count} collections, Σ C<sub>i</sub> = {score_sum:.2} &nbsp;→&nbsp;
+    1.5 × {count} + {score_sum:.2} = <strong>{score_db:.2}</strong>.<br>
     <strong>Width (top)</strong>: number of top-level fields in the collection schema.<br>
     <strong>Width (max)</strong>: highest field count found at any single nesting level, with the level shown in parentheses (probability-weighted).<br>
     <strong>Depth (max)</strong>: maximum nesting depth — top-level fields are depth 1, their sub-fields depth 2, etc.<br>
@@ -608,6 +610,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
         count = rows.len(),
         total_docs = total_docs,
         score_db = score_db,
+        score_sum = score_sum,
         score_avg = score_avg,
         score_max = score_max,
         complexity_label = complexity_label.0,
