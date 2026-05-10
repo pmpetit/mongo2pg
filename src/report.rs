@@ -48,16 +48,18 @@ pub struct ClusterScore {
 
 /// Compute a [`DatabaseScore`] from a slice of [`CollectionRow`]s for one database.
 pub fn compute_db_score(name: &str, rows: &[CollectionRow]) -> DatabaseScore {
-    let total_docs: u64 = rows
-        .iter()
-        .map(|r| match &r.stats.documents_in_collection {
-            serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0),
-            _ => 0,
-        })
-        .sum();
+    let doc_count = |r: &CollectionRow| match &r.stats.documents_in_collection {
+        serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0),
+        _ => 0,
+    };
 
-    let n = rows.len() as f64;
-    let score_sum: f64 = rows.iter().map(|r| r.stats.migrability_score).sum();
+    let total_docs: u64 = rows.iter().map(doc_count).sum();
+
+    // Only include collections with at least one document in the score formula,
+    // matching the Python compute_cluster_scores behaviour (count == 0 → skip).
+    let non_empty: Vec<&CollectionRow> = rows.iter().filter(|r| doc_count(r) > 0).collect();
+    let n = non_empty.len() as f64;
+    let score_sum: f64 = non_empty.iter().map(|r| r.stats.migrability_score).sum();
     let score_db = ((1.5 * n + score_sum) * 100.0).round() / 100.0;
 
     let score_max: f64 = rows
@@ -68,10 +70,7 @@ pub fn compute_db_score(name: &str, rows: &[CollectionRow]) -> DatabaseScore {
     let total_weighted: f64 = rows
         .iter()
         .map(|r| {
-            let docs = match &r.stats.documents_in_collection {
-                serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0) as f64,
-                _ => 0.0,
-            };
+            let docs = doc_count(r) as f64;
             r.stats.migrability_score * docs
         })
         .sum();
@@ -87,7 +86,7 @@ pub fn compute_db_score(name: &str, rows: &[CollectionRow]) -> DatabaseScore {
         score_avg,
         score_max: (score_max * 100.0).round() / 100.0,
         total_docs,
-        collection_count: rows.len(),
+        collection_count: non_empty.len(),
     }
 }
 
@@ -550,7 +549,9 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
     <strong>Complexity score</strong> per collection:
     <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
     DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
-    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.<br>
+    Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
+    Effective: {count} collections, Σ C<sub>i</sub> = {score_sum:.2} &nbsp;→&nbsp;
+    1.5 × {count} + {score_sum:.2} = <strong>{score_db:.2}</strong>.<br>
     <strong>Width (top)</strong>: number of top-level fields in the collection schema.<br>
     <strong>Width (max)</strong>: highest field count found at any single nesting level, with the level shown in parentheses (probability-weighted).<br>
     <strong>Depth (max)</strong>: maximum nesting depth — top-level fields are depth 1, their sub-fields depth 2, etc.<br>
@@ -608,6 +609,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
         count = rows.len(),
         total_docs = total_docs,
         score_db = score_db,
+        score_sum = score_sum,
         score_avg = score_avg,
         score_max = score_max,
         complexity_label = complexity_label.0,
@@ -643,15 +645,15 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
 
     let total_docs: u64 = dbs.iter().map(|db| db.total_docs).sum();
     let total_collections: usize = dbs.iter().map(|db| db.collection_count).sum();
+    let score_db_sum: f64 = (dbs.iter().map(|db| db.score_db).sum::<f64>() * 100.0).round() / 100.0;
 
-    // Thresholds scale with D so that a cluster of D databases is graded on the
-    // same relative scale as a single database.
+    // Use score_total / D against the same fixed 30/80 thresholds as the DB level,
+    // so cluster and database complexity labels are on the same scale.
     let d = dbs.len() as f64;
-    let threshold_easy = 30.0 * d;
-    let threshold_hard = 80.0 * d;
-    let complexity_label = if cs.score_total < threshold_easy {
+    let score_per_db = if d > 0.0 { cs.score_total / d } else { 0.0 };
+    let complexity_label = if score_per_db < 30.0 {
         ("Easy", "#27ae60")
-    } else if cs.score_total < threshold_hard {
+    } else if score_per_db < 80.0 {
         ("Medium", "#e67e22")
     } else {
         ("Hard", "#c0392b")
@@ -785,7 +787,8 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
   <p class="score-explainer">
     <strong>DB complexity score</strong>: <code>1.5 × collections + Σ C<sub>i</sub></code>
     where <code>C<sub>i</sub> = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.<br>
-    <strong>Cluster score</strong>: <code>1.5 × databases + Σ score_db<sub>j</sub></code>.
+    <strong>Cluster score</strong>: <code>1.5 × databases + Σ score_db<sub>j</sub></code><br>
+    &nbsp;&nbsp;&nbsp;= <code>1.5 × {db_count} + {score_db_sum:.2}</code> = <strong>{score_total:.2}</strong>.<br>
     Thresholds (per database): &lt;30 Easy · 30–80 Medium · &gt;80 Hard (scaled by database count for the cluster).
   </p>
 
@@ -820,6 +823,7 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
         complexity_label = complexity_label.0,
         complexity_color = complexity_label.1,
         table_rows = table_rows,
+        score_db_sum = score_db_sum,
     )
 }
 
@@ -851,13 +855,14 @@ pub fn render_multi_db_html(
 
     let total_collections: usize = db_scores.iter().map(|d| d.collection_count).sum();
     let total_docs: u64 = db_scores.iter().map(|d| d.total_docs).sum();
+    let score_db_sum: f64 =
+        (db_scores.iter().map(|d| d.score_db).sum::<f64>() * 100.0).round() / 100.0;
 
     let d = db_scores.len() as f64;
-    let threshold_easy = 30.0 * d;
-    let threshold_hard = 80.0 * d;
-    let (complexity_label, complexity_color) = if cs.score_total < threshold_easy {
+    let score_per_db = if d > 0.0 { cs.score_total / d } else { 0.0 };
+    let (complexity_label, complexity_color) = if score_per_db < 30.0 {
         ("Easy", "#27ae60")
-    } else if cs.score_total < threshold_hard {
+    } else if score_per_db < 80.0 {
         ("Medium", "#e67e22")
     } else {
         ("Hard", "#c0392b")
@@ -1029,6 +1034,7 @@ pub fn render_multi_db_html(
                 ""
             };
 
+            let score_sum_i = ((db_score.score_db - 1.5 * db_score.collection_count as f64) * 100.0).round() / 100.0;
             format!(
                 r#"  <div class="db-section" id="{db_name}">
     <h2 class="db-heading">{db_name}</h2>
@@ -1040,6 +1046,10 @@ pub fn render_multi_db_html(
       <div class="card"><div class="label">Score (avg)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
       <div class="card"><div class="label">Score (max coll)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
     </div>
+    <p class="score-explainer">
+      <strong>DB score</strong>: <code>1.5 × collections + Σ C<sub>i</sub></code><br>
+      &nbsp;&nbsp;&nbsp;= <code>1.5 × {coll_count} + {score_sum_i:.2}</code> = <strong>{score_db:.2}</strong>.
+    </p>
     <table>
       <thead>
         <tr>
@@ -1065,6 +1075,7 @@ pub fn render_multi_db_html(
                 score_db = db_score.score_db,
                 score_avg = db_score.score_avg,
                 score_max = score_max,
+                score_sum_i = score_sum_i,
                 db_complexity_label = db_complexity_label,
                 db_complexity_color = db_complexity_color,
                 tables_header = tables_header,
@@ -1209,6 +1220,8 @@ pub fn render_multi_db_html(
       margin-bottom: 1rem;
     }}
     footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
+    .score-explainer {{ margin-top: -1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: #7f8c8d; }}
+    .score-explainer code {{ background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }}
   </style>
 </head>
 <body>
@@ -1232,6 +1245,11 @@ pub fn render_multi_db_html(
     <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
     <div class="card"><div class="label">Score (max db)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
   </div>
+
+  <p class="score-explainer">
+    <strong>Cluster score</strong>: <code>1.5 × databases + Σ score_db<sub>j</sub></code><br>
+    &nbsp;&nbsp;&nbsp;= <code>1.5 × {db_count} + {score_db_sum:.2}</code> = <strong>{score_total:.2}</strong>.
+  </p>
 
   <h2>Databases</h2>
   <table>
@@ -1286,6 +1304,7 @@ pub fn render_multi_db_html(
         score_total = cs.score_total,
         score_avg = cs.score_avg,
         score_max = cs.score_max,
+        score_db_sum = score_db_sum,
         complexity_label = complexity_label,
         complexity_color = complexity_color,
         db_summary_rows = db_summary_rows,

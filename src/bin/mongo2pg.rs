@@ -153,8 +153,8 @@ struct InitArgs {
     #[arg(long)]
     uri: Option<String>,
 
-    /// Namespace to store in the project config (e.g. mydb or mydb.mycollection);
-    /// omit to leave NAMESPACE out of the config file
+    /// Namespace to store in the project config (e.g. mydb or mydb.mycoll); when omitted,
+    /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
     #[arg(long)]
     namespace: Option<String>,
 }
@@ -172,7 +172,7 @@ struct ReportArgs {
     #[arg(long = "collections-dir", conflicts_with = "config")]
     collections_dir: Option<PathBuf>,
 
-    /// Where to write the HTML report (default: reports/<namespace>.html or report.html)
+    /// Where to write the HTML report (default: reports/main.html or main.html)
     #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
 
@@ -703,7 +703,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         args.namespace
             .as_deref()
             .map(|ns| format!("NAMESPACE = {}\n", ns))
-            .unwrap_or_default(),
+            .unwrap_or_else(|| "# NAMESPACE = mydb\n".to_owned()),
     );
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;
@@ -846,12 +846,12 @@ fn run_report(args: ReportArgs) -> Result<()> {
 
     let output_path = if let Some(ref o) = args.output {
         o.clone()
-    } else if let (Some(ref dir), Some(ref proj)) = (&reports_dir, &project_name) {
+    } else if let (Some(ref dir), Some(ref _proj)) = (&reports_dir, &project_name) {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("Failed to create reports dir {}", dir.display()))?;
-        dir.join(format!("{proj}.html"))
+        dir.join("main.html")
     } else {
-        PathBuf::from("report.html")
+        PathBuf::from("main.html")
     };
 
     if is_multi_db {
