@@ -16,6 +16,7 @@
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use bson::doc;
@@ -490,9 +491,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 
             let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
             for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
-                let schema =
-                    infer_collection(&client, db_name, coll_name, coll_name, &args, None).await?;
-                all_schemas.insert(coll_name.clone(), schema);
+                match infer_collection(&client, db_name, coll_name, coll_name, &args, None).await {
+                    Ok(schema) => {
+                        all_schemas.insert(coll_name.clone(), schema);
+                    }
+                    Err(e) => eprintln!("  [warn] skipping {db_name}.{coll_name}: {e:#}"),
+                }
             }
             if !args.no_output {
                 println!("{}", serde_json::to_string_pretty(&all_schemas)?);
@@ -530,16 +534,21 @@ async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
 
     for db_name in &user_dbs {
         let db = client.database(db_name);
-        let coll_names = db
-            .list_collection_names()
-            .await
-            .with_context(|| format!("Failed to list collections for database '{db_name}'"))?;
+        let coll_names = match db.list_collection_names().await {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!(
+                    "  [warn] skipping database '{db_name}' (cannot list collections): {e:#}"
+                );
+                continue;
+            }
+        };
 
         let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
 
         for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
             let db_out_dir = args.output_dir.as_deref().map(|d| d.join(db_name));
-            let schema = infer_collection(
+            match infer_collection(
                 client,
                 db_name,
                 coll_name,
@@ -547,8 +556,13 @@ async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
                 args,
                 db_out_dir.as_deref(),
             )
-            .await?;
-            db_schemas.insert(coll_name.clone(), schema);
+            .await
+            {
+                Ok(schema) => {
+                    db_schemas.insert(coll_name.clone(), schema);
+                }
+                Err(e) => eprintln!("  [warn] skipping {db_name}.{coll_name}: {e:#}"),
+            }
         }
 
         if !args.no_output && args.output_dir.is_none() {
@@ -562,18 +576,9 @@ async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
     Ok(())
 }
 
-/// Returns `true` for MongoDB errors that mean `$sample` cannot run on this
-/// collection/tier and we should fall back to a sequential `find().limit()`.
-///
-/// * 241 – ConversionFailure  (e.g. a numeric string that `$sample` cannot coerce)
-/// * 292 – QueryExceededMemoryLimitNoDiskUseAllowed  (Atlas shared tier or server
-///         with `allowDiskUseByDefault: false` and a large `$sample` sort)
-fn is_sample_fallback_error(e: &mongodb::error::Error) -> bool {
-    match e.kind.as_ref() {
-        mongodb::error::ErrorKind::Command(cmd_err) => cmd_err.code == 241 || cmd_err.code == 292,
-        _ => false,
-    }
-}
+/// Returns `true` when `$sample` failed with error 292 (sort exceeds memory limit).
+/// Maximum time we allow a single sampling query to run on the server.
+const SAMPLE_MAX_TIME: Duration = Duration::from_secs(120);
 
 /// Infer the schema for a single collection, print stats to stderr, and optionally write output files.
 ///
@@ -609,30 +614,76 @@ async fn infer_collection(
 
     let mut analyzer = Analyzer::new(true);
 
+    // Try $sample; on any error fall back to a sequential find().limit().
+    // $sample internally sorts documents, which can fail on Atlas shared tiers
+    // (error 292 – sort memory limit) or emit deserialization errors on some
+    // server/driver combinations.  find().limit() has no sort stage and works
+    // on those tiers.  If find() also fails (e.g. error 241 in a broken view
+    // pipeline), infer_collection returns that error and batch callers skip.
     let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
-    let agg_result = collection.aggregate(pipeline).allow_disk_use(true).await;
-    let use_fallback = matches!(&agg_result, Err(e) if is_sample_fallback_error(e));
-    if use_fallback {
-        let e = agg_result.unwrap_err();
-        eprintln!(
-            "  [warn] $sample not supported for {db_name}.{coll_name} \
-             ({e}); falling back to sequential find().limit({sample_size})"
-        );
-        let mut cursor = collection
+    // Errors from $sample (sort memory limit, deserialization, etc.) surface during
+    // cursor iteration, not at this .await.  The cursor loop below handles all of them
+    // and falls back to find().limit() as needed.
+    let sample_result = collection
+        .aggregate(pipeline)
+        .allow_disk_use(true)
+        .max_time(SAMPLE_MAX_TIME)
+        .await;
+
+    /// Run a `find().limit()` into `analyzer`, logging any error without propagating.
+    async fn find_fallback(
+        collection: &mongodb::Collection<bson::Document>,
+        analyzer: &mut Analyzer,
+        sample_size: u64,
+        db_name: &str,
+        coll_name: &str,
+    ) {
+        match collection
             .find(doc! {})
             .limit(sample_size as i64)
+            .max_time(SAMPLE_MAX_TIME)
             .await
-            .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
-        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
-            analyzer.process_document(&doc);
+        {
+            Err(e) => {
+                eprintln!("  [warn] find() fallback also failed for {db_name}.{coll_name}: {e:#}")
+            }
+            Ok(mut cur) => loop {
+                match cur.try_next().await {
+                    Ok(Some(d)) => analyzer.process_document(&d),
+                    Ok(None) => break,
+                    Err(e) => {
+                        eprintln!("  [warn] find() cursor error for {db_name}.{coll_name}: {e:#}");
+                        break;
+                    }
+                }
+            },
         }
-    } else {
-        let mut cursor = agg_result.with_context(|| {
-            format!("Failed to run $sample aggregation on {db_name}.{coll_name}")
-        })?;
-        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
-            analyzer.process_document(&doc);
+    }
+
+    match sample_result {
+        Err(e) => {
+            eprintln!(
+                "  [warn] $sample failed for {db_name}.{coll_name} \
+                 ({e}); falling back to sequential find().limit({sample_size})"
+            );
+            find_fallback(&collection, &mut analyzer, sample_size, db_name, coll_name).await;
         }
+        Ok(mut cursor) => loop {
+            match cursor.try_next().await {
+                Ok(Some(doc)) => analyzer.process_document(&doc),
+                Ok(None) => break,
+                Err(e) => {
+                    analyzer = Analyzer::new(true);
+                    eprintln!(
+                        "  [warn] $sample cursor error for {db_name}.{coll_name} \
+                             ({e}); falling back to sequential find().limit({sample_size})"
+                    );
+                    find_fallback(&collection, &mut analyzer, sample_size, db_name, coll_name)
+                        .await;
+                    break;
+                }
+            }
+        },
     }
 
     let mut schema = analyzer.finish();
@@ -642,7 +693,7 @@ async fn infer_collection(
         collection
             .estimated_document_count()
             .await
-            .context("Failed to get document count")?
+            .unwrap_or(schema.sampled)
     };
     schema.count = total_docs;
     if args.jsonb {
