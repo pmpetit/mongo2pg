@@ -599,6 +599,7 @@ async fn infer_collection(
     let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
     let mut cursor = collection
         .aggregate(pipeline)
+        .allow_disk_use(true)
         .await
         .with_context(|| format!("Failed to run $sample aggregation on {db_name}.{coll_name}"))?;
     while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
