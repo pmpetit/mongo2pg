@@ -562,6 +562,19 @@ async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
     Ok(())
 }
 
+/// Returns `true` for MongoDB errors that mean `$sample` cannot run on this
+/// collection/tier and we should fall back to a sequential `find().limit()`.
+///
+/// * 241 – ConversionFailure  (e.g. a numeric string that `$sample` cannot coerce)
+/// * 292 – QueryExceededMemoryLimitNoDiskUseAllowed  (Atlas shared tier or server
+///         with `allowDiskUseByDefault: false` and a large `$sample` sort)
+fn is_sample_fallback_error(e: &mongodb::error::Error) -> bool {
+    match e.kind.as_ref() {
+        mongodb::error::ErrorKind::Command(cmd_err) => cmd_err.code == 241 || cmd_err.code == 292,
+        _ => false,
+    }
+}
+
 /// Infer the schema for a single collection, print stats to stderr, and optionally write output files.
 ///
 /// `output_name` controls the directory and file names under `output_dir`.
@@ -597,13 +610,29 @@ async fn infer_collection(
     let mut analyzer = Analyzer::new(true);
 
     let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
-    let mut cursor = collection
-        .aggregate(pipeline)
-        .allow_disk_use(true)
-        .await
-        .with_context(|| format!("Failed to run $sample aggregation on {db_name}.{coll_name}"))?;
-    while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
-        analyzer.process_document(&doc);
+    let agg_result = collection.aggregate(pipeline).allow_disk_use(true).await;
+    let use_fallback = matches!(&agg_result, Err(e) if is_sample_fallback_error(e));
+    if use_fallback {
+        let e = agg_result.unwrap_err();
+        eprintln!(
+            "  [warn] $sample not supported for {db_name}.{coll_name} \
+             ({e}); falling back to sequential find().limit({sample_size})"
+        );
+        let mut cursor = collection
+            .find(doc! {})
+            .limit(sample_size as i64)
+            .await
+            .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
+        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
+            analyzer.process_document(&doc);
+        }
+    } else {
+        let mut cursor = agg_result.with_context(|| {
+            format!("Failed to run $sample aggregation on {db_name}.{coll_name}")
+        })?;
+        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
+            analyzer.process_document(&doc);
+        }
     }
 
     let mut schema = analyzer.finish();
