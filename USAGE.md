@@ -663,7 +663,7 @@ CREATE SCHEMA IF NOT EXISTS product;
 SET search_path = product;
 
 CREATE TABLE product ( … );
-CREATE TABLE product_variants ( … );
+CREATE TABLE variants ( … );
 …
 ```
 
