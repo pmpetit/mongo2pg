@@ -566,8 +566,106 @@ mongo2pg to-pg [COLLECTION] [OPTIONS]
 | `-c, --config <FILE>` | Project config file – reads `source/collections/`, writes `schema/tables/` |
 | `-o, --output-dir <DIR>` | Directory to write `.sql` files into (overrides `-c`) |
 | `-t, --table <NAME>` | Table name override (single collection only) |
+| `--schema <NAME>` | Deploy all tables into the PostgreSQL schema `<NAME>` (see below) |
+| `--schema-per-collection` | Like `--schema` but uses each collection name as its own schema (see below) |
 
 Reads `source/collections/<name>/<name>.json` and writes `schema/tables/<name>.sql`.
+
+---
+
+### Why `--schema` and `--schema-per-collection`?
+
+MongoDB collections are often deeply nested. When `to-pg` flattens nested documents
+into relational tables, child table names are built by concatenating their parent
+names with underscores:
+
+```
+salesorder
+salesorder_lines
+salesorder_lines_fulfillmentmaplines
+salesorder_lines_fulfillmentmaplines_route
+salesorder_lines_fulfillmentmaplines_route_sourcinglocation
+salesorder_lines_fulfillmentmaplines_route_sourcinglocation_purchasecondition  ← 84 chars!
+```
+
+PostgreSQL silently truncates identifiers longer than **63 bytes**, which causes
+name collisions in large schemas.  More practically, when you plan to deploy a
+collection into its own dedicated PostgreSQL schema (one schema per collection
+is a common pattern), the collection name prefix on every table name is redundant
+noise.
+
+`--schema` and `--schema-per-collection` address both problems:
+
+1. **Each child table name has the `{schema}_` prefix stripped** before it is
+   written, so names are shorter and collision-free.
+2. **A `CREATE SCHEMA` preamble is prepended** to the generated SQL so the schema
+   is created automatically when you run the file.
+3. **`SET search_path`** is set at the top of the file so all `CREATE TABLE` and
+   `REFERENCES` statements resolve within the schema without needing to be qualified.
+
+**Before** (no flag):
+
+```sql
+CREATE TABLE salesorder ( … );
+CREATE TABLE salesorder_lines ( … );
+CREATE TABLE salesorder_lines_fulfillmentmaplines ( … );
+CREATE TABLE salesorder_lines_fulfillmentmaplines_route ( … );
+```
+
+**After** (`--schema salesorder`):
+
+```sql
+CREATE SCHEMA IF NOT EXISTS salesorder;
+SET search_path = salesorder;
+
+CREATE TABLE salesorder ( … );   -- root table keeps its name
+CREATE TABLE lines ( … );           -- prefix stripped
+CREATE TABLE lines_fulfillmentmaplines ( … );
+CREATE TABLE lines_fulfillmentmaplines_route ( … );
+```
+
+#### `--schema <NAME>`
+
+Applies a single fixed schema name to the output. Useful when converting a single
+collection, or when all collections in a project share one schema.
+
+```bash
+# Single collection deployed into its own schema
+mongo2pg to-pg -c config/sofi.conf salesorder --schema salesorder
+```
+
+#### `--schema-per-collection`
+
+Equivalent to running `--schema <collection_name>` for every collection processed.
+Each output file gets its own `CREATE SCHEMA` preamble and its tables are named
+without the collection prefix.  Mutually exclusive with `--schema`.
+
+```bash
+# Every collection gets deployed into its own schema
+mongo2pg to-pg -c config/sofi.conf --schema-per-collection
+```
+
+This produces one `.sql` file per collection, each self-contained:
+
+```sql
+-- salesorder.sql
+CREATE SCHEMA IF NOT EXISTS salesorder;
+SET search_path = salesorder;
+
+CREATE TABLE salesorder ( … );
+CREATE TABLE lines ( … );
+…
+```
+
+```sql
+-- product.sql
+CREATE SCHEMA IF NOT EXISTS product;
+SET search_path = product;
+
+CREATE TABLE product ( … );
+CREATE TABLE product_variants ( … );
+…
+```
 
 ---
 
@@ -685,6 +783,12 @@ mongo2pg to-pg -c config/retail.conf
 
 # Convert a single collection only
 mongo2pg to-pg -c config/retail.conf products
+
+# Deploy each collection into its own PostgreSQL schema (strips collection prefix from child table names)
+mongo2pg to-pg -c config/retail.conf --schema-per-collection
+
+# Deploy a single collection into a named schema
+mongo2pg to-pg -c config/retail.conf orders --schema orders
 
 # Generate reports
 mongo2pg report -c config/retail.conf

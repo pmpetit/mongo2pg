@@ -1,0 +1,5 @@
+[sqlfluff]
+dialect = postgres
+
+[sqlfluff:rules:references.keywords]
+ignore_words = name, type, value, key, level
