@@ -138,6 +138,16 @@ struct ToPgArgs {
     /// Directory to write the SQL file(s) into (overrides -c)
     #[arg(short = 'o', long = "output-dir", conflicts_with = "config")]
     output_dir: Option<PathBuf>,
+
+    /// PostgreSQL schema name: strips `{schema}_` prefix from child table names and
+    /// prepends `CREATE SCHEMA IF NOT EXISTS` + `SET search_path` to the output.
+    #[arg(long = "schema", conflicts_with = "schema_per_collection")]
+    schema: Option<String>,
+
+    /// Use each collection name as its own PostgreSQL schema: equivalent to `--schema <collection>`
+    /// applied per collection. Mutually exclusive with `--schema`.
+    #[arg(long = "schema-per-collection", action = clap::ArgAction::SetTrue)]
+    schema_per_collection: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -286,14 +296,14 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
         // Single collection specified – try flat layout first, then per-db.
         let flat = collections_dir.join(name).join(format!("{name}.json"));
         if flat.exists() {
-            vec![(PathBuf::from(format!("{name}.sql")), flat)]
+            vec![(PathBuf::from(format!("{}.sql", name.to_lowercase())), flat)]
         } else if name.contains('/') {
             // Caller passed "db/collection"
             let json = collections_dir.join(name).join({
                 let coll = name.split('/').next_back().unwrap_or(name);
                 format!("{coll}.json")
             });
-            vec![(PathBuf::from(format!("{name}.sql")), json)]
+            vec![(PathBuf::from(format!("{}.sql", name.to_lowercase())), json)]
         } else {
             return Err(anyhow!(
                 "Collection '{}' not found under {}",
@@ -316,7 +326,10 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 
             if direct_json.exists() {
                 // Flat layout: <collections_dir>/<name>/<name>.json
-                entries.push((PathBuf::from(format!("{top_name}.sql")), direct_json));
+                entries.push((
+                    PathBuf::from(format!("{}.sql", top_name.to_lowercase())),
+                    direct_json,
+                ));
             } else {
                 // Per-db layout: treat this dir as a database folder
                 let mut sub_dirs: Vec<(PathBuf, PathBuf)> = std::fs::read_dir(&top_path)
@@ -327,7 +340,14 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
                         let coll_name = e.file_name().to_string_lossy().into_owned();
                         let json = e.path().join(format!("{coll_name}.json"));
                         if json.exists() {
-                            Some((PathBuf::from(format!("{top_name}/{coll_name}.sql")), json))
+                            Some((
+                                PathBuf::from(format!(
+                                    "{}/{}.sql",
+                                    top_name.to_lowercase(),
+                                    coll_name.to_lowercase()
+                                )),
+                                json,
+                            ))
                         } else {
                             None
                         }
@@ -366,7 +386,15 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
             .with_context(|| format!("Failed to read {}", json_path.display()))?;
         let schema: CollectionSchema = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse {}", json_path.display()))?;
-        let ddl = schema_to_ddl(&schema, table_name);
+        let ddl = schema_to_ddl(
+            &schema,
+            table_name,
+            if args.schema_per_collection {
+                Some(table_name)
+            } else {
+                args.schema.as_deref()
+            },
+        );
         std::fs::write(&sql_path, &ddl)
             .with_context(|| format!("Failed to write {}", sql_path.display()))?;
         println!("SQL written to {}", sql_path.display());
