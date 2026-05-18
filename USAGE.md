@@ -630,8 +630,8 @@ Applies a single fixed schema name to the output. Useful when converting a singl
 collection, or when all collections in a project share one schema.
 
 ```bash
-# Single collection deployed into its own schema
-mongo2pg to-pg -c config/sofi.conf salesorder --schema salesorder
+# Single collection deployed into its own schema (sales is the dbname, salesorder is the collection)
+mongo2pg to-pg -c config/sofi.conf sales.salesorder --schema salesorder
 ```
 
 #### `--schema-per-collection`
