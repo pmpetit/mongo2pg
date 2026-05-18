@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`to-pg --schema <NAME>`**: deploy all tables for a collection into a dedicated PostgreSQL schema
+  - Prepends `CREATE SCHEMA IF NOT EXISTS <name>; SET search_path = <name>;` to the generated SQL
+  - Strips the `{schema}_` prefix from every child table name so names are shorter and schema-qualified references are unambiguous (e.g. `b2bsalesorder_lines` → `lines` inside schema `b2bsalesorder`)
+  - Prefix matching is case-insensitive (sanitized before comparison) to handle mixed-case collection names
+- **`to-pg --schema-per-collection`**: equivalent to `--schema <collection_name>` applied to every collection processed in a batch; each output file gets its own self-contained schema preamble. Mutually exclusive with `--schema`
+- **Output SQL filenames are now lowercased**: `B2BSalesOrder.sql` → `b2bsalesorder.sql`, consistent with PostgreSQL identifier folding
+
 ### Fixed
 
 - **`$sample` sort-memory failures no longer abort inference**: when `$sample` fails with a sort-memory-limit error (MongoDB error 292, common on Atlas shared/free tiers) or any other aggregation error, the tool now automatically falls back to `find().limit(<sample_size>)`, which has no sort stage and works on all tiers

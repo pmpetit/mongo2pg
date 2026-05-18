@@ -433,6 +433,33 @@ fn map_value_fields(doc_ts: &TypeSchema) -> Option<&IndexMap<String, FieldSchema
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Child table name helper
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Build a child table name, stripping the `{schema}_` prefix when `pg_schema`
+/// is provided so that tables deployed inside a dedicated schema have shorter names.
+fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> String {
+    let raw = format!("{parent_name}_{field}");
+    if let Some(schema) = pg_schema {
+        let prefix = format!("{}_", sanitize(schema));
+        raw.strip_prefix(&prefix).map(str::to_owned).unwrap_or(raw)
+    } else {
+        raw
+    }
+}
+
+/// Optionally prepend `CREATE SCHEMA` + `SET search_path` preamble.
+fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
+    match pg_schema {
+        None => ddl,
+        Some(schema) => {
+            let s = sanitize(schema);
+            format!("CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s};\n\n{ddl}")
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Child table builders
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -440,8 +467,9 @@ fn add_child_table(
     parent: &mut Table,
     array_field_col: &str,
     child_fields: &IndexMap<String, FieldSchema>,
+    pg_schema: Option<&str>,
 ) {
-    let child_name = format!("{}_{}", parent.name, array_field_col);
+    let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
     let (pk_name, pk_type) = find_pk(parent);
     let fk_col = format!("{}_id", parent.name);
 
@@ -460,7 +488,7 @@ fn add_child_table(
     });
     child.parent_ref = Some((fk_col, parent.name.clone(), pk_name));
 
-    process_fields(&mut child, child_fields, "", true);
+    process_fields(&mut child, child_fields, "", true, pg_schema);
     parent.child_tables.push(child);
 }
 
@@ -468,8 +496,9 @@ fn add_scalar_array_table(
     parent: &mut Table,
     array_field_col: &str,
     scalar_types: &[(&str, &TypeSchema)],
+    pg_schema: Option<&str>,
 ) {
-    let child_name = format!("{}_{}", parent.name, array_field_col);
+    let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
     let (pk_name, pk_type) = find_pk(parent);
     let fk_col = format!("{}_id", parent.name);
 
@@ -513,8 +542,9 @@ fn add_doc_table(
     parent: &mut Table,
     doc_field_col: &str,
     doc_fields: &IndexMap<String, FieldSchema>,
+    pg_schema: Option<&str>,
 ) {
-    let child_name = format!("{}_{}", parent.name, doc_field_col);
+    let child_name = child_table_name(&parent.name, doc_field_col, pg_schema);
     let (pk_name, pk_type) = find_pk(parent);
     let fk_col = format!("{}_id", parent.name);
 
@@ -533,7 +563,7 @@ fn add_doc_table(
     });
     child.parent_ref = Some((fk_col, parent.name.clone(), pk_name));
 
-    process_fields(&mut child, doc_fields, "", false);
+    process_fields(&mut child, doc_fields, "", false, pg_schema);
     parent.child_tables.push(child);
 }
 
@@ -543,8 +573,9 @@ fn add_map_table(
     parent: &mut Table,
     map_field_col: &str,
     value_fields: &IndexMap<String, FieldSchema>,
+    pg_schema: Option<&str>,
 ) {
-    let child_name = format!("{}_{}", parent.name, map_field_col);
+    let child_name = child_table_name(&parent.name, map_field_col, pg_schema);
     let (pk_name, pk_type) = find_pk(parent);
     let fk_col = format!("{}_id", parent.name);
 
@@ -569,7 +600,7 @@ fn add_map_table(
         primary_key: false,
     });
 
-    process_fields(&mut child, value_fields, "", false);
+    process_fields(&mut child, value_fields, "", false, pg_schema);
     parent.child_tables.push(child);
 }
 
@@ -578,6 +609,7 @@ fn handle_array_field(
     col_name: &str,
     items_field: &FieldSchema,
     nullable: bool,
+    pg_schema: Option<&str>,
 ) {
     let non_null_items: Vec<(&str, &TypeSchema)> = items_field
         .types
@@ -590,7 +622,7 @@ fn handle_array_field(
         // Array of documents → child table (one row per array element)
         if let Some(child_fields) = &doc_ts.object {
             let cf = child_fields.clone();
-            add_child_table(table, col_name, &cf);
+            add_child_table(table, col_name, &cf, pg_schema);
         } else {
             // Object type but no inner fields schema
             table.columns.push(Column {
@@ -602,7 +634,7 @@ fn handle_array_field(
         }
     } else {
         // Array of scalars → child table with `value` column
-        add_scalar_array_table(table, col_name, &non_null_items);
+        add_scalar_array_table(table, col_name, &non_null_items, pg_schema);
     }
 }
 
@@ -615,6 +647,7 @@ fn process_fields(
     fields: &IndexMap<String, FieldSchema>,
     col_prefix: &str,
     mark_pk: bool,
+    pg_schema: Option<&str>,
 ) {
     for (raw_name, field) in fields {
         let col_name = sanitize(&format!("{col_prefix}{raw_name}"));
@@ -659,7 +692,7 @@ fn process_fields(
                 // Map document (dynamic hex keys)
                 let value_fields = map_value_fields(ts).map(|vf| vf.clone());
                 if let Some(vf) = value_fields {
-                    add_map_table(table, &col_name, &vf);
+                    add_map_table(table, &col_name, &vf, pg_schema);
                 } else {
                     table.columns.push(Column {
                         name: col_name,
@@ -670,7 +703,7 @@ fn process_fields(
                 }
             } else if let Some(sub_fields) = &ts.object {
                 let sf = sub_fields.clone();
-                add_doc_table(table, &col_name, &sf);
+                add_doc_table(table, &col_name, &sf, pg_schema);
             } else {
                 // Object type but no inner field schema (empty document)
                 table.columns.push(Column {
@@ -688,7 +721,7 @@ fn process_fields(
             let ts = non_null[0].1;
             if let Some(items_field) = &ts.array {
                 let items = *items_field.clone();
-                handle_array_field(table, &col_name, &items, nullable);
+                handle_array_field(table, &col_name, &items, nullable, pg_schema);
             } else {
                 // Array with no items schema → JSONB
                 table.columns.push(Column {
@@ -810,9 +843,13 @@ fn render_table(table: &Table) -> String {
 ///
 /// # Returns
 /// A string containing one or more `CREATE TABLE` statements separated by blank lines.
-pub fn schema_to_ddl(schema: &CollectionSchema, table_name: &str) -> String {
+pub fn schema_to_ddl(
+    schema: &CollectionSchema,
+    table_name: &str,
+    pg_schema: Option<&str>,
+) -> String {
     let mut root = Table::new(sanitize(table_name));
-    process_fields(&mut root, &schema.object, "", true);
+    process_fields(&mut root, &schema.object, "", true, pg_schema);
 
     let tables = collect_tables(&root);
     let total_cols: usize = tables.iter().map(|t| t.columns.len()).sum();
@@ -820,11 +857,12 @@ pub fn schema_to_ddl(schema: &CollectionSchema, table_name: &str) -> String {
     eprintln!("tables : {}", tables.len());
     eprintln!("columns: {total_cols}");
 
-    tables
+    let ddl = tables
         .iter()
         .map(|t| render_table(t))
         .collect::<Vec<_>>()
-        .join("\n\n")
+        .join("\n\n");
+    prepend_schema_preamble(ddl, pg_schema)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -852,7 +890,7 @@ mod tests {
             doc! { "_id": 2_i32, "name": "Bob",   "score": 88_i32 },
         ];
         let schema = analyze(&docs);
-        let ddl = schema_to_ddl(&schema, "users");
+        let ddl = schema_to_ddl(&schema, "users", None);
         assert!(ddl.contains("CREATE TABLE users ("), "root table missing");
         assert!(ddl.contains("name TEXT"), "name column missing");
         assert!(ddl.contains("score"), "score column missing");
@@ -865,7 +903,7 @@ mod tests {
             doc! { "_id": 2_i32 },
         ];
         let schema = analyze(&docs);
-        let ddl = schema_to_ddl(&schema, "t");
+        let ddl = schema_to_ddl(&schema, "t", None);
         // opt must not be NOT NULL
         assert!(
             !ddl.contains("opt TEXT NOT NULL"),
@@ -877,7 +915,7 @@ mod tests {
     fn test_objectid_pk_becomes_uuid() {
         let docs = vec![doc! { "_id": bson::oid::ObjectId::new(), "x": 1_i32 }];
         let schema = analyze(&docs);
-        let ddl = schema_to_ddl(&schema, "t");
+        let ddl = schema_to_ddl(&schema, "t", None);
         assert!(
             ddl.contains("id UUID PRIMARY KEY"),
             "ObjectId PK should become UUID"
@@ -888,7 +926,7 @@ mod tests {
     fn test_nested_object_creates_child_table() {
         let docs = vec![doc! { "_id": 1_i32, "addr": { "city": "Paris" } }];
         let schema = analyze(&docs);
-        let ddl = schema_to_ddl(&schema, "orders");
+        let ddl = schema_to_ddl(&schema, "orders", None);
         assert!(
             ddl.contains("CREATE TABLE orders_addr ("),
             "child table for addr missing"
@@ -900,7 +938,7 @@ mod tests {
     fn test_array_of_scalars_creates_child_table() {
         let docs = vec![doc! { "_id": 1_i32, "tags": ["rust", "mongodb"] }];
         let schema = analyze(&docs);
-        let ddl = schema_to_ddl(&schema, "posts");
+        let ddl = schema_to_ddl(&schema, "posts", None);
         assert!(
             ddl.contains("CREATE TABLE posts_tags ("),
             "scalar array child table missing"
@@ -912,7 +950,7 @@ mod tests {
     fn test_reserved_word_prefixed() {
         let docs = vec![doc! { "_id": 1_i32, "order": "asc" }];
         let schema = analyze(&docs);
-        let ddl = schema_to_ddl(&schema, "t");
+        let ddl = schema_to_ddl(&schema, "t", None);
         assert!(
             ddl.contains("_order"),
             "reserved word 'order' should be prefixed with _"
