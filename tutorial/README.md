@@ -359,7 +359,6 @@ done
 
 Load parent tables before child tables to satisfy foreign-key constraints.
 
-
 ```bash
 {
   echo "BEGIN;"
@@ -370,7 +369,7 @@ Load parent tables before child tables to satisfy foreign-key constraints.
   done
   echo "COMMIT;"
 } | psql "$PGURI"
-``` 
+```
 
 ---
 
