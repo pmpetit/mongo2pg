@@ -187,7 +187,7 @@ pub fn collect_rows(base: &Path, tables_dir: Option<&Path>) -> Result<Vec<Collec
 
         let table_names: Vec<(String, String)> = tables_dir
             .and_then(|dir| {
-                let sql_path = dir.join(format!("{name}.sql"));
+                let sql_path = dir.join(format!("{}.sql", name.to_lowercase()));
                 std::fs::read_to_string(&sql_path).ok()
             })
             .map(|sql| {

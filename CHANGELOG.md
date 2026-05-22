@@ -15,9 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prefix matching is case-insensitive (sanitized before comparison) to handle mixed-case collection names
 - **`to-pg --schema-per-collection`**: equivalent to `--schema <collection_name>` applied to every collection processed in a batch; each output file gets its own self-contained schema preamble. Mutually exclusive with `--schema`
 - **Output SQL filenames are now lowercased**: `B2BSalesOrder.sql` → `b2bsalesorder.sql`, consistent with PostgreSQL identifier folding
+- **Regression test `test_camelcase_collection_table_count_matches_report`**: verifies end-to-end that the number of `CREATE TABLE` statements produced by `to-pg` for a camelCase collection name equals the number of PG tables shown in the HTML report (catches the filename mismatch bug)
+- **CI now runs `cargo test` on every PR**: a `test` job was added to `pr-preview.yml`; the build and preview-release jobs only proceed once all tests pass
 
 ### Fixed
 
+- **HTML report no longer shows 0 PG tables for camelCase collection names**: `collect_rows` now lowercases the collection directory name when resolving the SQL file path (e.g. `listingsAndReviews/` → `listingsandreviews.sql`), consistent with how `to-pg` writes the file
 - **`$sample` sort-memory failures no longer abort inference**: when `$sample` fails with a sort-memory-limit error (MongoDB error 292, common on Atlas shared/free tiers) or any other aggregation error, the tool now automatically falls back to `find().limit(<sample_size>)`, which has no sort stage and works on all tiers
 - **Cursor deserialization errors trigger the same fallback**: if a `$sample` cursor emits a document-level error mid-iteration, the partial result is discarded and `find().limit()` is retried from scratch
 - **Per-collection errors no longer abort database-wide or server-wide inference**: conversion errors on individual collections are now caught, a warning is printed to stderr, and the remaining collections continue to be processed
