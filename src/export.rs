@@ -483,17 +483,15 @@ fn extract_rows(
 ///
 /// One `.csv.gz` file is written per SQL table (root + all child tables) into
 /// `<data_dir>/<coll_name>/`.  The SQL schema is read from
-/// `<tables_dir>/<coll_name>.sql`.
-///
-/// Returns the list of file paths that were written.
+/// `<tables_dir>/<sanitize(coll_name)>.sql`.
 pub async fn export_collection(
     client: &Client,
     db_name: &str,
     coll_name: &str,
     tables_dir: &Path,
     data_dir: &Path,
-) -> Result<Vec<String>> {
-    let sql_path = tables_dir.join(format!("{coll_name}.sql"));
+) -> Result<()> {
+    let sql_path = tables_dir.join(format!("{}.sql", sanitize(coll_name)));
     if !sql_path.exists() {
         return Err(anyhow::anyhow!(
             "SQL schema not found: {} – run `to-pg` first",
@@ -537,8 +535,6 @@ pub async fn export_collection(
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("Cannot create {}", out_dir.display()))?;
 
-    let mut written: Vec<String> = Vec::new();
-
     for sql_t in &sql_tables {
         let columns: Vec<String> = sql_t.columns.iter().map(|c| c.name.clone()).collect();
         let rows = all_rows.get(&sql_t.name).cloned().unwrap_or_default();
@@ -563,9 +559,9 @@ pub async fn export_collection(
         gz.finish()
             .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
 
-        eprintln!("  {} rows → {}", rows.len(), csv_path.display());
-        written.push(csv_path.display().to_string());
+        let resolved_csv_path = std::fs::canonicalize(&csv_path).unwrap_or(csv_path.clone());
+        eprintln!("  {} rows -> {}", rows.len(), resolved_csv_path.display());
     }
 
-    Ok(written)
+    Ok(())
 }

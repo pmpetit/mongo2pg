@@ -860,7 +860,8 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     })?;
 
     let project_root = c.base_dir.join(&c.project_dir);
-    let tables_dir = project_root.join("schema").join("tables");
+    // Use <project_root>/schema/tables/<db_name> for SQL files
+    let tables_dir = project_root.join("schema").join("tables").join(&db_name);
     let data_dir = args
         .output_dir
         .clone()
@@ -872,10 +873,31 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
 
     // Determine which collections to export
+    // Helper: sanitize a name like to_pg::sanitize
+    fn sanitize(name: &str) -> String {
+        let mut s = name.replace(|c: char| !c.is_ascii_alphanumeric() && c != '_', "_");
+        if s.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+            s = format!("_{}", s);
+        }
+        s.to_lowercase()
+    }
+
     let collections: Vec<String> = if let Some(name) = args.collection.clone() {
-        vec![name]
+        // If a specific collection is requested, check for its sanitized .sql file
+        let sanitized = sanitize(&name);
+        let sql_path = tables_dir.join(format!("{sanitized}.sql"));
+        if sql_path.exists() {
+            vec![name]
+        } else {
+            eprintln!(
+                "  warning: SQL schema not found: {} – run `to-pg` first",
+                sql_path.display()
+            );
+            Vec::new()
+        }
     } else {
-        let mut names: Vec<String> = std::fs::read_dir(&tables_dir)
+        // Get all .sql files and their sanitized names
+        let mut sql_files: Vec<(String, String)> = std::fs::read_dir(&tables_dir)
             .with_context(|| format!("Cannot read {}", tables_dir.display()))?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("sql"))
@@ -883,11 +905,34 @@ async fn run_export(args: ExportArgs) -> Result<()> {
                 e.path()
                     .file_stem()
                     .and_then(|s| s.to_str())
-                    .map(|s| s.to_owned())
+                    .map(|s| (s.to_owned(), sanitize(s)))
             })
             .collect();
-        names.sort();
-        names
+        sql_files.sort_by(|a, b| a.1.cmp(&b.1));
+
+        // Build a set of sanitized .sql names for fast lookup
+        use std::collections::HashSet;
+        let sql_set: HashSet<String> = sql_files.iter().map(|(_, s)| s.clone()).collect();
+
+        // Get all collection names from MongoDB
+        let mongo_colls = client.database(&db_name).list_collection_names().await?;
+
+        // For each collection, if its sanitized name matches a sanitized .sql file, export it
+        let mut matched = Vec::new();
+        for coll in mongo_colls {
+            let sanitized = sanitize(&coll);
+            let sql_path = tables_dir.join(format!("{sanitized}.sql"));
+            if sql_set.contains(&sanitized) && sql_path.exists() {
+                matched.push(coll);
+            } else {
+                eprintln!(
+                    "  warning: SQL schema not found: {} – run `to-pg` first",
+                    sql_path.display()
+                );
+            }
+        }
+        matched.sort();
+        matched
     };
 
     if collections.is_empty() {
@@ -898,11 +943,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     for coll_name in &collections {
         eprintln!("[{db_name}.{coll_name}]");
         match export_collection(&client, &db_name, coll_name, &tables_dir, &data_dir).await {
-            Ok(files) => {
-                for f in files {
-                    println!("{f}");
-                }
-            }
+            Ok(()) => {}
             Err(e) => eprintln!("  warning: {e}"),
         }
     }
