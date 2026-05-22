@@ -225,6 +225,13 @@ struct ExportArgs {
     /// Override the output directory for CSV files (default: <project>/data/)
     #[arg(short = 'o', long = "output-dir")]
     output_dir: Option<PathBuf>,
+
+    /// Namespace: either <db>.<collection> to export one collection, or just <db> to export all
+    /// collections in the database. When omitted (and -c is not given) all user databases on the
+    /// server are enumerated and exported (admin, local, and config are skipped). Can also be set
+    /// via NAMESPACE in the config file. This overrides the namespace in the config file if provided.
+    #[arg(long = "namespace")]
+    namespace: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -846,9 +853,11 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .clone()
         .or(c.uri)
         .ok_or_else(|| anyhow!("No URI provided: pass --uri or add URI to the config file"))?;
-    let db_name = c
-        .namespace
-        .ok_or_else(|| anyhow!("No NAMESPACE in config file"))?;
+
+    // Use args.namespace if provided, else fall back to config file
+    let db_name = args.namespace.clone().or(c.namespace).ok_or_else(|| {
+        anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
+    })?;
 
     let project_root = c.base_dir.join(&c.project_dir);
     let tables_dir = project_root.join("schema").join("tables");
