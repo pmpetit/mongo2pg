@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-database errors no longer abort server-wide inference**: if `list_collection_names()` fails for a database, that database is skipped with a warning and iteration continues
 - **`estimated_document_count()` failure is now non-fatal**: falls back to the number of sampled documents instead of propagating the error
 - **`SAMPLE_MAX_TIME` cap (120 s) added** to both the `$sample` aggregation and the `find()` fallback to prevent runaway queries
+- **`export` now resolves SQL schemas by sanitized collection name only**: MongoDB collection names stay raw for querying, but schema lookup uses the lowercased sanitized filename (for example `listingsAndReviews` → `listingsandreviews.sql`), fixing mixed-case collection/export mismatches
+- **`export --namespace` now overrides the config namespace consistently**: export reads SQL from `schema/tables/<db_name>/` with no fallback to older flat locations
+- **Export output layout is now database-scoped**: generated `.csv.gz` files are written under `data/<database_name>/<sanitized_collection_name>/`
+- **Export output now prints the resolved `.csv.gz` path for each table**: row counts are logged alongside the final file location during export
 - **`mongodb` dependency bumped** from 3.2.5 to 3.6.0
 
 ---

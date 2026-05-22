@@ -482,7 +482,7 @@ fn extract_rows(
 /// Export a single MongoDB collection to gzipped CSV files.
 ///
 /// One `.csv.gz` file is written per SQL table (root + all child tables) into
-/// `<data_dir>/<coll_name>/`.  The SQL schema is read from
+/// `<data_dir>/<db_name>/<sanitize(coll_name)>/`.  The SQL schema is read from
 /// `<tables_dir>/<sanitize(coll_name)>.sql`.
 pub async fn export_collection(
     client: &Client,
@@ -491,7 +491,9 @@ pub async fn export_collection(
     tables_dir: &Path,
     data_dir: &Path,
 ) -> Result<()> {
-    let sql_path = tables_dir.join(format!("{}.sql", sanitize(coll_name)));
+    // Only the SQL filename is sanitized; the MongoDB collection name must stay raw.
+    let sql_lookup_name = sanitize(coll_name);
+    let sql_path = tables_dir.join(format!("{sql_lookup_name}.sql"));
     if !sql_path.exists() {
         return Err(anyhow::anyhow!(
             "SQL schema not found: {} – run `to-pg` first",
@@ -512,7 +514,7 @@ pub async fn export_collection(
 
     let roots = build_tree(&sql_tables);
 
-    // Stream all documents from the collection.
+    // Query MongoDB using the original collection name.
     let db = client.database(db_name);
     let collection = db.collection::<bson::Document>(coll_name);
     let mut cursor = collection
@@ -530,8 +532,8 @@ pub async fn export_collection(
         }
     }
 
-    // Write one .csv.gz per SQL table.
-    let out_dir = data_dir.join(coll_name);
+    // Keep the database name raw, but sanitize the collection folder for filesystem safety.
+    let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("Cannot create {}", out_dir.display()))?;
 

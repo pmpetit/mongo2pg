@@ -347,7 +347,30 @@ directly with `\COPY`:
 \COPY orders_status_history FROM PROGRAM 'gunzip -c orders_status_history.csv.gz' CSV HEADER;
 ```
 
+Create tables
+
+```bash
+export PGURI="postgres://avnadmin:<redacted>@pg-testpmp-fras-d-pmp-todel.j.aivencloud.com:12833/defaultdb?sslmode=require"
+find mongo2pg/mongodb-testpmp/schema/tables/sample_airbnb -maxdepth 1 -type f -name '*.sql' | while read -r f; do
+  echo "executing psql -f $f"
+  psql "$PGURI" -f $f
+done
+```
+
 Load parent tables before child tables to satisfy foreign-key constraints.
+
+
+```bash
+{
+  echo "BEGIN;"
+  echo "SET CONSTRAINTS ALL DEFERRED;"
+  find mongo2pg/mongodb-testpmp/data/sample_airbnb -mindepth 2 -maxdepth 2 -type f -name '*.csv.gz' | sort | while read -r f; do
+    table=$(basename "$f" .csv.gz)
+    printf "\\COPY %s FROM PROGRAM 'gunzip -c %s' CSV HEADER;\n" "$table" "$f"
+  done
+  echo "COMMIT;"
+} | psql "$PGURI"
+``` 
 
 ---
 
