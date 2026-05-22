@@ -482,18 +482,18 @@ fn extract_rows(
 /// Export a single MongoDB collection to gzipped CSV files.
 ///
 /// One `.csv.gz` file is written per SQL table (root + all child tables) into
-/// `<data_dir>/<coll_name>/`.  The SQL schema is read from
-/// `<tables_dir>/<coll_name>.sql`.
-///
-/// Returns the list of file paths that were written.
+/// `<data_dir>/<db_name>/<sanitize(coll_name)>/`.  The SQL schema is read from
+/// `<tables_dir>/<sanitize(coll_name)>.sql`.
 pub async fn export_collection(
     client: &Client,
     db_name: &str,
     coll_name: &str,
     tables_dir: &Path,
     data_dir: &Path,
-) -> Result<Vec<String>> {
-    let sql_path = tables_dir.join(format!("{coll_name}.sql"));
+) -> Result<()> {
+    // Only the SQL filename is sanitized; the MongoDB collection name must stay raw.
+    let sql_lookup_name = sanitize(coll_name);
+    let sql_path = tables_dir.join(format!("{sql_lookup_name}.sql"));
     if !sql_path.exists() {
         return Err(anyhow::anyhow!(
             "SQL schema not found: {} – run `to-pg` first",
@@ -514,7 +514,7 @@ pub async fn export_collection(
 
     let roots = build_tree(&sql_tables);
 
-    // Stream all documents from the collection.
+    // Query MongoDB using the original collection name.
     let db = client.database(db_name);
     let collection = db.collection::<bson::Document>(coll_name);
     let mut cursor = collection
@@ -532,12 +532,10 @@ pub async fn export_collection(
         }
     }
 
-    // Write one .csv.gz per SQL table.
-    let out_dir = data_dir.join(coll_name);
+    // Keep the database name raw, but sanitize the collection folder for filesystem safety.
+    let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("Cannot create {}", out_dir.display()))?;
-
-    let mut written: Vec<String> = Vec::new();
 
     for sql_t in &sql_tables {
         let columns: Vec<String> = sql_t.columns.iter().map(|c| c.name.clone()).collect();
@@ -563,9 +561,9 @@ pub async fn export_collection(
         gz.finish()
             .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
 
-        eprintln!("  {} rows → {}", rows.len(), csv_path.display());
-        written.push(csv_path.display().to_string());
+        let resolved_csv_path = std::fs::canonicalize(&csv_path).unwrap_or(csv_path.clone());
+        eprintln!("  {} rows -> {}", rows.len(), resolved_csv_path.display());
     }
 
-    Ok(written)
+    Ok(())
 }
