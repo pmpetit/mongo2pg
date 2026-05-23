@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="mongo2pg contributors" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Installation - mongo2pg</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Installation";
+        var mkdocs_page_input_path = "install.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/bash.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/json.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/rust.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/sql.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/yaml.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> mongo2pg
+        </a>
+        <div class="version">
+          {'provider': 'mike'}
+        </div><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Install</span></p>
+              <ul class="current">
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Installation</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#download-a-pre-built-binary">Download a pre-built binary</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#linux-macos">Linux / macOS</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#windows">Windows</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#build-from-source">Build from source</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#prerequisites">Prerequisites</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#clone-and-build">Clone and build</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#add-to-path">Add to PATH</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">How-To Guides</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../how-to/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">CLI Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../reference/">Commands</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Tutorial</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../tutorial/">Typical Workflow</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">mongo2pg</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Install</li>
+      <li class="breadcrumb-item active">Installation</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pmpetit/mongo2pg/edit/main/docs/install.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h1>
+<p><code>mongo2pg</code> is a single Rust binary.</p>
+<hr />
+<h2 id="download-a-pre-built-binary">Download a pre-built binary<a class="headerlink" href="#download-a-pre-built-binary" title="Permanent link">&para;</a></h2>
+<p>Go to the <a href="https://github.com/pmpetit/mongo2pg/releases">Releases page</a> and
+download the archive that matches your platform:</p>
+<table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>File to download</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linux x86_64</td>
+<td><code>mongo2pg-linux-x86_64</code></td>
+</tr>
+<tr>
+<td>Linux arm64</td>
+<td><code>mongo2pg-linux-aarch64</code></td>
+</tr>
+<tr>
+<td>macOS Intel</td>
+<td><code>mongo2pg-macos-x86_64</code></td>
+</tr>
+<tr>
+<td>macOS Apple Silicon</td>
+<td><code>mongo2pg-macos-aarch64</code></td>
+</tr>
+<tr>
+<td>Windows x86_64</td>
+<td><code>mongo2pg-windows-x86_64.exe</code></td>
+</tr>
+<tr>
+<td>Windows arm64</td>
+<td><code>mongo2pg-windows-aarch64.exe</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="linux-macos">Linux / macOS<a class="headerlink" href="#linux-macos" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Replace &lt;version&gt; and &lt;platform&gt; with your values, e.g. v0.3.7 and linux-x86_64</span>
+<span class="nv">version</span><span class="o">=</span><span class="s2">&quot;v0.3.7&quot;</span>
+<span class="nv">platform</span><span class="o">=</span><span class="s2">&quot;linux-x86_64&quot;</span>
+curl<span class="w"> </span>-fL<span class="w"> </span><span class="s2">&quot;https://github.com/pmpetit/mongo2pg/releases/download/</span><span class="si">${</span><span class="nv">version</span><span class="si">}</span><span class="s2">/mongo2pg-</span><span class="si">${</span><span class="nv">platform</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span>mongo2pg
+chmod<span class="w"> </span>+x<span class="w"> </span>mongo2pg
+sudo<span class="w"> </span>mv<span class="w"> </span>mongo2pg<span class="w"> </span>/usr/local/bin/
+</code></pre></div>
+
+<h3 id="windows">Windows<a class="headerlink" href="#windows" title="Permanent link">&para;</a></h3>
+<p>Download the <code>.exe</code>, optionally rename it to <code>mongo2pg.exe</code>, and place it in a
+directory that is on your <code>PATH</code>.</p>
+<hr />
+<h2 id="build-from-source">Build from source<a class="headerlink" href="#build-from-source" title="Permanent link">&para;</a></h2>
+<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Minimum version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rust toolchain</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Cargo</td>
+<td>bundled with Rust</td>
+</tr>
+<tr>
+<td>MongoDB instance</td>
+<td>needed for <code>infer</code>, <code>export</code>, and <code>report --post-import</code></td>
+</tr>
+<tr>
+<td>PostgreSQL instance</td>
+<td>needed for <code>report --post-import</code></td>
+</tr>
+</tbody>
+</table>
+<p>Install Rust via <a href="https://rustup.rs/">rustup</a>:</p>
+<div class="codehilite"><pre><span></span><code>curl<span class="w"> </span>--proto<span class="w"> </span><span class="s1">&#39;=https&#39;</span><span class="w"> </span>--tlsv1.2<span class="w"> </span>-sSf<span class="w"> </span>https://sh.rustup.rs<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+</code></pre></div>
+
+<h3 id="clone-and-build">Clone and build<a class="headerlink" href="#clone-and-build" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/pmpetit/mongo2pg.git
+<span class="nb">cd</span><span class="w"> </span>mongo2pg
+cargo<span class="w"> </span>build<span class="w"> </span>--release
+</code></pre></div>
+
+<p>The binary is written to <code>target/release/mongo2pg</code>.</p>
+<h3 id="add-to-path">Add to PATH<a class="headerlink" href="#add-to-path" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Option 1 – copy to a directory already on your PATH</span>
+sudo<span class="w"> </span>cp<span class="w"> </span>target/release/mongo2pg<span class="w"> </span>/usr/local/bin/
+
+<span class="c1"># Option 2 – install via Cargo</span>
+cargo<span class="w"> </span>install<span class="w"> </span>--path<span class="w"> </span>.
+</code></pre></div>
+
+<p>Verify the installation:</p>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>--version
+</code></pre></div>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href=".." class="btn btn-neutral float-left" title="Home"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../how-to/" class="btn btn-neutral float-right" title="Overview">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright 2024-2026 mongo2pg contributors</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pmpetit/mongo2pg" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href=".." style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../how-to/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -105,17 +105,3 @@ mongo2pg report [--collections-dir <dir> | -c <config>] [--output <file>] [--nam
 | `--post-import` | Compare MongoDB expanded counts with PostgreSQL row counts |
 
 ---
-
-## `mongo2pg cluster-report`
-
-Aggregates scores across multiple migration projects.
-
-```text
-mongo2pg cluster-report --configs <conf1,conf2,...> [--output <file>] [--cluster <label>]
-```
-
-| Flag | Description |
-|---|---|
-| `--configs` | One or more config files |
-| `--output` | Cluster HTML report path |
-| `--cluster` | Cluster label override |
