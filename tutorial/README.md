@@ -61,14 +61,14 @@ URI, credentials, and path to the `.bson.gz` files as needed.
 mongo2pg init \
   --project-base results/base \
   --project-name retail \
-  --uri "mongodb://user:pass@localhost:2717/?authSource=admin"
+  --source-uri "mongodb://user:pass@localhost:2717/?authSource=admin"
 ```
 
 `init` creates the following directory tree and writes a config file:
 
 ```
 results/base/retail/
-    config/retail.conf          ← BASE_DIR, PROJECT_DIR, URI, NAMESPACE
+    config/retail.conf          ← BASE_DIR, PROJECT_DIR, SOURCE_URI, NAMESPACE
     schema/tables/              ← SQL DDL files (populated by to-pg)
     source/collections/         ← inferred schemas + stats (populated by infer)
     data/
@@ -81,7 +81,7 @@ line so that `infer` knows which database to analyse:
 ```
 BASE_DIR  = results/base
 PROJECT_DIR = retail
-URI       = mongodb://user:pass@localhost:2717/?authSource=admin
+SOURCE_URI = mongodb://user:pass@localhost:2717/?authSource=admin
 NAMESPACE = retail
 ```
 
@@ -347,10 +347,33 @@ directly with `\COPY`:
 \COPY orders_status_history FROM PROGRAM 'gunzip -c orders_status_history.csv.gz' CSV HEADER;
 ```
 
+```bash
+export PGURI="postgres://avnadmin:<redacted>@pg-testpmp-fras-d-pmp-todel.j.aivencloud.com:12833/defaultdb?sslmode=require"
+```
+
+Drop database
+
+```bash
+for dir in mongo2pg/mongodb-testpmp/data/*; do
+  [[ -d "$dir" ]] || continue
+  dbname=$(basename "$dir")
+  psql "$PGURI" -c "DROP DATABASE IF EXISTS \"$dbname\";"
+done
+```
+
+Drop tables
+
+```bash
+for dir in mongo2pg/mongodb-testpmp/data/*/*; do
+  [[ -d "$dir" ]] || continue
+  schema=$(basename "$dir")
+  psql "$PGURI" -c "DROP SCHEMA IF EXISTS \"$schema\" CASCADE;"
+done
+```
+
 Create tables
 
 ```bash
-export PGURI="postgres://avnadmin:<redacted>@pg-testpmp-fras-d-pmp-todel.j.aivencloud.com:12833/defaultdb?sslmode=require"
 find mongo2pg/mongodb-testpmp/schema/tables/sample_airbnb -maxdepth 1 -type f -name '*.sql' | while read -r f; do
   echo "executing psql -f $f"
   psql "$PGURI" -f $f
@@ -359,16 +382,29 @@ done
 
 Load parent tables before child tables to satisfy foreign-key constraints.
 
+Insert
+
 ```bash
+export PGURIT=$(printf '%s\n' "$PGURI" | sed 's#/defaultdb?#/sample_airbnb?#')
+
 {
   echo "BEGIN;"
   echo "SET CONSTRAINTS ALL DEFERRED;"
+
   find mongo2pg/mongodb-testpmp/data/sample_airbnb -mindepth 2 -maxdepth 2 -type f -name '*.csv.gz' | sort | while read -r f; do
+    schema=$(basename "$(dirname "$f")")
     table=$(basename "$f" .csv.gz)
-    printf "\\COPY %s FROM PROGRAM 'gunzip -c %s' CSV HEADER;\n" "$table" "$f"
+    printf "TRUNCATE TABLE %s.%s CASCADE;\n" "$schema" "$table"
   done
+
+  find mongo2pg/mongodb-testpmp/data/sample_airbnb -mindepth 2 -maxdepth 2 -type f -name '*.csv.gz' | sort | while read -r f; do
+    schema=$(basename "$(dirname "$f")")
+    table=$(basename "$f" .csv.gz)
+    printf "\\COPY %s.%s FROM PROGRAM 'gunzip -c %s' CSV HEADER;\n" "$schema" "$table" "$f"
+  done
+
   echo "COMMIT;"
-} | psql "$PGURI"
+} | psql "$PGURIT"
 ```
 
 ---

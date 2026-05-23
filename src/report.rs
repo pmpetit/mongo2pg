@@ -155,6 +155,34 @@ impl CollectionRow {
     }
 }
 
+pub struct PostImportTableRow {
+    pub schema_name: Option<String>,
+    pub table_name: String,
+    pub row_count: i64,
+}
+
+pub struct PostImportNode {
+    pub name: String,
+    pub is_array: bool,
+    pub mongo_count: u64,
+    pub pg_table_name: Option<String>,
+    pub pg_row_count: Option<i64>,
+    pub children: Vec<PostImportNode>,
+}
+
+pub struct PostImportCollectionRow {
+    pub name: String,
+    pub document_count: u64,
+    pub root: PostImportNode,
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 /// Read every `<base>/<collection>/<collection>.stats.yaml` and return sorted rows.
 ///
 /// When `tables_dir` is `Some`, each collection's `.sql` file is parsed to fill
@@ -628,6 +656,306 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
         } else {
             ""
         },
+    )
+}
+
+pub fn render_post_import_html(
+    rows: &[PostImportCollectionRow],
+    namespace: &str,
+    mongo_cluster: &str,
+    pg_target: &str,
+) -> String {
+    fn sum_mongo_rows(node: &PostImportNode) -> u64 {
+        node.mongo_count + node.children.iter().map(sum_mongo_rows).sum::<u64>()
+    }
+
+    fn count_pg_tables(node: &PostImportNode) -> usize {
+        usize::from(node.pg_table_name.is_some())
+            + node.children.iter().map(count_pg_tables).sum::<usize>()
+    }
+
+    fn sum_pg_rows(node: &PostImportNode) -> i64 {
+        node.pg_row_count.unwrap_or(0) + node.children.iter().map(sum_pg_rows).sum::<i64>()
+    }
+
+    fn render_node(node: &PostImportNode, depth: usize, prefix: &str, index: &mut usize) -> String {
+        let node_id = format!("{prefix}-{}", *index);
+        *index += 1;
+        let has_children = !node.children.is_empty();
+        let toggle = if has_children {
+            format!(
+                r#"<button class="tree-toggle" type="button" onclick="toggleNode('{node_id}')"><span class="tree-arrow open" id="arrow-{node_id}">▶</span></button>"#,
+                node_id = node_id,
+            )
+        } else {
+            "<span class=\"tree-spacer\"></span>".to_owned()
+        };
+        let mongo_shape = if node.is_array { "[ ]" } else { "{ }" };
+        let mismatch = node
+            .pg_row_count
+            .map(|pg_rows| pg_rows - node.mongo_count as i64);
+        let pg_cell = match (&node.pg_table_name, node.pg_row_count) {
+            (Some(table_name), Some(row_count)) => format!(
+                r#"<div class="pg-ref"><span class="pg-table">{}</span><span class="pg-count">{}</span>{}</div>"#,
+                escape_html(table_name),
+                row_count,
+                match mismatch {
+                    Some(0) => "<span class=\"match-badge is-match\">match</span>".to_owned(),
+                    Some(delta) =>
+                        format!("<span class=\"match-badge is-mismatch\">delta {delta:+}</span>"),
+                    None => String::new(),
+                },
+            ),
+            (Some(table_name), None) => format!(
+                r#"<div class="pg-ref"><span class="pg-table">{}</span></div>"#,
+                escape_html(table_name),
+            ),
+            _ => "<div class=\"pg-empty\">-</div>".to_owned(),
+        };
+        let children = if has_children {
+            let rendered = node
+                .children
+                .iter()
+                .map(|child| render_node(child, depth + 1, prefix, index))
+                .collect::<Vec<_>>()
+                .join("");
+            format!(
+                r#"<div class="tree-children" id="children-{node_id}">{rendered}</div>"#,
+                node_id = node_id,
+                rendered = rendered,
+            )
+        } else {
+            String::new()
+        };
+
+        format!(
+            r#"<div class="tree-node" style="--depth:{depth}">
+  <div class="tree-row">
+  <div class="mongo-cell">
+    {toggle}
+    <span class="json-key">{label}</span>
+    <span class="json-shape">{mongo_shape}</span>
+    <span class="mongo-count">{mongo_count}</span>
+  </div>
+  <div class="pg-cell">{pg_cell}</div>
+  </div>
+  {children}
+</div>"#,
+            depth = depth,
+            toggle = toggle,
+            label = escape_html(&node.name),
+            mongo_shape = mongo_shape,
+            mongo_count = node.mongo_count,
+            pg_cell = pg_cell,
+            children = children,
+        )
+    }
+
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
+
+    let total_docs: u64 = rows.iter().map(|r| r.document_count).sum();
+    let total_mongo_rows: u64 = rows.iter().map(|r| sum_mongo_rows(&r.root)).sum();
+    let total_tables: usize = rows.iter().map(|r| count_pg_tables(&r.root)).sum();
+    let total_pg_rows: i64 = rows.iter().map(|r| sum_pg_rows(&r.root)).sum();
+
+    let collection_sections = rows
+        .iter()
+        .map(|row| {
+      let safe_name = row
+        .name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect::<String>();
+      let mut index = 0;
+      let tree = render_node(&row.root, 0, &safe_name, &mut index);
+      let mongo_total = sum_mongo_rows(&row.root);
+      let table_total = sum_pg_rows(&row.root);
+      let table_count = count_pg_tables(&row.root);
+      format!(
+        r#"<section class="collection-card">
+  <div class="collection-summary">
+  <div>
+    <h2>{label}</h2>
+    <p class="collection-meta">MongoDB documents: <strong>{document_count}</strong> &nbsp;|&nbsp; MongoDB expanded rows: <strong>{mongo_total}</strong> &nbsp;|&nbsp; PostgreSQL tables: <strong>{table_count}</strong> &nbsp;|&nbsp; PostgreSQL rows: <strong>{table_total}</strong></p>
+  </div>
+  </div>
+  <div class="compare-head">
+  <div>MongoDB JSON</div>
+  <div>PostgreSQL</div>
+  </div>
+  <div class="tree-panel">{tree}</div>
+</section>"#,
+        label = escape_html(&row.name),
+        document_count = row.document_count,
+        mongo_total = mongo_total,
+        table_count = table_count,
+        table_total = table_total,
+        tree = tree,
+      )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mongo2pg – Post-Import Report</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      margin: 0;
+      padding: 2rem;
+    }}
+    h1 {{ color: #2c3e50; margin-bottom: 0.25rem; }}
+    .subtitle {{ color: #7f8c8d; font-size: 0.9rem; margin-bottom: 2rem; }}
+    .summary-grid {{ display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }}
+    .card {{
+      background: white;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      min-width: 180px;
+    }}
+    .card .label {{ font-size: 0.75rem; text-transform: uppercase; color: #7f8c8d; }}
+    .card .value {{ font-size: 1.6rem; font-weight: 700; color: #2c3e50; }}
+    .collection-card {{
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }}
+    .collection-summary {{ padding: 1rem 1.25rem 0.6rem; }}
+    .collection-summary h2 {{ margin: 0 0 0.25rem; color: #2c3e50; font-size: 1.15rem; }}
+    .collection-meta {{ margin: 0; color: #6b7c93; font-size: 0.92rem; }}
+    .compare-head {{
+      display: grid;
+      grid-template-columns: 1.4fr 0.8fr;
+      gap: 1rem;
+      padding: 0.8rem 1.25rem;
+      background: #2c3e50;
+      color: white;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+    }}
+    .tree-panel {{ padding: 0.35rem 0 0.7rem; }}
+    .tree-node {{ --indent-step: 1.3rem; }}
+    .tree-row {{
+      display: grid;
+      grid-template-columns: 1.4fr 0.8fr;
+      gap: 1rem;
+      align-items: center;
+      padding: 0.15rem 1.25rem;
+    }}
+    .tree-row:hover {{ background: #f8fafc; }}
+    .mongo-cell {{
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding-left: calc(var(--depth) * var(--indent-step));
+      min-height: 2rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }}
+    .tree-toggle {{
+      border: none;
+      background: transparent;
+      padding: 0;
+      width: 1rem;
+      cursor: pointer;
+      color: #5d6d7e;
+    }}
+    .tree-spacer {{ display: inline-block; width: 1rem; }}
+    .tree-arrow {{ display: inline-block; font-size: 0.7rem; transition: transform 0.15s; }}
+    .tree-arrow.open {{ transform: rotate(90deg); }}
+    .json-key {{ color: #1f3a5f; font-weight: 600; }}
+    .json-shape {{ color: #7f8c8d; }}
+    .mongo-count, .pg-count {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 3rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      background: #edf2f7;
+      color: #334e68;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }}
+    .pg-cell {{ display: flex; align-items: center; min-height: 2rem; }}
+    .pg-ref {{ display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }}
+    .pg-table {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #2471a3;
+      background: #eaf4fb;
+      border: 1px solid #aed6f1;
+      border-radius: 6px;
+      padding: 0.15rem 0.45rem;
+    }}
+    .match-badge {{
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.12rem 0.45rem;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }}
+    .match-badge.is-match {{ background: #e8f7ef; color: #1e8449; }}
+    .match-badge.is-mismatch {{ background: #fdecea; color: #c0392b; }}
+    .pg-empty {{ color: #95a5a6; font-style: italic; }}
+    .tree-children {{ display: block; }}
+    footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
+  </style>
+</head>
+<body>
+  <h1>mongo2pg – Post-Import Report</h1>
+  <p class="subtitle">MongoDB: <strong>{mongo_cluster}</strong> &nbsp;|&nbsp; PostgreSQL: <strong>{pg_target}</strong> &nbsp;|&nbsp; Namespace: <strong>{namespace}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="label">Collections</div><div class="value">{collection_count}</div></div>
+    <div class="card"><div class="label">MongoDB Documents</div><div class="value">{total_docs}</div></div>
+    <div class="card"><div class="label">MongoDB Expanded Rows</div><div class="value">{total_mongo_rows}</div></div>
+    <div class="card"><div class="label">PostgreSQL Tables</div><div class="value">{total_tables}</div></div>
+    <div class="card"><div class="label">PostgreSQL Rows</div><div class="value">{total_pg_rows}</div></div>
+  </div>
+
+  {collection_sections}
+
+  <footer>Generated by <a href="https://github.com/pmpetit/mongo2pg">mongo2pg</a></footer>
+
+  <script>
+    function toggleNode(id) {{
+      var row = document.getElementById('children-' + id);
+      var icon = document.getElementById('arrow-' + id);
+      if (!row) return;
+      var open = row.style.display !== 'none';
+      row.style.display = open ? 'none' : '';
+      if (open) {{ icon.classList.remove('open'); }}
+      else      {{ icon.classList.add('open'); }}
+    }}
+  </script>
+</body>
+</html>
+"#,
+        mongo_cluster = escape_html(mongo_cluster),
+        pg_target = escape_html(pg_target),
+        namespace = escape_html(namespace),
+        now = now,
+        collection_count = rows.len(),
+        total_docs = total_docs,
+        total_mongo_rows = total_mongo_rows,
+        total_tables = total_tables,
+        total_pg_rows = total_pg_rows,
+        collection_sections = collection_sections,
     )
 }
 

@@ -42,7 +42,7 @@ docker exec -it mongodb bash -c "
 "
 ```
 
-If `mongoimport` is available locally, you can pass the URI directly:
+If `mongoimport` is available locally, you can pass the source URI directly:
 
 ```bash
 bash start.sh 'mongodb://user:pass@localhost:2717/?authSource=admin'

@@ -156,20 +156,20 @@ fn sanitize(name: &str) -> String {
 // BSON → CSV string
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn bson_to_string(val: &Bson) -> String {
+fn bson_to_string(val: &Bson) -> Option<String> {
     match val {
-        Bson::ObjectId(oid) => oid.to_hex(),
-        Bson::String(s) => s.clone(),
-        Bson::Int32(n) => n.to_string(),
-        Bson::Int64(n) => n.to_string(),
-        Bson::Double(d) => d.to_string(),
-        Bson::Boolean(b) => b.to_string(),
-        Bson::DateTime(dt) => format_millis(dt.timestamp_millis()),
-        Bson::Decimal128(d) => d.to_string(),
-        Bson::Timestamp(ts) => ts.time.to_string(),
-        Bson::Null | Bson::Undefined => String::new(),
+        Bson::ObjectId(oid) => Some(oid.to_hex()),
+        Bson::String(s) => Some(s.clone()),
+        Bson::Int32(n) => Some(n.to_string()),
+        Bson::Int64(n) => Some(n.to_string()),
+        Bson::Double(d) => Some(d.to_string()),
+        Bson::Boolean(b) => Some(b.to_string()),
+        Bson::DateTime(dt) => Some(format_millis(dt.timestamp_millis())),
+        Bson::Decimal128(d) => Some(d.to_string()),
+        Bson::Timestamp(ts) => Some(ts.time.to_string()),
+        Bson::Null | Bson::Undefined => None,
         // For complex / uncommon types fall back to BSON extended-JSON representation.
-        other => serde_json::to_string(other).unwrap_or_default(),
+        other => Some(serde_json::to_string(other).unwrap_or_default()),
     }
 }
 
@@ -209,10 +209,17 @@ fn format_millis(ms: i64) -> String {
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn csv_escape(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
+    if s.is_empty() || s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_owned()
+    }
+}
+
+fn csv_cell_text(cell: Option<&str>) -> String {
+    match cell {
+        Some(text) => csv_escape(text),
+        None => String::new(),
     }
 }
 
@@ -384,7 +391,7 @@ fn extract_rows(
     node: &TableNode,
     parent_id: Option<&str>,
     is_root: bool,
-    all_rows: &mut HashMap<String, Vec<Vec<String>>>,
+    all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
     counters: &mut HashMap<String, u64>,
 ) {
     let doc = match val {
@@ -395,7 +402,7 @@ fn extract_rows(
     // Assign an ID for this row.
     let my_id: String = if is_root {
         // Root table: _id → id
-        doc.get("_id").map(bson_to_string).unwrap_or_default()
+        doc.get("_id").and_then(bson_to_string).unwrap_or_default()
     } else {
         let c = counters.entry(node.sql_name.clone()).or_insert(0);
         *c += 1;
@@ -403,24 +410,24 @@ fn extract_rows(
     };
 
     // Build the row by iterating SQL columns in order.
-    let row: Vec<String> = node
+    let row: Vec<Option<String>> = node
         .columns
         .iter()
         .map(|col| {
             if col == &node.pk_col {
-                my_id.clone()
+                Some(my_id.clone())
             } else if Some(col) == node.fk_col.as_ref() {
-                parent_id.unwrap_or("").to_owned()
+                Some(parent_id.unwrap_or("").to_owned())
             } else {
                 find_mongo_field(doc, col)
                     .map(|v| {
                         if node.jsonb_cols.contains(col) {
-                            serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default()
+                            Some(serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default())
                         } else {
                             bson_to_string(v)
                         }
                     })
-                    .unwrap_or_default()
+                    .unwrap_or(None)
             }
         })
         .collect();
@@ -439,18 +446,18 @@ fn extract_rows(
                             *c += 1;
                             c.to_string()
                         };
-                        let child_row: Vec<String> = child
+                        let child_row: Vec<Option<String>> = child
                             .columns
                             .iter()
                             .map(|col| {
                                 if col == &child.pk_col {
-                                    child_id.clone()
+                                    Some(child_id.clone())
                                 } else if Some(col) == child.fk_col.as_ref() {
-                                    my_id.clone()
+                                    Some(my_id.clone())
                                 } else if col == "value" {
                                     bson_to_string(item)
                                 } else {
-                                    String::new()
+                                    None
                                 }
                             })
                             .collect();
@@ -522,7 +529,7 @@ pub async fn export_collection(
         .await
         .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
 
-    let mut all_rows: HashMap<String, Vec<Vec<String>>> = HashMap::new();
+    let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
 
     while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
@@ -553,7 +560,7 @@ pub async fn export_collection(
 
         // Data rows
         for row in &rows {
-            let line: Vec<String> = row.iter().map(|v| csv_escape(v)).collect();
+            let line: Vec<String> = row.iter().map(|v| csv_cell_text(v.as_deref())).collect();
             writeln!(gz, "{}", line.join(","))
                 .with_context(|| format!("Write error for {}", csv_path.display()))?;
         }

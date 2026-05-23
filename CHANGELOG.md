@@ -13,8 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prepends `CREATE SCHEMA IF NOT EXISTS <name>; SET search_path = <name>;` to the generated SQL
   - Strips the `{schema}_` prefix from every child table name so names are shorter and schema-qualified references are unambiguous (e.g. `b2bsalesorder_lines` → `lines` inside schema `b2bsalesorder`)
   - Prefix matching is case-insensitive (sanitized before comparison) to handle mixed-case collection names
-- **`to-pg --schema-per-collection`**: equivalent to `--schema <collection_name>` applied to every collection processed in a batch; each output file gets its own self-contained schema preamble. Mutually exclusive with `--schema`
+- **`to-pg` now uses one PostgreSQL schema per collection by default**: each generated SQL file gets its own self-contained schema preamble, and `--schema <NAME>` remains available to override that default with a fixed schema name
 - **Output SQL filenames are now lowercased**: `B2BSalesOrder.sql` → `b2bsalesorder.sql`, consistent with PostgreSQL identifier folding
+- **`report --post-import`**: generates `reports/post_report.html` by reading MongoDB counts from `SOURCE_URI`, PostgreSQL row counts from `TARGET_URI`, and table definitions from the generated DDL for the selected namespace
+- **MongoDB connection inputs are now named `SOURCE_URI` / `--source-uri`** across the CLI and generated config files
 - **Regression test `test_camelcase_collection_table_count_matches_report`**: verifies end-to-end that the number of `CREATE TABLE` statements produced by `to-pg` for a camelCase collection name equals the number of PG tables shown in the HTML report (catches the filename mismatch bug)
 - **CI now runs `cargo test` on every PR**: a `test` job was added to `pr-preview.yml`; the build and preview-release jobs only proceed once all tests pass
 
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`export --namespace` now overrides the config namespace consistently**: export reads SQL from `schema/tables/<db_name>/` with no fallback to older flat locations
 - **Export output layout is now database-scoped**: generated `.csv.gz` files are written under `data/<database_name>/<sanitized_collection_name>/`
 - **Export output now prints the resolved `.csv.gz` path for each table**: row counts are logged alongside the final file location during export
+- **Config parsing now uses `SOURCE_URI` and `TARGET_URI` keys** for MongoDB and PostgreSQL connection settings
 - **`mongodb` dependency bumped** from 3.2.5 to 3.6.0
 
 ---

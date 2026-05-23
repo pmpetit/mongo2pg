@@ -305,7 +305,7 @@ docker exec -it mongodb bash -c "
 "
 ```
 
-If `mongoimport` is available locally, you can pass the URI directly:
+If `mongoimport` is available locally, you can pass the source URI directly:
 
 ```bash
 bash start.sh 'mongodb://user:pass@localhost:2717/?authSource=admin'
@@ -315,7 +315,7 @@ bash start.sh 'mongodb://user:pass@localhost:2717/?authSource=admin'
 
 ### Step 3 — Run mongo2pg against each collection
 
-The URI for all commands below is:
+The source URI for all commands below is:
 
 ```bash
 mongodb://user:pass@localhost:2717/?authSource=admin
@@ -377,7 +377,7 @@ Top-level types         : _id:ObjectId, account_id:Number, bucket_end_date:Date,
 To keep the inferred schemas for later analysis or create the postgres ddl.
 
 ```bash
-URI="mongodb://user:pass@localhost:2717/?authSource=admin"
+SOURCE_URI="mongodb://user:pass@localhost:2717/?authSource=admin"
 
 for ns in \
   sample_airbnb.listingsAndReviews \
@@ -400,7 +400,7 @@ for ns in \
 do
   filename=$(echo "$ns" | tr '.' '_')
   echo "→ $ns"
-  mongo2pg "$URI" "$ns" 2>${filename}.stats.txt > ${filename}.json
+  mongo2pg "$SOURCE_URI" "$ns" 2>${filename}.stats.txt > ${filename}.json
 done
 ```
 
@@ -460,14 +460,14 @@ report → generate HTML stats report and ERD diagram
 ## `init` – create a migration project
 
 ```
-mongo2pg init --project-base <DIR> --project-name <NAME> [--uri <URI>]
+mongo2pg init --project-base <DIR> --project-name <NAME> [--source-uri <SOURCE_URI>]
 ```
 
 Creates the project directory tree and writes a config file:
 
 ```
 <project-base>/<project-name>/
-    config/<project-name>.conf   ← BASE_DIR, PROJECT_DIR, URI, NAMESPACE
+    config/<project-name>.conf   ← BASE_DIR, PROJECT_DIR, SOURCE_URI, NAMESPACE
     schema/
         tables/                  ← generated SQL DDL files go here
     source/
@@ -482,14 +482,14 @@ Creates the project directory tree and writes a config file:
 |---|---|
 | `--project-base <DIR>` | Parent directory that will contain the project folder |
 | `--project-name <NAME>` | Name of the project (becomes the sub-directory name) |
-| `--uri <URI>` | MongoDB connection URI – written into the config file |
+| `--source-uri <SOURCE_URI>` | MongoDB source connection URI – written into the config file |
 
 ---
 
 ## `infer` – sample a MongoDB collection and infer its schema
 
 ```
-mongo2pg [infer] --uri <URI> [--namespace <NAMESPACE>] [OPTIONS]
+mongo2pg [infer] --source-uri <SOURCE_URI> [--namespace <NAMESPACE>] [OPTIONS]
 mongo2pg [infer] -c <CONFIG> [OPTIONS]
 ```
 
@@ -497,7 +497,7 @@ mongo2pg [infer] -c <CONFIG> [OPTIONS]
 
 | Argument | Description |
 |---|---|
-| `--uri <URI>` | MongoDB connection URI – required unless `-c` is given |
+| `--source-uri <SOURCE_URI>` | MongoDB source connection URI – required unless `-c` is given |
 | `--namespace <NAMESPACE>` | `<db>.<collection>` for a single collection, `<db>` for all collections in the database, or omit to infer **all user databases** on the server (see below). Can also be set via `NAMESPACE` in the config file. |
 
 **Options**
@@ -506,7 +506,7 @@ mongo2pg [infer] -c <CONFIG> [OPTIONS]
 |---|---|
 | `-n, --number <N>` | Number of documents to sample (default: 1000) |
 | `-p, --percent <PCT>` | Percentage of the collection to sample |
-| `-c, --config <FILE>` | Project config file – derives URI and output paths automatically |
+| `-c, --config <FILE>` | Project config file – derives SOURCE_URI and output paths automatically |
 | `-o, --output-dir <DIR>` | Write output files into `<dir>/` for each collection |
 | `--no-output` | Suppress JSON schema output to stdout |
 
@@ -542,7 +542,7 @@ given) are named `<dbname>_<collname>` to avoid collisions:
 Example:
 
 ```bash
-mongo2pg infer --uri mongodb://localhost:27017 -o /tmp/output
+mongo2pg infer --source-uri mongodb://localhost:27017 -o /tmp/output
 ```
 
 ---
@@ -566,14 +566,13 @@ mongo2pg to-pg [COLLECTION] [OPTIONS]
 | `-c, --config <FILE>` | Project config file – reads `source/collections/`, writes `schema/tables/` |
 | `-o, --output-dir <DIR>` | Directory to write `.sql` files into (overrides `-c`) |
 | `-t, --table <NAME>` | Table name override (single collection only) |
-| `--schema <NAME>` | Deploy all tables into the PostgreSQL schema `<NAME>` (see below) |
-| `--schema-per-collection` | Like `--schema` but uses each collection name as its own schema (see below) |
+| `--schema <NAME>` | Deploy all tables into the PostgreSQL schema `<NAME>` instead of the default per-collection schema (see below) |
 
 Reads `source/collections/<name>/<name>.json` and writes `schema/tables/<name>.sql`.
 
 ---
 
-### Why `--schema` and `--schema-per-collection`?
+### Why per-collection schemas by default?
 
 MongoDB collections are often deeply nested. When `to-pg` flattens nested documents
 into relational tables, child table names are built by concatenating their parent
@@ -594,7 +593,7 @@ collection into its own dedicated PostgreSQL schema (one schema per collection
 is a common pattern), the collection name prefix on every table name is redundant
 noise.
 
-`--schema` and `--schema-per-collection` address both problems:
+By default, `to-pg` addresses both problems this way:
 
 1. **Each child table name has the `{schema}_` prefix stripped** before it is
    written, so names are shorter and collision-free.
@@ -603,7 +602,7 @@ noise.
 3. **`SET search_path`** is set at the top of the file so all `CREATE TABLE` and
    `REFERENCES` statements resolve within the schema without needing to be qualified.
 
-**Before** (no flag):
+**Before** (without a PostgreSQL schema wrapper):
 
 ```sql
 CREATE TABLE salesorder ( … );
@@ -612,7 +611,7 @@ CREATE TABLE salesorder_lines_fulfillmentmaplines ( … );
 CREATE TABLE salesorder_lines_fulfillmentmaplines_route ( … );
 ```
 
-**After** (`--schema salesorder`):
+**After** (default per-collection schema for `salesorder`):
 
 ```sql
 CREATE SCHEMA IF NOT EXISTS salesorder;
@@ -624,25 +623,15 @@ CREATE TABLE lines_fulfillmentmaplines ( … );
 CREATE TABLE lines_fulfillmentmaplines_route ( … );
 ```
 
-#### `--schema <NAME>`
+#### Default behavior
 
-Applies a single fixed schema name to the output. Useful when converting a single
-collection, or when all collections in a project share one schema.
-
-```bash
-# Single collection deployed into its own schema (sales is the dbname, salesorder is the collection)
-mongo2pg to-pg -c config/sofi.conf sales.salesorder --schema salesorder
-```
-
-#### `--schema-per-collection`
-
-Equivalent to running `--schema <collection_name>` for every collection processed.
+Each collection is deployed into its own PostgreSQL schema automatically.
 Each output file gets its own `CREATE SCHEMA` preamble and its tables are named
-without the collection prefix.  Mutually exclusive with `--schema`.
+without the collection prefix when possible.
 
 ```bash
-# Every collection gets deployed into its own schema
-mongo2pg to-pg -c config/sofi.conf --schema-per-collection
+# Every collection gets deployed into its own schema by default
+mongo2pg to-pg -c config/sofi.conf
 ```
 
 This produces one `.sql` file per collection, each self-contained:
@@ -665,6 +654,16 @@ SET search_path = product;
 CREATE TABLE product ( … );
 CREATE TABLE variants ( … );
 …
+```
+
+#### `--schema <NAME>`
+
+Applies a single fixed schema name to the output. Useful when converting a single
+collection, or when all collections in a project share one schema.
+
+```bash
+# Single collection deployed into its own schema (sales is the dbname, salesorder is the collection)
+mongo2pg to-pg -c config/sofi.conf sales.salesorder --schema salesorder
 ```
 
 ---
@@ -692,7 +691,7 @@ them, so the CSV files can be loaded directly into PostgreSQL with `\COPY`.
 
 | Flag | Description |
 |---|---|
-| `-c, --config <FILE>` | Project config file – derives URI, database name, `schema/tables/` and `data/` paths |
+| `-c, --config <FILE>` | Project config file – derives SOURCE_URI, database name, `schema/tables/` and `data/` paths |
 | `-o, --output-dir <DIR>` | Override the output directory for CSV files (default: `<project>/data/`) |
 
 **Output layout**
@@ -730,6 +729,7 @@ mongo2pg report [OPTIONS]
 | `--collections-dir <DIR>` | Path to `source/collections/` (overrides `-c`) |
 | `-o, --output <FILE>` | Output path for the HTML report |
 | `-n, --namespace <NS>` | Label shown in the report header |
+| `--post-import` | Connect to MongoDB and PostgreSQL and write a validation report to `reports/post_report.html` |
 
 Produces two files in `reports/`:
 
@@ -738,6 +738,21 @@ Produces two files in `reports/`:
 | `<project>.html` | Collection stats report (documents, depth, width, field counts) |
 | `<project>.schema.html` | Entity-relationship diagram generated from `schema/tables/*.sql` |
 
+When `--post-import` is used with `-c <config>`, `mongo2pg` expects the config file to define:
+
+```properties
+SOURCE_URI = mongodb://...
+TARGET_URI = postgres://.../dbname?sslmode=require
+NAMESPACE = mydb
+```
+
+It then:
+
+- lists MongoDB collections in the configured namespace and counts documents per collection
+- parses the generated DDL in `schema/tables/<db>/` to find the PostgreSQL tables for each collection
+- counts rows in PostgreSQL for each of those tables
+- writes the result to `reports/post_report.html`
+
 ---
 
 ## Typical workflow
@@ -745,7 +760,7 @@ Produces two files in `reports/`:
 ```bash
 # 1. Create the project
 mongo2pg init --project-base /app/migration --project-name retail \
-  --uri "mongodb://user:pass@localhost:27017"
+  --source-uri "mongodb://user:pass@localhost:27017"
 
 # 2. Optionally edit config to add the default namespace:
 #    NAMESPACE = retail
@@ -778,14 +793,11 @@ mongo2pg infer mongodb://localhost:27017 mydb -o source/collections
 # Sample 10 % of documents
 mongo2pg infer mongodb://localhost:27017 mydb.orders -p 10
 
-# Convert all inferred schemas to SQL (project-based)
+# Convert all inferred schemas to SQL (project-based; each collection gets its own PG schema)
 mongo2pg to-pg -c config/retail.conf
 
 # Convert a single collection only
 mongo2pg to-pg -c config/retail.conf products
-
-# Deploy each collection into its own PostgreSQL schema (strips collection prefix from child table names)
-mongo2pg to-pg -c config/retail.conf --schema-per-collection
 
 # Deploy a single collection into a named schema
 mongo2pg to-pg -c config/retail.conf orders --schema orders

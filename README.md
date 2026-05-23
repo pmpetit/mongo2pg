@@ -45,6 +45,7 @@ Just as tool exist to migrate from relational databases to document stores, a to
 ## CLI Usage
 
 See **[USAGE.md](USAGE.md)** for the full command reference and workflow.
+Hosted documentation is available on **[Read the Docs](https://mongo2pg.readthedocs.io/en/latest/)**.
 
 The migration-project workflow (init → analyse → convert → report) is inspired by the [ora2pg](https://ora2pg.darold.net/) approach to Oracle → PostgreSQL migrations.
 
@@ -53,7 +54,7 @@ Quick start:
 ```bash
 # 1. Create a project
 mongo2pg init --project-base /app/migration --project-name retail \
-  --uri "mongodb://user:pass@localhost:27017"
+  --source-uri "mongodb://user:pass@localhost:27017"
 
 # 2. Infer schemas, generate SQL, export data, generate reports
 mongo2pg infer  -c /app/migration/retail/config/retail.conf
