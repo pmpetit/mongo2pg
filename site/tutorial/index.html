@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="mongo2pg contributors" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Typical Workflow - mongo2pg</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Typical Workflow";
+        var mkdocs_page_input_path = "tutorial/README.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/bash.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/json.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/rust.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/sql.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/yaml.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> mongo2pg
+        </a>
+        <div class="version">
+          {'provider': 'mike'}
+        </div><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Install</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../install/">Installation</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">How-To Guides</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../how-to/">Overview</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">CLI Reference</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../reference/">Commands</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Tutorial</span></p>
+              <ul class="current">
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Typical Workflow</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#prerequisites">Prerequisites</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-1-create-a-project">Step 1 — Create a project</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-2-infer-schemas-and-statistics">Step 2 — Infer schemas and statistics</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-3-generate-postgresql-ddl">Step 3 — Generate PostgreSQL DDL</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-4-generate-pre-import-report">Step 4 - Generate pre-import report</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-5-adapt-the-ddl">Step 5 - Adapt the DDL</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-6-export-data-as-relational-csv-files">Step 6 — Export data as relational CSV files</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-7-load-into-postgresql">Step 7 — Load into PostgreSQL</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#sample_airbnb">sample_airbnb</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-8-generate-post-import-report">Step 8 — Generate post import report</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">mongo2pg</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Tutorial</li>
+      <li class="breadcrumb-item active">Typical Workflow</li>
+    <li class="wy-breadcrumbs-aside">
+          <a href="https://github.com/pmpetit/mongo2pg/edit/main/docs/tutorial/README.md" class="icon icon-github"> Edit on GitHub</a>
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="tutorial-from-mongodb-collection-to-postgresql-load-validation">Tutorial — From MongoDB Collection to PostgreSQL Load Validation<a class="headerlink" href="#tutorial-from-mongodb-collection-to-postgresql-load-validation" title="Permanent link">&para;</a></h1>
+<p>This walkthrough takes you from a MongoDB sample dataset to inferred schemas,
+generated PostgreSQL DDL, exported CSV files, and a post-import validation
+report.</p>
+<div class="admonition tip">
+<p class="admonition-title">Using a config file</p>
+<p>Every parameter shown in this tutorial can be stored in a project config
+file created by <code>mongo2pg init</code>. Once that file exists, pass <code>-c &lt;path&gt;</code>
+instead of repeating flags on every command.</p>
+</div>
+<hr />
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>mongo2pg</code> installed and on your <code>PATH</code> (see <a href="../install/">Installation</a>)</li>
+<li>a running MongoDB instance</li>
+<li>a running PostgreSQL instance</li>
+<li>a dataset already loaded into MongoDB</li>
+</ul>
+<p>This tutorial uses <code>sample_airbnb.listingsAndReviews</code> as the example
+collection.</p>
+<hr />
+<h2 id="step-1-create-a-project">Step 1 — Create a project<a class="headerlink" href="#step-1-create-a-project" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>init<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--project-base<span class="w"> </span>./projects<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--project-name<span class="w"> </span>sample_airbnb<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--source-uri<span class="w"> </span><span class="s1">&#39;mongodb://user:pass@localhost:27017/?authSource=admin&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--target-uri<span class="w"> </span><span class="s1">&#39;postgres://postgres:x@localhost:5432/postgres&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
+</code></pre></div>
+
+<p>This creates:</p>
+<div class="codehilite"><pre><span></span><code>projects/sample_airbnb/
+  config/
+    sample_airbnb.conf
+  source/
+    collections/
+  schema/
+    tables/
+  data/
+  reports/
+</code></pre></div>
+
+<p>Add PostgreSQL connectivity to the generated config file:</p>
+<div class="codehilite"><pre><span></span><code><span class="na">SOURCE_URI</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">mongodb://user:pass@localhost:27017/?authSource=admin</span>
+<span class="na">TARGET_URI</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">postgres://user:pass@localhost:5432/sample_airbnb?sslmode=require</span>
+<span class="na">NAMESPACE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">sample_airbnb</span>
+</code></pre></div>
+
+<hr />
+<h2 id="step-2-infer-schemas-and-statistics">Step 2 — Infer schemas and statistics<a class="headerlink" href="#step-2-infer-schemas-and-statistics" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>infer<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+</code></pre></div>
+
+<p>This writes one folder per collection under <code>source/collections/</code> with:</p>
+<ul>
+<li><code>&lt;collection&gt;.json</code></li>
+<li><code>&lt;collection&gt;.stats.txt</code></li>
+<li><code>&lt;collection&gt;.stats.yaml</code></li>
+<li><code>mapping_&lt;collection&gt;.yaml</code></li>
+</ul>
+<hr />
+<h2 id="step-3-generate-postgresql-ddl">Step 3 — Generate PostgreSQL DDL<a class="headerlink" href="#step-3-generate-postgresql-ddl" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>to-pg<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+</code></pre></div>
+
+<p>Each collection generates a <code>.sql</code> file under <code>schema/tables/&lt;db&gt;/</code>.</p>
+<p>By default, each collection is deployed into its own PostgreSQL schema.</p>
+<hr />
+<h2 id="step-4-generate-pre-import-report">Step 4 - Generate pre-import report<a class="headerlink" href="#step-4-generate-pre-import-report" title="Permanent link">&para;</a></h2>
+<p>Standard pre-migration report:</p>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>report<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+</code></pre></div>
+
+<p>This will generate an HTML report in reports/main.html</p>
+<p>It shows a scoring, objects created.</p>
+<h2 id="step-5-adapt-the-ddl">Step 5 - Adapt the DDL<a class="headerlink" href="#step-5-adapt-the-ddl" title="Permanent link">&para;</a></h2>
+<p>Maybe the table name, schema name or database do not reflect your needs. You can modify those SQL files. They will be used during the next steps, generating export files.</p>
+<p>For example, some table name can be over 64c, they should be renamed.</p>
+<h2 id="step-6-export-data-as-relational-csv-files">Step 6 — Export data as relational CSV files<a class="headerlink" href="#step-6-export-data-as-relational-csv-files" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+</code></pre></div>
+
+<p>Base on the existing SQL files in <code>schema/tables/&lt;db&gt;/*.sql</code></p>
+<p>This writes <code>.csv.gz</code> files under <code>data/&lt;db&gt;/&lt;collection&gt;/</code>, one per generated
+PostgreSQL table.</p>
+<hr />
+<h2 id="step-7-load-into-postgresql">Step 7 — Load into PostgreSQL<a class="headerlink" href="#step-7-load-into-postgresql" title="Permanent link">&para;</a></h2>
+<p>Run the generated SQL files, then load the <code>.csv.gz</code> files with <code>\COPY</code>.</p>
+<p>Example:</p>
+<div class="codehilite"><pre><span></span><code>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-f<span class="w"> </span>./projects/sample_airbnb/schema/tables/sample_airbnb/listingsandreviews.sql
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="err">\</span><span class="k">COPY</span><span class="w"> </span><span class="n">listingsandreviews</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">PROGRAM</span><span class="w"> </span><span class="s1">&#39;gunzip -c listingsandreviews.csv.gz&#39;</span><span class="w"> </span><span class="n">CSV</span><span class="w"> </span><span class="n">HEADER</span><span class="p">;</span>
+<span class="err">\</span><span class="k">COPY</span><span class="w"> </span><span class="n">address</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">PROGRAM</span><span class="w"> </span><span class="s1">&#39;gunzip -c address.csv.gz&#39;</span><span class="w"> </span><span class="n">CSV</span><span class="w"> </span><span class="n">HEADER</span><span class="p">;</span>
+</code></pre></div>
+
+<h3 id="sample_airbnb">sample_airbnb<a class="headerlink" href="#sample_airbnb" title="Permanent link">&para;</a></h3>
+<p>Create tables</p>
+<div class="codehilite"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">PGURI</span><span class="o">=</span><span class="s2">&quot;postgres://postgres:x@localhost:5432/postgres&quot;</span>
+find<span class="w"> </span>projects/sample_airbnb/schema/tables/sample_airbnb<span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">1</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.sql&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;executing psql -f </span><span class="nv">$f</span><span class="s2">&quot;</span>
+<span class="w">  </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">$f</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<p>during this step, you can see some errors message about constraint violations (not null / null).</p>
+<p>This is because during the infer process, sample value (100 default) was not enough.</p>
+<p>For example, it read 100 documents, and in all documents a field <code>REVIEWER_NAME</code> was always present (probability 1).</p>
+<p>The pg column <code>REVIEWER_NAME</code> has constraint set to <code>NOT NULL</code>.</p>
+<p>But during the effective import all docs are read/write, and one of them did not have the <code>REVIEWER_NAME</code> fields.</p>
+<p>The solution is : modify the column in the DDL sql file and remove the NOT NULL constraint.</p>
+<p>and re-run the table creation :</p>
+<p>Drop database</p>
+<div class="codehilite"><pre><span></span><code><span class="k">for</span><span class="w"> </span>dir<span class="w"> </span><span class="k">in</span><span class="w"> </span>projects/sample_airbnb/data/*<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span><span class="o">[[</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$dir</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]]</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="k">continue</span>
+<span class="w">  </span><span class="nv">dbname</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$dir</span><span class="s2">&quot;</span><span class="k">)</span>
+<span class="w">  </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;DROP DATABASE IF EXISTS \&quot;</span><span class="nv">$dbname</span><span class="s2">\&quot;;&quot;</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<p>Re-create the table</p>
+<p>Create tables</p>
+<div class="codehilite"><pre><span></span><code>find<span class="w"> </span>projects/sample_airbnb/schema/tables/sample_airbnb<span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">1</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.sql&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;executing psql -f </span><span class="nv">$f</span><span class="s2">&quot;</span>
+<span class="w">  </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">$f</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<p>Re-execute the import</p>
+<p>Insert</p>
+<div class="codehilite"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">PGURIT</span><span class="o">=</span><span class="k">$(</span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;%s\n&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s#/postgres?#/sample_airbnb?#&#39;</span><span class="k">)</span>
+
+<span class="o">{</span>
+<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;BEGIN;&quot;</span>
+<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;SET CONSTRAINTS ALL DEFERRED;&quot;</span>
+
+<span class="w">  </span>find<span class="w"> </span>projects/sample_airbnb/data/sample_airbnb<span class="w"> </span>-mindepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.csv.gz&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span><span class="nv">schema</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>dirname<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&quot;</span><span class="k">)</span>
+<span class="w">    </span><span class="nv">table</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="w"> </span>.csv.gz<span class="k">)</span>
+<span class="w">    </span><span class="nb">printf</span><span class="w"> </span><span class="s2">&quot;TRUNCATE TABLE %s.%s CASCADE;\n&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$schema</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$table</span><span class="s2">&quot;</span>
+<span class="w">  </span><span class="k">done</span>
+
+<span class="w">  </span>find<span class="w"> </span>projects/sample_airbnb/data/sample_airbnb<span class="w"> </span>-mindepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.csv.gz&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span><span class="nv">schema</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>dirname<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&quot;</span><span class="k">)</span>
+<span class="w">    </span><span class="nv">table</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="w"> </span>.csv.gz<span class="k">)</span>
+<span class="w">    </span><span class="nb">printf</span><span class="w"> </span><span class="s2">&quot;\\COPY %s.%s FROM PROGRAM &#39;gunzip -c %s&#39; CSV HEADER;\n&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$schema</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$table</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span>
+<span class="w">  </span><span class="k">done</span>
+
+<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;COMMIT;&quot;</span>
+<span class="o">}</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURIT</span><span class="s2">&quot;</span>
+</code></pre></div>
+
+<hr />
+<h2 id="step-8-generate-post-import-report">Step 8 — Generate post import report<a class="headerlink" href="#step-8-generate-post-import-report" title="Permanent link">&para;</a></h2>
+<p>Post-import validation report:</p>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>report<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-c<span class="w"> </span>projects/sample_airbnb/config/sample_airbnb.conf<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--post-import<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
+</code></pre></div>
+
+<p>The post-import report writes <code>reports/post_report.html</code> and compares:</p>
+<ul>
+<li>MongoDB top-level document counts</li>
+<li>MongoDB expanded nested occurrence counts</li>
+<li>PostgreSQL row counts per generated table</li>
+</ul>
+<p>For nested nodes such as <code>address</code>, <code>reviews</code>, or <code>address.location.coordinates</code>,
+the report shows the MongoDB occurrence count beside the matching PostgreSQL
+table count so you can verify the relational expansion.</p>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../reference/" class="btn btn-neutral float-left" title="Commands"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+      <p>Copyright 2024-2026 mongo2pg contributors</p>
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+        <span>
+          <a href="https://github.com/pmpetit/mongo2pg" class="fa fa-github" style="color: #fcfcfc"> GitHub</a>
+        </span>
+    
+    
+      <span><a href="../reference/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
