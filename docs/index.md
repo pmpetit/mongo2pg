@@ -84,6 +84,28 @@ mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.conf \
 
 ---
 
+## Screenshots
+
+### Migration report overview
+
+<p align="center">
+  <img src="retail.png" alt="mongo2pg migration report overview" width="1000">
+</p>
+
+### Schema diagram
+
+<p align="center">
+  <img src="schema_diagram.png" alt="mongo2pg schema diagram" width="1000">
+</p>
+
+### Post-import validation
+
+<p align="center">
+  <img src="post_report.png" alt="mongo2pg post-import validation report" width="1000">
+</p>
+
+---
+
 ## Documentation Map
 
 - [Installation](install.md)
