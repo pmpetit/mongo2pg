@@ -45,6 +45,7 @@ Just as tool exist to migrate from relational databases to document stores, a to
 ## CLI Usage
 
 See **[USAGE.md](USAGE.md)** for the full command reference and workflow.
+Hosted documentation is available on **[Read the Docs](https://mongo2pg.readthedocs.io/en/latest/)**.
 
 The migration-project workflow (init → analyse → convert → report) is inspired by the [ora2pg](https://ora2pg.darold.net/) approach to Oracle → PostgreSQL migrations.
 
