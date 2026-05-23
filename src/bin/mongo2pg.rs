@@ -4,7 +4,7 @@
 //!
 //! ## `mongo2pg infer` (default when no subcommand given)
 //! ```text
-//! mongo2pg infer <URI> <DB.COLLECTION> [OPTIONS]
+//! mongo2pg infer <SOURCE_URI> <DB.COLLECTION> [OPTIONS]
 //! ```
 //! Samples documents and writes the inferred schema JSON to stdout.
 //!
@@ -14,37 +14,41 @@
 //! ```
 //! Converts a schema JSON file produced by `infer` into PostgreSQL DDL.
 
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use bson::doc;
+use bson::{doc, Bson};
 use clap::{Args, Parser, Subcommand};
 use futures::TryStreamExt;
 use indexmap::IndexMap;
-use mongo2pg::analyzer::{Analyzer, CollectionSchema};
+use mongo2pg::analyzer::{Analyzer, CollectionSchema, FieldSchema, TypeSchema};
 use mongo2pg::export::export_collection;
 use mongo2pg::report::{
-    collect_rows, compute_db_score, render_cluster_html, render_html, SYSTEM_DATABASES,
+    collect_rows, compute_db_score, render_cluster_html, render_html, render_post_import_html,
+    PostImportCollectionRow, PostImportNode, PostImportTableRow, SYSTEM_DATABASES,
 };
-use mongo2pg::schema_diagram::{load_tables_by_db, render_schema_html};
+use mongo2pg::schema_diagram::{load_tables_by_db, parse_sql, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
+use postgres_native_tls::MakeTlsConnector;
+use serde::Serialize;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared args
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// MongoDB URI argument shared across commands that connect to MongoDB.
-/// When `-c` is also provided, this overrides the URI stored in the config file.
+/// MongoDB source URI argument shared across commands that connect to MongoDB.
+/// When `-c` is also provided, this overrides the SOURCE_URI stored in the config file.
 #[derive(Args, Debug, Clone)]
 struct UriArg {
-    /// MongoDB connection URI (e.g. mongodb://localhost:27017) – required unless -c is given;
-    /// overrides the URI stored in the config file when -c is also provided
-    #[arg(long = "uri", required_unless_present = "config")]
-    uri: Option<String>,
+    /// MongoDB source connection URI (e.g. mongodb://localhost:27017) – required unless -c is given;
+    /// overrides the SOURCE_URI stored in the config file when -c is also provided
+    #[arg(long = "source-uri", required_unless_present = "config")]
+    source_uri: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -56,7 +60,7 @@ struct UriArg {
     name = "mongo2pg",
     about = "Infer a MongoDB collection schema and convert it to PostgreSQL DDL",
     version,
-    // Allow bare `mongo2pg <URI> <NS>` without an explicit subcommand.
+    // Allow bare `mongo2pg <SOURCE_URI> <NS>` without an explicit subcommand.
     args_conflicts_with_subcommands = true
 )]
 struct Cli {
@@ -141,13 +145,9 @@ struct ToPgArgs {
 
     /// PostgreSQL schema name: strips `{schema}_` prefix from child table names and
     /// prepends `CREATE SCHEMA IF NOT EXISTS` + `SET search_path` to the output.
-    #[arg(long = "schema", conflicts_with = "schema_per_collection")]
+    /// When omitted, each collection is deployed into its own PostgreSQL schema.
+    #[arg(long = "schema")]
     schema: Option<String>,
-
-    /// Use each collection name as its own PostgreSQL schema: equivalent to `--schema <collection>`
-    /// applied per collection. Mutually exclusive with `--schema`.
-    #[arg(long = "schema-per-collection", action = clap::ArgAction::SetTrue)]
-    schema_per_collection: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -160,9 +160,9 @@ struct InitArgs {
     #[arg(long)]
     project_name: String,
 
-    /// MongoDB connection URI to store in the project config
-    #[arg(long)]
-    uri: Option<String>,
+    /// MongoDB source connection URI to store in the project config
+    #[arg(long = "source-uri")]
+    source_uri: Option<String>,
 
     /// Namespace to store in the project config (e.g. mydb or mydb.mycoll); when omitted,
     /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
@@ -190,6 +190,10 @@ struct ReportArgs {
     /// Database / namespace label shown in the report header
     #[arg(short = 'n', long = "namespace", default_value = "")]
     namespace: String,
+
+    /// Connect to MongoDB and PostgreSQL and write a post-import validation report.
+    #[arg(long = "post-import", action = clap::ArgAction::SetTrue)]
+    post_import: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -215,7 +219,7 @@ struct ExportArgs {
     /// Optional collection name; if omitted all collections in schema/tables/ are exported
     collection: Option<String>,
 
-    /// Path to the project config file (.conf) – derives URI, db, schema/tables and data/ paths
+    /// Path to the project config file (.conf) – derives SOURCE_URI, db, schema/tables and data/ paths
     #[arg(short = 'c', long = "config")]
     config: Option<PathBuf>,
 
@@ -260,7 +264,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Command::Init(args)) => run_init(args),
         Some(Command::ToPg(args)) => run_to_pg(args),
-        Some(Command::Report(args)) => run_report(args),
+        Some(Command::Report(args)) => run_report(args).await,
         Some(Command::Export(args)) => run_export(args).await,
         Some(Command::Infer(args)) => run_infer(args).await,
         Some(Command::ClusterReport(args)) => run_cluster_report(args),
@@ -273,6 +277,13 @@ async fn main() -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn run_to_pg(args: ToPgArgs) -> Result<()> {
+    fn prepend_database_preamble(ddl: String, db_name: Option<&str>) -> String {
+        match db_name {
+            None => ddl,
+            Some(name) => format!("CREATE DATABASE {name};\n\\connect {name}\n\n{ddl}"),
+        }
+    }
+
     // Resolve collections source dir and SQL output dir
     let (collections_dir, output_dir) = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
@@ -396,16 +407,27 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
         let ddl = schema_to_ddl(
             &schema,
             table_name,
-            if args.schema_per_collection {
-                Some(table_name)
-            } else {
-                args.schema.as_deref()
-            },
+            args.schema.as_deref().or(Some(table_name)),
         );
+        let db_name = rel_sql
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str());
+        let ddl = prepend_database_preamble(ddl, db_name);
         std::fs::write(&sql_path, &ddl)
             .with_context(|| format!("Failed to write {}", sql_path.display()))?;
         println!("SQL written to {}", sql_path.display());
     }
+
+    eprintln!(
+        "to-pg completed. Review the generated SQL files to confirm that schema names and table names suit your needs."
+    );
+    eprintln!(
+        "Also check that table and column names do not exceed PostgreSQL's 63-byte identifier limit."
+    );
+    eprintln!(
+        "If you modify those SQL files, the next export and report commands will use them as their source of truth."
+    );
 
     Ok(())
 }
@@ -415,41 +437,46 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
-    // Resolve URI, namespace, number, and percent – reading conf file if -c was given
-    let (resolved_uri, effective_output_dir, conf_namespace, conf_number, conf_percent, conf_jsonb) =
-        if let Some(ref conf) = args.config {
-            let c = read_conf(conf)?;
-            let uri = args.mongo.uri.clone().or(c.uri).ok_or_else(|| {
-                anyhow!("No URI provided: pass it as an argument or add URI to the config file")
+    // Resolve SOURCE_URI, namespace, number, and percent – reading conf file if -c was given
+    let (
+        resolved_source_uri,
+        effective_output_dir,
+        conf_namespace,
+        conf_number,
+        conf_percent,
+        conf_jsonb,
+    ) = if let Some(ref conf) = args.config {
+        let c = read_conf(conf)?;
+        let source_uri = args.mongo.source_uri.clone().or(c.source_uri).ok_or_else(|| {
+                anyhow!("No SOURCE_URI provided: pass --source-uri or add SOURCE_URI to the config file")
             })?;
-            let out_dir = args.output_dir.clone().unwrap_or_else(|| {
-                c.base_dir
-                    .join(&c.project_dir)
-                    .join("source")
-                    .join("collections")
-            });
-            (
-                uri,
-                Some(out_dir),
-                c.namespace,
-                c.number,
-                c.percent,
-                c.jsonb,
-            )
-        } else {
-            let uri = args
-                .mongo
-                .uri
-                .clone()
-                .ok_or_else(|| anyhow!("No URI provided: pass --uri or -c <config>"))?;
-            (uri, args.output_dir.clone(), None, None, None, false)
-        };
+        let out_dir = args.output_dir.clone().unwrap_or_else(|| {
+            c.base_dir
+                .join(&c.project_dir)
+                .join("source")
+                .join("collections")
+        });
+        (
+            source_uri,
+            Some(out_dir),
+            c.namespace,
+            c.number,
+            c.percent,
+            c.jsonb,
+        )
+    } else {
+        let source_uri =
+            args.mongo.source_uri.clone().ok_or_else(|| {
+                anyhow!("No SOURCE_URI provided: pass --source-uri or -c <config>")
+            })?;
+        (source_uri, args.output_dir.clone(), None, None, None, false)
+    };
 
     let namespace = args.namespace.clone().or(conf_namespace);
 
-    let client_options = ClientOptions::parse(&resolved_uri)
+    let client_options = ClientOptions::parse(&resolved_source_uri)
         .await
-        .context("Failed to parse MongoDB URI")?;
+        .context("Failed to parse MongoDB SOURCE_URI")?;
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
 
     // CLI takes priority over conf for number/percent/jsonb; then fall back to defaults
@@ -459,7 +486,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 
     let args = InferArgs {
         mongo: UriArg {
-            uri: Some(resolved_uri),
+            source_uri: Some(resolved_source_uri),
         },
         namespace: namespace.clone(),
         output_dir: effective_output_dir,
@@ -538,6 +565,18 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             }
         }
     }
+
+    if let Some(output_dir) = args.output_dir.as_deref() {
+        eprintln!(
+            "Inference completed. Collection schemas and statistics were written under {}.",
+            output_dir.display()
+        );
+        eprintln!("Next, run the to-pg command to create DDL SQL files under schema/tables/*.sql.");
+        eprintln!(
+            "You can then modify those SQL files to reflect your needs, but each to-pg run overwrites them."
+        );
+    }
+
     Ok(())
 }
 
@@ -747,16 +786,208 @@ async fn infer_collection(
     drop(handle);
 
     if let Some(out_dir) = output_dir {
-        write_collection_files(out_dir, output_name, &schema, &stats_lines)
+        write_collection_files(out_dir, db_name, output_name, &schema, &stats_lines)
             .with_context(|| format!("Failed to write output files for {output_name}"))?;
     }
 
     Ok(schema)
 }
 
-/// Write `<dir>/<name>/<name>.json`, `<dir>/<name>/<name>.stats.txt`, and `<dir>/<name>/<name>.stats.yaml`.
+#[derive(Serialize)]
+struct MappingColumn {
+    source_field: String,
+    target_field: String,
+    data_type: String,
+    nullable: bool,
+}
+
+#[derive(Serialize)]
+struct PgMapping {
+    dbname: String,
+    schema_name: String,
+    table_name: String,
+    columns: Vec<MappingColumn>,
+}
+
+#[derive(Serialize)]
+struct CollectionMapping {
+    collection_name: String,
+    dbname: String,
+    pg_mapping: PgMapping,
+}
+
+fn is_pg_reserved(s: &str) -> bool {
+    matches!(
+        s,
+        "all"
+            | "analyse"
+            | "analyze"
+            | "and"
+            | "any"
+            | "array"
+            | "as"
+            | "asc"
+            | "asymmetric"
+            | "authorization"
+            | "binary"
+            | "both"
+            | "case"
+            | "cast"
+            | "check"
+            | "collate"
+            | "collation"
+            | "column"
+            | "concurrently"
+            | "constraint"
+            | "create"
+            | "cross"
+            | "current_catalog"
+            | "current_date"
+            | "current_role"
+            | "current_schema"
+            | "current_time"
+            | "current_timestamp"
+            | "current_user"
+            | "default"
+            | "deferrable"
+            | "desc"
+            | "distinct"
+            | "do"
+            | "else"
+            | "end"
+            | "except"
+            | "false"
+            | "fetch"
+            | "for"
+            | "foreign"
+            | "freeze"
+            | "from"
+            | "full"
+            | "grant"
+            | "group"
+            | "having"
+            | "ilike"
+            | "in"
+            | "initially"
+            | "inner"
+            | "intersect"
+            | "into"
+            | "is"
+            | "isnull"
+            | "join"
+            | "lateral"
+            | "leading"
+            | "left"
+            | "like"
+            | "limit"
+            | "localtime"
+            | "localtimestamp"
+            | "natural"
+            | "not"
+            | "notnull"
+            | "null"
+            | "offset"
+            | "on"
+            | "only"
+            | "or"
+            | "order"
+            | "outer"
+            | "overlaps"
+            | "placing"
+            | "primary"
+            | "references"
+            | "returning"
+            | "right"
+            | "select"
+            | "session_user"
+            | "similar"
+            | "some"
+            | "symmetric"
+            | "system_user"
+            | "table"
+            | "tablesample"
+            | "then"
+            | "to"
+            | "trailing"
+            | "true"
+            | "union"
+            | "unique"
+            | "user"
+            | "using"
+            | "variadic"
+            | "verbose"
+            | "when"
+            | "where"
+            | "window"
+            | "with"
+    )
+}
+
+fn sanitize_pg_name(name: &str) -> String {
+    let s: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+        format!("_{s}")
+    } else {
+        s
+    }
+}
+
+fn build_collection_mapping(
+    db_name: &str,
+    coll_name: &str,
+    schema: &CollectionSchema,
+) -> Option<CollectionMapping> {
+    let ddl = schema_to_ddl(schema, coll_name, None);
+    let root = parse_sql(&ddl).into_iter().next()?;
+    let columns = root
+        .columns
+        .into_iter()
+        .filter_map(|column| {
+            let source_field = if column.name == "id" {
+                schema.object.contains_key("_id").then(|| "_id".to_owned())
+            } else {
+                schema
+                    .object
+                    .keys()
+                    .find(|raw_name| sanitize_pg_name(raw_name) == column.name)
+                    .cloned()
+            }?;
+
+            Some(MappingColumn {
+                source_field,
+                target_field: column.name,
+                data_type: column.col_type.to_lowercase(),
+                nullable: !column.not_null,
+            })
+        })
+        .collect();
+
+    Some(CollectionMapping {
+        collection_name: coll_name.to_owned(),
+        dbname: db_name.to_owned(),
+        pg_mapping: PgMapping {
+            dbname: db_name.to_owned(),
+            schema_name: root.name.clone(),
+            table_name: root.name,
+            columns,
+        },
+    })
+}
+
+/// Write `<dir>/<name>/<name>.json`, `<dir>/<name>/<name>.stats.txt`, `<dir>/<name>/<name>.stats.yaml`, and `mapping_<sanitize(name)>.yaml`.
 fn write_collection_files(
     base: &Path,
+    db_name: &str,
     coll_name: &str,
     schema: &CollectionSchema,
     stats_lines: &[String],
@@ -781,6 +1012,12 @@ fn write_collection_files(
     let yaml_path = dir.join(format!("{safe_name}.stats.yaml"));
     std::fs::write(&yaml_path, serde_yaml::to_string(&yaml_stats)?)
         .with_context(|| format!("Failed to write {}", yaml_path.display()))?;
+
+    if let Some(mapping) = build_collection_mapping(db_name, coll_name, schema) {
+        let mapping_path = dir.join(format!("mapping_{}.yaml", sanitize_pg_name(coll_name)));
+        std::fs::write(&mapping_path, serde_yaml::to_string(&mapping)?)
+            .with_context(|| format!("Failed to write {}", mapping_path.display()))?;
+    }
 
     Ok(())
 }
@@ -812,10 +1049,10 @@ fn run_init(args: InitArgs) -> Result<()> {
         "BASE_DIR = {}\nPROJECT_DIR = {}\n{}{}\n# NUMBER = 1000\n# PERCENT = 10\n# JSONB = false\n",
         args.project_base.display(),
         args.project_name,
-        args.uri
+        args.source_uri
             .as_deref()
-            .map(|u| format!("URI = {}\n", u))
-            .unwrap_or_else(|| "# URI = mongodb://localhost:27017\n".to_owned()),
+            .map(|u| format!("SOURCE_URI = {}\n", u))
+            .unwrap_or_else(|| "# SOURCE_URI = mongodb://localhost:27017\n".to_owned()),
         args.namespace
             .as_deref()
             .map(|ns| format!("NAMESPACE = {}\n", ns))
@@ -847,12 +1084,16 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .ok_or_else(|| anyhow!("Provide -c <config>"))?;
 
     let c = read_conf(conf)?;
-    let uri = args
+    let source_uri = args
         .mongo
-        .uri
+        .source_uri
         .clone()
-        .or(c.uri)
-        .ok_or_else(|| anyhow!("No URI provided: pass --uri or add URI to the config file"))?;
+        .or(c.source_uri)
+        .ok_or_else(|| {
+            anyhow!(
+                "No SOURCE_URI provided: pass --source-uri or add SOURCE_URI to the config file"
+            )
+        })?;
 
     // Use args.namespace if provided, else fall back to config file
     let db_name = args.namespace.clone().or(c.namespace).ok_or_else(|| {
@@ -867,9 +1108,9 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .clone()
         .unwrap_or_else(|| project_root.join("data"));
 
-    let client_options = ClientOptions::parse(&uri)
+    let client_options = ClientOptions::parse(&source_uri)
         .await
-        .context("Failed to parse MongoDB URI")?;
+        .context("Failed to parse MongoDB SOURCE_URI")?;
     let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
 
     // Determine which collections to export
@@ -955,9 +1196,9 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 // `report` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn run_report(args: ReportArgs) -> Result<()> {
+async fn run_report(args: ReportArgs) -> Result<()> {
     // Resolve collections dir, cluster label, reports dir and project name
-    let (collections_dir, namespace, cluster, reports_dir, project_name) =
+    let (collections_dir, namespace, cluster, reports_dir, project_name, source_uri, target_uri) =
         if let Some(ref conf) = args.config {
             let c = read_conf(conf)?;
             let ns = args.namespace.clone();
@@ -967,7 +1208,7 @@ fn run_report(args: ReportArgs) -> Result<()> {
                 ns
             };
             let cluster = c
-                .uri
+                .source_uri
                 .as_deref()
                 .map(mongo2pg::report::cluster_from_uri)
                 .unwrap_or_default();
@@ -978,14 +1219,80 @@ fn run_report(args: ReportArgs) -> Result<()> {
                 .join("collections");
             let rep_dir = c.base_dir.join(&c.project_dir).join("reports");
             let proj = c.project_dir.clone();
-            (cols_dir, ns, cluster, Some(rep_dir), Some(proj))
+            (
+                cols_dir,
+                ns,
+                cluster,
+                Some(rep_dir),
+                Some(proj),
+                c.source_uri,
+                c.target_uri,
+            )
         } else {
             let dir = args
                 .collections_dir
                 .clone()
                 .ok_or_else(|| anyhow!("Provide --collections-dir or -c <config>"))?;
-            (dir, args.namespace.clone(), String::new(), None, None)
+            (
+                dir,
+                args.namespace.clone(),
+                String::new(),
+                None,
+                None,
+                args.mongo.source_uri.clone(),
+                None,
+            )
         };
+
+    if args.post_import {
+        let reports_dir = reports_dir
+            .as_ref()
+            .ok_or_else(|| anyhow!("--post-import requires -c <config>"))?;
+        let source_uri = source_uri
+            .as_deref()
+            .ok_or_else(|| anyhow!("SOURCE_URI (or URI) not found in the config file"))?;
+        let target_uri = target_uri
+            .as_deref()
+            .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
+        if namespace.is_empty() {
+            return Err(anyhow!(
+                "--post-import requires a namespace in the config file or via --namespace"
+            ));
+        }
+
+        let output_path = if let Some(ref o) = args.output {
+            o.clone()
+        } else {
+            std::fs::create_dir_all(reports_dir).with_context(|| {
+                format!("Failed to create reports dir {}", reports_dir.display())
+            })?;
+            reports_dir.join("post_report.html")
+        };
+
+        let schema_tables_root = reports_dir
+            .parent()
+            .unwrap_or(reports_dir)
+            .join("schema")
+            .join("tables");
+        let rows = build_post_import_rows(
+            source_uri,
+            target_uri,
+            &namespace,
+            &collections_dir,
+            &schema_tables_root,
+        )
+        .await?;
+        let html = render_post_import_html(
+            &rows,
+            &namespace,
+            &mongo2pg::report::cluster_from_uri(source_uri),
+            &mongo2pg::report::cluster_from_uri(target_uri),
+        );
+        std::fs::write(&output_path, html)
+            .with_context(|| format!("Failed to write {}", output_path.display()))?;
+        println!("Post-import report written to {}", output_path.display());
+        return Ok(());
+    }
 
     // Detect whether source/collections has the per-db layout:
     // a per-db layout has subdirs that contain further subdirs (not direct .stats.yaml files).
@@ -1128,8 +1435,8 @@ fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
 
         // Derive the cluster label from the first config that has a URI.
         if cluster_label.is_empty() {
-            if let Some(ref uri) = c.uri {
-                cluster_label = mongo2pg::report::cluster_from_uri(uri);
+            if let Some(ref source_uri) = c.source_uri {
+                cluster_label = mongo2pg::report::cluster_from_uri(source_uri);
             }
         }
 
@@ -1170,7 +1477,8 @@ fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
 struct ConfData {
     base_dir: PathBuf,
     project_dir: String,
-    uri: Option<String>,
+    source_uri: Option<String>,
+    target_uri: Option<String>,
     namespace: Option<String>,
     number: Option<u64>,
     percent: Option<f64>,
@@ -1179,12 +1487,25 @@ struct ConfData {
 
 /// Parse a `.conf` file produced by `mongo2pg init`.
 fn read_conf(path: &Path) -> Result<ConfData> {
+    fn parse_conf_value(raw: &str) -> String {
+        let value = raw.trim();
+        if value.len() >= 2 {
+            let quoted = (value.starts_with('"') && value.ends_with('"'))
+                || (value.starts_with('\'') && value.ends_with('\''));
+            if quoted {
+                return value[1..value.len() - 1].trim().to_owned();
+            }
+        }
+        value.to_owned()
+    }
+
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file {}", path.display()))?;
 
     let mut base_dir: Option<PathBuf> = None;
     let mut project_dir: Option<String> = None;
-    let mut uri: Option<String> = None;
+    let mut source_uri: Option<String> = None;
+    let mut target_uri: Option<String> = None;
     let mut namespace: Option<String> = None;
     let mut number: Option<u64> = None;
     let mut percent: Option<f64> = None;
@@ -1192,16 +1513,16 @@ fn read_conf(path: &Path) -> Result<ConfData> {
 
     for line in content.lines() {
         if let Some((key, val)) = line.split_once('=') {
+            let parsed = parse_conf_value(val);
             match key.trim() {
-                "BASE_DIR" => base_dir = Some(PathBuf::from(val.trim())),
-                "PROJECT_DIR" => project_dir = Some(val.trim().to_owned()),
-                "URI" => uri = Some(val.trim().to_owned()),
-                "NAMESPACE" => namespace = Some(val.trim().to_owned()),
-                "NUMBER" => number = val.trim().parse().ok(),
-                "PERCENT" => percent = val.trim().parse().ok(),
-                "JSONB" => {
-                    jsonb = matches!(val.trim().to_lowercase().as_str(), "true" | "1" | "yes")
-                }
+                "BASE_DIR" => base_dir = Some(PathBuf::from(&parsed)),
+                "PROJECT_DIR" => project_dir = Some(parsed),
+                "SOURCE_URI" => source_uri = Some(parsed),
+                "TARGET_URI" => target_uri = Some(parsed),
+                "NAMESPACE" => namespace = Some(parsed),
+                "NUMBER" => number = parsed.parse().ok(),
+                "PERCENT" => percent = parsed.parse().ok(),
+                "JSONB" => jsonb = matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes"),
                 _ => {}
             }
         }
@@ -1214,10 +1535,404 @@ fn read_conf(path: &Path) -> Result<ConfData> {
     Ok(ConfData {
         base_dir,
         project_dir,
-        uri,
+        source_uri,
+        target_uri,
         namespace,
         number,
         percent,
         jsonb,
     })
+}
+
+fn sanitize_name(name: &str) -> String {
+    let mut out = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push('_');
+        }
+    }
+    while out.contains("__") {
+        out = out.replace("__", "_");
+    }
+    out.trim_matches('_').to_owned()
+}
+
+fn quote_ident(name: &str) -> String {
+    format!("\"{}\"", name.replace('"', "\"\""))
+}
+
+fn split_namespace_scope(namespace: &str) -> (&str, Option<&str>) {
+    if let Some((db_name, coll_name)) = namespace.split_once('.') {
+        (db_name, Some(coll_name))
+    } else {
+        (namespace, None)
+    }
+}
+
+fn extract_search_path(sql: &str) -> Option<String> {
+    sql.lines().find_map(|line| {
+        let trimmed = line.trim();
+        trimmed
+            .strip_prefix("SET search_path = ")
+            .map(|rest| rest.trim().trim_end_matches(';').trim().to_owned())
+    })
+}
+
+fn pg_sslmode(uri: &str) -> Option<&str> {
+    let query = uri.split_once('?')?.1;
+    query.split('&').find_map(|part| {
+        let (key, value) = part.split_once('=')?;
+        if key.eq_ignore_ascii_case("sslmode") {
+            Some(value)
+        } else {
+            None
+        }
+    })
+}
+
+async fn build_post_import_rows(
+    source_uri: &str,
+    target_uri: &str,
+    namespace: &str,
+    collections_root: &Path,
+    schema_tables_root: &Path,
+) -> Result<Vec<PostImportCollectionRow>> {
+    #[derive(Clone)]
+    enum CountNodeKind {
+        Root,
+        Object { field_name: String },
+        ArrayScalar { field_name: String },
+        ArrayObject { field_name: String },
+    }
+
+    #[derive(Clone)]
+    struct CountNode {
+        name: String,
+        is_array: bool,
+        mongo_count: u64,
+        pg_table_name: Option<String>,
+        pg_row_count: Option<i64>,
+        kind: CountNodeKind,
+        children: Vec<CountNode>,
+    }
+
+    fn is_null_type(type_name: &str) -> bool {
+        matches!(type_name, "Null" | "Undefined")
+    }
+
+    fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> String {
+        let raw = format!("{parent_name}_{field}");
+        if let Some(schema) = pg_schema {
+            let prefix = format!("{}{}", sanitize_pg_name(schema), "_");
+            raw.strip_prefix(&prefix).map(str::to_owned).unwrap_or(raw)
+        } else {
+            raw
+        }
+    }
+
+    fn build_field_nodes(
+        parent_table_name: &str,
+        fields: &IndexMap<String, FieldSchema>,
+        pg_schema: Option<&str>,
+        table_counts: &HashMap<String, PostImportTableRow>,
+    ) -> Vec<CountNode> {
+        let mut nodes = Vec::new();
+
+        for (raw_name, field) in fields {
+            let non_null: Vec<(&str, &TypeSchema)> = field
+                .types
+                .iter()
+                .filter(|(type_name, _)| !is_null_type(type_name.as_str()))
+                .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+                .collect();
+
+            if non_null.len() == 1 && non_null[0].0 == "Object" {
+                let type_schema = non_null[0].1;
+                if type_schema.as_jsonb {
+                    continue;
+                }
+                if let Some(sub_fields) = &type_schema.object {
+                    let table_name =
+                        child_table_name(parent_table_name, &sanitize_pg_name(raw_name), pg_schema);
+                    let table_ref = table_counts.get(&table_name);
+                    nodes.push(CountNode {
+                        name: raw_name.to_string(),
+                        is_array: false,
+                        mongo_count: 0,
+                        pg_table_name: table_ref.and_then(|t| {
+                            Some(match &t.schema_name {
+                                Some(schema) => format!("{}.{}", schema, t.table_name),
+                                None => t.table_name.clone(),
+                            })
+                        }),
+                        pg_row_count: table_ref.map(|t| t.row_count),
+                        kind: CountNodeKind::Object {
+                            field_name: raw_name.to_string(),
+                        },
+                        children: build_field_nodes(
+                            &table_name,
+                            sub_fields,
+                            pg_schema,
+                            table_counts,
+                        ),
+                    });
+                }
+                continue;
+            }
+
+            if non_null.len() == 1 && non_null[0].0 == "Array" {
+                let type_schema = non_null[0].1;
+                if let Some(items_field) = &type_schema.array {
+                    let table_name =
+                        child_table_name(parent_table_name, &sanitize_pg_name(raw_name), pg_schema);
+                    let table_ref = table_counts.get(&table_name);
+                    let object_type = items_field.types.get("Object");
+                    let (kind, children) = if let Some(object_ts) = object_type {
+                        (
+                            CountNodeKind::ArrayObject {
+                                field_name: raw_name.to_string(),
+                            },
+                            object_ts
+                                .object
+                                .as_ref()
+                                .map(|sub_fields| {
+                                    build_field_nodes(
+                                        &table_name,
+                                        sub_fields,
+                                        pg_schema,
+                                        table_counts,
+                                    )
+                                })
+                                .unwrap_or_default(),
+                        )
+                    } else {
+                        (
+                            CountNodeKind::ArrayScalar {
+                                field_name: raw_name.to_string(),
+                            },
+                            Vec::new(),
+                        )
+                    };
+                    nodes.push(CountNode {
+                        name: raw_name.to_string(),
+                        is_array: true,
+                        mongo_count: 0,
+                        pg_table_name: table_ref.and_then(|t| {
+                            Some(match &t.schema_name {
+                                Some(schema) => format!("{}.{}", schema, t.table_name),
+                                None => t.table_name.clone(),
+                            })
+                        }),
+                        pg_row_count: table_ref.map(|t| t.row_count),
+                        kind,
+                        children,
+                    });
+                }
+            }
+        }
+
+        nodes
+    }
+
+    fn count_children(nodes: &mut [CountNode], doc: &bson::Document) {
+        for node in nodes {
+            match &node.kind {
+                CountNodeKind::Root => {}
+                CountNodeKind::Object { field_name } => {
+                    if let Some(Bson::Document(child_doc)) = doc.get(field_name) {
+                        node.mongo_count += 1;
+                        count_children(&mut node.children, child_doc);
+                    }
+                }
+                CountNodeKind::ArrayScalar { field_name } => {
+                    if let Some(Bson::Array(items)) = doc.get(field_name) {
+                        node.mongo_count += items
+                            .iter()
+                            .filter(|item| !matches!(item, Bson::Null))
+                            .count() as u64;
+                    }
+                }
+                CountNodeKind::ArrayObject { field_name } => {
+                    if let Some(Bson::Array(items)) = doc.get(field_name) {
+                        for item in items {
+                            if let Bson::Document(child_doc) = item {
+                                node.mongo_count += 1;
+                                count_children(&mut node.children, child_doc);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn into_post_import_node(node: CountNode) -> PostImportNode {
+        PostImportNode {
+            name: node.name,
+            is_array: node.is_array,
+            mongo_count: node.mongo_count,
+            pg_table_name: node.pg_table_name,
+            pg_row_count: node.pg_row_count,
+            children: node
+                .children
+                .into_iter()
+                .map(into_post_import_node)
+                .collect(),
+        }
+    }
+
+    let (db_name, only_collection) = split_namespace_scope(namespace);
+
+    let mongo_client = Client::with_uri_str(source_uri)
+        .await
+        .with_context(|| "Failed to connect to MongoDB using SOURCE_URI")?;
+    let mongo_db = mongo_client.database(db_name);
+    let mut collection_names = mongo_db
+        .list_collection_names()
+        .await
+        .with_context(|| format!("Failed to list collections for MongoDB database {db_name}"))?;
+    collection_names.retain(|name| !name.starts_with("system."));
+    if let Some(coll_name) = only_collection {
+        collection_names.retain(|name| name == coll_name);
+    }
+    collection_names.sort();
+
+    let ddl_dir = if schema_tables_root.join(db_name).is_dir() {
+        schema_tables_root.join(db_name)
+    } else {
+        schema_tables_root.to_path_buf()
+    };
+
+    let mut tls_builder = native_tls::TlsConnector::builder();
+    if matches!(pg_sslmode(target_uri), Some(mode) if mode.eq_ignore_ascii_case("require")) {
+        tls_builder.danger_accept_invalid_certs(true);
+        tls_builder.danger_accept_invalid_hostnames(true);
+    }
+    let tls = tls_builder
+        .build()
+        .with_context(|| "Failed to initialize PostgreSQL TLS connector")?;
+    let tls = MakeTlsConnector::new(tls);
+
+    let (pg_client, pg_connection) = tokio_postgres::connect(target_uri, tls)
+        .await
+        .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
+    tokio::spawn(async move {
+        if let Err(err) = pg_connection.await {
+            eprintln!("warning: PostgreSQL connection error: {err}");
+        }
+    });
+
+    let mut rows = Vec::new();
+    for coll_name in collection_names {
+        let document_count = mongo_db
+            .collection::<bson::Document>(&coll_name)
+            .count_documents(doc! {})
+            .await
+            .with_context(|| {
+                format!("Failed to count MongoDB documents for {db_name}.{coll_name}")
+            })?;
+
+        let sql_path = ddl_dir.join(format!("{}.sql", sanitize_name(&coll_name)));
+        let coll_dir = if collections_root.join(db_name).is_dir() {
+            collections_root
+                .join(db_name)
+                .join(coll_name.replace('/', "_"))
+        } else {
+            collections_root.join(coll_name.replace('/', "_"))
+        };
+        let schema_path = coll_dir.join(format!("{}.json", coll_name.replace('/', "_")));
+        let schema: CollectionSchema = serde_json::from_str(
+            &std::fs::read_to_string(&schema_path)
+                .with_context(|| format!("Failed to read {}", schema_path.display()))?,
+        )
+        .with_context(|| format!("Failed to parse {}", schema_path.display()))?;
+
+        let root = if sql_path.is_file() {
+            let sql = std::fs::read_to_string(&sql_path)
+                .with_context(|| format!("Failed to read {}", sql_path.display()))?;
+            let schema_name = extract_search_path(&sql);
+            let parsed_tables = parse_sql(&sql);
+            let root_table_name = parsed_tables
+                .first()
+                .map(|table| table.name.clone())
+                .unwrap_or_else(|| sanitize_pg_name(&coll_name));
+            let mut table_rows = HashMap::new();
+            for table in parsed_tables {
+                let qualified_name = match &schema_name {
+                    Some(schema) => format!("{}.{}", quote_ident(schema), quote_ident(&table.name)),
+                    None => quote_ident(&table.name),
+                };
+                let count_sql = format!("SELECT COUNT(*)::BIGINT FROM {qualified_name}");
+                let row = pg_client
+                    .query_one(&count_sql, &[])
+                    .await
+                    .with_context(|| {
+                        format!("Failed to count PostgreSQL rows in {qualified_name}")
+                    })?;
+                let row_count: i64 = row.get(0);
+                table_rows.insert(
+                    table.name.clone(),
+                    PostImportTableRow {
+                        schema_name: schema_name.clone(),
+                        table_name: table.name,
+                        row_count,
+                    },
+                );
+            }
+            let root_ref = table_rows.get(&root_table_name);
+            let mut root = CountNode {
+                name: coll_name.clone(),
+                is_array: false,
+                mongo_count: document_count,
+                pg_table_name: root_ref.and_then(|t| {
+                    Some(match &t.schema_name {
+                        Some(schema) => format!("{}.{}", schema, t.table_name),
+                        None => t.table_name.clone(),
+                    })
+                }),
+                pg_row_count: root_ref.map(|t| t.row_count),
+                kind: CountNodeKind::Root,
+                children: build_field_nodes(
+                    &root_table_name,
+                    &schema.object,
+                    schema_name.as_deref(),
+                    &table_rows,
+                ),
+            };
+
+            let mut cursor = mongo_db
+                .collection::<bson::Document>(&coll_name)
+                .find(doc! {})
+                .await
+                .with_context(|| {
+                    format!("Failed to scan MongoDB documents for {db_name}.{coll_name}")
+                })?;
+            while let Some(doc) = cursor.try_next().await.with_context(|| {
+                format!("Failed to iterate MongoDB documents for {db_name}.{coll_name}")
+            })? {
+                count_children(&mut root.children, &doc);
+            }
+
+            into_post_import_node(root)
+        } else {
+            PostImportNode {
+                name: coll_name.clone(),
+                is_array: false,
+                mongo_count: document_count,
+                pg_table_name: None,
+                pg_row_count: None,
+                children: Vec::new(),
+            }
+        };
+
+        rows.push(PostImportCollectionRow {
+            name: coll_name,
+            document_count,
+            root,
+        });
+    }
+
+    Ok(rows)
 }

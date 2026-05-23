@@ -53,7 +53,7 @@ Quick start:
 ```bash
 # 1. Create a project
 mongo2pg init --project-base /app/migration --project-name retail \
-  --uri "mongodb://user:pass@localhost:27017"
+  --source-uri "mongodb://user:pass@localhost:27017"
 
 # 2. Infer schemas, generate SQL, export data, generate reports
 mongo2pg infer  -c /app/migration/retail/config/retail.conf

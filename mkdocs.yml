@@ -1,0 +1,46 @@
+site_name: mongo2pg
+site_description: Schema inference and migration tooling for MongoDB to PostgreSQL
+site_author: mongo2pg contributors
+copyright: Copyright 2024-2026 mongo2pg contributors
+repo_url: https://github.com/pmpetit/mongo2pg
+edit_uri: edit/main/docs/
+
+theme:
+  name: readthedocs
+  highlightjs: true
+  hljs_languages:
+    - bash
+    - json
+    - rust
+    - sql
+    - yaml
+
+nav:
+  - 'Home': index.md
+  - Install:
+      - 'Installation': install.md
+  - How-To Guides:
+      - 'Overview': how-to/README.md
+  - CLI Reference:
+      - 'Commands': reference/README.md
+  - Tutorial:
+      - 'Typical Workflow': tutorial/README.md
+
+markdown_extensions:
+  - admonition
+  - codehilite:
+      guess_lang: false
+  - toc:
+      permalink: true
+  - tables
+  - fenced_code
+
+use_directory_urls: true
+strict: false
+
+plugins:
+  - search
+
+extra:
+  version:
+    provider: mike
