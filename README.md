@@ -47,20 +47,28 @@ Just as tool exist to migrate from relational databases to document stores, a to
 See **[USAGE.md](USAGE.md)** for the full command reference and workflow.
 Hosted documentation is available on **[Read the Docs](https://mongo2pg.readthedocs.io/en/latest/)**.
 
-The migration-project workflow (init → analyse → convert → report) is inspired by the [ora2pg](https://ora2pg.darold.net/) approach to Oracle → PostgreSQL migrations.
+The migration-project workflow (init → infer → export → import) is inspired by the [ora2pg](https://ora2pg.darold.net/) approach to Oracle → PostgreSQL migrations.
 
 Quick start:
 
 ```bash
 # 1. Create a project
 mongo2pg init --project-base /app/migration --project-name retail \
-  --source-uri "mongodb://user:pass@localhost:27017"
+  --source-uri "mongodb://user:pass@localhost:27017" \
+  --target-uri "postgres://postgres:x@localhost:5432/postgres?sslmode=disable"
 
-# 2. Infer schemas, generate SQL, export data, generate reports
-mongo2pg infer  -c /app/migration/retail/config/retail.conf
-mongo2pg to-pg  -c /app/migration/retail/config/retail.conf
-mongo2pg export -c /app/migration/retail/config/retail.conf
-mongo2pg report -c /app/migration/retail/config/retail.conf
+# 2. Infer schemas, generate SQL, and refresh the main reports
+mongo2pg infer  -c /app/migration/retail/config/retail.toml
+
+# 3. Export data
+mongo2pg export -c /app/migration/retail/config/retail.toml
+
+# 4. Create PostgreSQL objects and load the exported CSV data
+mongo2pg import -c /app/migration/retail/config/retail.toml
+
+# 5. `import` also writes reports/post_report.html automatically.
+#    Run this only if you want to regenerate the post-import validation report.
+mongo2pg report -c /app/migration/retail/config/retail.toml --post-import
 ```
 
 ---

@@ -70,9 +70,9 @@
     </li>
         </ul>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#how-to-generate-postgresql-ddl">How to generate PostgreSQL DDL</a>
-    </li>
     <li class="toctree-l2"><a class="reference internal" href="#how-to-export-relational-csv-files">How to export relational CSV files</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#how-to-load-postgresql-objects-and-data">How to load PostgreSQL objects and data</a>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#how-to-validate-a-postgresql-import">How to validate a PostgreSQL import</a>
     </li>
@@ -123,13 +123,14 @@
 <span class="w">  </span>--project-base<span class="w"> </span>./projects<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--project-name<span class="w"> </span>airbnb<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--source-uri<span class="w"> </span>mongodb://localhost:27017<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--target-uri<span class="w"> </span>postgres://postgres:x@localhost:5432/postgres?sslmode<span class="o">=</span>disable<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
 </code></pre></div>
 
 <p>This creates:</p>
 <div class="codehilite"><pre><span></span><code>projects/airbnb/
   config/
-    airbnb.conf
+    airbnb.toml
   source/
     collections/
   schema/
@@ -138,7 +139,7 @@
   reports/
 </code></pre></div>
 
-<p>You can then pass <code>-c projects/airbnb/config/airbnb.conf</code> to subsequent
+<p>You can then pass <code>-c projects/airbnb/config/airbnb.toml</code> to subsequent
 commands instead of repeating all flags.</p>
 <hr />
 <h2 id="how-to-infer-schemas">How to infer schemas<a class="headerlink" href="#how-to-infer-schemas" title="Permanent link">&para;</a></h2>
@@ -157,27 +158,33 @@ commands instead of repeating all flags.</p>
 <span class="w">  </span>--output-dir<span class="w"> </span>./output
 </code></pre></div>
 
-<hr />
-<h2 id="how-to-generate-postgresql-ddl">How to generate PostgreSQL DDL<a class="headerlink" href="#how-to-generate-postgresql-ddl" title="Permanent link">&para;</a></h2>
-<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>to-pg<span class="w"> </span>-c<span class="w"> </span>./projects/airbnb/config/airbnb.conf
-</code></pre></div>
-
-<p>This reads inferred schemas from <code>source/collections/</code> and writes SQL to
-<code>schema/tables/</code>.</p>
+<p>With <code>-c &lt;config&gt;</code>, <code>infer</code> also refreshes SQL files under <code>schema/tables/</code>
+and the main reports under <code>reports/</code>.</p>
 <hr />
 <h2 id="how-to-export-relational-csv-files">How to export relational CSV files<a class="headerlink" href="#how-to-export-relational-csv-files" title="Permanent link">&para;</a></h2>
-<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-c<span class="w"> </span>./projects/airbnb/config/airbnb.conf
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-c<span class="w"> </span>./projects/airbnb/config/airbnb.toml
 </code></pre></div>
 
 <p>This expands nested documents and arrays into one <code>.csv.gz</code> file per generated
 PostgreSQL table.</p>
 <hr />
+<h2 id="how-to-load-postgresql-objects-and-data">How to load PostgreSQL objects and data<a class="headerlink" href="#how-to-load-postgresql-objects-and-data" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>import<span class="w"> </span>-c<span class="w"> </span>./projects/airbnb/config/airbnb.toml
+</code></pre></div>
+
+<p>This command:</p>
+<ul>
+<li>connects to PostgreSQL using <code>TARGET_URI</code></li>
+<li>creates the target database if needed</li>
+<li>executes <code>schema/tables/&lt;db&gt;/*.sql</code></li>
+<li>decompresses each exported <code>.csv.gz</code> file and loads it with <code>COPY</code></li>
+</ul>
+<hr />
 <h2 id="how-to-validate-a-postgresql-import">How to validate a PostgreSQL import<a class="headerlink" href="#how-to-validate-a-postgresql-import" title="Permanent link">&para;</a></h2>
 <p>Set both <code>SOURCE_URI</code> and <code>TARGET_URI</code> in the config file, then run:</p>
 <div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>report<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-c<span class="w"> </span>./projects/airbnb/config/airbnb.conf<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--post-import<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
+<span class="w">  </span>-c<span class="w"> </span>./projects/airbnb/config/airbnb.toml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--post-import
 </code></pre></div>
 
 <p>This generates <code>reports/post_report.html</code>, which compares:</p>

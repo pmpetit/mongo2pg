@@ -74,23 +74,23 @@
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#step-1-create-a-project">Step 1 — Create a project</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#step-2-infer-schemas-and-statistics">Step 2 — Infer schemas and statistics</a>
+    <li class="toctree-l2"><a class="reference internal" href="#step-2-infer-schemas-postgresql-ddl-and-pre-import-reports">Step 2 — Infer schemas, PostgreSQL DDL, and pre-import reports</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#step-3-generate-postgresql-ddl">Step 3 — Generate PostgreSQL DDL</a>
+    <li class="toctree-l2"><a class="reference internal" href="#step-3-adapt-the-ddl">Step 3 - Adapt the DDL</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#step-4-generate-pre-import-report">Step 4 - Generate pre-import report</a>
-    </li>
-    <li class="toctree-l2"><a class="reference internal" href="#step-5-adapt-the-ddl">Step 5 - Adapt the DDL</a>
-    </li>
-    <li class="toctree-l2"><a class="reference internal" href="#step-6-export-data-as-relational-csv-files">Step 6 — Export data as relational CSV files</a>
-    </li>
-    <li class="toctree-l2"><a class="reference internal" href="#step-7-load-into-postgresql">Step 7 — Load into PostgreSQL</a>
+    <li class="toctree-l2"><a class="reference internal" href="#step-4-export-data-as-relational-csv-files">Step 4 — Export data as relational CSV files</a>
         <ul>
-    <li class="toctree-l3"><a class="reference internal" href="#sample_airbnb">sample_airbnb</a>
+    <li class="toctree-l3"><a class="reference internal" href="#reports">reports</a>
     </li>
         </ul>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#step-8-generate-post-import-report">Step 8 — Generate post import report</a>
+    <li class="toctree-l2"><a class="reference internal" href="#step-5-load-into-postgresql">Step 5 — Load into PostgreSQL</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#reports_1">reports</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#step-6-review-the-post-import-report">Step 6 — Review the post import report</a>
     </li>
     </ul>
                   </li>
@@ -143,17 +143,17 @@ collection.</p>
 <hr />
 <h2 id="step-1-create-a-project">Step 1 — Create a project<a class="headerlink" href="#step-1-create-a-project" title="Permanent link">&para;</a></h2>
 <div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>init<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--project-base<span class="w"> </span>./projects<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--project-name<span class="w"> </span>sample_airbnb<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--project-base<span class="w"> </span>docker_tutorial<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--project-name<span class="w"> </span>mycluster<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--source-uri<span class="w"> </span><span class="s1">&#39;mongodb://user:pass@localhost:27017/?authSource=admin&#39;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--target-uri<span class="w"> </span><span class="s1">&#39;postgres://postgres:x@localhost:5432/postgres&#39;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
 </code></pre></div>
 
 <p>This creates:</p>
-<div class="codehilite"><pre><span></span><code>projects/sample_airbnb/
+<div class="codehilite"><pre><span></span><code>docker_tutorial/sample_airbnb/
   config/
-    sample_airbnb.conf
+    sample_airbnb.toml
   source/
     collections/
   schema/
@@ -162,15 +162,25 @@ collection.</p>
   reports/
 </code></pre></div>
 
-<p>Add PostgreSQL connectivity to the generated config file:</p>
-<div class="codehilite"><pre><span></span><code><span class="na">SOURCE_URI</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">mongodb://user:pass@localhost:27017/?authSource=admin</span>
-<span class="na">TARGET_URI</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">postgres://user:pass@localhost:5432/sample_airbnb?sslmode=require</span>
-<span class="na">NAMESPACE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">sample_airbnb</span>
+<p>And a generated config file:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">[project]</span>
+<span class="n">base_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;docker_tutorial&quot;</span>
+<span class="n">project_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sample_airbnb&quot;</span>
+
+<span class="k">[source]</span>
+<span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mongodb://user:pass@localhost:2717/?authSource=admin&quot;</span>
+<span class="n">namespace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sample_airbnb&quot;</span>
+<span class="n">number</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1000</span>
+<span class="n">jsonb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+
+<span class="k">[target]</span>
+<span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;postgres://postgres:x@localhost:5432/postgres?sslmode=require&quot;</span>
+<span class="n">database_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sample_airbnb&quot;</span>
 </code></pre></div>
 
 <hr />
-<h2 id="step-2-infer-schemas-and-statistics">Step 2 — Infer schemas and statistics<a class="headerlink" href="#step-2-infer-schemas-and-statistics" title="Permanent link">&para;</a></h2>
-<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>infer<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+<h2 id="step-2-infer-schemas-postgresql-ddl-and-pre-import-reports">Step 2 — Infer schemas, PostgreSQL DDL, and pre-import reports<a class="headerlink" href="#step-2-infer-schemas-postgresql-ddl-and-pre-import-reports" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>infer<span class="w"> </span>-c<span class="w"> </span>docker_tutorial/mycluster/config/mycluster.toml
 </code></pre></div>
 
 <p>This writes one folder per collection under <code>source/collections/</code> with:</p>
@@ -178,110 +188,112 @@ collection.</p>
 <li><code>&lt;collection&gt;.json</code></li>
 <li><code>&lt;collection&gt;.stats.txt</code></li>
 <li><code>&lt;collection&gt;.stats.yaml</code></li>
-<li><code>mapping_&lt;collection&gt;.yaml</code></li>
+<li><code>mapping_&lt;collection&gt;.yaml</code> (for future use only)</li>
 </ul>
-<hr />
-<h2 id="step-3-generate-postgresql-ddl">Step 3 — Generate PostgreSQL DDL<a class="headerlink" href="#step-3-generate-postgresql-ddl" title="Permanent link">&para;</a></h2>
-<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>to-pg<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+<p>It also generates:</p>
+<ul>
+<li>PostgreSQL DDL under <code>schema/tables/&lt;db&gt;/</code></li>
+<li>the main HTML report in <code>reports/main.html</code></li>
+<li>schema diagrams in <code>reports/*.schema.html</code></li>
+</ul>
+<p>output is</p>
+<div class="codehilite"><pre><span></span><code>tables : 11
+columns: 101
+tables : 11
+columns: 101
+Inference summary
+  Score: 6.85
+  Collections: 1
+  PostgreSQL tables: 11
+  Detailed HTML report: docker_tutorial/sample_airbnb/reports/main.html
+  Next step: review the generated DDL files under docker_tutorial/sample_airbnb/schema/tables and then run `mongo2pg export -c docker_tutorial/sample_airbnb/config/sample_airbnb.toml`
 </code></pre></div>
 
-<p>Each collection generates a <code>.sql</code> file under <code>schema/tables/&lt;db&gt;/</code>.</p>
-<p>By default, each collection is deployed into its own PostgreSQL schema.</p>
 <hr />
-<h2 id="step-4-generate-pre-import-report">Step 4 - Generate pre-import report<a class="headerlink" href="#step-4-generate-pre-import-report" title="Permanent link">&para;</a></h2>
-<p>Standard pre-migration report:</p>
-<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>report<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
-</code></pre></div>
-
-<p>This will generate an HTML report in reports/main.html</p>
-<p>It shows a scoring, objects created.</p>
-<h2 id="step-5-adapt-the-ddl">Step 5 - Adapt the DDL<a class="headerlink" href="#step-5-adapt-the-ddl" title="Permanent link">&para;</a></h2>
-<p>Maybe the table name, schema name or database do not reflect your needs. You can modify those SQL files. They will be used during the next steps, generating export files.</p>
+<h2 id="step-3-adapt-the-ddl">Step 3 - Adapt the DDL<a class="headerlink" href="#step-3-adapt-the-ddl" title="Permanent link">&para;</a></h2>
+<p>Maybe the table name, schema name or database options do not reflect your needs. You can modify those SQL files. They will be used during the next steps, generating export files.</p>
 <p>For example, some table name can be over 64c, they should be renamed.</p>
-<h2 id="step-6-export-data-as-relational-csv-files">Step 6 — Export data as relational CSV files<a class="headerlink" href="#step-6-export-data-as-relational-csv-files" title="Permanent link">&para;</a></h2>
-<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+<h2 id="step-4-export-data-as-relational-csv-files">Step 4 — Export data as relational CSV files<a class="headerlink" href="#step-4-export-data-as-relational-csv-files" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-c<span class="w"> </span>docker_tutorial/mycluster/config/mycluster.toml
 </code></pre></div>
 
-<p>Base on the existing SQL files in <code>schema/tables/&lt;db&gt;/*.sql</code></p>
+<p>Base on the existing SQL files in <code>schema/tables/&lt;db&gt;/*.sql</code>, it will connect to mongodb extract documents into zipped <code>csv</code> files.</p>
 <p>This writes <code>.csv.gz</code> files under <code>data/&lt;db&gt;/&lt;collection&gt;/</code>, one per generated
 PostgreSQL table.</p>
+<div class="codehilite"><pre><span></span><code>[sample_airbnb.listingsAndReviews]
+  5555 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/listingsandreviews.csv.gz
+  5555 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address.csv.gz
+  121402 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/amenities.csv.gz
+  5555 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/availability.csv.gz
+  5555 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host.csv.gz
+  5555 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/images.csv.gz
+  5555 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/review_scores.csv.gz
+  149792 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/reviews.csv.gz
+  5555 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location.csv.gz
+  27600 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host_host_verifications.csv.gz
+  11110 rows -&gt; docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location_coordinates.csv.gz
+</code></pre></div>
+
+<h3 id="reports">reports<a class="headerlink" href="#reports" title="Permanent link">&para;</a></h3>
+<p>This command creates a <code>mycluster/reports/main.html</code> where details are explained.</p>
+<p><img alt="alt text" src="image.png" /></p>
+<p>and also <code>mycluster/reports/sample_airbnb.schema.html</code> a graphical representation of the model</p>
+<p><img alt="alt text" src="image-1.png" /></p>
 <hr />
-<h2 id="step-7-load-into-postgresql">Step 7 — Load into PostgreSQL<a class="headerlink" href="#step-7-load-into-postgresql" title="Permanent link">&para;</a></h2>
-<p>Run the generated SQL files, then load the <code>.csv.gz</code> files with <code>\COPY</code>.</p>
-<p>Example:</p>
-<div class="codehilite"><pre><span></span><code>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-f<span class="w"> </span>./projects/sample_airbnb/schema/tables/sample_airbnb/listingsandreviews.sql
+<h2 id="step-5-load-into-postgresql">Step 5 — Load into PostgreSQL<a class="headerlink" href="#step-5-load-into-postgresql" title="Permanent link">&para;</a></h2>
+<p>Run:</p>
+<div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>import<span class="w"> </span>-c<span class="w"> </span>docker_tutorial/mycluster/config/mycluster.toml
 </code></pre></div>
 
-<div class="codehilite"><pre><span></span><code><span class="err">\</span><span class="k">COPY</span><span class="w"> </span><span class="n">listingsandreviews</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">PROGRAM</span><span class="w"> </span><span class="s1">&#39;gunzip -c listingsandreviews.csv.gz&#39;</span><span class="w"> </span><span class="n">CSV</span><span class="w"> </span><span class="n">HEADER</span><span class="p">;</span>
-<span class="err">\</span><span class="k">COPY</span><span class="w"> </span><span class="n">address</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">PROGRAM</span><span class="w"> </span><span class="s1">&#39;gunzip -c address.csv.gz&#39;</span><span class="w"> </span><span class="n">CSV</span><span class="w"> </span><span class="n">HEADER</span><span class="p">;</span>
+<p>This command connects to PostgreSQL using <code>TARGET_URI</code>, creates the database
+if needed, executes the generated SQL files in <code>schema/tables/&lt;db&gt;/</code>, and then
+decompresses every exported <code>.csv.gz</code> file and loads it with <code>COPY</code>.
+It also regenerates <code>reports/post_report.html</code> automatically once the import
+completes.</p>
+<p>If you see constraint violations during this step, review the generated DDL,
+adjust the affected <code>NOT NULL</code> constraints or table definitions, and then rerun
+<code>mongo2pg import -c ...</code>.</p>
+<p>this import command will fail with</p>
+<div class="codehilite"><pre><span></span><code>Caused by:
+    0: db error
+    1: ERROR: null value in column &quot;reviewer_name&quot; of relation &quot;reviews&quot; violates not-null constraint
+       DETAIL: Failing row contains (66541, 19953862, Great place in a very central location. It made getting around t..., 2019-02-24 05:00:00+00, 19953862, 26317712, null).
 </code></pre></div>
 
-<h3 id="sample_airbnb">sample_airbnb<a class="headerlink" href="#sample_airbnb" title="Permanent link">&para;</a></h3>
-<p>Create tables</p>
-<div class="codehilite"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">PGURI</span><span class="o">=</span><span class="s2">&quot;postgres://postgres:x@localhost:5432/postgres&quot;</span>
-find<span class="w"> </span>projects/sample_airbnb/schema/tables/sample_airbnb<span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">1</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.sql&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;executing psql -f </span><span class="nv">$f</span><span class="s2">&quot;</span>
-<span class="w">  </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">$f</span>
-<span class="k">done</span>
+<p>This is because during infer command, 100 documents were read (sample=100 the default value). In those documents, <code>reviewer_name</code> was always present.
+So in ddl file this colum <code>reviewer_name</code> has a <code>not null constraint</code>.
+But it appears that on some document, sometimes <code>reviewer_name</code> is not present.
+So you should modify the file <code>mycluster/schema/tables/sample_airbnb/listingsandreviews.sql</code>
+find <code>reviewer_name</code> and remove the not null constraint.</p>
+<p>Drop the previously created database and run again the import command (not the infer,it will overwrite the ddl files)</p>
+<div class="codehilite"><pre><span></span><code>Created PostgreSQL database &quot;sample_airbnb&quot;
+Created PostgreSQL objects from docker_tutorial/mycluster/schema/tables/sample_airbnb/listingsandreviews.sql
+Imported 5555 row(s) into listingsandreviews.address from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address.csv.gz
+Imported 5555 row(s) into listingsandreviews.address_location from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location.csv.gz
+Imported 11110 row(s) into listingsandreviews.address_location_coordinates from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location_coordinates.csv.gz
+Imported 121402 row(s) into listingsandreviews.amenities from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/amenities.csv.gz
+Imported 5555 row(s) into listingsandreviews.availability from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/availability.csv.gz
+Imported 5555 row(s) into listingsandreviews.host from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host.csv.gz
+Imported 27600 row(s) into listingsandreviews.host_host_verifications from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host_host_verifications.csv.gz
+Imported 5555 row(s) into listingsandreviews.images from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/images.csv.gz
+Imported 5555 row(s) into listingsandreviews.listingsandreviews from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/listingsandreviews.csv.gz
+Imported 5555 row(s) into listingsandreviews.review_scores from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/review_scores.csv.gz
+Imported 149792 row(s) into listingsandreviews.reviews from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/reviews.csv.gz
+Import completed for database &#39;sample_airbnb&#39;.
 </code></pre></div>
 
-<p>during this step, you can see some errors message about constraint violations (not null / null).</p>
-<p>This is because during the infer process, sample value (100 default) was not enough.</p>
-<p>For example, it read 100 documents, and in all documents a field <code>REVIEWER_NAME</code> was always present (probability 1).</p>
-<p>The pg column <code>REVIEWER_NAME</code> has constraint set to <code>NOT NULL</code>.</p>
-<p>But during the effective import all docs are read/write, and one of them did not have the <code>REVIEWER_NAME</code> fields.</p>
-<p>The solution is : modify the column in the DDL sql file and remove the NOT NULL constraint.</p>
-<p>and re-run the table creation :</p>
-<p>Drop database</p>
-<div class="codehilite"><pre><span></span><code><span class="k">for</span><span class="w"> </span>dir<span class="w"> </span><span class="k">in</span><span class="w"> </span>projects/sample_airbnb/data/*<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<span class="w">  </span><span class="o">[[</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$dir</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]]</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="k">continue</span>
-<span class="w">  </span><span class="nv">dbname</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$dir</span><span class="s2">&quot;</span><span class="k">)</span>
-<span class="w">  </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;DROP DATABASE IF EXISTS \&quot;</span><span class="nv">$dbname</span><span class="s2">\&quot;;&quot;</span>
-<span class="k">done</span>
-</code></pre></div>
-
-<p>Re-create the table</p>
-<p>Create tables</p>
-<div class="codehilite"><pre><span></span><code>find<span class="w"> </span>projects/sample_airbnb/schema/tables/sample_airbnb<span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">1</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.sql&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;executing psql -f </span><span class="nv">$f</span><span class="s2">&quot;</span>
-<span class="w">  </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">$f</span>
-<span class="k">done</span>
-</code></pre></div>
-
-<p>Re-execute the import</p>
-<p>Insert</p>
-<div class="codehilite"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">PGURIT</span><span class="o">=</span><span class="k">$(</span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;%s\n&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURI</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s#/postgres?#/sample_airbnb?#&#39;</span><span class="k">)</span>
-
-<span class="o">{</span>
-<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;BEGIN;&quot;</span>
-<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;SET CONSTRAINTS ALL DEFERRED;&quot;</span>
-
-<span class="w">  </span>find<span class="w"> </span>projects/sample_airbnb/data/sample_airbnb<span class="w"> </span>-mindepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.csv.gz&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<span class="w">    </span><span class="nv">schema</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>dirname<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&quot;</span><span class="k">)</span>
-<span class="w">    </span><span class="nv">table</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="w"> </span>.csv.gz<span class="k">)</span>
-<span class="w">    </span><span class="nb">printf</span><span class="w"> </span><span class="s2">&quot;TRUNCATE TABLE %s.%s CASCADE;\n&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$schema</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$table</span><span class="s2">&quot;</span>
-<span class="w">  </span><span class="k">done</span>
-
-<span class="w">  </span>find<span class="w"> </span>projects/sample_airbnb/data/sample_airbnb<span class="w"> </span>-mindepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-maxdepth<span class="w"> </span><span class="m">2</span><span class="w"> </span>-type<span class="w"> </span>f<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.csv.gz&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>-r<span class="w"> </span>f<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-<span class="w">    </span><span class="nv">schema</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>dirname<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&quot;</span><span class="k">)</span>
-<span class="w">    </span><span class="nv">table</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span><span class="w"> </span>.csv.gz<span class="k">)</span>
-<span class="w">    </span><span class="nb">printf</span><span class="w"> </span><span class="s2">&quot;\\COPY %s.%s FROM PROGRAM &#39;gunzip -c %s&#39; CSV HEADER;\n&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$schema</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$table</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$f</span><span class="s2">&quot;</span>
-<span class="w">  </span><span class="k">done</span>
-
-<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;COMMIT;&quot;</span>
-<span class="o">}</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>psql<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$PGURIT</span><span class="s2">&quot;</span>
-</code></pre></div>
-
+<h3 id="reports_1">reports<a class="headerlink" href="#reports_1" title="Permanent link">&para;</a></h3>
 <hr />
-<h2 id="step-8-generate-post-import-report">Step 8 — Generate post import report<a class="headerlink" href="#step-8-generate-post-import-report" title="Permanent link">&para;</a></h2>
-<p>Post-import validation report:</p>
+<h2 id="step-6-review-the-post-import-report">Step 6 — Review the post import report<a class="headerlink" href="#step-6-review-the-post-import-report" title="Permanent link">&para;</a></h2>
+<p>After loading the exported CSV data into PostgreSQL, open the automatically
+generated report at <code>reports/post_report.html</code>.</p>
+<p>If you need to rerun it manually after additional database changes, run:</p>
 <div class="codehilite"><pre><span></span><code>mongo2pg<span class="w"> </span>report<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-c<span class="w"> </span>projects/sample_airbnb/config/sample_airbnb.conf<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--post-import<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
+<span class="w">  </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.toml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--post-import
 </code></pre></div>
 
-<p>The post-import report writes <code>reports/post_report.html</code> and compares:</p>
+<p>This writes <code>reports/post_report.html</code> and compares:</p>
 <ul>
 <li>MongoDB top-level document counts</li>
 <li>MongoDB expanded nested occurrence counts</li>

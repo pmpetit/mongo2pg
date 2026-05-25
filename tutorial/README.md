@@ -61,28 +61,38 @@ URI, credentials, and path to the `.bson.gz` files as needed.
 mongo2pg init \
   --project-base results/base \
   --project-name retail \
-  --source-uri "mongodb://user:pass@localhost:2717/?authSource=admin"
+  --source-uri "mongodb://user:pass@localhost:2717/?authSource=admin" \
+  --target-uri "postgres://postgres:x@localhost:5432/postgres?sslmode=disable"
 ```
 
 `init` creates the following directory tree and writes a config file:
 
 ```
 results/base/retail/
-    config/retail.conf          ← BASE_DIR, PROJECT_DIR, SOURCE_URI, NAMESPACE
-    schema/tables/              ← SQL DDL files (populated by to-pg)
+    config/retail.toml          ← [project], [source], [target]
+    schema/tables/              ← SQL DDL files (populated by infer)
     source/collections/         ← inferred schemas + stats (populated by infer)
     data/
-    reports/                    ← HTML reports (populated by report)
+    reports/                    ← HTML reports (populated by infer / report)
 ```
 
-Then open `results/base/retail/config/retail.conf` and add the `NAMESPACE`
-line so that `infer` knows which database to analyse:
+Then open `results/base/retail/config/retail.toml` and add the source
+namespace so that `infer` knows which database to analyse:
 
-```
-BASE_DIR  = results/base
-PROJECT_DIR = retail
-SOURCE_URI = mongodb://user:pass@localhost:2717/?authSource=admin
-NAMESPACE = retail
+```toml
+[project]
+base_dir = "results/base"
+project_dir = "retail"
+
+[source]
+uri = "mongodb://user:pass@localhost:2717/?authSource=admin"
+namespace = "retail"
+number = 1000
+jsonb = false
+
+[target]
+uri = "postgres://postgres:x@localhost:5432/postgres?sslmode=disable"
+database_name = "retail"
 ```
 
 ---
@@ -90,7 +100,7 @@ NAMESPACE = retail
 ## Step 4 – Infer the schemas
 
 ```bash
-mongo2pg infer -c results/base/retail/config/retail.conf
+mongo2pg infer -c results/base/retail/config/retail.toml
 ```
 
 For each collection `mongo2pg` samples documents, infers a probabilistic
@@ -160,14 +170,11 @@ Top-level types         : _id:ObjectId, address:Object, email:String,
 
 ---
 
-## Step 5 – Generate PostgreSQL DDL
+## Step 5 – Review the generated PostgreSQL DDL
 
-```bash
-mongo2pg to-pg -c results/base/retail/config/retail.conf
-```
-
-Each `.json` schema is read from `source/collections/<name>/<name>.json` and
-a `.sql` file is written to `schema/tables/<name>.sql`.
+After `mongo2pg infer -c results/base/retail/config/retail.toml`, each `.json`
+schema from `source/collections/<name>/<name>.json` has already been converted
+into a `.sql` file under `schema/tables/<name>.sql`.
 
 `mongo2pg` flattens nested objects and arrays into child tables with foreign
 keys.
@@ -263,13 +270,10 @@ CREATE TABLE orders_products_price (
 
 ---
 
-## Step 6 – Generate reports
+## Step 6 – Review the generated reports
 
-```bash
-mongo2pg report -c results/base/retail/config/retail.conf
-```
-
-Two HTML files are written to `reports/`:
+After `mongo2pg infer -c results/base/retail/config/retail.toml`, two HTML
+files are written to `reports/`:
 
 | File | Contents |
 |---|---|
@@ -283,12 +287,12 @@ Open them in any browser to explore the database structure.
 ## Step 7 – Export data to gzipped CSV
 
 ```bash
-mongo2pg export -c results/base/retail/config/retail.conf
+mongo2pg export -c results/base/retail/config/retail.toml
 ```
 
 `export` streams every document from MongoDB, expands nested arrays and objects
-into child tables (following the same hierarchy that `to-pg` generated), and
-writes one `.csv.gz` file per SQL table into `data/<collection_name>/`.
+into child tables (following the same hierarchy that `infer` already generated
+in SQL), and writes one `.csv.gz` file per SQL table into `data/<collection_name>/`.
 
 ### Output layout
 
@@ -332,91 +336,45 @@ data/
     └── users_lastrecommendations.csv.gz
 ```
 
-### Loading into PostgreSQL
-
-The CSV header row matches the SQL column names exactly, so you can load them
-directly with `\COPY`:
-
-```sql
-\COPY products           FROM PROGRAM 'gunzip -c products.csv.gz'           CSV HEADER;
-\COPY products_image     FROM PROGRAM 'gunzip -c products_image.csv.gz'     CSV HEADER;
-\COPY products_price     FROM PROGRAM 'gunzip -c products_price.csv.gz'     CSV HEADER;
-
-\COPY orders             FROM PROGRAM 'gunzip -c orders.csv.gz'             CSV HEADER;
-\COPY orders_products    FROM PROGRAM 'gunzip -c orders_products.csv.gz'    CSV HEADER;
-\COPY orders_status_history FROM PROGRAM 'gunzip -c orders_status_history.csv.gz' CSV HEADER;
-```
+## Step 8 – Import into PostgreSQL
 
 ```bash
-export PGURI="postgres://avnadmin:<redacted>@pg-testpmp-fras-d-pmp-todel.j.aivencloud.com:12833/defaultdb?sslmode=require"
+mongo2pg import -c results/base/retail/config/retail.toml
 ```
 
-Drop database
+`import` connects to PostgreSQL using `TARGET_URI`, creates the target
+database if needed, executes `schema/tables/<db>/*.sql`, and then loads every
+exported `.csv.gz` file into the matching PostgreSQL table with `COPY`.
+It also writes `reports/post_report.html` automatically when the load finishes.
+
+If the generated DDL needs changes, edit the SQL files and rerun
+`mongo2pg import -c ...`.
+
+---
+
+## Step 9 – Review the post-import report
+
+After `import`, open `results/base/retail/reports/post_report.html`.
+
+If you need to regenerate it later, run:
 
 ```bash
-for dir in mongo2pg/mongodb-testpmp/data/*; do
-  [[ -d "$dir" ]] || continue
-  dbname=$(basename "$dir")
-  psql "$PGURI" -c "DROP DATABASE IF EXISTS \"$dbname\";"
-done
+mongo2pg report -c results/base/retail/config/retail.toml --post-import
 ```
 
-Drop tables
-
-```bash
-for dir in mongo2pg/mongodb-testpmp/data/*/*; do
-  [[ -d "$dir" ]] || continue
-  schema=$(basename "$dir")
-  psql "$PGURI" -c "DROP SCHEMA IF EXISTS \"$schema\" CASCADE;"
-done
-```
-
-Create tables
-
-```bash
-find mongo2pg/mongodb-testpmp/schema/tables/sample_airbnb -maxdepth 1 -type f -name '*.sql' | while read -r f; do
-  echo "executing psql -f $f"
-  psql "$PGURI" -f $f
-done
-```
-
-Load parent tables before child tables to satisfy foreign-key constraints.
-
-Insert
-
-```bash
-export PGURIT=$(printf '%s\n' "$PGURI" | sed 's#/defaultdb?#/sample_airbnb?#')
-
-{
-  echo "BEGIN;"
-  echo "SET CONSTRAINTS ALL DEFERRED;"
-
-  find mongo2pg/mongodb-testpmp/data/sample_airbnb -mindepth 2 -maxdepth 2 -type f -name '*.csv.gz' | sort | while read -r f; do
-    schema=$(basename "$(dirname "$f")")
-    table=$(basename "$f" .csv.gz)
-    printf "TRUNCATE TABLE %s.%s CASCADE;\n" "$schema" "$table"
-  done
-
-  find mongo2pg/mongodb-testpmp/data/sample_airbnb -mindepth 2 -maxdepth 2 -type f -name '*.csv.gz' | sort | while read -r f; do
-    schema=$(basename "$(dirname "$f")")
-    table=$(basename "$f" .csv.gz)
-    printf "\\COPY %s.%s FROM PROGRAM 'gunzip -c %s' CSV HEADER;\n" "$schema" "$table" "$f"
-  done
-
-  echo "COMMIT;"
-} | psql "$PGURIT"
-```
+This writes `reports/post_report.html` so you can compare MongoDB occurrence
+counts with PostgreSQL row counts after the load.
 
 ---
 
 ## Resulting project tree
 
-After all five commands the project directory looks like this:
+After infer, export, import, and post-import reporting, the project directory looks like this:
 
 ```
 results/base/retail/
 ├── config/
-│   └── retail.conf
+│   └── retail.toml
 ├── data/
 │   ├── carts/        ← carts.csv.gz, carts_products.csv.gz
 │   ├── invoices/     ← invoices.csv.gz + 9 child table files
@@ -427,7 +385,8 @@ results/base/retail/
 │   └── users/        ← users.csv.gz + 2 child table files
 ├── reports/
 │   ├── retail.html
-│   └── retail.schema.html
+│   ├── retail.schema.html
+│   └── post_report.html
 ├── schema/
 │   └── tables/
 │       ├── carts.sql

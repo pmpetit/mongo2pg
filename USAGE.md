@@ -64,16 +64,16 @@ mongo2pg "mongodb://localhost:27017" mydb.mycollection -n 5000
 mongo2pg "mongodb://localhost:27017" mydb.mycollection -p 10
 ```
 
-### Print statistics only (suppress JSON output)
+### Print inferred schema JSON
 
 ```bash
-mongo2pg "mongodb://localhost:27017" mydb.mycollection --no-output
+mongo2pg "mongodb://localhost:27017" mydb.mycollection --print-json
 ```
 
 ### Save the schema to a file
 
 ```bash
-mongo2pg "mongodb://user:pass@host:27017" mydb.orders > orders-schema.json
+mongo2pg "mongodb://user:pass@host:27017" mydb.orders --print-json > orders-schema.json
 ```
 
 ### Disable sample-value collection (smaller output)
@@ -321,14 +321,15 @@ The source URI for all commands below is:
 mongodb://user:pass@localhost:2717/?authSource=admin
 ```
 
-The --no-output option removes the `json` output and keep only statistics on collection.
+By default, `infer` prints the collection statistics and progress messages only.
+Use `--print-json` when you also want the inferred schema JSON on stdout.
 
 #### sample_airbnb
 
 ```bash
 # 5 555 documents – deeply nested, good stress test
 mongo2pg "mongodb://user:pass@localhost:2717/?authSource=admin" \
-  sample_airbnb.listingsAndReviews --no-output
+  sample_airbnb.listingsAndReviews
 
 Documents in collection : 5555
 Documents sampled       : 1000
@@ -460,14 +461,14 @@ report → generate HTML stats report and ERD diagram
 ## `init` – create a migration project
 
 ```
-mongo2pg init --project-base <DIR> --project-name <NAME> [--source-uri <SOURCE_URI>]
+mongo2pg init --project-base <DIR> --project-name <NAME> [--source-uri <SOURCE_URI>] [--target-uri <TARGET_URI>]
 ```
 
 Creates the project directory tree and writes a config file:
 
 ```
 <project-base>/<project-name>/
-    config/<project-name>.conf   ← BASE_DIR, PROJECT_DIR, SOURCE_URI, NAMESPACE
+    config/<project-name>.toml   ← [project], [source], [target]
     schema/
         tables/                  ← generated SQL DDL files go here
     source/
@@ -483,6 +484,7 @@ Creates the project directory tree and writes a config file:
 | `--project-base <DIR>` | Parent directory that will contain the project folder |
 | `--project-name <NAME>` | Name of the project (becomes the sub-directory name) |
 | `--source-uri <SOURCE_URI>` | MongoDB source connection URI – written into the config file |
+| `--target-uri <TARGET_URI>` | PostgreSQL target connection URI – written into the config file |
 
 ---
 
@@ -498,7 +500,7 @@ mongo2pg [infer] -c <CONFIG> [OPTIONS]
 | Argument | Description |
 |---|---|
 | `--source-uri <SOURCE_URI>` | MongoDB source connection URI – required unless `-c` is given |
-| `--namespace <NAMESPACE>` | `<db>.<collection>` for a single collection, `<db>` for all collections in the database, or omit to infer **all user databases** on the server (see below). Can also be set via `NAMESPACE` in the config file. |
+| `--namespace <NAMESPACE>` | `<db>.<collection>` for a single collection, `<db>` for all collections in the database, or omit to infer **all user databases** on the server (see below). Can also be set via `source.namespace` in the config file. |
 
 **Options**
 
@@ -508,7 +510,7 @@ mongo2pg [infer] -c <CONFIG> [OPTIONS]
 | `-p, --percent <PCT>` | Percentage of the collection to sample |
 | `-c, --config <FILE>` | Project config file – derives SOURCE_URI and output paths automatically |
 | `-o, --output-dir <DIR>` | Write output files into `<dir>/` for each collection |
-| `--no-output` | Suppress JSON schema output to stdout |
+| `--print-json` | Print the inferred schema JSON to stdout |
 
 When `-c` or `-o` is given, each collection produces three files:
 
@@ -631,7 +633,7 @@ without the collection prefix when possible.
 
 ```bash
 # Every collection gets deployed into its own schema by default
-mongo2pg to-pg -c config/sofi.conf
+mongo2pg to-pg -c config/sofi.toml
 ```
 
 This produces one `.sql` file per collection, each self-contained:
@@ -663,7 +665,7 @@ collection, or when all collections in a project share one schema.
 
 ```bash
 # Single collection deployed into its own schema (sales is the dbname, salesorder is the collection)
-mongo2pg to-pg -c config/sofi.conf sales.salesorder --schema salesorder
+mongo2pg to-pg -c config/sofi.toml sales.salesorder --schema salesorder
 ```
 
 ---
@@ -715,6 +717,32 @@ data/
 
 ---
 
+## `import` – create PostgreSQL objects and load exported CSV files
+
+```
+mongo2pg import [COLLECTION] -c <config> [--namespace <db-or-db.collection>]
+```
+
+Reads `TARGET_URI` from the config file, creates the target database if needed,
+executes the generated `schema/tables/<db>/*.sql` files, then decompresses the
+matching `.csv.gz` files under `data/<db>/<collection>/` and loads them with
+`COPY FROM STDIN`.
+
+**Arguments**
+
+| Argument | Description |
+|---|---|
+| `[COLLECTION]` | Optional collection name; omit to import all exported collections |
+
+**Options**
+
+| Flag | Description |
+|---|---|
+| `-c, --config <FILE>` | Project config file – derives TARGET_URI, `schema/tables/`, and `data/` paths |
+| `--namespace <NS>` | Database or fully qualified collection namespace |
+
+---
+
 ## `report` – generate HTML reports
 
 ```
@@ -740,10 +768,14 @@ Produces two files in `reports/`:
 
 When `--post-import` is used with `-c <config>`, `mongo2pg` expects the config file to define:
 
-```properties
-SOURCE_URI = mongodb://...
-TARGET_URI = postgres://.../dbname?sslmode=require
-NAMESPACE = mydb
+```toml
+[source]
+uri = "mongodb://..."
+namespace = "mydb"
+
+[target]
+uri = "postgres://.../postgres?sslmode=require"
+database_name = "mydb"
 ```
 
 It then:
@@ -760,23 +792,28 @@ It then:
 ```bash
 # 1. Create the project
 mongo2pg init --project-base /app/migration --project-name retail \
-  --source-uri "mongodb://user:pass@localhost:27017"
+  --source-uri "mongodb://user:pass@localhost:27017" \
+  --target-uri "postgres://postgres:x@localhost:5432/postgres?sslmode=disable"
 
 # 2. Optionally edit config to add the default namespace:
-#    NAMESPACE = retail
-#    /app/migration/retail/config/retail.conf
+#    [source]
+#    namespace = "retail"
+#    /app/migration/retail/config/retail.toml
 
-# 3. Infer all collection schemas
-mongo2pg infer -c /app/migration/retail/config/retail.conf
+# 3. Infer all collection schemas, generate SQL, and refresh reports
+mongo2pg infer -c /app/migration/retail/config/retail.toml
 
-# 4. Generate PostgreSQL DDL
-mongo2pg to-pg -c /app/migration/retail/config/retail.conf
+# 4. Review / edit the generated SQL under schema/tables/
 
 # 5. Export data to gzipped CSV files
-mongo2pg export -c /app/migration/retail/config/retail.conf
+mongo2pg export -c /app/migration/retail/config/retail.toml
 
-# 6. Generate HTML reports + ERD diagram
-mongo2pg report -c /app/migration/retail/config/retail.conf
+# 6. Create PostgreSQL objects and import the exported CSV files
+mongo2pg import -c /app/migration/retail/config/retail.toml
+
+# 7. `import` also writes reports/post_report.html automatically.
+#    Run this only to regenerate the post-import report later.
+mongo2pg report -c /app/migration/retail/config/retail.toml --post-import
 ```
 
 ---
@@ -794,23 +831,23 @@ mongo2pg infer mongodb://localhost:27017 mydb -o source/collections
 mongo2pg infer mongodb://localhost:27017 mydb.orders -p 10
 
 # Convert all inferred schemas to SQL (project-based; each collection gets its own PG schema)
-mongo2pg to-pg -c config/retail.conf
+mongo2pg to-pg -c config/retail.toml
 
 # Convert a single collection only
-mongo2pg to-pg -c config/retail.conf products
+mongo2pg to-pg -c config/retail.toml products
 
 # Deploy a single collection into a named schema
-mongo2pg to-pg -c config/retail.conf orders --schema orders
+mongo2pg to-pg -c config/retail.toml orders --schema orders
 
 # Generate reports
-mongo2pg report -c config/retail.conf
+mongo2pg report -c config/retail.toml
 
 # Export all collections to gzipped CSV
-mongo2pg export -c config/retail.conf
+mongo2pg export -c config/retail.toml
 
 # Export a single collection
-mongo2pg export -c config/retail.conf orders
+mongo2pg export -c config/retail.toml orders
 
 # Export to a custom output directory
-mongo2pg export -c config/retail.conf -o /tmp/csv
+mongo2pg export -c config/retail.toml -o /tmp/csv
 ```

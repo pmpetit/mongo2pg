@@ -31,11 +31,12 @@ PostgreSQL.
 |---|---|
 | Schema inference | Samples MongoDB collections and writes JSON schema-like structure plus stats |
 | Project workflow | `init` creates a repeatable migration project with config, source, schema, data, and report folders |
-| PostgreSQL DDL generation | `to-pg` converts inferred collection schemas into PostgreSQL `CREATE TABLE` statements |
+| PostgreSQL DDL generation | `infer` refreshes PostgreSQL `CREATE TABLE` statements under `schema/tables/` when used with a project config |
 | Per-collection PostgreSQL schemas | Each collection is deployed into its own PostgreSQL schema by default |
 | CSV export | `export` expands MongoDB documents into `.csv.gz` files matching the generated SQL tables |
-| HTML reporting | `report` generates collection-level, schema-level, cluster-level, and post-import validation reports |
-| Post-import validation | `report --post-import` compares MongoDB occurrence counts with PostgreSQL row counts |
+| PostgreSQL import | `import` creates PostgreSQL objects and loads exported `.csv.gz` files using `TARGET_URI` |
+| HTML reporting | `infer` writes collection-level and schema-level reports, and `report` can regenerate them from existing files |
+| Post-import validation | `import` writes `reports/post_report.html` automatically, and `report --post-import` can regenerate it later |
 
 ---
 
@@ -47,24 +48,21 @@ mongo2pg init \
   --project-base ./projects \
   --project-name sample_airbnb \
   --source-uri 'mongodb://user:pass@localhost:27017/?authSource=admin' \
+  --target-uri 'postgres://postgres:x@localhost:5432/postgres?sslmode=disable' \
   --namespace sample_airbnb
 
-# 2. Infer schemas and statistics
-mongo2pg infer -c ./projects/sample_airbnb/config/sample_airbnb.conf
+# 2. Infer schemas, generate PostgreSQL DDL, and write the main reports
+mongo2pg infer -c ./projects/sample_airbnb/config/sample_airbnb.toml
 
-# 3. Generate PostgreSQL DDL
-mongo2pg to-pg -c ./projects/sample_airbnb/config/sample_airbnb.conf
+# 3. Export relational CSV files
+mongo2pg export -c ./projects/sample_airbnb/config/sample_airbnb.toml
 
-# 4. Export relational CSV files
-mongo2pg export -c ./projects/sample_airbnb/config/sample_airbnb.conf
+# 4. Create PostgreSQL objects and import the exported CSV files
+mongo2pg import -c ./projects/sample_airbnb/config/sample_airbnb.toml
 
-# 5. Generate reports
-mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.conf
-
-# 6. Validate a loaded PostgreSQL database
-mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.conf \
-  --post-import \
-  --namespace sample_airbnb
+# 5. `import` already generated reports/post_report.html.
+#    Run this only if you want to regenerate it.
+mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.toml --post-import
 ```
 
 ---

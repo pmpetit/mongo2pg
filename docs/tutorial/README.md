@@ -27,8 +27,8 @@ collection.
 
 ```bash
 mongo2pg init \
-  --project-base ./projects \
-  --project-name sample_airbnb \
+  --project-base docker_tutorial \
+  --project-name mycluster \
   --source-uri 'mongodb://user:pass@localhost:27017/?authSource=admin' \
   --target-uri 'postgres://postgres:x@localhost:5432/postgres' \
   --namespace sample_airbnb
@@ -37,9 +37,9 @@ mongo2pg init \
 This creates:
 
 ```text
-projects/sample_airbnb/
+docker_tutorial/sample_airbnb/
   config/
-    sample_airbnb.conf
+    sample_airbnb.toml
   source/
     collections/
   schema/
@@ -48,20 +48,30 @@ projects/sample_airbnb/
   reports/
 ```
 
-Add PostgreSQL connectivity to the generated config file:
+And a generated config file:
 
-```properties
-SOURCE_URI = mongodb://user:pass@localhost:27017/?authSource=admin
-TARGET_URI = postgres://user:pass@localhost:5432/sample_airbnb?sslmode=require
-NAMESPACE = sample_airbnb
+```toml
+[project]
+base_dir = "docker_tutorial"
+project_dir = "sample_airbnb"
+
+[source]
+uri = "mongodb://user:pass@localhost:2717/?authSource=admin"
+namespace = "sample_airbnb"
+number = 1000
+jsonb = false
+
+[target]
+uri = "postgres://postgres:x@localhost:5432/postgres?sslmode=require"
+database_name = "sample_airbnb"
 ```
 
 ---
 
-## Step 2 — Infer schemas and statistics
+## Step 2 — Infer schemas, PostgreSQL DDL, and pre-import reports
 
 ```bash
-mongo2pg infer -c ./projects/sample_airbnb/config/sample_airbnb.conf
+mongo2pg infer -c docker_tutorial/mycluster/config/mycluster.toml
 ```
 
 This writes one folder per collection under `source/collections/` with:
@@ -69,156 +79,141 @@ This writes one folder per collection under `source/collections/` with:
 - `<collection>.json`
 - `<collection>.stats.txt`
 - `<collection>.stats.yaml`
-- `mapping_<collection>.yaml`
+- `mapping_<collection>.yaml` (for future use only)
+
+It also generates:
+
+- PostgreSQL DDL under `schema/tables/<db>/`
+- the main HTML report in `reports/main.html`
+- schema diagrams in `reports/*.schema.html`
+
+output is
+
+```log
+tables : 11
+columns: 101
+tables : 11
+columns: 101
+Inference summary
+  Score: 6.85
+  Collections: 1
+  PostgreSQL tables: 11
+  Detailed HTML report: docker_tutorial/sample_airbnb/reports/main.html
+  Next step: review the generated DDL files under docker_tutorial/sample_airbnb/schema/tables and then run `mongo2pg export -c docker_tutorial/sample_airbnb/config/sample_airbnb.toml`
+```
 
 ---
 
-## Step 3 — Generate PostgreSQL DDL
+## Step 3 - Adapt the DDL
 
-```bash
-mongo2pg to-pg -c ./projects/sample_airbnb/config/sample_airbnb.conf
-```
-
-Each collection generates a `.sql` file under `schema/tables/<db>/`.
-
-By default, each collection is deployed into its own PostgreSQL schema.
-
----
-
-## Step 4 - Generate pre-import report
-
-Standard pre-migration report:
-
-```bash
-mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.conf
-```
-
-This will generate an HTML report in reports/main.html
-
-It shows a scoring, objects created.
-
-## Step 5 - Adapt the DDL
-
-Maybe the table name, schema name or database do not reflect your needs. You can modify those SQL files. They will be used during the next steps, generating export files.
+Maybe the table name, schema name or database options do not reflect your needs. You can modify those SQL files. They will be used during the next steps, generating export files.
 
 For example, some table name can be over 64c, they should be renamed.
 
-## Step 6 — Export data as relational CSV files
+## Step 4 — Export data as relational CSV files
 
 ```bash
-mongo2pg export -c ./projects/sample_airbnb/config/sample_airbnb.conf
+mongo2pg export -c docker_tutorial/mycluster/config/mycluster.toml
 ```
 
-Base on the existing SQL files in `schema/tables/<db>/*.sql`
+Base on the existing SQL files in `schema/tables/<db>/*.sql`, it will connect to mongodb extract documents into zipped `csv` files.
 
 This writes `.csv.gz` files under `data/<db>/<collection>/`, one per generated
 PostgreSQL table.
 
----
-
-## Step 7 — Load into PostgreSQL
-
-Run the generated SQL files, then load the `.csv.gz` files with `\COPY`.
-
-Example:
-
-```bash
-psql "$PGURI" -f ./projects/sample_airbnb/schema/tables/sample_airbnb/listingsandreviews.sql
+```log
+[sample_airbnb.listingsAndReviews]
+  5555 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/listingsandreviews.csv.gz
+  5555 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address.csv.gz
+  121402 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/amenities.csv.gz
+  5555 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/availability.csv.gz
+  5555 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host.csv.gz
+  5555 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/images.csv.gz
+  5555 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/review_scores.csv.gz
+  149792 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/reviews.csv.gz
+  5555 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location.csv.gz
+  27600 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host_host_verifications.csv.gz
+  11110 rows -> docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location_coordinates.csv.gz
 ```
 
-```sql
-\COPY listingsandreviews FROM PROGRAM 'gunzip -c listingsandreviews.csv.gz' CSV HEADER;
-\COPY address FROM PROGRAM 'gunzip -c address.csv.gz' CSV HEADER;
-```
+### reports
 
-### sample_airbnb
+This command creates a `mycluster/reports/main.html` where details are explained.
 
-Create tables
+![alt text](image.png)
 
-```bash
-export PGURI="postgres://postgres:x@localhost:5432/postgres"
-find projects/sample_airbnb/schema/tables/sample_airbnb -maxdepth 1 -type f -name '*.sql' | while read -r f; do
-  echo "executing psql -f $f"
-  psql "$PGURI" -f $f
-done
-```
+and also `mycluster/reports/sample_airbnb.schema.html` a graphical representation of the model
 
-during this step, you can see some errors message about constraint violations (not null / null).
-
-This is because during the infer process, sample value (100 default) was not enough.
-
-For example, it read 100 documents, and in all documents a field `REVIEWER_NAME` was always present (probability 1).
-
-The pg column `REVIEWER_NAME` has constraint set to `NOT NULL`.
-
-But during the effective import all docs are read/write, and one of them did not have the `REVIEWER_NAME` fields.
-
-The solution is : modify the column in the DDL sql file and remove the NOT NULL constraint.
-
-and re-run the table creation :
-
-Drop database
-
-```bash
-for dir in projects/sample_airbnb/data/*; do
-  [[ -d "$dir" ]] || continue
-  dbname=$(basename "$dir")
-  psql "$PGURI" -c "DROP DATABASE IF EXISTS \"$dbname\";"
-done
-```
-
-Re-create the table
-
-Create tables
-
-```bash
-find projects/sample_airbnb/schema/tables/sample_airbnb -maxdepth 1 -type f -name '*.sql' | while read -r f; do
-  echo "executing psql -f $f"
-  psql "$PGURI" -f $f
-done
-```
-
-Re-execute the import
-
-Insert
-
-```bash
-export PGURIT=$(printf '%s\n' "$PGURI" | sed 's#/postgres?#/sample_airbnb?#')
-
-{
-  echo "BEGIN;"
-  echo "SET CONSTRAINTS ALL DEFERRED;"
-
-  find projects/sample_airbnb/data/sample_airbnb -mindepth 2 -maxdepth 2 -type f -name '*.csv.gz' | sort | while read -r f; do
-    schema=$(basename "$(dirname "$f")")
-    table=$(basename "$f" .csv.gz)
-    printf "TRUNCATE TABLE %s.%s CASCADE;\n" "$schema" "$table"
-  done
-
-  find projects/sample_airbnb/data/sample_airbnb -mindepth 2 -maxdepth 2 -type f -name '*.csv.gz' | sort | while read -r f; do
-    schema=$(basename "$(dirname "$f")")
-    table=$(basename "$f" .csv.gz)
-    printf "\\COPY %s.%s FROM PROGRAM 'gunzip -c %s' CSV HEADER;\n" "$schema" "$table" "$f"
-  done
-
-  echo "COMMIT;"
-} | psql "$PGURIT"
-```
+![alt text](image-1.png)
 
 ---
 
-## Step 8 — Generate post import report
+## Step 5 — Load into PostgreSQL
 
-Post-import validation report:
+Run:
+
+```bash
+mongo2pg import -c docker_tutorial/mycluster/config/mycluster.toml
+```
+
+This command connects to PostgreSQL using `TARGET_URI`, creates the database
+if needed, executes the generated SQL files in `schema/tables/<db>/`, and then
+decompresses every exported `.csv.gz` file and loads it with `COPY`.
+It also regenerates `reports/post_report.html` automatically once the import
+completes.
+
+If you see constraint violations during this step, review the generated DDL,
+adjust the affected `NOT NULL` constraints or table definitions, and then rerun
+`mongo2pg import -c ...`.
+
+this import command will fail with
+
+```log
+Caused by:
+    0: db error
+    1: ERROR: null value in column "reviewer_name" of relation "reviews" violates not-null constraint
+       DETAIL: Failing row contains (66541, 19953862, Great place in a very central location. It made getting around t..., 2019-02-24 05:00:00+00, 19953862, 26317712, null).
+```
+
+This is because during infer command, 100 documents were read (sample=100 the default value). In those documents, `reviewer_name` was always present.
+So in ddl file this colum `reviewer_name` has a `not null constraint`.
+But it appears that on some document, sometimes `reviewer_name` is not present.
+So you should modify the file `mycluster/schema/tables/sample_airbnb/listingsandreviews.sql`
+find `reviewer_name` and remove the not null constraint.
+
+Drop the previously created database and run again the import command (not the infer,it will overwrite the ddl files)
+
+```log
+Created PostgreSQL database "sample_airbnb"
+Created PostgreSQL objects from docker_tutorial/mycluster/schema/tables/sample_airbnb/listingsandreviews.sql
+Imported 5555 row(s) into listingsandreviews.address from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address.csv.gz
+Imported 5555 row(s) into listingsandreviews.address_location from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location.csv.gz
+Imported 11110 row(s) into listingsandreviews.address_location_coordinates from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/address_location_coordinates.csv.gz
+Imported 121402 row(s) into listingsandreviews.amenities from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/amenities.csv.gz
+Imported 5555 row(s) into listingsandreviews.availability from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/availability.csv.gz
+Imported 5555 row(s) into listingsandreviews.host from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host.csv.gz
+Imported 27600 row(s) into listingsandreviews.host_host_verifications from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/host_host_verifications.csv.gz
+Imported 5555 row(s) into listingsandreviews.images from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/images.csv.gz
+Imported 5555 row(s) into listingsandreviews.listingsandreviews from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/listingsandreviews.csv.gz
+Imported 5555 row(s) into listingsandreviews.review_scores from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/review_scores.csv.gz
+Imported 149792 row(s) into listingsandreviews.reviews from docker_tutorial/mycluster/data/sample_airbnb/listingsandreviews/reviews.csv.gz
+Import completed for database 'sample_airbnb'.
+```
+
+### report
+
+After loading the exported CSV data into PostgreSQL, open the automatically
+generated report at `reports/post_report.html`.
+
+If you need to rerun it manually after additional database changes, run:
 
 ```bash
 mongo2pg report \
-  -c projects/sample_airbnb/config/sample_airbnb.conf \
-  --post-import \
-  --namespace sample_airbnb
+  -c docker_tutorial/mycluster/config/mycluster.toml \
+  --post-import
 ```
 
-The post-import report writes `reports/post_report.html` and compares:
+This writes `reports/post_report.html` and compares:
 
 - MongoDB top-level document counts
 - MongoDB expanded nested occurrence counts
@@ -227,3 +222,5 @@ The post-import report writes `reports/post_report.html` and compares:
 For nested nodes such as `address`, `reviews`, or `address.location.coordinates`,
 the report shows the MongoDB occurrence count beside the matching PostgreSQL
 table count so you can verify the relational expansion.
+
+![alt text](image-2.png)

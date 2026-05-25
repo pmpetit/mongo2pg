@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prefix matching is case-insensitive (sanitized before comparison) to handle mixed-case collection names
 - **`to-pg` now uses one PostgreSQL schema per collection by default**: each generated SQL file gets its own self-contained schema preamble, and `--schema <NAME>` remains available to override that default with a fixed schema name
 - **Output SQL filenames are now lowercased**: `B2BSalesOrder.sql` → `b2bsalesorder.sql`, consistent with PostgreSQL identifier folding
-- **`report --post-import`**: generates `reports/post_report.html` by reading MongoDB counts from `SOURCE_URI`, PostgreSQL row counts from `TARGET_URI`, and table definitions from the generated DDL for the selected namespace
+- **Integrated workflow**: `infer -c <config>` now refreshes generated SQL and the main HTML reports; post-import validation remains available through `report --post-import` after loading data into PostgreSQL
 - **MongoDB connection inputs are now named `SOURCE_URI` / `--source-uri`** across the CLI and generated config files
 - **Regression test `test_camelcase_collection_table_count_matches_report`**: verifies end-to-end that the number of `CREATE TABLE` statements produced by `to-pg` for a camelCase collection name equals the number of PG tables shown in the HTML report (catches the filename mismatch bug)
 - **CI now runs `cargo test` on every PR**: a `test` job was added to `pr-preview.yml`; the build and preview-release jobs only proceed once all tests pass

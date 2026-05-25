@@ -38,13 +38,9 @@ tasks:
         for db in {{.DATABASES}}
         do
           echo "📁 init $db"
-          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --uri "{{.URI}}"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "📐 infer $db"
-          "{{.BIN}}" infer --uri "{{.URI}}" -c "{{.OUT}}/$db/config/$db.conf" --no-output 2>/dev/null
-          echo "🛠️  to-pg $db"
-          "{{.BIN}}" to-pg -c "{{.OUT}}/$db/config/$db.conf"
-          echo "📊 report"
-          "{{.BIN}}" report -c "{{.OUT}}/$db/config/$db.conf"          
+          "{{.BIN}}" infer --source-uri "{{.URI}}" -c "{{.OUT}}/$db/config/$db.toml" --no-output 2>/dev/null
         done
       - echo "👉 results in {{.OUT}}"
 
@@ -60,13 +56,9 @@ tasks:
         for db in {{.DATABASES}}
         do
           echo "📁 init $db"
-          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --uri "{{.URI}}"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "📐 infer $db"
-          "{{.BIN}}" infer --uri "{{.URI}}" -c "{{.OUT}}/$db/config/$db.conf" --jsonb --no-output 2>/dev/null
-          echo "🛠️  to-pg $db"
-          "{{.BIN}}" to-pg -c "{{.OUT}}/$db/config/$db.conf"
-          echo "📊 report"
-          "{{.BIN}}" report -c "{{.OUT}}/$db/config/$db.conf"          
+          "{{.BIN}}" infer --source-uri "{{.URI}}" -c "{{.OUT}}/$db/config/$db.toml" --jsonb --no-output 2>/dev/null
         done
       - echo "👉 results in {{.OUT}}"
 
@@ -80,11 +72,7 @@ tasks:
     cmds:
       - |
         echo "📁 init {{.DB}}"
-        "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "{{.DB}}" --uri "{{.URI}}"
+        "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "{{.DB}}" --source-uri "{{.URI}}"
         echo "📐 infer {{.DB}}"
-        "{{.BIN}}" infer --uri "{{.URI}}" -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.conf" --jsonb --no-output 2>/dev/null
-        echo "🛠️  to-pg {{.DB}}"
-        "{{.BIN}}" to-pg -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.conf"
-        echo "📊 report"
-        "{{.BIN}}" report -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.conf"          
+        "{{.BIN}}" infer --source-uri "{{.URI}}" -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.toml" --jsonb --no-output 2>/dev/null
 

@@ -13,6 +13,7 @@ mongo2pg init \
   --project-base ./projects \
   --project-name airbnb \
   --source-uri mongodb://localhost:27017 \
+  --target-uri postgres://postgres:x@localhost:5432/postgres?sslmode=disable \
   --namespace sample_airbnb
 ```
 
@@ -21,7 +22,7 @@ This creates:
 ```text
 projects/airbnb/
   config/
-    airbnb.conf
+    airbnb.toml
   source/
     collections/
   schema/
@@ -30,7 +31,7 @@ projects/airbnb/
   reports/
 ```
 
-You can then pass `-c projects/airbnb/config/airbnb.conf` to subsequent
+You can then pass `-c projects/airbnb/config/airbnb.toml` to subsequent
 commands instead of repeating all flags.
 
 ---
@@ -56,27 +57,34 @@ mongo2pg infer \
   --output-dir ./output
 ```
 
----
-
-## How to generate PostgreSQL DDL
-
-```bash
-mongo2pg to-pg -c ./projects/airbnb/config/airbnb.conf
-```
-
-This reads inferred schemas from `source/collections/` and writes SQL to
-`schema/tables/`.
+With `-c <config>`, `infer` also refreshes SQL files under `schema/tables/`
+and the main reports under `reports/`.
 
 ---
 
 ## How to export relational CSV files
 
 ```bash
-mongo2pg export -c ./projects/airbnb/config/airbnb.conf
+mongo2pg export -c ./projects/airbnb/config/airbnb.toml
 ```
 
 This expands nested documents and arrays into one `.csv.gz` file per generated
 PostgreSQL table.
+
+---
+
+## How to load PostgreSQL objects and data
+
+```bash
+mongo2pg import -c ./projects/airbnb/config/airbnb.toml
+```
+
+This command:
+
+- connects to PostgreSQL using `TARGET_URI`
+- creates the target database if needed
+- executes `schema/tables/<db>/*.sql`
+- decompresses each exported `.csv.gz` file and loads it with `COPY`
 
 ---
 
@@ -86,9 +94,8 @@ Set both `SOURCE_URI` and `TARGET_URI` in the config file, then run:
 
 ```bash
 mongo2pg report \
-  -c ./projects/airbnb/config/airbnb.conf \
-  --post-import \
-  --namespace sample_airbnb
+  -c ./projects/airbnb/config/airbnb.toml \
+  --post-import
 ```
 
 This generates `reports/post_report.html`, which compares:
