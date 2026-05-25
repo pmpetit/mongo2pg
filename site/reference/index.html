@@ -75,6 +75,8 @@
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#mongo2pg-report">mongo2pg report</a>
     </li>
+    <li class="toctree-l2"><a class="reference internal" href="#mongo2pg-import">mongo2pg import</a>
+    </li>
     </ul>
                   </li>
               </ul>
@@ -109,13 +111,14 @@
             <div class="section" itemprop="articleBody">
               
                 <h1 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
-<p><code>mongo2pg</code> exposes six subcommands.</p>
+<p><code>mongo2pg</code> exposes seven subcommands.</p>
 <hr />
 <h2 id="mongo2pg-init"><code>mongo2pg init</code><a class="headerlink" href="#mongo2pg-init" title="Permanent link">&para;</a></h2>
-<p>Creates a project directory structure and a <code>.conf</code> file for repeatable runs.</p>
+<p>Creates a project directory structure and a TOML config file for repeatable runs.</p>
 <div class="codehilite"><pre><span></span><code>mongo2pg init --project-base &lt;dir&gt;
               --project-name &lt;name&gt;
               [--source-uri &lt;mongodb-uri&gt;]
+              [--target-uri &lt;postgres-uri&gt;]
               [--namespace &lt;db-or-db.collection&gt;]
 </code></pre></div>
 
@@ -140,6 +143,10 @@
 <td>MongoDB source connection URI stored in the config file</td>
 </tr>
 <tr>
+<td><code>--target-uri</code></td>
+<td>PostgreSQL target connection URI stored in the config file</td>
+</tr>
+<tr>
 <td><code>--namespace</code></td>
 <td>Default namespace stored in the config file</td>
 </tr>
@@ -147,13 +154,14 @@
 </table>
 <hr />
 <h2 id="mongo2pg-infer"><code>mongo2pg infer</code><a class="headerlink" href="#mongo2pg-infer" title="Permanent link">&para;</a></h2>
-<p>Samples MongoDB data and writes inferred collection schemas and statistics.</p>
+<p>Samples MongoDB data and writes inferred collection schemas and statistics.
+With <code>-c &lt;config&gt;</code>, it also refreshes PostgreSQL DDL and the main HTML reports.</p>
 <div class="codehilite"><pre><span></span><code>mongo2pg infer --source-uri &lt;mongodb-uri&gt;
                [--namespace &lt;db-or-db.collection&gt;]
                [--number &lt;n&gt; | --percent &lt;pct&gt;]
                [--output-dir &lt;dir&gt;]
                [--jsonb]
-               [--no-output]
+               [--print-json]
 
 mongo2pg infer -c &lt;config&gt;
 </code></pre></div>
@@ -191,8 +199,8 @@ mongo2pg infer -c &lt;config&gt;
 <td>Emit MongoDB objects as JSONB columns instead of child tables where applicable</td>
 </tr>
 <tr>
-<td><code>--no-output</code></td>
-<td>Suppress JSON schema output to stdout</td>
+<td><code>--print-json</code></td>
+<td>Print the inferred schema JSON to stdout</td>
 </tr>
 <tr>
 <td><code>-c, --config</code></td>
@@ -302,6 +310,35 @@ tables.</p>
 <tr>
 <td><code>--post-import</code></td>
 <td>Compare MongoDB expanded counts with PostgreSQL row counts</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="mongo2pg-import"><code>mongo2pg import</code><a class="headerlink" href="#mongo2pg-import" title="Permanent link">&para;</a></h2>
+<p>Creates PostgreSQL objects from generated SQL files and loads exported
+<code>.csv.gz</code> files into PostgreSQL using <code>COPY FROM STDIN</code>.</p>
+<div class="codehilite"><pre><span></span><code>mongo2pg import [collection] -c &lt;config&gt; [--namespace &lt;db-or-db.collection&gt;]
+</code></pre></div>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[collection]</code></td>
+<td>Optional collection name</td>
+</tr>
+<tr>
+<td><code>-c, --config</code></td>
+<td>Project config file</td>
+</tr>
+<tr>
+<td><code>--namespace</code></td>
+<td>Database or fully qualified collection namespace</td>
 </tr>
 </tbody>
 </table>

@@ -568,8 +568,7 @@ pub async fn export_collection(
         gz.finish()
             .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
 
-        let resolved_csv_path = std::fs::canonicalize(&csv_path).unwrap_or(csv_path.clone());
-        eprintln!("  {} rows -> {}", rows.len(), resolved_csv_path.display());
+        eprintln!("  {} rows -> {}", rows.len(), csv_path.display());
     }
 
     Ok(())

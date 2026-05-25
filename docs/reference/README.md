@@ -1,17 +1,18 @@
 # CLI Reference
 
-`mongo2pg` exposes six subcommands.
+`mongo2pg` exposes seven subcommands.
 
 ---
 
 ## `mongo2pg init`
 
-Creates a project directory structure and a `.conf` file for repeatable runs.
+Creates a project directory structure and a TOML config file for repeatable runs.
 
 ```text
 mongo2pg init --project-base <dir>
               --project-name <name>
               [--source-uri <mongodb-uri>]
+              [--target-uri <postgres-uri>]
               [--namespace <db-or-db.collection>]
 ```
 
@@ -20,6 +21,7 @@ mongo2pg init --project-base <dir>
 | `--project-base` | Base directory where the project folder will be created |
 | `--project-name` | Project name |
 | `--source-uri` | MongoDB source connection URI stored in the config file |
+| `--target-uri` | PostgreSQL target connection URI stored in the config file |
 | `--namespace` | Default namespace stored in the config file |
 
 ---
@@ -27,6 +29,7 @@ mongo2pg init --project-base <dir>
 ## `mongo2pg infer`
 
 Samples MongoDB data and writes inferred collection schemas and statistics.
+With `-c <config>`, it also refreshes PostgreSQL DDL and the main HTML reports.
 
 ```text
 mongo2pg infer --source-uri <mongodb-uri>
@@ -34,7 +37,7 @@ mongo2pg infer --source-uri <mongodb-uri>
                [--number <n> | --percent <pct>]
                [--output-dir <dir>]
                [--jsonb]
-               [--no-output]
+               [--print-json]
 
 mongo2pg infer -c <config>
 ```
@@ -47,26 +50,8 @@ mongo2pg infer -c <config>
 | `--percent` | Percentage of the collection to sample |
 | `--output-dir` | Directory where inferred files are written |
 | `--jsonb` | Emit MongoDB objects as JSONB columns instead of child tables where applicable |
-| `--no-output` | Suppress JSON schema output to stdout |
+| `--print-json` | Print the inferred schema JSON to stdout |
 | `-c, --config` | Project config file |
-
----
-
-## `mongo2pg to-pg`
-
-Converts inferred collection schemas to PostgreSQL DDL.
-
-```text
-mongo2pg to-pg [collection] [--table <name>] [--schema <name>] [-c <config> | -o <dir>]
-```
-
-| Flag | Description |
-|---|---|
-| `[collection]` | Optional collection name |
-| `--table` | Root table name override for a single collection |
-| `--schema` | PostgreSQL schema name override |
-| `-c, --config` | Project config file |
-| `-o, --output-dir` | SQL output directory override |
 
 ---
 
@@ -103,5 +88,22 @@ mongo2pg report [--collections-dir <dir> | -c <config>] [--output <file>] [--nam
 | `--output` | HTML output file |
 | `--namespace` | Namespace label or selection |
 | `--post-import` | Compare MongoDB expanded counts with PostgreSQL row counts |
+
+---
+
+## `mongo2pg import`
+
+Creates PostgreSQL objects from generated SQL files and loads exported
+`.csv.gz` files into PostgreSQL using `COPY FROM STDIN`.
+
+```text
+mongo2pg import [collection] -c <config> [--namespace <db-or-db.collection>]
+```
+
+| Flag | Description |
+|---|---|
+| `[collection]` | Optional collection name |
+| `-c, --config` | Project config file |
+| `--namespace` | Database or fully qualified collection namespace |
 
 ---

@@ -17,25 +17,29 @@
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::pin::pin;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use bson::{doc, Bson};
+use bytes::Bytes;
 use clap::{Args, Parser, Subcommand};
-use futures::TryStreamExt;
+use flate2::read::GzDecoder;
+use futures::{SinkExt, TryStreamExt};
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{Analyzer, CollectionSchema, FieldSchema, TypeSchema};
 use mongo2pg::export::export_collection;
 use mongo2pg::report::{
-    collect_rows, compute_db_score, render_cluster_html, render_html, render_post_import_html,
-    PostImportCollectionRow, PostImportNode, PostImportTableRow, SYSTEM_DATABASES,
+    collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
+    render_post_import_html, PostImportCollectionRow, PostImportNode, PostImportTableRow,
+    SYSTEM_DATABASES,
 };
 use mongo2pg::schema_diagram::{load_tables_by_db, parse_sql, render_schema_html};
 use mongo2pg::stats::{format_stats, stats_to_yaml};
 use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared args
@@ -84,6 +88,8 @@ enum Command {
     Report(ReportArgs),
     /// Export MongoDB data to gzipped CSV files (one per SQL table)
     Export(ExportArgs),
+    /// Create PostgreSQL objects and import exported CSV files into PostgreSQL
+    Import(ImportArgs),
     /// Generate a cluster-level HTML report aggregating scores across multiple databases
     ClusterReport(ClusterReportArgs),
 }
@@ -113,15 +119,19 @@ struct InferArgs {
     #[arg(long = "jsonb", action = clap::ArgAction::SetTrue)]
     jsonb: bool,
 
-    /// Suppress schema output to stdout
-    #[arg(long = "no-output", action = clap::ArgAction::SetTrue)]
+    /// Print inferred schema JSON to stdout
+    #[arg(long = "print-json", action = clap::ArgAction::SetTrue)]
+    print_json: bool,
+
+    /// Deprecated compatibility flag. JSON is no longer printed by default.
+    #[arg(long = "no-output", hide = true, action = clap::ArgAction::SetTrue)]
     no_output: bool,
 
     /// Write <name>.json and <name>.stats.txt into <output_dir>/<name>/ for each collection
     #[arg(short = 'o', long = "output-dir", conflicts_with = "config")]
     output_dir: Option<PathBuf>,
 
-    /// Path to a .conf file (created by `mongo2pg init`) to derive the output directory
+    /// Path to a project config file (TOML) created by `mongo2pg init`
     #[arg(short = 'c', long = "config", conflicts_with = "output_dir")]
     config: Option<PathBuf>,
 }
@@ -135,7 +145,7 @@ struct ToPgArgs {
     #[arg(short = 't', long = "table")]
     table: Option<String>,
 
-    /// Path to the project config file (.conf) – derives source/collections and schema/tables paths
+    /// Path to the project config file (TOML) – derives source/collections and schema/tables paths
     #[arg(short = 'c', long = "config", conflicts_with = "output_dir")]
     config: Option<PathBuf>,
 
@@ -164,6 +174,10 @@ struct InitArgs {
     #[arg(long = "source-uri")]
     source_uri: Option<String>,
 
+    /// PostgreSQL target connection URI to store in the project config
+    #[arg(long = "target-uri")]
+    target_uri: Option<String>,
+
     /// Namespace to store in the project config (e.g. mydb or mydb.mycoll); when omitted,
     /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
     #[arg(long)]
@@ -175,7 +189,7 @@ struct ReportArgs {
     #[command(flatten)]
     mongo: UriArg,
 
-    /// Path to the project config file (.conf) – derives source/collections and output paths
+    /// Path to the project config file (TOML) – derives source/collections and output paths
     #[arg(short = 'c', long = "config", conflicts_with_all = ["collections_dir", "output"])]
     config: Option<PathBuf>,
 
@@ -201,7 +215,7 @@ struct SchemaArgs {
     #[command(flatten)]
     mongo: UriArg,
 
-    /// Path to the project config file (.conf) – derives schema/tables and reports paths
+    /// Path to the project config file (TOML) – derives schema/tables and reports paths
     #[arg(short = 'c', long = "config", conflicts_with = "tables_dir")]
     config: Option<PathBuf>,
 
@@ -219,7 +233,7 @@ struct ExportArgs {
     /// Optional collection name; if omitted all collections in schema/tables/ are exported
     collection: Option<String>,
 
-    /// Path to the project config file (.conf) – derives SOURCE_URI, db, schema/tables and data/ paths
+    /// Path to the project config file (TOML) – derives SOURCE_URI, db, schema/tables and data/ paths
     #[arg(short = 'c', long = "config")]
     config: Option<PathBuf>,
 
@@ -239,8 +253,23 @@ struct ExportArgs {
 }
 
 #[derive(Parser, Debug)]
+struct ImportArgs {
+    /// Optional collection name; if omitted all collections for the namespace are imported
+    collection: Option<String>,
+
+    /// Path to the project config file (TOML) – derives TARGET_URI, schema/tables and data/ paths
+    #[arg(short = 'c', long = "config")]
+    config: PathBuf,
+
+    /// Namespace: either <db>.<collection> to import one collection, or just <db> to import all.
+    /// This overrides the namespace in the config file if provided.
+    #[arg(long = "namespace")]
+    namespace: Option<String>,
+}
+
+#[derive(Parser, Debug)]
 struct ClusterReportArgs {
-    /// One or more project config (.conf) files; can be repeated or comma-separated
+    /// One or more project config files (TOML); can be repeated or comma-separated
     #[arg(long = "configs", value_delimiter = ',', num_args = 1..)]
     configs: Vec<PathBuf>,
 
@@ -263,9 +292,10 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Some(Command::Init(args)) => run_init(args),
-        Some(Command::ToPg(args)) => run_to_pg(args),
-        Some(Command::Report(args)) => run_report(args).await,
+        Some(Command::ToPg(args)) => run_to_pg(args, false),
+        Some(Command::Report(args)) => run_report(args, false).await,
         Some(Command::Export(args)) => run_export(args).await,
+        Some(Command::Import(args)) => run_import(args).await,
         Some(Command::Infer(args)) => run_infer(args).await,
         Some(Command::ClusterReport(args)) => run_cluster_report(args),
         None => run_infer(cli.infer.expect("clap ensures args are present")).await,
@@ -276,7 +306,7 @@ async fn main() -> Result<()> {
 // `to-pg` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn run_to_pg(args: ToPgArgs) -> Result<()> {
+fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
     fn prepend_database_preamble(ddl: String, db_name: Option<&str>) -> String {
         match db_name {
             None => ddl,
@@ -285,6 +315,14 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
     }
 
     // Resolve collections source dir and SQL output dir
+    let config_db_name: Option<String> = if let Some(ref conf) = args.config {
+        let c = read_conf(conf)?;
+        c.namespace
+            .map(|namespace| split_namespace_scope(&namespace).0.to_owned())
+    } else {
+        None
+    };
+
     let (collections_dir, output_dir) = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
         let (base_dir, project_dir) = (c.base_dir, c.project_dir);
@@ -314,7 +352,12 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
         // Single collection specified – try flat layout first, then per-db.
         let flat = collections_dir.join(name).join(format!("{name}.json"));
         if flat.exists() {
-            vec![(PathBuf::from(format!("{}.sql", name.to_lowercase())), flat)]
+            let rel_sql = if let Some(db_name) = config_db_name.as_deref() {
+                PathBuf::from(db_name).join(format!("{}.sql", name.to_lowercase()))
+            } else {
+                PathBuf::from(format!("{}.sql", name.to_lowercase()))
+            };
+            vec![(rel_sql, flat)]
         } else if name.contains('/') {
             // Caller passed "db/collection"
             let json = collections_dir.join(name).join({
@@ -344,10 +387,12 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 
             if direct_json.exists() {
                 // Flat layout: <collections_dir>/<name>/<name>.json
-                entries.push((
-                    PathBuf::from(format!("{}.sql", top_name.to_lowercase())),
-                    direct_json,
-                ));
+                let rel_sql = if let Some(db_name) = config_db_name.as_deref() {
+                    PathBuf::from(db_name).join(format!("{}.sql", top_name.to_lowercase()))
+                } else {
+                    PathBuf::from(format!("{}.sql", top_name.to_lowercase()))
+                };
+                entries.push((rel_sql, direct_json));
             } else {
                 // Per-db layout: treat this dir as a database folder
                 let mut sub_dirs: Vec<(PathBuf, PathBuf)> = std::fs::read_dir(&top_path)
@@ -416,18 +461,22 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
         let ddl = prepend_database_preamble(ddl, db_name);
         std::fs::write(&sql_path, &ddl)
             .with_context(|| format!("Failed to write {}", sql_path.display()))?;
-        println!("SQL written to {}", sql_path.display());
+        if !quiet {
+            println!("SQL written to {}", sql_path.display());
+        }
     }
 
-    eprintln!(
-        "to-pg completed. Review the generated SQL files to confirm that schema names and table names suit your needs."
-    );
-    eprintln!(
-        "Also check that table and column names do not exceed PostgreSQL's 63-byte identifier limit."
-    );
-    eprintln!(
-        "If you modify those SQL files, the next export and report commands will use them as their source of truth."
-    );
+    if !quiet {
+        eprintln!(
+            "to-pg completed. Review the generated SQL files to confirm that schema names and table names suit your needs."
+        );
+        eprintln!(
+            "Also check that table and column names do not exceed PostgreSQL's 63-byte identifier limit."
+        );
+        eprintln!(
+            "If you modify those SQL files, the next export and report commands will use them as their source of truth."
+        );
+    }
 
     Ok(())
 }
@@ -437,6 +486,9 @@ fn run_to_pg(args: ToPgArgs) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
+    let chained_config = args.config.clone();
+    let chained_output_dir = args.output_dir.clone();
+    let quiet_infer = chained_config.is_some();
     // Resolve SOURCE_URI, namespace, number, and percent – reading conf file if -c was given
     let (
         resolved_source_uri,
@@ -500,7 +552,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     match namespace {
         None => {
             // No namespace provided: enumerate all user databases and infer each.
-            infer_all_databases(&client, &args).await?;
+            infer_all_databases(&client, &args, !quiet_infer).await?;
         }
         Some(ref ns) if ns.contains('.') => {
             // Single collection: <db>.<collection>
@@ -526,9 +578,17 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     existing_colls.join(", ")
                 );
             }
-            let schema =
-                infer_collection(&client, db_name, coll_name, coll_name, &args, None).await?;
-            if !args.no_output {
+            let schema = infer_collection(
+                &client,
+                db_name,
+                coll_name,
+                coll_name,
+                &args,
+                None,
+                !quiet_infer,
+            )
+            .await?;
+            if args.print_json && !args.no_output {
                 println!("{}", serde_json::to_string_pretty(&schema)?);
             }
         }
@@ -553,29 +613,145 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 
             let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
             for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
-                match infer_collection(&client, db_name, coll_name, coll_name, &args, None).await {
+                match infer_collection(
+                    &client,
+                    db_name,
+                    coll_name,
+                    coll_name,
+                    &args,
+                    None,
+                    !quiet_infer,
+                )
+                .await
+                {
                     Ok(schema) => {
                         all_schemas.insert(coll_name.clone(), schema);
                     }
                     Err(e) => eprintln!("  [warn] skipping {db_name}.{coll_name}: {e:#}"),
                 }
             }
-            if !args.no_output {
+            if args.print_json && !args.no_output {
                 println!("{}", serde_json::to_string_pretty(&all_schemas)?);
             }
         }
     }
 
-    if let Some(output_dir) = args.output_dir.as_deref() {
-        eprintln!(
-            "Inference completed. Collection schemas and statistics were written under {}.",
-            output_dir.display()
-        );
-        eprintln!("Next, run the to-pg command to create DDL SQL files under schema/tables/*.sql.");
-        eprintln!(
-            "You can then modify those SQL files to reflect your needs, but each to-pg run overwrites them."
-        );
+    if let Some(ref conf) = chained_config {
+        run_to_pg(
+            ToPgArgs {
+                collection: None,
+                table: None,
+                config: Some(conf.clone()),
+                output_dir: None,
+                schema: None,
+            },
+            true,
+        )?;
+        run_report(
+            ReportArgs {
+                mongo: UriArg { source_uri: None },
+                config: Some(conf.clone()),
+                collections_dir: None,
+                output: None,
+                namespace: String::new(),
+                post_import: false,
+            },
+            true,
+        )
+        .await?;
+        print_infer_summary(conf)?;
     }
+
+    if chained_config.is_none() {
+        if let Some(output_dir) = args.output_dir.as_deref() {
+            eprintln!(
+                "Inference completed. Collection schemas and statistics were written under {}.",
+                output_dir.display()
+            );
+            if chained_output_dir.is_some() {
+                eprintln!(
+                "If you need PostgreSQL DDL from this standalone output, run to-pg separately on the generated collection files."
+            );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn print_infer_summary(conf: &Path) -> Result<()> {
+    let c = read_conf(conf)?;
+    let project_root = c.base_dir.join(&c.project_dir);
+    let collections_dir = project_root.join("source").join("collections");
+    let tables_root = project_root.join("schema").join("tables");
+    let report_path = project_root.join("reports").join("main.html");
+
+    let is_multi_db = std::fs::read_dir(&collections_dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .any(|e| {
+                    std::fs::read_dir(e.path())
+                        .map(|sub| sub.filter_map(|s| s.ok()).any(|s| s.path().is_dir()))
+                        .unwrap_or(false)
+                })
+        })
+        .unwrap_or(false);
+
+    let (score, collection_count, table_count) = if is_multi_db {
+        let mut db_scores = Vec::new();
+        let mut total_collections = 0usize;
+        let mut total_tables = 0usize;
+
+        let mut db_names: Vec<String> = std::fs::read_dir(&collections_dir)
+            .with_context(|| format!("Cannot read {}", collections_dir.display()))?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        db_names.sort();
+
+        for db_name in &db_names {
+            let db_dir = collections_dir.join(db_name);
+            let tables_dir = tables_root.join(db_name);
+            let rows = collect_rows(&db_dir, tables_dir.is_dir().then_some(tables_dir.as_path()))?;
+            total_collections += rows.len();
+            total_tables += rows
+                .iter()
+                .map(|row| row.tables_count().unwrap_or(0))
+                .sum::<usize>();
+            db_scores.push(compute_db_score(db_name, &rows));
+        }
+
+        (
+            compute_cluster_score(&db_scores).score_total,
+            total_collections,
+            total_tables,
+        )
+    } else {
+        let rows = collect_rows(
+            &collections_dir,
+            tables_root.is_dir().then_some(tables_root.as_path()),
+        )?;
+        let score = compute_db_score(&c.project_dir, &rows).score_db;
+        let table_count = rows
+            .iter()
+            .map(|row| row.tables_count().unwrap_or(0))
+            .sum::<usize>();
+        (score, rows.len(), table_count)
+    };
+
+    println!("Inference summary");
+    println!("  Score: {:.2}", score);
+    println!("  Collections: {}", collection_count);
+    println!("  PostgreSQL tables: {}", table_count);
+    println!("  Detailed HTML report: {}", report_path.display());
+    println!(
+        "  Next step: review the generated DDL files under {} and then run `mongo2pg export -c {}`",
+        tables_root.display(),
+        conf.display()
+    );
 
     Ok(())
 }
@@ -584,7 +760,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 ///
 /// Output files are written as `<output_dir>/<dbname>/<collname>/`.
 /// Report generation is handled separately by the `report` command.
-async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
+async fn infer_all_databases(client: &Client, args: &InferArgs, emit_stats: bool) -> Result<()> {
     let all_dbs = client
         .list_database_names()
         .await
@@ -629,6 +805,7 @@ async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
                 coll_name,
                 args,
                 db_out_dir.as_deref(),
+                emit_stats,
             )
             .await
             {
@@ -639,7 +816,7 @@ async fn infer_all_databases(client: &Client, args: &InferArgs) -> Result<()> {
             }
         }
 
-        if !args.no_output && args.output_dir.is_none() {
+        if args.print_json && !args.no_output && args.output_dir.is_none() {
             println!(
                 "{}",
                 serde_json::to_string_pretty(&IndexMap::from([(db_name.clone(), &db_schemas)]))?
@@ -665,6 +842,7 @@ async fn infer_collection(
     output_name: &str,
     args: &InferArgs,
     output_dir_override: Option<&Path>,
+    emit_stats: bool,
 ) -> Result<CollectionSchema> {
     let output_dir = output_dir_override.or(args.output_dir.as_deref());
     let db = client.database(db_name);
@@ -777,13 +955,14 @@ async fn infer_collection(
 
     let stats_lines = format_stats(&schema, Some(total_docs));
 
-    let stderr = io::stderr();
-    let mut handle = stderr.lock();
-    writeln!(handle, "[{db_name}.{coll_name}]")?;
-    for line in &stats_lines {
-        writeln!(handle, "{line}")?;
+    if emit_stats {
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        writeln!(handle, "[{db_name}.{coll_name}]")?;
+        for line in &stats_lines {
+            writeln!(handle, "{line}")?;
+        }
     }
-    drop(handle);
 
     if let Some(out_dir) = output_dir {
         write_collection_files(out_dir, db_name, output_name, &schema, &stats_lines)
@@ -1044,19 +1223,32 @@ fn run_init(args: InitArgs) -> Result<()> {
 
     let conf_path = project_root
         .join("config")
-        .join(format!("{}.conf", args.project_name));
+        .join(format!("{}.toml", args.project_name));
+    let target_database_name = args
+        .namespace
+        .as_deref()
+        .map(|ns| ns.split('.').next().unwrap_or(ns))
+        .unwrap_or(&args.project_name);
     let conf_content = format!(
-        "BASE_DIR = {}\nPROJECT_DIR = {}\n{}{}\n# NUMBER = 1000\n# PERCENT = 10\n# JSONB = false\n",
+        "[project]\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
         args.project_base.display(),
         args.project_name,
         args.source_uri
             .as_deref()
-            .map(|u| format!("SOURCE_URI = {}\n", u))
-            .unwrap_or_else(|| "# SOURCE_URI = mongodb://localhost:27017\n".to_owned()),
+            .map(|u| format!("\"{}\"", u.replace('"', "\\\"")))
+            .unwrap_or_else(|| "\"mongodb://localhost:27017\"".to_owned()),
         args.namespace
             .as_deref()
-            .map(|ns| format!("NAMESPACE = {}\n", ns))
-            .unwrap_or_else(|| "# NAMESPACE = mydb\n".to_owned()),
+            .map(|ns| format!("\"{}\"", ns.replace('"', "\\\"")))
+            .unwrap_or_else(|| "\"mydb\"".to_owned()),
+        args.target_uri
+            .as_deref()
+            .map(|u| format!("\"{}\"", u.replace('"', "\\\"")))
+            .unwrap_or_else(|| {
+                "\"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable\""
+                    .to_owned()
+            }),
+        target_database_name.replace('"', "\\\""),
     );
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;
@@ -1192,13 +1384,229 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     Ok(())
 }
 
+async fn run_import(args: ImportArgs) -> Result<()> {
+    let c = read_conf(&args.config)?;
+    let target_uri = c
+        .target_uri
+        .clone()
+        .ok_or_else(|| anyhow!("No TARGET_URI provided: add TARGET_URI to the config file"))?;
+    let namespace = args
+        .namespace
+        .clone()
+        .or(c.namespace.clone())
+        .ok_or_else(|| {
+            anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
+        })?;
+    let (db_name, namespace_collection) = split_namespace_scope(&namespace);
+    let target_database_name = c.target_database_name.as_deref().unwrap_or(db_name);
+    let requested_collection = args.collection.as_deref().or(namespace_collection);
+    let requested_collection_dir = requested_collection.map(sanitize_name);
+
+    let project_root = c.base_dir.join(&c.project_dir);
+    let tables_root = project_root.join("schema").join("tables");
+    let tables_dir = if tables_root.join(db_name).is_dir() {
+        tables_root.join(db_name)
+    } else {
+        tables_root.clone()
+    };
+    let data_root = project_root.join("data");
+    let data_db_dir = if data_root.join(db_name).is_dir() {
+        data_root.join(db_name)
+    } else {
+        data_root.clone()
+    };
+
+    if !tables_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read SQL tables directory {}",
+            tables_dir.display()
+        ));
+    }
+    if !data_db_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read data directory {}",
+            data_db_dir.display()
+        ));
+    }
+
+    let admin_client = connect_pg_client(&target_uri).await?;
+    ensure_pg_database(&admin_client, target_database_name).await?;
+
+    let db_target_uri = pg_uri_with_database(&target_uri, target_database_name);
+    let mut pg_client = connect_pg_client(&db_target_uri).await?;
+
+    let mut sql_files: Vec<PathBuf> = std::fs::read_dir(&tables_dir)
+        .with_context(|| format!("Cannot read {}", tables_dir.display()))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("sql"))
+        .filter(|path| {
+            requested_collection_dir
+                .as_deref()
+                .map_or(true, |collection_dir| {
+                    path.file_stem().and_then(|stem| stem.to_str()) == Some(collection_dir)
+                })
+        })
+        .collect();
+    sql_files.sort();
+
+    if sql_files.is_empty() {
+        return Err(anyhow!("No SQL files found in {}", tables_dir.display()));
+    }
+
+    for sql_path in &sql_files {
+        let sql = std::fs::read_to_string(sql_path)
+            .with_context(|| format!("Failed to read {}", sql_path.display()))?;
+        let executable_sql = strip_psql_preamble(&sql);
+        if executable_sql.trim().is_empty() {
+            continue;
+        }
+        pg_client
+            .batch_execute(&executable_sql)
+            .await
+            .with_context(|| format!("Failed to execute {}", sql_path.display()))?;
+        println!("Created PostgreSQL objects from {}", sql_path.display());
+    }
+
+    let mut csv_files: Vec<PathBuf> = std::fs::read_dir(&data_db_dir)
+        .with_context(|| format!("Cannot read {}", data_db_dir.display()))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .filter(|path| {
+            requested_collection_dir
+                .as_deref()
+                .map_or(true, |collection_dir| {
+                    path.file_name().and_then(|name| name.to_str()) == Some(collection_dir)
+                })
+        })
+        .flat_map(|collection_dir| {
+            std::fs::read_dir(&collection_dir)
+                .into_iter()
+                .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("gz"))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    csv_files.sort();
+
+    if csv_files.is_empty() {
+        return Err(anyhow!(
+            "No .csv.gz files found in {}",
+            data_db_dir.display()
+        ));
+    }
+
+    let transaction = pg_client.transaction().await?;
+    transaction
+        .batch_execute("SET CONSTRAINTS ALL DEFERRED;")
+        .await?;
+
+    for csv_path in &csv_files {
+        let schema = csv_path
+            .parent()
+            .and_then(|path| path.file_name())
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
+        let table = csv_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .and_then(|stem| stem.strip_suffix(".csv"))
+            .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
+        let truncate_sql = format!(
+            "TRUNCATE TABLE {}.{} CASCADE",
+            quote_ident(schema),
+            quote_ident(table)
+        );
+        transaction
+            .batch_execute(&truncate_sql)
+            .await
+            .with_context(|| format!("Failed to truncate {}.{}", schema, table))?;
+    }
+
+    for csv_path in &csv_files {
+        let schema = csv_path
+            .parent()
+            .and_then(|path| path.file_name())
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
+        let table = csv_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .and_then(|stem| stem.strip_suffix(".csv"))
+            .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
+        let copy_sql = format!(
+            "COPY {}.{} FROM STDIN WITH (FORMAT csv, HEADER true)",
+            quote_ident(schema),
+            quote_ident(table)
+        );
+        let file = std::fs::File::open(csv_path)
+            .with_context(|| format!("Failed to open {}", csv_path.display()))?;
+        let mut decoder = GzDecoder::new(file);
+        let mut contents = Vec::new();
+        std::io::Read::read_to_end(&mut decoder, &mut contents)
+            .with_context(|| format!("Failed to decompress {}", csv_path.display()))?;
+
+        let sink = transaction
+            .copy_in(&copy_sql)
+            .await
+            .with_context(|| format!("Failed to start COPY for {}.{}", schema, table))?;
+        let mut sink = pin!(sink);
+        sink.as_mut()
+            .send(Bytes::from(contents))
+            .await
+            .with_context(|| format!("Failed to stream CSV data for {}", csv_path.display()))?;
+        let rows = sink
+            .as_mut()
+            .finish()
+            .await
+            .with_context(|| format!("Failed to finish COPY for {}.{}", schema, table))?;
+        println!(
+            "Imported {rows} row(s) into {}.{} from {}",
+            schema,
+            table,
+            csv_path.display()
+        );
+    }
+
+    transaction.commit().await?;
+    println!("Import completed for database '{target_database_name}'.");
+
+    let post_import_namespace = if namespace_collection.is_none() {
+        args.collection
+            .as_deref()
+            .map(|collection| format!("{db_name}.{collection}"))
+            .unwrap_or_else(|| namespace.clone())
+    } else {
+        namespace.clone()
+    };
+    write_post_import_report(&args.config, &post_import_namespace, "").await?;
+
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // `report` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
 
-async fn run_report(args: ReportArgs) -> Result<()> {
+async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
+    if args.post_import {
+        let conf = args
+            .config
+            .as_ref()
+            .ok_or_else(|| anyhow!("--post-import requires -c <config>"))?;
+        write_post_import_report(
+            conf,
+            &args.namespace,
+            args.mongo.source_uri.as_deref().unwrap_or(""),
+        )
+        .await?;
+        return Ok(());
+    }
+
     // Resolve collections dir, cluster label, reports dir and project name
-    let (collections_dir, namespace, cluster, reports_dir, project_name, source_uri, target_uri) =
+    let (collections_dir, namespace, cluster, reports_dir, project_name) =
         if let Some(ref conf) = args.config {
             let c = read_conf(conf)?;
             let ns = args.namespace.clone();
@@ -1219,80 +1627,14 @@ async fn run_report(args: ReportArgs) -> Result<()> {
                 .join("collections");
             let rep_dir = c.base_dir.join(&c.project_dir).join("reports");
             let proj = c.project_dir.clone();
-            (
-                cols_dir,
-                ns,
-                cluster,
-                Some(rep_dir),
-                Some(proj),
-                c.source_uri,
-                c.target_uri,
-            )
+            (cols_dir, ns, cluster, Some(rep_dir), Some(proj))
         } else {
             let dir = args
                 .collections_dir
                 .clone()
                 .ok_or_else(|| anyhow!("Provide --collections-dir or -c <config>"))?;
-            (
-                dir,
-                args.namespace.clone(),
-                String::new(),
-                None,
-                None,
-                args.mongo.source_uri.clone(),
-                None,
-            )
+            (dir, args.namespace.clone(), String::new(), None, None)
         };
-
-    if args.post_import {
-        let reports_dir = reports_dir
-            .as_ref()
-            .ok_or_else(|| anyhow!("--post-import requires -c <config>"))?;
-        let source_uri = source_uri
-            .as_deref()
-            .ok_or_else(|| anyhow!("SOURCE_URI (or URI) not found in the config file"))?;
-        let target_uri = target_uri
-            .as_deref()
-            .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
-        if namespace.is_empty() {
-            return Err(anyhow!(
-                "--post-import requires a namespace in the config file or via --namespace"
-            ));
-        }
-
-        let output_path = if let Some(ref o) = args.output {
-            o.clone()
-        } else {
-            std::fs::create_dir_all(reports_dir).with_context(|| {
-                format!("Failed to create reports dir {}", reports_dir.display())
-            })?;
-            reports_dir.join("post_report.html")
-        };
-
-        let schema_tables_root = reports_dir
-            .parent()
-            .unwrap_or(reports_dir)
-            .join("schema")
-            .join("tables");
-        let rows = build_post_import_rows(
-            source_uri,
-            target_uri,
-            &namespace,
-            &collections_dir,
-            &schema_tables_root,
-        )
-        .await?;
-        let html = render_post_import_html(
-            &rows,
-            &namespace,
-            &mongo2pg::report::cluster_from_uri(source_uri),
-            &mongo2pg::report::cluster_from_uri(target_uri),
-        );
-        std::fs::write(&output_path, html)
-            .with_context(|| format!("Failed to write {}", output_path.display()))?;
-        println!("Post-import report written to {}", output_path.display());
-        return Ok(());
-    }
 
     // Detect whether source/collections has the per-db layout:
     // a per-db layout has subdirs that contain further subdirs (not direct .stats.yaml files).
@@ -1359,19 +1701,30 @@ async fn run_report(args: ReportArgs) -> Result<()> {
         let html = mongo2pg::report::render_multi_db_html(&entries, &cluster, proj);
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
-        println!("Report written to {}", output_path.display());
+        if !quiet {
+            println!("Report written to {}", output_path.display());
+        }
     } else {
         // ── Flat / single-db layout ────────────────────────────────────────────
-        let tables_dir_for_report: Option<PathBuf> = reports_dir
-            .as_ref()
-            .map(|r| r.parent().unwrap_or(r).join("schema").join("tables"));
+        let tables_dir_for_report: Option<PathBuf> = reports_dir.as_ref().map(|r| {
+            let tables_root = r.parent().unwrap_or(r).join("schema").join("tables");
+            let db_name = split_namespace_scope(&namespace).0;
+            let db_tables = tables_root.join(db_name);
+            if db_tables.is_dir() {
+                db_tables
+            } else {
+                tables_root
+            }
+        });
         let tables_dir_opt = tables_dir_for_report.as_deref().filter(|p| p.is_dir());
 
         let rows = collect_rows(&collections_dir, tables_dir_opt)?;
         let html = render_html(&rows, &namespace, &cluster);
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
-        println!("Report written to {}", output_path.display());
+        if !quiet {
+            println!("Report written to {}", output_path.display());
+        }
     }
 
     // Generate per-database schema ERD diagrams if SQL tables exist
@@ -1404,13 +1757,85 @@ async fn run_report(args: ReportArgs) -> Result<()> {
                         std::fs::write(&schema_path, &schema_html).with_context(|| {
                             format!("Failed to write {}", schema_path.display())
                         })?;
-                        println!("Schema diagram written to {}", schema_path.display());
+                        if !quiet {
+                            println!("Schema diagram written to {}", schema_path.display());
+                        }
                     }
                 }
                 Err(e) => eprintln!("Warning: could not generate schema diagram: {e}"),
             }
         }
     }
+
+    Ok(())
+}
+
+async fn write_post_import_report(
+    conf: &Path,
+    namespace_override: &str,
+    source_uri_override: &str,
+) -> Result<()> {
+    let c = read_conf(conf)?;
+    let reports_dir = c.base_dir.join(&c.project_dir).join("reports");
+    std::fs::create_dir_all(&reports_dir)
+        .with_context(|| format!("Failed to create reports dir {}", reports_dir.display()))?;
+
+    let namespace = if namespace_override.is_empty() {
+        c.namespace.clone().ok_or_else(|| {
+            anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
+        })?
+    } else {
+        namespace_override.to_owned()
+    };
+    let source_uri = if source_uri_override.is_empty() {
+        c.source_uri
+            .as_deref()
+            .ok_or_else(|| anyhow!("SOURCE_URI not found in the config file"))?
+            .to_owned()
+    } else {
+        source_uri_override.to_owned()
+    };
+    let target_uri = c
+        .target_uri
+        .as_deref()
+        .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
+    let target_database_name = c.target_database_name.as_deref();
+
+    let collections_dir = c
+        .base_dir
+        .join(&c.project_dir)
+        .join("source")
+        .join("collections");
+    let schema_tables_root = c
+        .base_dir
+        .join(&c.project_dir)
+        .join("schema")
+        .join("tables");
+    let output_path = reports_dir.join("post_report.html");
+
+    let rows = build_post_import_rows(
+        &source_uri,
+        &target_database_name
+            .map(|db_name| pg_uri_with_database(target_uri, db_name))
+            .unwrap_or_else(|| target_uri.to_owned()),
+        &namespace,
+        &collections_dir,
+        &schema_tables_root,
+    )
+    .await?;
+    let html = render_post_import_html(
+        &rows,
+        &namespace,
+        &mongo2pg::report::cluster_from_uri(&source_uri),
+        &mongo2pg::report::cluster_from_uri(
+            &target_database_name
+                .map(|db_name| pg_uri_with_database(target_uri, db_name))
+                .unwrap_or_else(|| target_uri.to_owned()),
+        ),
+    );
+    std::fs::write(&output_path, html)
+        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+    println!("Post-import report written to {}", output_path.display());
 
     Ok(())
 }
@@ -1473,75 +1898,138 @@ fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
     Ok((&ns[..dot], &ns[dot + 1..]))
 }
 
-/// Values parsed from a `.conf` file produced by `mongo2pg init`.
+/// Values parsed from a project config file produced by `mongo2pg init`.
 struct ConfData {
     base_dir: PathBuf,
     project_dir: String,
     source_uri: Option<String>,
     target_uri: Option<String>,
+    target_database_name: Option<String>,
     namespace: Option<String>,
     number: Option<u64>,
     percent: Option<f64>,
     jsonb: bool,
 }
 
-/// Parse a `.conf` file produced by `mongo2pg init`.
+#[derive(Debug, Deserialize)]
+struct TomlProjectConfig {
+    project: TomlProjectSection,
+    #[serde(default)]
+    source: Option<TomlSourceSection>,
+    #[serde(default)]
+    target: Option<TomlTargetSection>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TomlProjectSection {
+    base_dir: PathBuf,
+    project_dir: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct TomlSourceSection {
+    uri: Option<String>,
+    namespace: Option<String>,
+    number: Option<u64>,
+    percent: Option<f64>,
+    jsonb: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct TomlTargetSection {
+    uri: Option<String>,
+    database_name: Option<String>,
+}
+
+/// Parse a project config file produced by `mongo2pg init`.
 fn read_conf(path: &Path) -> Result<ConfData> {
-    fn parse_conf_value(raw: &str) -> String {
-        let value = raw.trim();
-        if value.len() >= 2 {
-            let quoted = (value.starts_with('"') && value.ends_with('"'))
-                || (value.starts_with('\'') && value.ends_with('\''));
-            if quoted {
-                return value[1..value.len() - 1].trim().to_owned();
+    fn parse_toml_conf(path: &Path, content: &str) -> Result<ConfData> {
+        let parsed: TomlProjectConfig = toml::from_str(content)
+            .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
+        let source = parsed.source.unwrap_or_default();
+        let target = parsed.target.unwrap_or_default();
+
+        Ok(ConfData {
+            base_dir: parsed.project.base_dir,
+            project_dir: parsed.project.project_dir,
+            source_uri: source.uri,
+            target_uri: target.uri,
+            target_database_name: target.database_name,
+            namespace: source.namespace,
+            number: source.number,
+            percent: source.percent,
+            jsonb: source.jsonb.unwrap_or(false),
+        })
+    }
+
+    fn parse_legacy_conf(path: &Path, content: &str) -> Result<ConfData> {
+        fn parse_conf_value(raw: &str) -> String {
+            let value = raw.trim();
+            if value.len() >= 2 {
+                let quoted = (value.starts_with('"') && value.ends_with('"'))
+                    || (value.starts_with('\'') && value.ends_with('\''));
+                if quoted {
+                    return value[1..value.len() - 1].trim().to_owned();
+                }
+            }
+            value.to_owned()
+        }
+
+        let mut base_dir: Option<PathBuf> = None;
+        let mut project_dir: Option<String> = None;
+        let mut source_uri: Option<String> = None;
+        let mut target_uri: Option<String> = None;
+        let mut target_database_name: Option<String> = None;
+        let mut namespace: Option<String> = None;
+        let mut number: Option<u64> = None;
+        let mut percent: Option<f64> = None;
+        let mut jsonb: bool = false;
+
+        for line in content.lines() {
+            if let Some((key, val)) = line.split_once('=') {
+                let parsed = parse_conf_value(val);
+                match key.trim() {
+                    "BASE_DIR" => base_dir = Some(PathBuf::from(&parsed)),
+                    "PROJECT_DIR" => project_dir = Some(parsed),
+                    "SOURCE_URI" => source_uri = Some(parsed),
+                    "TARGET_URI" => target_uri = Some(parsed),
+                    "TARGET_DATABASE_NAME" => target_database_name = Some(parsed),
+                    "NAMESPACE" => namespace = Some(parsed),
+                    "NUMBER" => number = parsed.parse().ok(),
+                    "PERCENT" => percent = parsed.parse().ok(),
+                    "JSONB" => {
+                        jsonb = matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes")
+                    }
+                    _ => {}
+                }
             }
         }
-        value.to_owned()
+
+        let base_dir =
+            base_dir.ok_or_else(|| anyhow!("BASE_DIR not found in {}", path.display()))?;
+        let project_dir =
+            project_dir.ok_or_else(|| anyhow!("PROJECT_DIR not found in {}", path.display()))?;
+
+        Ok(ConfData {
+            base_dir,
+            project_dir,
+            source_uri,
+            target_uri,
+            target_database_name,
+            namespace,
+            number,
+            percent,
+            jsonb,
+        })
     }
 
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file {}", path.display()))?;
 
-    let mut base_dir: Option<PathBuf> = None;
-    let mut project_dir: Option<String> = None;
-    let mut source_uri: Option<String> = None;
-    let mut target_uri: Option<String> = None;
-    let mut namespace: Option<String> = None;
-    let mut number: Option<u64> = None;
-    let mut percent: Option<f64> = None;
-    let mut jsonb: bool = false;
-
-    for line in content.lines() {
-        if let Some((key, val)) = line.split_once('=') {
-            let parsed = parse_conf_value(val);
-            match key.trim() {
-                "BASE_DIR" => base_dir = Some(PathBuf::from(&parsed)),
-                "PROJECT_DIR" => project_dir = Some(parsed),
-                "SOURCE_URI" => source_uri = Some(parsed),
-                "TARGET_URI" => target_uri = Some(parsed),
-                "NAMESPACE" => namespace = Some(parsed),
-                "NUMBER" => number = parsed.parse().ok(),
-                "PERCENT" => percent = parsed.parse().ok(),
-                "JSONB" => jsonb = matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes"),
-                _ => {}
-            }
-        }
+    match parse_toml_conf(path, &content) {
+        Ok(conf) => Ok(conf),
+        Err(_) => parse_legacy_conf(path, &content),
     }
-
-    let base_dir = base_dir.ok_or_else(|| anyhow!("BASE_DIR not found in {}", path.display()))?;
-    let project_dir =
-        project_dir.ok_or_else(|| anyhow!("PROJECT_DIR not found in {}", path.display()))?;
-
-    Ok(ConfData {
-        base_dir,
-        project_dir,
-        source_uri,
-        target_uri,
-        namespace,
-        number,
-        percent,
-        jsonb,
-    })
 }
 
 fn sanitize_name(name: &str) -> String {
@@ -1578,6 +2066,68 @@ fn extract_search_path(sql: &str) -> Option<String> {
             .strip_prefix("SET search_path = ")
             .map(|rest| rest.trim().trim_end_matches(';').trim().to_owned())
     })
+}
+
+fn strip_psql_preamble(sql: &str) -> String {
+    sql.lines()
+        .filter(|line| {
+            let trimmed = line.trim_start();
+            !trimmed.starts_with("CREATE DATABASE ") && !trimmed.starts_with("\\connect ")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn pg_uri_with_database(uri: &str, database: &str) -> String {
+    let (base, query) = match uri.split_once('?') {
+        Some((base, query)) => (base, format!("?{query}")),
+        None => (uri, String::new()),
+    };
+    let authority_start = uri.find("://").map(|pos| pos + 3).unwrap_or(0);
+    match base[authority_start..].find('/') {
+        Some(offset) => {
+            let slash = authority_start + offset;
+            format!("{}{database}{}", &base[..=slash], query)
+        }
+        None => format!("{base}/{database}{query}"),
+    }
+}
+
+async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
+    let mut tls_builder = native_tls::TlsConnector::builder();
+    if matches!(pg_sslmode(target_uri), Some(mode) if mode.eq_ignore_ascii_case("require")) {
+        tls_builder.danger_accept_invalid_certs(true);
+        tls_builder.danger_accept_invalid_hostnames(true);
+    }
+    let tls = tls_builder
+        .build()
+        .with_context(|| "Failed to initialize PostgreSQL TLS connector")?;
+    let tls = MakeTlsConnector::new(tls);
+
+    let (pg_client, pg_connection) = tokio_postgres::connect(target_uri, tls)
+        .await
+        .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
+    tokio::spawn(async move {
+        if let Err(err) = pg_connection.await {
+            eprintln!("warning: PostgreSQL connection error: {err}");
+        }
+    });
+
+    Ok(pg_client)
+}
+
+async fn ensure_pg_database(pg_client: &tokio_postgres::Client, db_name: &str) -> Result<()> {
+    let create_db_sql = format!("CREATE DATABASE {}", quote_ident(db_name));
+    match pg_client.batch_execute(&create_db_sql).await {
+        Ok(()) => {
+            println!("Created PostgreSQL database {}", quote_ident(db_name));
+            Ok(())
+        }
+        Err(err) if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_DATABASE) => {
+            Ok(())
+        }
+        Err(err) => Err(err).with_context(|| format!("Failed to create database {db_name}")),
+    }
 }
 
 fn pg_sslmode(uri: &str) -> Option<&str> {

@@ -45,7 +45,7 @@ directory that is on your `PATH`.
 |---|---|
 | Rust toolchain | stable |
 | Cargo | bundled with Rust |
-| MongoDB instance | needed for `infer`, `export`, and `report --post-import` |
+| MongoDB instance | needed for `infer` and `export` |
 | PostgreSQL instance | needed for `report --post-import` |
 
 Install Rust via [rustup](https://rustup.rs/):

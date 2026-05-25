@@ -77,7 +77,7 @@ Project 'sample_weatherdata' initialised at results/infer/sample_weatherdata
   results/infer/sample_weatherdata/data
   results/infer/sample_weatherdata/config
   results/infer/sample_weatherdata/reports
-  results/infer/sample_weatherdata/config/sample_weatherdata.conf
+  results/infer/sample_weatherdata/config/sample_weatherdata.toml
 📐 infer sample_weatherdata.data
 🛠️  to-pg sample_weatherdata_data
 tables : 44
@@ -104,7 +104,7 @@ Project 'sample_weatherdata' initialised at results/infer-with-jsonb/sample_weat
   results/infer-with-jsonb/sample_weatherdata/data
   results/infer-with-jsonb/sample_weatherdata/config
   results/infer-with-jsonb/sample_weatherdata/reports
-  results/infer-with-jsonb/sample_weatherdata/config/sample_weatherdata.conf
+  results/infer-with-jsonb/sample_weatherdata/config/sample_weatherdata.toml
 📐 infer sample_weatherdata.data
 🛠️ to-pg sample_weatherdata_data
 tables : 11

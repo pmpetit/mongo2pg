@@ -159,7 +159,7 @@ PostgreSQL.</p>
 </tr>
 <tr>
 <td>PostgreSQL DDL generation</td>
-<td><code>to-pg</code> converts inferred collection schemas into PostgreSQL <code>CREATE TABLE</code> statements</td>
+<td><code>infer</code> refreshes PostgreSQL <code>CREATE TABLE</code> statements under <code>schema/tables/</code> when used with a project config</td>
 </tr>
 <tr>
 <td>Per-collection PostgreSQL schemas</td>
@@ -170,12 +170,16 @@ PostgreSQL.</p>
 <td><code>export</code> expands MongoDB documents into <code>.csv.gz</code> files matching the generated SQL tables</td>
 </tr>
 <tr>
+<td>PostgreSQL import</td>
+<td><code>import</code> creates PostgreSQL objects and loads exported <code>.csv.gz</code> files using <code>TARGET_URI</code></td>
+</tr>
+<tr>
 <td>HTML reporting</td>
-<td><code>report</code> generates collection-level, schema-level, cluster-level, and post-import validation reports</td>
+<td><code>infer</code> writes collection-level and schema-level reports, and <code>report</code> can regenerate them from existing files</td>
 </tr>
 <tr>
 <td>Post-import validation</td>
-<td><code>report --post-import</code> compares MongoDB occurrence counts with PostgreSQL row counts</td>
+<td><code>import</code> writes <code>reports/post_report.html</code> automatically, and <code>report --post-import</code> can regenerate it later</td>
 </tr>
 </tbody>
 </table>
@@ -186,24 +190,21 @@ mongo2pg<span class="w"> </span>init<span class="w"> </span><span class="se">\</
 <span class="w">  </span>--project-base<span class="w"> </span>./projects<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--project-name<span class="w"> </span>sample_airbnb<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--source-uri<span class="w"> </span><span class="s1">&#39;mongodb://user:pass@localhost:27017/?authSource=admin&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--target-uri<span class="w"> </span><span class="s1">&#39;postgres://postgres:x@localhost:5432/postgres?sslmode=disable&#39;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
 
-<span class="c1"># 2. Infer schemas and statistics</span>
-mongo2pg<span class="w"> </span>infer<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+<span class="c1"># 2. Infer schemas, generate PostgreSQL DDL, and write the main reports</span>
+mongo2pg<span class="w"> </span>infer<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.toml
 
-<span class="c1"># 3. Generate PostgreSQL DDL</span>
-mongo2pg<span class="w"> </span>to-pg<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+<span class="c1"># 3. Export relational CSV files</span>
+mongo2pg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.toml
 
-<span class="c1"># 4. Export relational CSV files</span>
-mongo2pg<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
+<span class="c1"># 4. Create PostgreSQL objects and import the exported CSV files</span>
+mongo2pg<span class="w"> </span>import<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.toml
 
-<span class="c1"># 5. Generate reports</span>
-mongo2pg<span class="w"> </span>report<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf
-
-<span class="c1"># 6. Validate a loaded PostgreSQL database</span>
-mongo2pg<span class="w"> </span>report<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.conf<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--post-import<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>--namespace<span class="w"> </span>sample_airbnb
+<span class="c1"># 5. `import` already generated reports/post_report.html.</span>
+<span class="c1">#    Run this only if you want to regenerate it.</span>
+mongo2pg<span class="w"> </span>report<span class="w"> </span>-c<span class="w"> </span>./projects/sample_airbnb/config/sample_airbnb.toml<span class="w"> </span>--post-import
 </code></pre></div>
 
 <hr />
@@ -300,5 +301,5 @@ mongo2pg<span class="w"> </span>report<span class="w"> </span>-c<span class="w">
 
 <!--
 MkDocs version : 1.6.1
-Build Date UTC : 2026-05-23 16:38:45.887110+00:00
+Build Date UTC : 2026-05-25 12:52:52.168524+00:00
 -->
