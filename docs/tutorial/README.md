@@ -37,9 +37,9 @@ mongo2pg init \
 This creates:
 
 ```text
-docker_tutorial/sample_airbnb/
+docker_tutorial/mycluster/
   config/
-    sample_airbnb.toml
+    mycluster.toml
   source/
     collections/
   schema/
@@ -53,7 +53,7 @@ And a generated config file:
 ```toml
 [project]
 base_dir = "docker_tutorial"
-project_dir = "sample_airbnb"
+project_dir = "mycluster"
 
 [source]
 uri = "mongodb://user:pass@localhost:2717/?authSource=admin"
@@ -104,13 +104,11 @@ Inference summary
 
 ---
 
-## Step 3 - Adapt the DDL
-
 Maybe the table name, schema name or database options do not reflect your needs. You can modify those SQL files. They will be used during the next steps, generating export files.
 
 For example, some table name can be over 64c, they should be renamed.
 
-## Step 4 — Export data as relational CSV files
+## Step 3 — Export data as relational CSV files
 
 ```bash
 mongo2pg export -c docker_tutorial/mycluster/config/mycluster.toml
@@ -148,7 +146,7 @@ and also `mycluster/reports/sample_airbnb.schema.html` a graphical representatio
 
 ---
 
-## Step 5 — Load into PostgreSQL
+## Step 4 — Load into PostgreSQL
 
 Run:
 
