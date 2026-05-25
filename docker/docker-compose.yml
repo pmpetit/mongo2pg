@@ -22,7 +22,16 @@ services:
     image: mongodb/mongodb-community-server
     container_name: mongodb_db
     entrypoint: ["/bin/sh", "/usr/local/bin/mongodb-entrypoint.sh"]
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/tmp/mongodb-keyfile"]
+    command:
+      [
+        "mongod",
+        "--quiet",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all",
+        "--keyFile",
+        "/tmp/mongodb-keyfile",
+      ]
     environment:
       MONGODB_INITDB_ROOT_USERNAME: user
       MONGODB_INITDB_ROOT_PASSWORD: pass
@@ -36,11 +45,12 @@ services:
       test:
         [
           "CMD-SHELL",
-          "echo 'db.runCommand(\"ping\").ok' | mongosh 'mongodb://user:pass@localhost:27017/admin?authSource=admin' --quiet",
+          'echo ''db.runCommand("ping").ok'' | mongosh ''mongodb://user:pass@localhost:27017/admin?authSource=admin'' --quiet',
         ]
-      interval: 5s
+      interval: 60s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 20s
 
   # --- MONGO INIT (Automatically starts the replica set) ---
   mongodb-init:
@@ -61,12 +71,27 @@ services:
         "--authenticationDatabase",
         "admin",
         "--eval",
-        "rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongodb:27017'}]})",
+        "try { rs.status(); } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongodb:27017'}]}); }",
+      ]
+
+  # --- MONGO SAMPLE DATA SEEDING ---
+  mongodb-seed:
+    image: mongodb/mongodb-community-server
+    container_name: mongodb_seed
+    user: root
+    depends_on:
+      mongodb-init:
+        condition: service_completed_successfully
+    entrypoint:
+      [
+        "/bin/bash",
+        "-lc",
+        'if mongosh ''mongodb://user:pass@mongodb:27017/admin?authSource=admin'' --quiet --eval ''db.getSiblingDB("sample_mflix").getCollectionNames().length > 0'' | grep -qx ''true''; then echo ''MongoDB sample datasets already loaded, skipping seed''; exit 0; fi && apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/mongodb-sample-dataset && git clone --depth 1 https://github.com/neelabalan/mongodb-sample-dataset /tmp/mongodb-sample-dataset && cd /tmp/mongodb-sample-dataset && bash script.sh mongodb 27017 user pass',
       ]
 
   # --- APACHE KAFKA (KRaft Mode - No Zookeeper) ---
   kafka:
-    image: confluentinc/cp-kafka:7.6.0
+    image: confluentinc/cp-kafka:8.2.1
     container_name: kafka_broker
     ports:
       - "9092:9092"
@@ -81,8 +106,9 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
       KAFKA_PROCESS_ROLES: "broker,controller"
       KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:29093"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
       KAFKA_LOG_DIRS: "/var/lib/kafka/data"
-      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk" # Pre-generated cluster ID
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qg" # Pre-generated cluster ID
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
@@ -98,17 +124,90 @@ services:
       timeout: 5s
       retries: 5
 
-  # --- APICURIO SCHEMA REGISTRY ---
+  # --- CONFLUENT SCHEMA REGISTRY ---
   schema-registry:
-    image: apicurio/apicurio-registry-mem:2.5.7.Final
+    image: confluentinc/cp-schema-registry:8.2.1
     container_name: schema_registry
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
-      QUARKUS_PROFILE: "prod"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "PLAINTEXT://kafka:29092"
+      SCHEMA_REGISTRY_HOST_NAME: "schema-registry"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
     depends_on:
       kafka:
         condition: service_healthy
+
+  # --- KAFKA CONNECT / DEBEZIUM WITH CONFLUENT AVRO CONVERTERS ---
+  kafkaconnect:
+    build:
+      context: .
+      dockerfile: Dockerfile.kafkaconnect
+    container_name: kafka_connect
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka:29092"
+      CONNECT_GROUP_ID: "1"
+      CONNECT_CONFIG_STORAGE_TOPIC: "debezium_connect_configs"
+      CONNECT_OFFSET_STORAGE_TOPIC: "debezium_connect_offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "debezium_connect_statuses"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_KEY_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+      CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafkaconnect"
+      CONNECT_REST_PORT: "8083"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components,/kafka/connect"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_started
+      mongodb-seed:
+        condition: service_completed_successfully
+
+  kafkaconnect-init:
+    image: curlimages/curl:8.8.0
+    container_name: kafka_connect_init
+    depends_on:
+      kafkaconnect:
+        condition: service_started
+      mongodb-seed:
+        condition: service_completed_successfully
+    entrypoint:
+      [
+        "sh",
+        "-lc",
+        'until curl -fsS http://kafkaconnect:8083/connectors; do sleep 2; done && curl -fsS -X PUT -H ''Content-Type: application/json'' http://kafkaconnect:8083/connectors/sample-airbnb-mongodb/config -d ''{"connector.class":"io.debezium.connector.mongodb.MongoDbConnector","tasks.max":"1","mongodb.connection.string":"mongodb://user:pass@mongodb:27017/?authSource=admin&replicaSet=rs0","topic.prefix":"mongo2pg_sample_airbnb","database.include.list":"sample_airbnb","snapshot.mode":"initial"}''',
+      ]
+
+  # --- KAFKA UI ---
+  kafkaui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka_ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "local"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:29092"
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8081"
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: "connect"
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: "http://kafkaconnect:8083"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_started
+      kafkaconnect:
+        condition: service_started
 
 volumes:
   postgres_data:
