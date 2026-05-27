@@ -369,7 +369,7 @@ struct Column {
 }
 
 #[derive(Debug)]
-struct Table {
+pub struct Table {
     name: String,
     columns: Vec<Column>,
     child_tables: Vec<Table>,
@@ -378,7 +378,7 @@ struct Table {
 }
 
 impl Table {
-    fn new(name: String) -> Self {
+    pub fn new(name: String) -> Self {
         Self {
             name,
             columns: Vec::new(),
@@ -403,8 +403,54 @@ fn find_pk(table: &Table) -> (String, String) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// Returns `true` when `name` looks like a MongoDB map key (8+ lowercase hex chars).
+
 fn is_hex_keyed_name(name: &str) -> bool {
     name.len() >= 8 && name.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'))
+}
+
+/// Returns true if the string looks like a UUID (hex digits and dashes, 36 chars, 8-4-4-4-12)
+fn is_uuid_keyed_name(name: &str) -> bool {
+    let parts: Vec<&str> = name.split('-').collect();
+    name.len() == 36
+        && parts.len() == 5
+        && parts[0].len() == 8
+        && parts[1].len() == 4
+        && parts[2].len() == 4
+        && parts[3].len() == 4
+        && parts[4].len() == 12
+        && parts
+            .iter()
+            .all(|p| p.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+/// Returns true if all keys in the map look like UUIDs
+fn all_keys_are_uuids(map: &IndexMap<String, FieldSchema>) -> bool {
+    !map.is_empty() && map.keys().all(|k| is_uuid_keyed_name(k))
+}
+
+/// For a map document (all sub-fields are UUID-keyed), try to find uniform inner
+/// document fields. Returns the first non-empty inner `IndexMap` found, or `None`
+/// if there is no uniform inner structure (caller should fall back to JSONB).
+fn map_uuid_value_fields(doc_ts: &TypeSchema) -> Option<&IndexMap<String, FieldSchema>> {
+    let sub_fields = doc_ts.object.as_ref()?;
+    if sub_fields.is_empty() || !all_keys_are_uuids(sub_fields) {
+        return None;
+    }
+    for sf in sub_fields.values() {
+        let nonnull: Vec<_> = sf
+            .types
+            .iter()
+            .filter(|(t, _)| !is_null_type(t.as_str()))
+            .collect();
+        if nonnull.len() == 1 && nonnull[0].0 == TYPE_OBJECT {
+            if let Some(inner) = &nonnull[0].1.object {
+                if !inner.is_empty() {
+                    return Some(inner);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// For a map document (all sub-fields are hex-keyed), try to find uniform inner
@@ -593,9 +639,16 @@ fn add_map_table(
         primary_key: false,
     });
     child.parent_ref = Some((fk_col, parent.name.clone(), pk_name));
+
+    // Use UUID type if all keys are UUIDs, else TEXT
+    let key_type = if value_fields.keys().all(|k| is_uuid_keyed_name(k)) {
+        "UUID"
+    } else {
+        "TEXT"
+    };
     child.columns.push(Column {
         name: "key".to_owned(),
-        pg_type: "TEXT".to_owned(),
+        pg_type: key_type.to_owned(),
         nullable: false,
         primary_key: false,
     });
@@ -642,7 +695,7 @@ fn handle_array_field(
 // Main recursive field processor
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn process_fields(
+pub fn process_fields(
     table: &mut Table,
     fields: &IndexMap<String, FieldSchema>,
     col_prefix: &str,
@@ -669,6 +722,7 @@ fn process_fields(
         }
 
         // ── Single pure Object ────────────────────────────────────────────────
+
         if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
             let ts = non_null[0].1;
 
@@ -688,9 +742,27 @@ fn process_fields(
                 .as_ref()
                 .is_some_and(|sf| !sf.is_empty() && sf.keys().all(|k| is_hex_keyed_name(k)));
 
+            let is_uuid = ts
+                .object
+                .as_ref()
+                .is_some_and(|sf| !sf.is_empty() && sf.keys().all(|k| is_uuid_keyed_name(k)));
+
             if is_hex {
                 // Map document (dynamic hex keys)
                 let value_fields = map_value_fields(ts).map(|vf| vf.clone());
+                if let Some(vf) = value_fields {
+                    add_map_table(table, &col_name, &vf, pg_schema);
+                } else {
+                    table.columns.push(Column {
+                        name: col_name,
+                        pg_type: "JSONB".to_owned(),
+                        nullable,
+                        primary_key: false,
+                    });
+                }
+            } else if is_uuid {
+                // Map document (dynamic UUID keys)
+                let value_fields = map_uuid_value_fields(ts).map(|vf| vf.clone());
                 if let Some(vf) = value_fields {
                     add_map_table(table, &col_name, &vf, pg_schema);
                 } else {
@@ -788,7 +860,7 @@ fn process_fields(
 // Tree traversal and DDL rendering
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn collect_tables(root: &Table) -> Vec<&Table> {
+pub fn collect_tables(root: &Table) -> Vec<&Table> {
     let mut result: Vec<&Table> = Vec::new();
     let mut queue: Vec<&Table> = vec![root];
     while !queue.is_empty() {
@@ -852,10 +924,8 @@ pub fn schema_to_ddl(
     process_fields(&mut root, &schema.object, "", true, pg_schema);
 
     let tables = collect_tables(&root);
-    let total_cols: usize = tables.iter().map(|t| t.columns.len()).sum();
 
-    eprintln!("tables : {}", tables.len());
-    eprintln!("columns: {total_cols}");
+    // Suppressed debug output: tables and columns count
 
     let ddl = tables
         .iter()
