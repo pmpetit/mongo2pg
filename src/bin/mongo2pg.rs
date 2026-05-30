@@ -497,6 +497,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         conf_number,
         conf_percent,
         conf_jsonb,
+        conf_include,
+        conf_exclude,
     ) = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
         let source_uri = args.mongo.source_uri.clone().or(c.source_uri).ok_or_else(|| {
@@ -515,13 +517,24 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             c.number,
             c.percent,
             c.jsonb,
+            c.include,
+            c.exclude,
         )
     } else {
         let source_uri =
             args.mongo.source_uri.clone().ok_or_else(|| {
                 anyhow!("No SOURCE_URI provided: pass --source-uri or -c <config>")
             })?;
-        (source_uri, args.output_dir.clone(), None, None, None, false)
+        (
+            source_uri,
+            args.output_dir.clone(),
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            Vec::new(),
+        )
     };
 
     let namespace = args.namespace.clone().or(conf_namespace);
@@ -552,7 +565,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     match namespace {
         None => {
             // No namespace provided: enumerate all user databases and infer each.
-            infer_all_databases(&client, &args, !quiet_infer).await?;
+            infer_all_databases(&client, &args, &conf_include, &conf_exclude, !quiet_infer).await?;
         }
         Some(ref ns) if ns.contains('.') => {
             // Single collection: <db>.<collection>
@@ -577,6 +590,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     "Warning: collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
                     existing_colls.join(", ")
                 );
+            }
+            if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
+                eprintln!(
+                    "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
+                );
+                return Ok(());
             }
             let schema = infer_collection(
                 &client,
@@ -612,7 +631,11 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .context("Failed to list collections")?;
 
             let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
-            for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+            for coll_name in coll_names
+                .iter()
+                .filter(|n| !n.starts_with("system."))
+                .filter(|n| should_infer_collection(n, &conf_include, &conf_exclude))
+            {
                 match infer_collection(
                     &client,
                     db_name,
@@ -760,7 +783,13 @@ fn print_infer_summary(conf: &Path) -> Result<()> {
 ///
 /// Output files are written as `<output_dir>/<dbname>/<collname>/`.
 /// Report generation is handled separately by the `report` command.
-async fn infer_all_databases(client: &Client, args: &InferArgs, emit_stats: bool) -> Result<()> {
+async fn infer_all_databases(
+    client: &Client,
+    args: &InferArgs,
+    include: &[String],
+    exclude: &[String],
+    emit_stats: bool,
+) -> Result<()> {
     let all_dbs = client
         .list_database_names()
         .await
@@ -796,7 +825,11 @@ async fn infer_all_databases(client: &Client, args: &InferArgs, emit_stats: bool
 
         let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
 
-        for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+        for coll_name in coll_names
+            .iter()
+            .filter(|n| !n.starts_with("system."))
+            .filter(|n| should_infer_collection(n, include, exclude))
+        {
             let db_out_dir = args.output_dir.as_deref().map(|d| d.join(db_name));
             match infer_collection(
                 client,
@@ -1230,7 +1263,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| ns.split('.').next().unwrap_or(ns))
         .unwrap_or(&args.project_name);
     let conf_content = format!(
-        "[project]\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
+        "[project]\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
         args.project_base.display(),
         args.project_name,
         args.source_uri
@@ -1909,6 +1942,8 @@ struct ConfData {
     number: Option<u64>,
     percent: Option<f64>,
     jsonb: bool,
+    include: Vec<String>,
+    exclude: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1933,6 +1968,20 @@ struct TomlSourceSection {
     number: Option<u64>,
     percent: Option<f64>,
     jsonb: Option<bool>,
+    #[serde(default)]
+    include: Vec<String>,
+    #[serde(default)]
+    exclude: Vec<String>,
+}
+
+fn should_infer_collection(name: &str, include: &[String], exclude: &[String]) -> bool {
+    if !exclude.is_empty() {
+        !exclude.iter().any(|candidate| candidate == name)
+    } else if !include.is_empty() {
+        include.iter().any(|candidate| candidate == name)
+    } else {
+        true
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -1959,6 +2008,8 @@ fn read_conf(path: &Path) -> Result<ConfData> {
             number: source.number,
             percent: source.percent,
             jsonb: source.jsonb.unwrap_or(false),
+            include: source.include,
+            exclude: source.exclude,
         })
     }
 
@@ -2020,6 +2071,8 @@ fn read_conf(path: &Path) -> Result<ConfData> {
             number,
             percent,
             jsonb,
+            include: Vec::new(),
+            exclude: Vec::new(),
         })
     }
 
@@ -2485,4 +2538,47 @@ async fn build_post_import_rows(
     }
 
     Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_infer_collection, TomlProjectConfig};
+
+    #[test]
+    fn should_infer_collection_honors_exclude_before_include() {
+        let include = vec!["users".to_owned()];
+        let exclude = vec!["users".to_owned(), "audit".to_owned()];
+
+        assert!(!should_infer_collection("users", &include, &exclude));
+        assert!(should_infer_collection("orders", &include, &exclude));
+    }
+
+    #[test]
+    fn should_infer_collection_honors_include_when_exclude_is_empty() {
+        let include = vec!["users".to_owned(), "orders".to_owned()];
+        let exclude = Vec::new();
+
+        assert!(should_infer_collection("users", &include, &exclude));
+        assert!(!should_infer_collection("audit", &include, &exclude));
+    }
+
+    #[test]
+    fn toml_source_include_and_exclude_are_parsed() {
+        let config: TomlProjectConfig = toml::from_str(
+            r#"
+[project]
+base_dir = "/tmp"
+project_dir = "demo"
+
+[source]
+include = ["users", "orders"]
+exclude = ["audit"]
+"#,
+        )
+        .expect("config should parse");
+
+        let source = config.source.expect("source section should exist");
+        assert_eq!(source.include, vec!["users", "orders"]);
+        assert_eq!(source.exclude, vec!["audit"]);
+    }
 }
