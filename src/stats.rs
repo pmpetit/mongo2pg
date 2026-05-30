@@ -1,5 +1,6 @@
 //! Schema statistics helpers: width, depth, and branch count.
 
+use crate::pg_table_count::pg_table_count;
 use serde::Serialize;
 
 use crate::analyzer::{CollectionSchema, FieldSchema, TYPE_ARRAY};
@@ -97,10 +98,14 @@ impl SchemaStats {
     ///                       collections with sparse nested objects (e.g. audit-log
     ///                       documents where `newValues`/`oldValues` can hold any
     ///                       subset of hundreds of possible sub-fields).
-    pub fn migrability_score(&self) -> f64 {
+    pub fn migrability_score(&self, pg_tables: usize) -> f64 {
         let depth_term = self.depth as f64 / 2.0;
         let array_term = self.array_field_count as f64;
-        let poly_term = self.max_poly_ratio;
+        let poly_term = if self.max_poly_ratio > 0.0 {
+            pg_tables as f64 / self.max_poly_ratio
+        } else {
+            pg_tables as f64
+        };
         depth_term + array_term + poly_term
     }
 }
@@ -233,6 +238,7 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
     } else {
         0.0
     };
+    let pg_tables = pg_table_count(schema);
     vec![
         total_line,
         format!("Documents sampled       : {}", schema.sampled),
@@ -248,7 +254,11 @@ pub fn format_stats(schema: &CollectionSchema, total_docs: Option<u64>) -> Vec<S
             "Max poly ratio           : {:.4} (L{})",
             s.max_poly_ratio, s.max_poly_level
         ),
-        format!("Migrability score       : {:.2}", s.migrability_score()),
+        format!(
+            "Migrability score       : {:.2}",
+            s.migrability_score(pg_tables)
+        ),
+        format!("PG tables               : {}", pg_tables),
         format!("Top-level types         : {}", type_summary),
     ]
 }
@@ -332,7 +342,8 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         })
         .collect();
 
-    let score = (s.migrability_score() * 100.0).round() / 100.0;
+    let pg_tables = pg_table_count(schema);
+    let score = (s.migrability_score(pg_tables) * 100.0).round() / 100.0;
     let distinct_over_avg = if s.avg_fields_per_doc > 0.0 {
         (s.width as f64 / s.avg_fields_per_doc * 10000.0).round() / 10000.0
     } else {
