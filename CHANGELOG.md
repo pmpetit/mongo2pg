@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
----
+### Changed
+
+- **Config file**: Added `include` and `exclude` parameters to the `[source]` section in TOML config files. These allow users to specify which collections to include or exclude during inference, export, and import steps. The `exclude` list takes precedence over `include` if both are specified.
+- **Primary key and foreign key handling**: Now supports multi-column primary keys and corresponding foreign key relationships throughout the export and import logic. The internal representation and SQL generation have been updated to handle composite keys, and row extraction logic now correctly maps MongoDB `_id` fields to the appropriate SQL columns, including flattened object ID fields for composite PKs.
+- **Type inference**: Simplified type inference for number fields, mapping MongoDB `ObjectId` to `TEXT` instead of `UUID`, and ensuring numeric strings remain `TEXT`.
+- **Analyzer**: Empty arrays no longer count as present for probability calculations.
+- **CLI**: `to-pg`, `infer`, `export`, and `import` commands now honor the `include` and `exclude` config parameters for collection filtering.
+- **Tests**: Added comprehensive tests for multi-column PKs, collection filtering, and row extraction logic.
+
+### Fixed
+
+- **Composite PKs**: Fixed bugs in row extraction and SQL generation for tables with composite primary keys.
+- **Collection filtering**: Fixed issues where excluded collections could still be processed.
+- **Error reporting**: Improved error messages for missing SQL schemas and import/export failures, including line-level details for CSV import errors.
+- **Child tables**: Child tables now drop redundant nested `id` fields instead of renaming them.
+- **Post-import report**: Now filters collections using sanitized names and honors `include`/`exclude` lists.
 
 ## [0.4.0] - 2026-05-25
 
