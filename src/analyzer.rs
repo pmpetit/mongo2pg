@@ -183,6 +183,10 @@ impl FieldAcc {
     }
 
     fn observe_value(&mut self, bson: &Bson) {
+        if matches!(bson, Bson::Array(arr) if arr.is_empty()) {
+            return;
+        }
+
         self.count += 1;
         let type_name = bson_type_name(bson);
         let acc = self
@@ -542,5 +546,40 @@ pub fn bson_to_json_value(bson: &Bson) -> Option<serde_json::Value> {
             Some(serde_json::Value::Array(vals))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Analyzer;
+    use bson::doc;
+
+    #[test]
+    fn empty_arrays_do_not_count_as_present_for_probability() {
+        let docs = vec![
+            doc! { "advices": [] },
+            doc! { "advices": [ { "advice": "keep" } ] },
+            doc! { "advices": [ { "advice": "check" } ] },
+        ];
+
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let advices = schema
+            .object
+            .get("advices")
+            .expect("advices field should exist");
+        assert!(
+            (advices.probability - (2.0 / 3.0)).abs() < f64::EPSILON,
+            "empty arrays should not count as present"
+        );
+        let array_type = advices
+            .types
+            .get("Array")
+            .expect("advices should be typed as array");
+        assert_eq!(array_type.sampled, 2);
     }
 }

@@ -257,8 +257,8 @@ struct TableNode {
     sql_name: String,
     /// Column names in declaration order (from SQL)
     columns: Vec<String>,
-    /// Primary-key column name (always `"id"`)
-    pk_col: String,
+    /// Primary-key column names in declaration order.
+    pk_cols: Vec<String>,
     /// FK column pointing to the parent table (`None` for root tables)
     fk_col: Option<String>,
     /// MongoDB field name at the current document level that yields this table's data.
@@ -319,12 +319,12 @@ fn build_node(
         None => String::new(),
     };
 
-    let pk_col = sql_t
+    let pk_cols: Vec<String> = sql_t
         .columns
         .iter()
-        .find(|c| c.primary_key)
+        .filter(|c| c.primary_key)
         .map(|c| c.name.clone())
-        .unwrap_or_else(|| "id".to_owned());
+        .collect();
 
     let fk_col = sql_t.foreign_keys.first().map(|fk| fk.from_col.clone());
 
@@ -353,7 +353,7 @@ fn build_node(
     TableNode {
         sql_name: sql_t.name.clone(),
         columns,
-        pk_col,
+        pk_cols,
         fk_col,
         mongo_field,
         is_scalar_array,
@@ -380,6 +380,14 @@ fn find_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bs
         }
     }
     None
+}
+
+fn find_root_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bson> {
+    find_mongo_field(doc, sql_col).or_else(|| {
+        doc.get_document("_id")
+            .ok()
+            .and_then(|id_doc| find_mongo_field(id_doc, sql_col))
+    })
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -414,12 +422,19 @@ fn extract_rows(
         .columns
         .iter()
         .map(|col| {
-            if col == &node.pk_col {
+            if (!is_root && node.pk_cols.iter().any(|pk| pk == col))
+                || (is_root && node.pk_cols.len() == 1 && node.pk_cols[0] == "id" && col == "id")
+            {
                 Some(my_id.clone())
             } else if Some(col) == node.fk_col.as_ref() {
                 Some(parent_id.unwrap_or("").to_owned())
             } else {
-                find_mongo_field(doc, col)
+                let lookup = if is_root {
+                    find_root_mongo_field(doc, col)
+                } else {
+                    find_mongo_field(doc, col)
+                };
+                lookup
                     .map(|v| {
                         if node.jsonb_cols.contains(col) {
                             Some(serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default())
@@ -450,7 +465,7 @@ fn extract_rows(
                             .columns
                             .iter()
                             .map(|col| {
-                                if col == &child.pk_col {
+                                if child.pk_cols.iter().any(|pk| pk == col) {
                                     Some(child_id.clone())
                                 } else if Some(col) == child.fk_col.as_ref() {
                                     Some(my_id.clone())
@@ -572,4 +587,97 @@ pub async fn export_collection(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_tree, extract_rows};
+    use crate::schema_diagram::parse_sql;
+    use bson::{doc, Bson};
+    use std::collections::HashMap;
+
+    #[test]
+    fn export_root_rows_use_flattened_object_id_fields_and_skip_fake_primary_column() {
+        let sql = r#"
+CREATE TABLE security_logs (
+    log_type TEXT NOT NULL,
+    projectid TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    last_execution TEXT NOT NULL,
+    PRIMARY KEY (log_type, projectid, provider)
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables);
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": {
+                "projectid": "FRAS-P-SAM-FRTERR2",
+                "provider": "atlas",
+                "log_type": "dbAccessHistory"
+            },
+            "last_execution": "2023-07-13T09:02:15.833170"
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("security_logs").expect("root rows missing");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].len(), 4);
+        assert_eq!(rows[0][0].as_deref(), Some("dbAccessHistory"));
+        assert_eq!(rows[0][1].as_deref(), Some("FRAS-P-SAM-FRTERR2"));
+        assert_eq!(rows[0][2].as_deref(), Some("atlas"));
+        assert_eq!(rows[0][3].as_deref(), Some("2023-07-13T09:02:15.833170"));
+    }
+
+    #[test]
+    fn export_root_rows_write_scalar_id_column_from_mongo_id() {
+        let sql = r#"
+CREATE TABLE activity_feed (
+    id TEXT PRIMARY KEY,
+    activity TEXT NOT NULL,
+    targetid TEXT NOT NULL,
+    targettype TEXT NOT NULL,
+    timestamp DOUBLE PRECISION NOT NULL,
+    who TEXT NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables);
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "6267ddea9270b5e839a81ac4",
+            "activity": "Project created",
+            "targetid": "FRAS-D-NLX-FEATURE1",
+            "targettype": "project",
+            "timestamp": 1650468505.273496,
+            "who": "me"
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("activity_feed").expect("root rows missing");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0].as_deref(), Some("6267ddea9270b5e839a81ac4"));
+        assert_eq!(rows[0][1].as_deref(), Some("Project created"));
+        assert_eq!(rows[0][2].as_deref(), Some("FRAS-D-NLX-FEATURE1"));
+    }
 }
