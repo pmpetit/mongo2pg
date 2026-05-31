@@ -40,6 +40,7 @@ use mongo2pg::to_pg::schema_to_ddl;
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
 use serde::{Deserialize, Serialize};
+use strsim::jaro_winkler;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared args
@@ -310,7 +311,10 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
     fn prepend_database_preamble(ddl: String, db_name: Option<&str>) -> String {
         match db_name {
             None => ddl,
-            Some(name) => format!("CREATE DATABASE {name};\n\\connect {name}\n\n{ddl}"),
+            Some(name) => {
+                let quoted_name = quote_ident(name);
+                format!("CREATE DATABASE {quoted_name};\n\\connect {quoted_name}\n\n{ddl}")
+            }
         }
     }
 
@@ -319,6 +323,12 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
         let c = read_conf(conf)?;
         c.namespace
             .map(|namespace| split_namespace_scope(&namespace).0.to_owned())
+    } else {
+        None
+    };
+
+    let config_target_schema: Option<String> = if let Some(ref conf) = args.config {
+        read_conf(conf)?.target_schema
     } else {
         None
     };
@@ -452,7 +462,10 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
         let ddl = schema_to_ddl(
             &schema,
             table_name,
-            args.schema.as_deref().or(Some(table_name)),
+            args.schema
+                .as_deref()
+                .or(config_target_schema.as_deref())
+                .or(Some(table_name)),
         );
         let db_name = rel_sql
             .parent()
@@ -497,6 +510,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         conf_number,
         conf_percent,
         conf_jsonb,
+        conf_include,
+        conf_exclude,
     ) = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
         let source_uri = args.mongo.source_uri.clone().or(c.source_uri).ok_or_else(|| {
@@ -515,13 +530,24 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             c.number,
             c.percent,
             c.jsonb,
+            c.include,
+            c.exclude,
         )
     } else {
         let source_uri =
             args.mongo.source_uri.clone().ok_or_else(|| {
                 anyhow!("No SOURCE_URI provided: pass --source-uri or -c <config>")
             })?;
-        (source_uri, args.output_dir.clone(), None, None, None, false)
+        (
+            source_uri,
+            args.output_dir.clone(),
+            None,
+            None,
+            None,
+            false,
+            Vec::new(),
+            Vec::new(),
+        )
     };
 
     let namespace = args.namespace.clone().or(conf_namespace);
@@ -552,7 +578,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     match namespace {
         None => {
             // No namespace provided: enumerate all user databases and infer each.
-            infer_all_databases(&client, &args, !quiet_infer).await?;
+            infer_all_databases(&client, &args, &conf_include, &conf_exclude, !quiet_infer).await?;
         }
         Some(ref ns) if ns.contains('.') => {
             // Single collection: <db>.<collection>
@@ -578,6 +604,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     existing_colls.join(", ")
                 );
             }
+            if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
+                eprintln!(
+                    "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
+                );
+                return Ok(());
+            }
             let schema = infer_collection(
                 &client,
                 db_name,
@@ -585,6 +617,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 coll_name,
                 &args,
                 None,
+                Some((1, 1)),
                 !quiet_infer,
             )
             .await?;
@@ -610,9 +643,15 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .list_collection_names()
                 .await
                 .context("Failed to list collections")?;
+            let filtered_coll_names: Vec<&String> = coll_names
+                .iter()
+                .filter(|n| !n.starts_with("system."))
+                .filter(|n| should_infer_collection(n, &conf_include, &conf_exclude))
+                .collect();
+            let total_collections = filtered_coll_names.len();
 
             let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
-            for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+            for (index, coll_name) in filtered_coll_names.iter().enumerate() {
                 match infer_collection(
                     &client,
                     db_name,
@@ -620,12 +659,13 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     coll_name,
                     &args,
                     None,
+                    Some((index + 1, total_collections)),
                     !quiet_infer,
                 )
                 .await
                 {
                     Ok(schema) => {
-                        all_schemas.insert(coll_name.clone(), schema);
+                        all_schemas.insert((*coll_name).clone(), schema);
                     }
                     Err(e) => eprintln!("  [warn] skipping {db_name}.{coll_name}: {e:#}"),
                 }
@@ -760,7 +800,13 @@ fn print_infer_summary(conf: &Path) -> Result<()> {
 ///
 /// Output files are written as `<output_dir>/<dbname>/<collname>/`.
 /// Report generation is handled separately by the `report` command.
-async fn infer_all_databases(client: &Client, args: &InferArgs, emit_stats: bool) -> Result<()> {
+async fn infer_all_databases(
+    client: &Client,
+    args: &InferArgs,
+    include: &[String],
+    exclude: &[String],
+    emit_stats: bool,
+) -> Result<()> {
     let all_dbs = client
         .list_database_names()
         .await
@@ -782,6 +828,8 @@ async fn infer_all_databases(client: &Client, args: &InferArgs, emit_stats: bool
         user_dbs.join(", ")
     );
 
+    let mut databases_with_collections: Vec<(String, Vec<String>)> = Vec::new();
+
     for db_name in &user_dbs {
         let db = client.database(db_name);
         let coll_names = match db.list_collection_names().await {
@@ -794,9 +842,27 @@ async fn infer_all_databases(client: &Client, args: &InferArgs, emit_stats: bool
             }
         };
 
+        let filtered_coll_names: Vec<String> = coll_names
+            .into_iter()
+            .filter(|n| !n.starts_with("system."))
+            .filter(|n| should_infer_collection(n, include, exclude))
+            .collect();
+
+        databases_with_collections.push((db_name.clone(), filtered_coll_names));
+    }
+
+    let total_collections: usize = databases_with_collections
+        .iter()
+        .map(|(_, coll_names)| coll_names.len())
+        .sum();
+
+    let mut current_collection = 0usize;
+
+    for (db_name, coll_names) in &databases_with_collections {
         let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
 
-        for coll_name in coll_names.iter().filter(|n| !n.starts_with("system.")) {
+        for coll_name in coll_names {
+            current_collection += 1;
             let db_out_dir = args.output_dir.as_deref().map(|d| d.join(db_name));
             match infer_collection(
                 client,
@@ -805,6 +871,7 @@ async fn infer_all_databases(client: &Client, args: &InferArgs, emit_stats: bool
                 coll_name,
                 args,
                 db_out_dir.as_deref(),
+                Some((current_collection, total_collections)),
                 emit_stats,
             )
             .await
@@ -842,13 +909,17 @@ async fn infer_collection(
     output_name: &str,
     args: &InferArgs,
     output_dir_override: Option<&Path>,
+    progress: Option<(usize, usize)>,
     emit_stats: bool,
 ) -> Result<CollectionSchema> {
+    let collection_label = format!("{db_name}.{coll_name}");
+    let progress_prefix = progress.map(|(current, total)| format!("[{current}/{total}] "));
+
     let output_dir = output_dir_override.or(args.output_dir.as_deref());
     let db = client.database(db_name);
     let collection = db.collection::<bson::Document>(coll_name);
 
-    let (sample_size, known_total) = if let Some(pct) = args.percent {
+    let (sample_size, known_total, sample_basis) = if let Some(pct) = args.percent {
         if pct <= 0.0 || pct > 100.0 {
             return Err(anyhow!(
                 "--percent must be between 0 (exclusive) and 100 (inclusive), got {pct}"
@@ -859,9 +930,20 @@ async fn infer_collection(
             .await
             .context("Failed to get document count for --percent calculation")?;
         let n = ((total as f64 * pct / 100.0).ceil() as u64).max(1);
-        (n, Some(total))
+        (
+            n,
+            Some(total),
+            format!("sample: --percent {pct}% => {n}/{total} docs"),
+        )
     } else {
-        (args.number.unwrap_or(1000), None)
+        let n = args.number.unwrap_or(1000);
+        (n, None, format!("sample: --number {n} docs"))
+    };
+
+    if let Some(prefix) = &progress_prefix {
+        eprintln!("{prefix}Inferring {collection_label} ({sample_basis})");
+    } else {
+        eprintln!("Inferring {collection_label} ({sample_basis})");
     };
 
     let mut analyzer = Analyzer::new(true);
@@ -958,7 +1040,11 @@ async fn infer_collection(
     if emit_stats {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        writeln!(handle, "[{db_name}.{coll_name}]")?;
+        if let Some(prefix) = &progress_prefix {
+            writeln!(handle, "{prefix}{collection_label} ({sample_basis})")?;
+        } else {
+            writeln!(handle, "[{collection_label}] ({sample_basis})")?;
+        }
         for line in &stats_lines {
             writeln!(handle, "{line}")?;
         }
@@ -1230,7 +1316,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| ns.split('.').next().unwrap_or(ns))
         .unwrap_or(&args.project_name);
     let conf_content = format!(
-        "[project]\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
+        "[project]\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
         args.project_base.display(),
         args.project_name,
         args.source_uri
@@ -1276,6 +1362,8 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .ok_or_else(|| anyhow!("Provide -c <config>"))?;
 
     let c = read_conf(conf)?;
+    let conf_include = c.include.clone();
+    let conf_exclude = c.exclude.clone();
     let source_uri = args
         .mongo
         .source_uri
@@ -1315,6 +1403,34 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         s.to_lowercase()
     }
 
+    fn warn_missing_sql_schema(
+        coll_name: &str,
+        sanitized: &str,
+        tables_dir: &Path,
+        sql_files: &[(String, String)],
+    ) {
+        let expected_path = tables_dir.join(format!("{sanitized}.sql"));
+        let closest_existing = sql_files
+            .iter()
+            .map(|(stem, sanitized_stem)| (stem, jaro_winkler(sanitized, sanitized_stem)))
+            .max_by(|(_, left), (_, right)| left.total_cmp(right))
+            .filter(|(_, score)| *score >= 0.88)
+            .map(|(stem, _)| tables_dir.join(format!("{stem}.sql")));
+
+        if let Some(closest_path) = closest_existing {
+            eprintln!(
+                "  warning: SQL schema not found for collection '{coll_name}': expected {}, closest existing file is {}",
+                expected_path.display(),
+                closest_path.display()
+            );
+        } else {
+            eprintln!(
+                "  warning: SQL schema not found for collection '{coll_name}': expected {} – run `to-pg` first",
+                expected_path.display()
+            );
+        }
+    }
+
     let collections: Vec<String> = if let Some(name) = args.collection.clone() {
         // If a specific collection is requested, check for its sanitized .sql file
         let sanitized = sanitize(&name);
@@ -1348,7 +1464,13 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         let sql_set: HashSet<String> = sql_files.iter().map(|(_, s)| s.clone()).collect();
 
         // Get all collection names from MongoDB
-        let mongo_colls = client.database(&db_name).list_collection_names().await?;
+        let mongo_colls = client
+            .database(&db_name)
+            .list_collection_names()
+            .await?
+            .into_iter()
+            .filter(|coll| !coll.starts_with("system."))
+            .filter(|coll| should_infer_collection(coll, &conf_include, &conf_exclude));
 
         // For each collection, if its sanitized name matches a sanitized .sql file, export it
         let mut matched = Vec::new();
@@ -1358,10 +1480,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             if sql_set.contains(&sanitized) && sql_path.exists() {
                 matched.push(coll);
             } else {
-                eprintln!(
-                    "  warning: SQL schema not found: {} – run `to-pg` first",
-                    sql_path.display()
-                );
+                warn_missing_sql_schema(&coll, &sanitized, &tables_dir, &sql_files);
             }
         }
         matched.sort();
@@ -1373,8 +1492,14 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         return Ok(());
     }
 
-    for coll_name in &collections {
-        eprintln!("[{db_name}.{coll_name}]");
+    let total_collections = collections.len();
+
+    for (index, coll_name) in collections.iter().enumerate() {
+        eprintln!(
+            "[{}/{}] Exporting {db_name}.{coll_name}",
+            index + 1,
+            total_collections
+        );
         match export_collection(&client, &db_name, coll_name, &tables_dir, &data_dir).await {
             Ok(()) => {}
             Err(e) => eprintln!("  warning: {e}"),
@@ -1386,6 +1511,9 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 
 async fn run_import(args: ImportArgs) -> Result<()> {
     let c = read_conf(&args.config)?;
+    let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
+    let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
+    let target_schema = c.target_schema.clone();
     let target_uri = c
         .target_uri
         .clone()
@@ -1401,6 +1529,8 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     let target_database_name = c.target_database_name.as_deref().unwrap_or(db_name);
     let requested_collection = args.collection.as_deref().or(namespace_collection);
     let requested_collection_dir = requested_collection.map(sanitize_name);
+    let should_import_collection =
+        |name: &str| should_infer_collection(name, &conf_include, &conf_exclude);
 
     let project_root = c.base_dir.join(&c.project_dir);
     let tables_root = project_root.join("schema").join("tables");
@@ -1447,6 +1577,12 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                     path.file_stem().and_then(|stem| stem.to_str()) == Some(collection_dir)
                 })
         })
+        .filter(|path| {
+            path.file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(&should_import_collection)
+                .unwrap_or(false)
+        })
         .collect();
     sql_files.sort();
 
@@ -1454,12 +1590,18 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         return Err(anyhow!("No SQL files found in {}", tables_dir.display()));
     }
 
+    use std::collections::HashSet;
+    let mut allowed_table_names: HashSet<String> = HashSet::new();
+
     for sql_path in &sql_files {
         let sql = std::fs::read_to_string(sql_path)
             .with_context(|| format!("Failed to read {}", sql_path.display()))?;
         let executable_sql = strip_psql_preamble(&sql);
         if executable_sql.trim().is_empty() {
             continue;
+        }
+        for table in parse_sql(&executable_sql) {
+            allowed_table_names.insert(table.name);
         }
         pg_client
             .batch_execute(&executable_sql)
@@ -1480,12 +1622,25 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                     path.file_name().and_then(|name| name.to_str()) == Some(collection_dir)
                 })
         })
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(&should_import_collection)
+                .unwrap_or(false)
+        })
         .flat_map(|collection_dir| {
             std::fs::read_dir(&collection_dir)
                 .into_iter()
                 .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
                 .map(|entry| entry.path())
                 .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("gz"))
+                .filter(|path| {
+                    path.file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .and_then(|stem| stem.strip_suffix(".csv"))
+                        .map(|table_name| allowed_table_names.contains(table_name))
+                        .unwrap_or(false)
+                })
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -1504,10 +1659,14 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         .await?;
 
     for csv_path in &csv_files {
-        let schema = csv_path
-            .parent()
-            .and_then(|path| path.file_name())
-            .and_then(|name| name.to_str())
+        let schema = target_schema
+            .as_deref()
+            .or_else(|| {
+                csv_path
+                    .parent()
+                    .and_then(|path| path.file_name())
+                    .and_then(|name| name.to_str())
+            })
             .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
         let table = csv_path
             .file_stem()
@@ -1519,17 +1678,28 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             quote_ident(schema),
             quote_ident(table)
         );
-        transaction
-            .batch_execute(&truncate_sql)
-            .await
-            .with_context(|| format!("Failed to truncate {}.{}", schema, table))?;
+        match transaction.batch_execute(&truncate_sql).await {
+            Ok(()) => {}
+            Err(err) => {
+                return Err(anyhow!(
+                    "Failed to truncate {}.{}\n{}",
+                    schema,
+                    table,
+                    format_postgres_error(&err)
+                ));
+            }
+        }
     }
 
     for csv_path in &csv_files {
-        let schema = csv_path
-            .parent()
-            .and_then(|path| path.file_name())
-            .and_then(|name| name.to_str())
+        let schema = target_schema
+            .as_deref()
+            .or_else(|| {
+                csv_path
+                    .parent()
+                    .and_then(|path| path.file_name())
+                    .and_then(|name| name.to_str())
+            })
             .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
         let table = csv_path
             .file_stem()
@@ -1547,21 +1717,44 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         let mut contents = Vec::new();
         std::io::Read::read_to_end(&mut decoder, &mut contents)
             .with_context(|| format!("Failed to decompress {}", csv_path.display()))?;
+        let content_text = String::from_utf8_lossy(&contents).into_owned();
 
-        let sink = transaction
-            .copy_in(&copy_sql)
-            .await
-            .with_context(|| format!("Failed to start COPY for {}.{}", schema, table))?;
+        let sink = match transaction.copy_in(&copy_sql).await {
+            Ok(sink) => sink,
+            Err(err) => {
+                return Err(anyhow!(
+                    "Failed to start COPY for {}.{}\n{}",
+                    schema,
+                    table,
+                    format_postgres_error(&err)
+                ));
+            }
+        };
         let mut sink = pin!(sink);
         sink.as_mut()
             .send(Bytes::from(contents))
             .await
             .with_context(|| format!("Failed to stream CSV data for {}", csv_path.display()))?;
-        let rows = sink
-            .as_mut()
-            .finish()
-            .await
-            .with_context(|| format!("Failed to finish COPY for {}.{}", schema, table))?;
+        let rows = match sink.as_mut().finish().await {
+            Ok(rows) => rows,
+            Err(err) => {
+                let line_detail = extract_copy_error_line(&err)
+                    .and_then(|line_number| {
+                        csv_line_at(&content_text, line_number)
+                            .map(|line| format!("CSV line {line_number}: {line}"))
+                    })
+                    .unwrap_or_default();
+                return Err(anyhow!(
+                    "Failed to finish COPY for {}.{} from {}\n{}{}{}",
+                    schema,
+                    table,
+                    csv_path.display(),
+                    format_postgres_error(&err),
+                    if line_detail.is_empty() { "" } else { "\n" },
+                    line_detail
+                ));
+            }
+        };
         println!(
             "Imported {rows} row(s) into {}.{} from {}",
             schema,
@@ -1776,6 +1969,8 @@ async fn write_post_import_report(
     source_uri_override: &str,
 ) -> Result<()> {
     let c = read_conf(conf)?;
+    let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
+    let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
     let reports_dir = c.base_dir.join(&c.project_dir).join("reports");
     std::fs::create_dir_all(&reports_dir)
         .with_context(|| format!("Failed to create reports dir {}", reports_dir.display()))?;
@@ -1819,6 +2014,8 @@ async fn write_post_import_report(
             .map(|db_name| pg_uri_with_database(target_uri, db_name))
             .unwrap_or_else(|| target_uri.to_owned()),
         &namespace,
+        &conf_include,
+        &conf_exclude,
         &collections_dir,
         &schema_tables_root,
     )
@@ -1905,10 +2102,13 @@ struct ConfData {
     source_uri: Option<String>,
     target_uri: Option<String>,
     target_database_name: Option<String>,
+    target_schema: Option<String>,
     namespace: Option<String>,
     number: Option<u64>,
     percent: Option<f64>,
     jsonb: bool,
+    include: Vec<String>,
+    exclude: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1933,12 +2133,27 @@ struct TomlSourceSection {
     number: Option<u64>,
     percent: Option<f64>,
     jsonb: Option<bool>,
+    #[serde(default)]
+    include: Vec<String>,
+    #[serde(default)]
+    exclude: Vec<String>,
+}
+
+fn should_infer_collection(name: &str, include: &[String], exclude: &[String]) -> bool {
+    if !exclude.is_empty() {
+        !exclude.iter().any(|candidate| candidate == name)
+    } else if !include.is_empty() {
+        include.iter().any(|candidate| candidate == name)
+    } else {
+        true
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
 struct TomlTargetSection {
     uri: Option<String>,
     database_name: Option<String>,
+    schema: Option<String>,
 }
 
 /// Parse a project config file produced by `mongo2pg init`.
@@ -1955,10 +2170,13 @@ fn read_conf(path: &Path) -> Result<ConfData> {
             source_uri: source.uri,
             target_uri: target.uri,
             target_database_name: target.database_name,
+            target_schema: target.schema,
             namespace: source.namespace,
             number: source.number,
             percent: source.percent,
             jsonb: source.jsonb.unwrap_or(false),
+            include: source.include,
+            exclude: source.exclude,
         })
     }
 
@@ -1980,6 +2198,7 @@ fn read_conf(path: &Path) -> Result<ConfData> {
         let mut source_uri: Option<String> = None;
         let mut target_uri: Option<String> = None;
         let mut target_database_name: Option<String> = None;
+        let mut target_schema: Option<String> = None;
         let mut namespace: Option<String> = None;
         let mut number: Option<u64> = None;
         let mut percent: Option<f64> = None;
@@ -1994,6 +2213,7 @@ fn read_conf(path: &Path) -> Result<ConfData> {
                     "SOURCE_URI" => source_uri = Some(parsed),
                     "TARGET_URI" => target_uri = Some(parsed),
                     "TARGET_DATABASE_NAME" => target_database_name = Some(parsed),
+                    "TARGET_SCHEMA" => target_schema = Some(parsed),
                     "NAMESPACE" => namespace = Some(parsed),
                     "NUMBER" => number = parsed.parse().ok(),
                     "PERCENT" => percent = parsed.parse().ok(),
@@ -2016,10 +2236,13 @@ fn read_conf(path: &Path) -> Result<ConfData> {
             source_uri,
             target_uri,
             target_database_name,
+            target_schema,
             namespace,
             number,
             percent,
             jsonb,
+            include: Vec::new(),
+            exclude: Vec::new(),
         })
     }
 
@@ -2072,7 +2295,9 @@ fn strip_psql_preamble(sql: &str) -> String {
     sql.lines()
         .filter(|line| {
             let trimmed = line.trim_start();
-            !trimmed.starts_with("CREATE DATABASE ") && !trimmed.starts_with("\\connect ")
+            !trimmed.starts_with("DROP DATABASE ")
+                && !trimmed.starts_with("CREATE DATABASE ")
+                && !trimmed.starts_with("\\connect ")
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -2090,6 +2315,59 @@ fn pg_uri_with_database(uri: &str, database: &str) -> String {
             format!("{}{database}{}", &base[..=slash], query)
         }
         None => format!("{base}/{database}{query}"),
+    }
+}
+
+fn format_postgres_error(err: &tokio_postgres::Error) -> String {
+    if let Some(db_err) = err.as_db_error() {
+        let mut parts = vec![format!(
+            "{} (SQLSTATE {})",
+            db_err.message(),
+            db_err.code().code()
+        )];
+
+        if let Some(detail) = db_err.detail() {
+            parts.push(format!("DETAIL: {detail}"));
+        }
+        if let Some(context) = db_err.where_() {
+            parts.push(format!("CONTEXT: {context}"));
+        }
+        if let Some(hint) = db_err.hint() {
+            parts.push(format!("HINT: {hint}"));
+        }
+        if let Some(table) = db_err.table() {
+            parts.push(format!("TABLE: {table}"));
+        }
+        if let Some(column) = db_err.column() {
+            parts.push(format!("COLUMN: {column}"));
+        }
+
+        parts.join("\n")
+    } else {
+        err.to_string()
+    }
+}
+
+fn extract_copy_error_line(err: &tokio_postgres::Error) -> Option<usize> {
+    let context = err.as_db_error()?.where_()?;
+    let marker = ", line ";
+    let start = context.find(marker)? + marker.len();
+    let digits: String = context[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect();
+    if digits.is_empty() {
+        None
+    } else {
+        digits.parse().ok()
+    }
+}
+
+fn csv_line_at(contents: &str, line_number: usize) -> Option<&str> {
+    if line_number == 0 {
+        None
+    } else {
+        contents.lines().nth(line_number - 1)
     }
 }
 
@@ -2146,6 +2424,8 @@ async fn build_post_import_rows(
     source_uri: &str,
     target_uri: &str,
     namespace: &str,
+    include: &[String],
+    exclude: &[String],
     collections_root: &Path,
     schema_tables_root: &Path,
 ) -> Result<Vec<PostImportCollectionRow>> {
@@ -2344,6 +2624,7 @@ async fn build_post_import_rows(
         .await
         .with_context(|| format!("Failed to list collections for MongoDB database {db_name}"))?;
     collection_names.retain(|name| !name.starts_with("system."));
+    collection_names.retain(|name| should_infer_collection(&sanitize_name(name), include, exclude));
     if let Some(coll_name) = only_collection {
         collection_names.retain(|name| name == coll_name);
     }
@@ -2485,4 +2766,99 @@ async fn build_post_import_rows(
     }
 
     Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sanitize_name, should_infer_collection, strip_psql_preamble, TomlProjectConfig};
+
+    #[test]
+    fn should_infer_collection_honors_exclude_before_include() {
+        let include = vec!["users".to_owned()];
+        let exclude = vec!["users".to_owned(), "audit".to_owned()];
+
+        assert!(!should_infer_collection("users", &include, &exclude));
+        assert!(should_infer_collection("orders", &include, &exclude));
+    }
+
+    #[test]
+    fn should_infer_collection_honors_include_when_exclude_is_empty() {
+        let include = vec!["users".to_owned(), "orders".to_owned()];
+        let exclude = Vec::new();
+
+        assert!(should_infer_collection("users", &include, &exclude));
+        assert!(!should_infer_collection("audit", &include, &exclude));
+    }
+
+    #[test]
+    fn post_import_filters_live_collection_names_using_sanitized_include_exclude() {
+        let include = vec!["activity_feed".to_owned(), "security_logs".to_owned()];
+        let exclude = Vec::new();
+        let live = ["activity-feed", "security_logs", "admin"];
+
+        let kept: Vec<&str> = live
+            .into_iter()
+            .filter(|name| should_infer_collection(&sanitize_name(name), &include, &exclude))
+            .collect();
+
+        assert_eq!(kept, vec!["activity-feed", "security_logs"]);
+    }
+
+    #[test]
+    fn toml_source_include_and_exclude_are_parsed() {
+        let config: TomlProjectConfig = toml::from_str(
+            r#"
+[project]
+base_dir = "/tmp"
+project_dir = "demo"
+
+[source]
+include = ["users", "orders"]
+exclude = ["audit"]
+"#,
+        )
+        .expect("config should parse");
+
+        let source = config.source.expect("source section should exist");
+        assert_eq!(source.include, vec!["users", "orders"]);
+        assert_eq!(source.exclude, vec!["audit"]);
+    }
+
+    #[test]
+    fn toml_target_schema_is_parsed() {
+        let config: TomlProjectConfig = toml::from_str(
+            r#"
+[project]
+base_dir = "/tmp"
+project_dir = "demo"
+
+[target]
+schema = "shared_schema"
+"#,
+        )
+        .expect("config should parse");
+
+        let target = config.target.expect("target section should exist");
+        assert_eq!(target.schema.as_deref(), Some("shared_schema"));
+    }
+
+    #[test]
+    fn strip_psql_preamble_removes_drop_create_and_connect() {
+        let sql = r#"
+DROP DATABASE IF EXISTS "demo";
+CREATE DATABASE "demo";
+\connect "demo"
+
+CREATE TABLE demo (
+    id INTEGER PRIMARY KEY
+);
+"#;
+
+        let stripped = strip_psql_preamble(sql);
+
+        assert!(!stripped.contains("DROP DATABASE"));
+        assert!(!stripped.contains("CREATE DATABASE"));
+        assert!(!stripped.contains("\\connect"));
+        assert!(stripped.contains("CREATE TABLE demo"));
+    }
 }

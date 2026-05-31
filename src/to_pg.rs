@@ -200,36 +200,6 @@ fn all_values_are_whole(values: &[serde_json::Value]) -> bool {
             .all(|v| v.as_f64().is_some_and(|f| f.is_finite() && f == f.floor()))
 }
 
-/// Returns a narrow integer PG type when every sampled value is a numeric string.
-fn numeric_string_pg_type(values: &[serde_json::Value]) -> Option<&'static str> {
-    if values.is_empty() {
-        return None;
-    }
-    if values
-        .iter()
-        .all(|v| v.as_str().is_some_and(|s| s.parse::<i64>().is_ok()))
-    {
-        let max = values
-            .iter()
-            .filter_map(|v| v.as_str().and_then(|s| s.parse::<i64>().ok()))
-            .map(|n| n.unsigned_abs())
-            .max()
-            .unwrap_or(0);
-        return Some(if max <= 2_147_483_647 {
-            "INTEGER"
-        } else {
-            "BIGINT"
-        });
-    }
-    if values
-        .iter()
-        .all(|v| v.as_str().is_some_and(|s| s.parse::<f64>().is_ok()))
-    {
-        return Some("DOUBLE PRECISION");
-    }
-    None
-}
-
 /// Returns `true` when every sampled Date value has a midnight UTC time component,
 /// making it a good candidate for `DATE` rather than `TIMESTAMP WITH TIME ZONE`.
 fn all_dates_are_date_only(values: &[serde_json::Value]) -> bool {
@@ -273,6 +243,7 @@ fn resolve_scalar_pg_type(non_null: &[(&str, &TypeSchema)], col_name: &str) -> S
         let (name, ts) = non_null[0];
         let values = ts.values.as_deref().unwrap_or(&[]);
 
+        // For MongoDB Number fields: if all values are integers, use INTEGER/BIGINT; otherwise, use DOUBLE PRECISION.
         if name == TYPE_NUMBER {
             if all_values_are_whole(values) {
                 let max = values
@@ -286,15 +257,15 @@ fn resolve_scalar_pg_type(non_null: &[(&str, &TypeSchema)], col_name: &str) -> S
                 } else {
                     "BIGINT".to_owned()
                 };
+            } else {
+                // If any value is a decimal, use DOUBLE PRECISION for lossless mapping.
+                return "DOUBLE PRECISION".to_owned();
             }
         }
         if name == TYPE_DATE && all_dates_are_date_only(values) {
             return "DATE".to_owned();
         }
         if name == TYPE_STRING {
-            if let Some(pg) = numeric_string_pg_type(values) {
-                return pg.to_owned();
-            }
             if let Some(pg) = varchar_for_code_field(col_name, values) {
                 return pg;
             }
@@ -324,7 +295,7 @@ fn pk_type_for_id(non_null: &[(&str, &TypeSchema)]) -> String {
     }
     let (name, ts) = non_null[0];
     if name == TYPE_OBJECTID {
-        return "UUID".to_owned();
+        return "TEXT".to_owned();
     }
     if name == TYPE_NUMBER {
         let values = ts.values.as_deref().unwrap_or(&[]);
@@ -373,8 +344,8 @@ pub struct Table {
     name: String,
     columns: Vec<Column>,
     child_tables: Vec<Table>,
-    /// `(fk_column_name, referenced_table_name, referenced_column_name)`
-    parent_ref: Option<(String, String, String)>,
+    /// `[(fk_column_name, referenced_table_name, referenced_column_name)]`
+    parent_ref: Option<Vec<(String, String, String)>>,
 }
 
 impl Table {
@@ -388,14 +359,20 @@ impl Table {
     }
 }
 
-/// Returns `(pk_column_name, pk_pg_type)` for a table, falling back to `("id", "TEXT")`.
-fn find_pk(table: &Table) -> (String, String) {
-    for col in &table.columns {
-        if col.primary_key {
-            return (col.name.clone(), col.pg_type.clone());
-        }
+/// Returns `[(pk_column_name, pk_pg_type)]` for a table, falling back to `[("id", "TEXT")]`.
+fn find_pk_columns(table: &Table) -> Vec<(String, String)> {
+    let pk_columns: Vec<(String, String)> = table
+        .columns
+        .iter()
+        .filter(|col| col.primary_key)
+        .map(|col| (col.name.clone(), col.pg_type.clone()))
+        .collect();
+
+    if pk_columns.is_empty() {
+        vec![("id".to_owned(), "TEXT".to_owned())]
+    } else {
+        pk_columns
     }
-    ("id".to_owned(), "TEXT".to_owned())
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -516,8 +493,7 @@ fn add_child_table(
     pg_schema: Option<&str>,
 ) {
     let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
-    let (pk_name, pk_type) = find_pk(parent);
-    let fk_col = format!("{}_id", parent.name);
+    let parent_pks = find_pk_columns(parent);
 
     let mut child = Table::new(child_name);
     child.columns.push(Column {
@@ -526,13 +502,31 @@ fn add_child_table(
         nullable: false,
         primary_key: true,
     });
-    child.columns.push(Column {
-        name: fk_col.clone(),
-        pg_type: fk_scalar_type(&pk_type).to_owned(),
-        nullable: false,
-        primary_key: false,
-    });
-    child.parent_ref = Some((fk_col, parent.name.clone(), pk_name));
+
+    let mut parent_ref = Vec::new();
+    if parent_pks.len() == 1 {
+        let (pk_name, pk_type) = &parent_pks[0];
+        let fk_col = format!("{}_id", parent.name);
+        child.columns.push(Column {
+            name: fk_col.clone(),
+            pg_type: fk_scalar_type(pk_type).to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+        parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+    } else {
+        for (pk_name, pk_type) in &parent_pks {
+            let fk_col = format!("{}_{}", parent.name, pk_name);
+            child.columns.push(Column {
+                name: fk_col.clone(),
+                pg_type: fk_scalar_type(pk_type).to_owned(),
+                nullable: false,
+                primary_key: false,
+            });
+            parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+        }
+    }
+    child.parent_ref = Some(parent_ref);
 
     process_fields(&mut child, child_fields, "", true, pg_schema);
     parent.child_tables.push(child);
@@ -545,8 +539,7 @@ fn add_scalar_array_table(
     pg_schema: Option<&str>,
 ) {
     let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
-    let (pk_name, pk_type) = find_pk(parent);
-    let fk_col = format!("{}_id", parent.name);
+    let parent_pks = find_pk_columns(parent);
 
     let mut child = Table::new(child_name);
     child.columns.push(Column {
@@ -555,13 +548,31 @@ fn add_scalar_array_table(
         nullable: false,
         primary_key: true,
     });
-    child.columns.push(Column {
-        name: fk_col.clone(),
-        pg_type: fk_scalar_type(&pk_type).to_owned(),
-        nullable: false,
-        primary_key: false,
-    });
-    child.parent_ref = Some((fk_col, parent.name.clone(), pk_name));
+
+    let mut parent_ref = Vec::new();
+    if parent_pks.len() == 1 {
+        let (pk_name, pk_type) = &parent_pks[0];
+        let fk_col = format!("{}_id", parent.name);
+        child.columns.push(Column {
+            name: fk_col.clone(),
+            pg_type: fk_scalar_type(pk_type).to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+        parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+    } else {
+        for (pk_name, pk_type) in &parent_pks {
+            let fk_col = format!("{}_{}", parent.name, pk_name);
+            child.columns.push(Column {
+                name: fk_col.clone(),
+                pg_type: fk_scalar_type(pk_type).to_owned(),
+                nullable: false,
+                primary_key: false,
+            });
+            parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+        }
+    }
+    child.parent_ref = Some(parent_ref);
 
     let non_null: Vec<(&str, &TypeSchema)> = scalar_types
         .iter()
@@ -591,8 +602,7 @@ fn add_doc_table(
     pg_schema: Option<&str>,
 ) {
     let child_name = child_table_name(&parent.name, doc_field_col, pg_schema);
-    let (pk_name, pk_type) = find_pk(parent);
-    let fk_col = format!("{}_id", parent.name);
+    let parent_pks = find_pk_columns(parent);
 
     let mut child = Table::new(child_name);
     child.columns.push(Column {
@@ -601,13 +611,31 @@ fn add_doc_table(
         nullable: false,
         primary_key: true,
     });
-    child.columns.push(Column {
-        name: fk_col.clone(),
-        pg_type: fk_scalar_type(&pk_type).to_owned(),
-        nullable: false,
-        primary_key: false,
-    });
-    child.parent_ref = Some((fk_col, parent.name.clone(), pk_name));
+
+    let mut parent_ref = Vec::new();
+    if parent_pks.len() == 1 {
+        let (pk_name, pk_type) = &parent_pks[0];
+        let fk_col = format!("{}_id", parent.name);
+        child.columns.push(Column {
+            name: fk_col.clone(),
+            pg_type: fk_scalar_type(pk_type).to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+        parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+    } else {
+        for (pk_name, pk_type) in &parent_pks {
+            let fk_col = format!("{}_{}", parent.name, pk_name);
+            child.columns.push(Column {
+                name: fk_col.clone(),
+                pg_type: fk_scalar_type(pk_type).to_owned(),
+                nullable: false,
+                primary_key: false,
+            });
+            parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+        }
+    }
+    child.parent_ref = Some(parent_ref);
 
     process_fields(&mut child, doc_fields, "", false, pg_schema);
     parent.child_tables.push(child);
@@ -622,8 +650,7 @@ fn add_map_table(
     pg_schema: Option<&str>,
 ) {
     let child_name = child_table_name(&parent.name, map_field_col, pg_schema);
-    let (pk_name, pk_type) = find_pk(parent);
-    let fk_col = format!("{}_id", parent.name);
+    let parent_pks = find_pk_columns(parent);
 
     let mut child = Table::new(child_name);
     child.columns.push(Column {
@@ -632,13 +659,31 @@ fn add_map_table(
         nullable: false,
         primary_key: true,
     });
-    child.columns.push(Column {
-        name: fk_col.clone(),
-        pg_type: fk_scalar_type(&pk_type).to_owned(),
-        nullable: false,
-        primary_key: false,
-    });
-    child.parent_ref = Some((fk_col, parent.name.clone(), pk_name));
+
+    let mut parent_ref = Vec::new();
+    if parent_pks.len() == 1 {
+        let (pk_name, pk_type) = &parent_pks[0];
+        let fk_col = format!("{}_id", parent.name);
+        child.columns.push(Column {
+            name: fk_col.clone(),
+            pg_type: fk_scalar_type(pk_type).to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+        parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+    } else {
+        for (pk_name, pk_type) in &parent_pks {
+            let fk_col = format!("{}_{}", parent.name, pk_name);
+            child.columns.push(Column {
+                name: fk_col.clone(),
+                pg_type: fk_scalar_type(pk_type).to_owned(),
+                nullable: false,
+                primary_key: false,
+            });
+            parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+        }
+    }
+    child.parent_ref = Some(parent_ref);
 
     // Use UUID type if all keys are UUIDs, else TEXT
     let key_type = if value_fields.keys().all(|k| is_uuid_keyed_name(k)) {
@@ -691,6 +736,51 @@ fn handle_array_field(
     }
 }
 
+fn flatten_object_id_fields(
+    table: &mut Table,
+    fields: &IndexMap<String, FieldSchema>,
+    col_prefix: &str,
+) {
+    for (raw_name, field) in fields {
+        let col_name = sanitize(&format!("{col_prefix}{raw_name}"));
+        let non_null: Vec<(&str, &TypeSchema)> = field
+            .types
+            .iter()
+            .filter(|(t, _)| !is_null_type(t.as_str()))
+            .map(|(t, ts)| (t.as_str(), ts))
+            .collect();
+
+        if non_null.is_empty() {
+            continue;
+        }
+
+        if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
+            if let Some(sub_fields) = &non_null[0].1.object {
+                flatten_object_id_fields(table, sub_fields, &format!("{col_name}_"));
+                continue;
+            }
+        }
+
+        let pg_type = if non_null.len() == 1 && non_null[0].0 == TYPE_ARRAY {
+            "JSONB".to_owned()
+        } else if non_null
+            .iter()
+            .any(|(t, _)| *t == TYPE_OBJECT || *t == TYPE_ARRAY)
+        {
+            "JSONB".to_owned()
+        } else {
+            resolve_scalar_pg_type(&non_null, &col_name)
+        };
+
+        table.columns.push(Column {
+            name: col_name,
+            pg_type,
+            nullable: false,
+            primary_key: true,
+        });
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Main recursive field processor
 // ──────────────────────────────────────────────────────────────────────────────
@@ -719,6 +809,20 @@ pub fn process_fields(
         if non_null.is_empty() {
             // Field is always null/undefined – omit from DDL.
             continue;
+        }
+
+        // ── Top-level object _id => flattened composite PK ───────────────────
+
+        if raw_name == "_id"
+            && col_prefix.is_empty()
+            && mark_pk
+            && non_null.len() == 1
+            && non_null[0].0 == TYPE_OBJECT
+        {
+            if let Some(sub_fields) = &non_null[0].1.object {
+                flatten_object_id_fields(table, sub_fields, "");
+                continue;
+            }
         }
 
         // ── Single pure Object ────────────────────────────────────────────────
@@ -840,14 +944,13 @@ pub fn process_fields(
                 primary_key: true,
             });
         } else {
-            // Guard against a literal field named "id" clashing with a surrogate PK.
-            let final_name = if col_name == "id" && table.columns.iter().any(|c| c.name == "id") {
-                "field_id".to_owned()
-            } else {
-                col_name
-            };
+            // Child tables already get a surrogate `id` PK; drop nested scalar `id`
+            // fields instead of duplicating them as `field_id`.
+            if col_name == "id" && table.columns.iter().any(|c| c.name == "id") {
+                continue;
+            }
             table.columns.push(Column {
-                name: final_name,
+                name: col_name,
                 pg_type,
                 nullable,
                 primary_key: false,
@@ -873,10 +976,10 @@ pub fn collect_tables(root: &Table) -> Vec<&Table> {
     result
 }
 
-fn render_column(col: &Column) -> String {
-    let constraint = if col.primary_key {
+fn render_column(col: &Column, inline_primary_key: bool) -> String {
+    let constraint = if col.primary_key && inline_primary_key {
         " PRIMARY KEY"
-    } else if !col.nullable {
+    } else if !col.nullable || col.primary_key {
         " NOT NULL"
     } else {
         ""
@@ -887,10 +990,32 @@ fn render_column(col: &Column) -> String {
 }
 
 fn render_table(table: &Table) -> String {
-    let mut defs: Vec<String> = table.columns.iter().map(render_column).collect();
-    if let Some((fk_col, ref_table, ref_col)) = &table.parent_ref {
+    let pk_columns: Vec<&str> = table
+        .columns
+        .iter()
+        .filter(|col| col.primary_key)
+        .map(|col| col.name.as_str())
+        .collect();
+    let mut defs: Vec<String> = table
+        .columns
+        .iter()
+        .map(|col| render_column(col, pk_columns.len() == 1))
+        .collect();
+    if pk_columns.len() > 1 {
+        defs.push(format!("    PRIMARY KEY ({})", pk_columns.join(", ")));
+    }
+    if let Some(refs) = &table.parent_ref {
+        let fk_cols: Vec<&str> = refs.iter().map(|(fk_col, _, _)| fk_col.as_str()).collect();
+        let ref_table = &refs[0].1;
+        let ref_cols: Vec<&str> = refs
+            .iter()
+            .map(|(_, _, ref_col)| ref_col.as_str())
+            .collect();
         defs.push(format!(
-            "    FOREIGN KEY ({fk_col}) REFERENCES {ref_table} ({ref_col}) DEFERRABLE INITIALLY DEFERRED"
+            "    FOREIGN KEY ({}) REFERENCES {} ({}) DEFERRABLE INITIALLY DEFERRED",
+            fk_cols.join(", "),
+            ref_table,
+            ref_cols.join(", ")
         ));
     }
     let body = defs.join(",\n");
@@ -982,13 +1107,90 @@ mod tests {
     }
 
     #[test]
-    fn test_objectid_pk_becomes_uuid() {
+    fn test_objectid_pk_becomes_text() {
         let docs = vec![doc! { "_id": bson::oid::ObjectId::new(), "x": 1_i32 }];
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "t", None);
         assert!(
-            ddl.contains("id UUID PRIMARY KEY"),
-            "ObjectId PK should become UUID"
+            ddl.contains("id TEXT PRIMARY KEY"),
+            "ObjectId PK should become TEXT"
+        );
+    }
+
+    #[test]
+    fn test_numeric_strings_stay_text() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "ldap": "20014291" },
+            doc! { "_id": 2_i32, "ldap": "20101496" },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "teams_members", None);
+        assert!(
+            ddl.contains("ldap TEXT NOT NULL"),
+            "Numeric-looking strings should remain TEXT"
+        );
+    }
+
+    #[test]
+    fn test_child_tables_drop_redundant_nested_id_field() {
+        let docs = vec![doc! {
+            "_id": 1_i32,
+            "advices": [{
+                "id": "72a50747b3bfaac0cc2973bf0393ce63fe86c5ed",
+                "advice": "Service has invalid ip range",
+                "object_id": "aiven-pg-pgprepapr",
+                "object_type": "SERVICE"
+            }]
+        }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "advisors", None);
+        assert!(
+            ddl.contains("CREATE TABLE advisors_advices ("),
+            "child table for advices missing"
+        );
+        assert!(
+            !ddl.contains("field_id TEXT"),
+            "nested id field should be dropped instead of renamed"
+        );
+    }
+
+    #[test]
+    fn test_object_id_flattens_into_composite_primary_key() {
+        let docs = vec![doc! {
+            "_id": {
+                "projectid": "FRAS-P-SAM-FRTERR2",
+                "provider": "atlas",
+                "log_type": "dbAccessHistory"
+            },
+            "last_execution": "2023-07-13T09:02:15.833170"
+        }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "executions", None);
+
+        assert!(
+            ddl.contains("projectid TEXT NOT NULL"),
+            "projectid PK column missing"
+        );
+        assert!(
+            ddl.contains("provider TEXT NOT NULL"),
+            "provider PK column missing"
+        );
+        assert!(
+            ddl.contains("log_type TEXT NOT NULL"),
+            "log_type PK column missing"
+        );
+        assert!(
+            ddl.contains("last_execution "),
+            "data field should stay on root table"
+        );
+        assert!(ddl.contains("PRIMARY KEY ("), "composite PK missing");
+        assert!(
+            ddl.contains("log_type") && ddl.contains("projectid") && ddl.contains("provider"),
+            "composite PK should use flattened _id fields"
+        );
+        assert!(
+            !ddl.contains("CREATE TABLE executions__id"),
+            "_id should not become a child table"
         );
     }
 

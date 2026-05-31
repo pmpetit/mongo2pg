@@ -32,6 +32,28 @@ pub struct Table {
     pub foreign_keys: Vec<ForeignKey>,
 }
 
+fn parse_primary_key_columns(line: &str) -> Option<Vec<String>> {
+    let upper = line.to_uppercase();
+    let start = if upper.starts_with("PRIMARY KEY (") {
+        line.find('(')?
+    } else if upper.starts_with("CONSTRAINT ") && upper.contains(" PRIMARY KEY (") {
+        line.find("PRIMARY KEY (")? + "PRIMARY KEY ".len()
+    } else {
+        return None;
+    };
+    let end = line.rfind(')')?;
+    let cols = line[start + 1..end]
+        .split(',')
+        .map(|col| col.trim().to_owned())
+        .filter(|col| !col.is_empty())
+        .collect::<Vec<_>>();
+    if cols.is_empty() {
+        None
+    } else {
+        Some(cols)
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // SQL parser
 // ──────────────────────────────────────────────────────────────────────────────
@@ -55,12 +77,22 @@ pub fn parse_sql(sql: &str) -> Vec<Table> {
         let name = chunk[..paren].trim().to_owned();
         let body = &chunk[paren + 1..close];
 
-        let mut columns = Vec::new();
-        let mut foreign_keys = Vec::new();
+        let mut columns: Vec<Column> = Vec::new();
+        let mut foreign_keys: Vec<ForeignKey> = Vec::new();
 
         for raw_line in body.lines() {
             let line = raw_line.trim().trim_end_matches(',').trim();
             if line.is_empty() {
+                continue;
+            }
+
+            if let Some(pk_cols) = parse_primary_key_columns(line) {
+                for col in &mut columns {
+                    if pk_cols.iter().any(|pk| pk.eq_ignore_ascii_case(&col.name)) {
+                        col.primary_key = true;
+                        col.not_null = true;
+                    }
+                }
                 continue;
             }
 
@@ -112,6 +144,37 @@ pub fn parse_sql(sql: &str) -> Vec<Table> {
     }
 
     tables
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_sql;
+
+    #[test]
+    fn parse_sql_marks_table_level_primary_key_columns_without_fake_primary_column() {
+        let sql = r#"
+CREATE TABLE security_logs (
+    log_type TEXT NOT NULL,
+    projectid TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    last_execution TEXT NOT NULL,
+    PRIMARY KEY (log_type, projectid, provider)
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let table = &tables[0];
+        let cols: Vec<&str> = table.columns.iter().map(|c| c.name.as_str()).collect();
+
+        assert_eq!(
+            cols,
+            vec!["log_type", "projectid", "provider", "last_execution"]
+        );
+        assert!(table.columns[0].primary_key);
+        assert!(table.columns[1].primary_key);
+        assert!(table.columns[2].primary_key);
+        assert!(!table.columns[3].primary_key);
+    }
 }
 
 /// Read and parse all `.sql` files in `dir`.
