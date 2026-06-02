@@ -3373,7 +3373,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
     }
 
     // Resolve collections dir, cluster label, reports dir and project name
-    let (collections_dir, namespace, cluster, reports_dir, project_name) =
+    let (collections_dir, namespace, cluster, reports_dir, project_name,ftitle) =
         if let Some(ref conf) = args.config {
             let c = read_conf(conf)?;
             let ns = args.namespace.clone();
@@ -3394,13 +3394,14 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
                 .join("collections");
             let rep_dir = c.base_dir.join(&c.project_dir).join("reports");
             let proj = c.project_dir.clone();
-            (cols_dir, ns, cluster, Some(rep_dir), Some(proj))
+            let ftitle= c.title.clone();
+            (cols_dir, ns, cluster, Some(rep_dir), Some(proj),Some(ftitle))
         } else {
             let dir = args
                 .collections_dir
                 .clone()
                 .ok_or_else(|| anyhow!("Provide --collections-dir or -c <config>"))?;
-            (dir, args.namespace.clone(), String::new(), None, None)
+            (dir, args.namespace.clone(), String::new(), None, None, None)
         };
 
     // Detect whether source/collections has the per-db layout:
@@ -3449,7 +3450,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
             .iter()
             .map(|db_name| {
                 let db_dir = collections_dir.join(db_name);
-                let tables_dir_opt = tables_root
+                let tables_dir_opt: Option<PathBuf> = tables_root
                     .as_deref()
                     .map(|t| t.join(db_name))
                     .filter(|p| p.is_dir());
@@ -3465,7 +3466,8 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
             .collect();
 
         let proj = project_name.as_deref().unwrap_or("project");
-        let html = mongo2pg::report::render_multi_db_html(&entries, &cluster, proj);
+        let title= ftitle.as_deref().unwrap_or("mongo2pg Report");
+        let html = mongo2pg::report::render_multi_db_html(&entries, &cluster, proj, title);
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
         if !quiet {
@@ -3486,7 +3488,8 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
         let tables_dir_opt = tables_dir_for_report.as_deref().filter(|p| p.is_dir());
 
         let rows = collect_rows(&collections_dir, tables_dir_opt)?;
-        let html = render_html(&rows, &namespace, &cluster);
+        let title= ftitle.as_deref().unwrap_or("mongo2pg Report");
+        let html = render_html(&rows, &namespace, &cluster, &title);
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
         if !quiet {
