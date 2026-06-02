@@ -103,7 +103,12 @@ pub fn parse_sql(sql: &str) -> Vec<Table> {
                     let rest = rest.trim();
                     if let Some(sp) = rest.find(" (") {
                         let to_table = rest[..sp].trim().to_owned();
-                        let to_col = rest[sp + 2..].trim_end_matches(')').trim().to_owned();
+                        let to_col = rest[sp + 2..]
+                            .split(')')
+                            .next()
+                            .unwrap_or("")
+                            .trim()
+                            .to_owned();
                         foreign_keys.push(ForeignKey {
                             from_col,
                             to_table,
@@ -115,16 +120,27 @@ pub fn parse_sql(sql: &str) -> Vec<Table> {
             }
 
             // Regular column: name TYPE [NOT NULL] [PRIMARY KEY]
-            let mut tokens = line.splitn(3, ' ');
+            let mut tokens = line.split_whitespace();
             let col_name = match tokens.next() {
                 Some(n) if !n.is_empty() => n.to_owned(),
                 _ => continue,
             };
-            let col_type = match tokens.next() {
-                Some(t) => t.to_owned(),
-                None => continue,
-            };
-            let rest = tokens.next().unwrap_or("").to_uppercase();
+            let remainder = line[col_name.len()..].trim();
+            if remainder.is_empty() {
+                continue;
+            }
+            let upper_remainder = remainder.to_uppercase();
+            let keyword_index = [" NOT NULL", " PRIMARY KEY"]
+                .iter()
+                .filter_map(|keyword| upper_remainder.find(keyword))
+                .min();
+            let col_type = keyword_index
+                .map(|index| remainder[..index].trim())
+                .unwrap_or(remainder)
+                .to_owned();
+            let rest = keyword_index
+                .map(|index| upper_remainder[index..].to_owned())
+                .unwrap_or_default();
             let not_null = rest.contains("NOT NULL") || rest.contains("PRIMARY KEY");
             let primary_key = rest.contains("PRIMARY KEY") || col_name.to_lowercase() == "id";
 
@@ -174,6 +190,51 @@ CREATE TABLE security_logs (
         assert!(table.columns[1].primary_key);
         assert!(table.columns[2].primary_key);
         assert!(!table.columns[3].primary_key);
+    }
+
+    #[test]
+    fn parse_sql_keeps_multi_word_column_types_and_clean_foreign_keys() {
+        let sql = r#"
+CREATE TABLE parent (
+    id TEXT PRIMARY KEY
+);
+
+CREATE TABLE child (
+    id BIGSERIAL PRIMARY KEY,
+    parent_id TEXT NOT NULL,
+    amount DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    FOREIGN KEY (parent_id) REFERENCES parent (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let child = tables
+            .iter()
+            .find(|table| table.name == "child")
+            .expect("child table should exist");
+
+        let amount = child
+            .columns
+            .iter()
+            .find(|column| column.name == "amount")
+            .expect("amount column should exist");
+        assert_eq!(amount.col_type, "DOUBLE PRECISION");
+
+        let created_at = child
+            .columns
+            .iter()
+            .find(|column| column.name == "created_at")
+            .expect("created_at column should exist");
+        assert_eq!(created_at.col_type, "TIMESTAMP WITH TIME ZONE");
+
+        let fk = child
+            .foreign_keys
+            .iter()
+            .find(|fk| fk.from_col == "parent_id")
+            .expect("parent_id foreign key should exist");
+        assert_eq!(fk.to_table, "parent");
+        assert_eq!(fk.to_col, "id");
     }
 }
 

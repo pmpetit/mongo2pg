@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Type inference**: Simplified type inference for number fields, mapping MongoDB `ObjectId` to `TEXT` instead of `UUID`, and ensuring numeric strings remain `TEXT`.
 - **Analyzer**: Empty arrays no longer count as present for probability calculations.
 - **CLI**: `to-pg`, `infer`, `export`, and `import` commands now honor the `include` and `exclude` config parameters for collection filtering.
+- **Infer warnings and HTML reports**: `infer` now emits warnings when a field mixes incompatible scalar families in the sampled source data, persists those warnings in stats YAML, and highlights affected collection names in `reports/main.html` with inline warning details and the first five distinct sampled examples for each observed type.
 - **Tests**: Added comprehensive tests for multi-column PKs, collection filtering, and row extraction logic.
 
 ### Fixed
@@ -23,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Error reporting**: Improved error messages for missing SQL schemas and import/export failures, including line-level details for CSV import errors.
 - **Child tables**: Child tables now drop redundant nested `id` fields instead of renaming them.
 - **Post-import report**: Now filters collections using sanitized names and honors `include`/`exclude` lists.
+- **`check-md5` normalization**: Canonicalized numeric JSON literals and normalized MongoDB values according to the target PostgreSQL column type before hashing and sorting, avoiding false mismatches such as `647.0` versus `647` and numeric Mongo values compared against PostgreSQL `TEXT` columns.
+- **`check-md5` row ordering**: Comparison rows for nested exports such as `advisors_advices_earnings` now use the normalized target-side values consistently, so ordering no longer creates spurious mismatches.
+- **Non-JSONB export schema lookup**: `export` now resolves collection schemas from both nested `source/collections/<db>/` layouts and older flat layouts, restoring CSV generation for collections such as `engine` in non-JSONB projects.
 
 ## [0.4.0] - 2026-05-25
 

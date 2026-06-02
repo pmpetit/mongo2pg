@@ -34,5 +34,7 @@ bytes = "1"
 toml = "0.8"
 strsim = "0.11.1"
 
+md5 = "0.7"
+
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

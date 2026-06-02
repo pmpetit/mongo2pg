@@ -13,22 +13,35 @@
 //! The public entry point is [`schema_to_ddl`].
 
 use indexmap::IndexMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::{
     CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_BINARY, TYPE_BOOLEAN, TYPE_CODE,
-    TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_MAXKEY, TYPE_MINKEY,
-    TYPE_NULL, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX, TYPE_STRING, TYPE_SYMBOL,
-    TYPE_TIMESTAMP, TYPE_UNDEFINED,
+    TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_DOUBLE, TYPE_INT32,
+    TYPE_INT64, TYPE_MAXKEY, TYPE_MINKEY, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX,
+    TYPE_STRING, TYPE_SYMBOL, TYPE_TIMESTAMP,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
 // BSON → PostgreSQL type mapping
 // ──────────────────────────────────────────────────────────────────────────────
 
+use crate::util::{
+    can_inline_object_fields, flatten_grouped_root_array_object_fields,
+    flatten_root_array_object_field,
+    flattened_root_parent_id_column, is_null_type,
+    grouped_root_array_object_fields, inline_object_column_names_with_prefix,
+    inline_object_leaf_fields_with_prefix, matches_timestamp_field, sanitize,
+};
+
+const FORCED_TIMESTAMP_PG_TYPE: &str = "TIMESTAMP WITH TIME ZONE";
+
 fn bson_type_to_pg(t: &str) -> &'static str {
     match t {
         TYPE_STRING => "TEXT",
-        TYPE_NUMBER => "DOUBLE PRECISION",
+        TYPE_NUMBER | TYPE_DOUBLE => "DOUBLE PRECISION",
+        TYPE_INT32 => "INTEGER",
+        TYPE_INT64 => "BIGINT",
         TYPE_BOOLEAN => "BOOLEAN",
         TYPE_DATE => "TIMESTAMP WITH TIME ZONE",
         TYPE_DECIMAL128 => "NUMERIC",
@@ -41,143 +54,9 @@ fn bson_type_to_pg(t: &str) -> &'static str {
     }
 }
 
-fn is_null_type(t: &str) -> bool {
-    t == TYPE_NULL || t == TYPE_UNDEFINED
-}
-
 // ──────────────────────────────────────────────────────────────────────────────
 // PostgreSQL identifier sanitization
 // ──────────────────────────────────────────────────────────────────────────────
-
-fn is_pg_reserved(s: &str) -> bool {
-    matches!(
-        s,
-        "all"
-            | "analyse"
-            | "analyze"
-            | "and"
-            | "any"
-            | "array"
-            | "as"
-            | "asc"
-            | "asymmetric"
-            | "authorization"
-            | "binary"
-            | "both"
-            | "case"
-            | "cast"
-            | "check"
-            | "collate"
-            | "collation"
-            | "column"
-            | "concurrently"
-            | "constraint"
-            | "create"
-            | "cross"
-            | "current_catalog"
-            | "current_date"
-            | "current_role"
-            | "current_schema"
-            | "current_time"
-            | "current_timestamp"
-            | "current_user"
-            | "default"
-            | "deferrable"
-            | "desc"
-            | "distinct"
-            | "do"
-            | "else"
-            | "end"
-            | "except"
-            | "false"
-            | "fetch"
-            | "for"
-            | "foreign"
-            | "freeze"
-            | "from"
-            | "full"
-            | "grant"
-            | "group"
-            | "having"
-            | "ilike"
-            | "in"
-            | "initially"
-            | "inner"
-            | "intersect"
-            | "into"
-            | "is"
-            | "isnull"
-            | "join"
-            | "lateral"
-            | "leading"
-            | "left"
-            | "like"
-            | "limit"
-            | "localtime"
-            | "localtimestamp"
-            | "natural"
-            | "not"
-            | "notnull"
-            | "null"
-            | "offset"
-            | "on"
-            | "only"
-            | "or"
-            | "order"
-            | "outer"
-            | "overlaps"
-            | "placing"
-            | "primary"
-            | "references"
-            | "returning"
-            | "right"
-            | "select"
-            | "session_user"
-            | "similar"
-            | "some"
-            | "symmetric"
-            | "system_user"
-            | "table"
-            | "tablesample"
-            | "then"
-            | "to"
-            | "trailing"
-            | "true"
-            | "union"
-            | "unique"
-            | "user"
-            | "using"
-            | "variadic"
-            | "verbose"
-            | "when"
-            | "where"
-            | "window"
-            | "with"
-    )
-}
-
-/// Convert a MongoDB field name to a valid, lowercase PostgreSQL identifier.
-///
-/// Non-ASCII-alphanumeric characters are replaced with `_`. Names that start
-/// with a digit or clash with a PostgreSQL reserved word are prefixed with `_`.
-fn sanitize(name: &str) -> String {
-    let s: String = name
-        .to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
-        format!("_{s}")
-    } else {
-        s
-    }
-}
 
 /// Return the plain scalar type to use for FK columns that reference serial PKs.
 fn fk_scalar_type(pg_type: &str) -> &str {
@@ -192,14 +71,6 @@ fn fk_scalar_type(pg_type: &str) -> &str {
 // Value-based type heuristics
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Returns `true` when every sampled value is a finite whole number.
-fn all_values_are_whole(values: &[serde_json::Value]) -> bool {
-    !values.is_empty()
-        && values
-            .iter()
-            .all(|v| v.as_f64().is_some_and(|f| f.is_finite() && f == f.floor()))
-}
-
 /// Returns `true` when every sampled Date value has a midnight UTC time component,
 /// making it a good candidate for `DATE` rather than `TIMESTAMP WITH TIME ZONE`.
 fn all_dates_are_date_only(values: &[serde_json::Value]) -> bool {
@@ -212,21 +83,39 @@ fn all_dates_are_date_only(values: &[serde_json::Value]) -> bool {
         })
 }
 
-/// Returns `VARCHAR(n)` when the field name contains "code" and all sampled
-/// string values are shorter than 5 characters.
-fn varchar_for_code_field(col_name: &str, values: &[serde_json::Value]) -> Option<String> {
-    if !col_name.contains("code") || values.is_empty() {
-        return None;
-    }
+/// Returns the PostgreSQL string type for sampled MongoDB string values.
+///
+/// - max length `<= 5`  -> `VARCHAR(max_len)`
+/// - max length `<= 20` -> `VARCHAR(20)`
+/// - max length `> 20`  -> `TEXT`
+fn pg_string_type(values: &[serde_json::Value]) -> Option<String> {
     let max_len = values
         .iter()
         .filter_map(|v| v.as_str().map(str::len))
         .max()?;
-    if max_len < 5 {
+    let max_len = max_len.max(1);
+
+    if max_len <= 5 {
         Some(format!("VARCHAR({max_len})"))
+    } else if max_len <= 20 {
+        Some("VARCHAR(20)".to_owned())
     } else {
-        None
+        Some("TEXT".to_owned())
     }
+}
+
+fn pg_string_type_from_schema(ts: &TypeSchema) -> Option<String> {
+    if let Some(width) = ts.varchar_length {
+        return Some(format!("VARCHAR({})", width.max(1)));
+    }
+    if let Some(max_length) = ts.max_length {
+        if max_length > 20 {
+            return Some("TEXT".to_owned());
+        }
+        return Some(format!("VARCHAR({})", max_length.max(1)));
+    }
+
+    pg_string_type(ts.values.as_deref().unwrap_or(&[]))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -234,7 +123,7 @@ fn varchar_for_code_field(col_name: &str, values: &[serde_json::Value]) -> Optio
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// Map a slice of non-null `(bson_type_name, TypeSchema)` pairs to a single PG type.
-fn resolve_scalar_pg_type(non_null: &[(&str, &TypeSchema)], col_name: &str) -> String {
+fn resolve_scalar_pg_type(non_null: &[(&str, &TypeSchema)], _col_name: &str) -> String {
     if non_null.is_empty() {
         return "TEXT".to_owned();
     }
@@ -243,30 +132,22 @@ fn resolve_scalar_pg_type(non_null: &[(&str, &TypeSchema)], col_name: &str) -> S
         let (name, ts) = non_null[0];
         let values = ts.values.as_deref().unwrap_or(&[]);
 
-        // For MongoDB Number fields: if all values are integers, use INTEGER/BIGINT; otherwise, use DOUBLE PRECISION.
-        if name == TYPE_NUMBER {
-            if all_values_are_whole(values) {
-                let max = values
-                    .iter()
-                    .filter_map(|v| v.as_f64())
-                    .map(|f| f.abs() as u64)
-                    .max()
-                    .unwrap_or(0);
-                return if max <= 2_147_483_647 {
-                    "INTEGER".to_owned()
-                } else {
-                    "BIGINT".to_owned()
-                };
-            } else {
-                // If any value is a decimal, use DOUBLE PRECISION for lossless mapping.
-                return "DOUBLE PRECISION".to_owned();
-            }
+        // MongoDB Number collapses multiple BSON numeric subtypes into one bucket,
+        // so keep regular scalar fields wide enough for later decimal values.
+        if matches!(name, TYPE_NUMBER | TYPE_DOUBLE) {
+            return "DOUBLE PRECISION".to_owned();
+        }
+        if name == TYPE_INT32 {
+            return "INTEGER".to_owned();
+        }
+        if name == TYPE_INT64 {
+            return "BIGINT".to_owned();
         }
         if name == TYPE_DATE && all_dates_are_date_only(values) {
             return "DATE".to_owned();
         }
         if name == TYPE_STRING {
-            if let Some(pg) = varchar_for_code_field(col_name, values) {
+            if let Some(pg) = pg_string_type_from_schema(ts) {
                 return pg;
             }
         }
@@ -274,15 +155,26 @@ fn resolve_scalar_pg_type(non_null: &[(&str, &TypeSchema)], col_name: &str) -> S
     }
 
     // Multiple non-null types – try to widen numeric types before falling back to TEXT.
-    // In the Rust schema, all numeric BSON types collapse to TYPE_NUMBER or TYPE_DECIMAL128.
-    let all_numeric = non_null
-        .iter()
-        .all(|(n, _)| *n == TYPE_NUMBER || *n == TYPE_DECIMAL128);
+    let all_numeric = non_null.iter().all(|(n, _)| {
+        matches!(
+            *n,
+            TYPE_NUMBER | TYPE_DOUBLE | TYPE_INT32 | TYPE_INT64 | TYPE_DECIMAL128
+        )
+    });
     if all_numeric {
         if non_null.iter().any(|(n, _)| *n == TYPE_DECIMAL128) {
             return "NUMERIC".to_owned();
         }
-        return "DOUBLE PRECISION".to_owned();
+        if non_null
+            .iter()
+            .any(|(n, _)| matches!(*n, TYPE_NUMBER | TYPE_DOUBLE))
+        {
+            return "DOUBLE PRECISION".to_owned();
+        }
+        if non_null.iter().any(|(n, _)| *n == TYPE_INT64) {
+            return "BIGINT".to_owned();
+        }
+        return "INTEGER".to_owned();
     }
 
     "TEXT".to_owned()
@@ -297,21 +189,13 @@ fn pk_type_for_id(non_null: &[(&str, &TypeSchema)]) -> String {
     if name == TYPE_OBJECTID {
         return "TEXT".to_owned();
     }
-    if name == TYPE_NUMBER {
-        let values = ts.values.as_deref().unwrap_or(&[]);
-        if all_values_are_whole(values) {
-            let max = values
-                .iter()
-                .filter_map(|v| v.as_f64())
-                .map(|f| f.abs() as u64)
-                .max()
-                .unwrap_or(0);
-            return if max <= 2_147_483_647 {
-                "SERIAL".to_owned()
-            } else {
-                "BIGSERIAL".to_owned()
-            };
-        }
+    if name == TYPE_DOUBLE || name == TYPE_NUMBER {
+        return "BIGSERIAL".to_owned();
+    }
+    if name == TYPE_INT32 {
+        return "SERIAL".to_owned();
+    }
+    if name == TYPE_INT64 {
         return "BIGSERIAL".to_owned();
     }
     if name == TYPE_STRING {
@@ -322,6 +206,9 @@ fn pk_type_for_id(non_null: &[(&str, &TypeSchema)]) -> String {
                 .all(|v| v.as_str().is_some_and(|s| s.parse::<i64>().is_ok()))
         {
             return "BIGSERIAL".to_owned();
+        }
+        if let Some(pg) = pg_string_type_from_schema(ts) {
+            return pg;
         }
     }
     "TEXT".to_owned()
@@ -462,7 +349,16 @@ fn map_value_fields(doc_ts: &TypeSchema) -> Option<&IndexMap<String, FieldSchema
 /// Build a child table name, stripping the `{schema}_` prefix when `pg_schema`
 /// is provided so that tables deployed inside a dedicated schema have shorter names.
 fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> String {
-    let raw = format!("{parent_name}_{field}");
+    let ancestor_segments = parent_name.split('_').collect::<Vec<_>>();
+    let raw = if ancestor_segments.iter().any(|segment| *segment == field) {
+        let parent_segment = ancestor_segments
+            .last()
+            .copied()
+            .unwrap_or(parent_name);
+        format!("{parent_segment}_{field}")
+    } else {
+        field.to_owned()
+    };
     if let Some(schema) = pg_schema {
         let prefix = format!("{}_", sanitize(schema));
         raw.strip_prefix(&prefix).map(str::to_owned).unwrap_or(raw)
@@ -491,6 +387,7 @@ fn add_child_table(
     array_field_col: &str,
     child_fields: &IndexMap<String, FieldSchema>,
     pg_schema: Option<&str>,
+    timestamp_fields: &[String],
 ) {
     let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
     let parent_pks = find_pk_columns(parent);
@@ -528,15 +425,86 @@ fn add_child_table(
     }
     child.parent_ref = Some(parent_ref);
 
-    process_fields(&mut child, child_fields, "", true, pg_schema);
+    process_fields(
+        &mut child,
+        child_fields,
+        "",
+        true,
+        false,
+        pg_schema,
+        timestamp_fields,
+    );
+    parent.child_tables.push(child);
+}
+
+fn add_grouped_root_child_table(
+    parent: &mut Table,
+    representative_field_col: &str,
+    child_fields: &IndexMap<String, FieldSchema>,
+    pg_schema: Option<&str>,
+    timestamp_fields: &[String],
+) {
+    let child_name = child_table_name(&parent.name, representative_field_col, pg_schema);
+    let parent_pks = find_pk_columns(parent);
+
+    let mut child = Table::new(child_name);
+    child.columns.push(Column {
+        name: "id".to_owned(),
+        pg_type: "BIGSERIAL".to_owned(),
+        nullable: false,
+        primary_key: true,
+    });
+
+    let mut parent_ref = Vec::new();
+    if parent_pks.len() == 1 {
+        let (pk_name, pk_type) = &parent_pks[0];
+        let fk_col = format!("{}_id", parent.name);
+        child.columns.push(Column {
+            name: fk_col.clone(),
+            pg_type: fk_scalar_type(pk_type).to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+        parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+    } else {
+        for (pk_name, pk_type) in &parent_pks {
+            let fk_col = format!("{}_{}", parent.name, pk_name);
+            child.columns.push(Column {
+                name: fk_col.clone(),
+                pg_type: fk_scalar_type(pk_type).to_owned(),
+                nullable: false,
+                primary_key: false,
+            });
+            parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+        }
+    }
+    child.parent_ref = Some(parent_ref);
+    child.columns.push(Column {
+        name: "key".to_owned(),
+        pg_type: "TEXT".to_owned(),
+        nullable: false,
+        primary_key: false,
+    });
+
+    process_fields(
+        &mut child,
+        child_fields,
+        "",
+        true,
+        false,
+        pg_schema,
+        timestamp_fields,
+    );
     parent.child_tables.push(child);
 }
 
 fn add_scalar_array_table(
     parent: &mut Table,
     array_field_col: &str,
+    mongo_field_name: &str,
     scalar_types: &[(&str, &TypeSchema)],
     pg_schema: Option<&str>,
+    timestamp_fields: &[String],
 ) {
     let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
     let parent_pks = find_pk_columns(parent);
@@ -579,7 +547,9 @@ fn add_scalar_array_table(
         .filter(|(t, _)| !is_null_type(t))
         .copied()
         .collect();
-    let value_type = if non_null.is_empty() {
+    let value_type = if matches_timestamp_field(mongo_field_name, timestamp_fields) {
+        FORCED_TIMESTAMP_PG_TYPE.to_owned()
+    } else if non_null.is_empty() {
         "TEXT".to_owned()
     } else {
         resolve_scalar_pg_type(&non_null, "value")
@@ -600,6 +570,7 @@ fn add_doc_table(
     doc_field_col: &str,
     doc_fields: &IndexMap<String, FieldSchema>,
     pg_schema: Option<&str>,
+    timestamp_fields: &[String],
 ) {
     let child_name = child_table_name(&parent.name, doc_field_col, pg_schema);
     let parent_pks = find_pk_columns(parent);
@@ -637,7 +608,15 @@ fn add_doc_table(
     }
     child.parent_ref = Some(parent_ref);
 
-    process_fields(&mut child, doc_fields, "", false, pg_schema);
+    process_fields(
+        &mut child,
+        doc_fields,
+        "",
+        false,
+        false,
+        pg_schema,
+        timestamp_fields,
+    );
     parent.child_tables.push(child);
 }
 
@@ -648,6 +627,7 @@ fn add_map_table(
     map_field_col: &str,
     value_fields: &IndexMap<String, FieldSchema>,
     pg_schema: Option<&str>,
+    timestamp_fields: &[String],
 ) {
     let child_name = child_table_name(&parent.name, map_field_col, pg_schema);
     let parent_pks = find_pk_columns(parent);
@@ -698,16 +678,27 @@ fn add_map_table(
         primary_key: false,
     });
 
-    process_fields(&mut child, value_fields, "", false, pg_schema);
+    process_fields(
+        &mut child,
+        value_fields,
+        "",
+        false,
+        false,
+        pg_schema,
+        timestamp_fields,
+    );
     parent.child_tables.push(child);
 }
 
 fn handle_array_field(
     table: &mut Table,
     col_name: &str,
+    mongo_field_name: &str,
     items_field: &FieldSchema,
     nullable: bool,
+    flatten_to_jsonb: bool,
     pg_schema: Option<&str>,
+    timestamp_fields: &[String],
 ) {
     let non_null_items: Vec<(&str, &TypeSchema)> = items_field
         .types
@@ -717,10 +708,20 @@ fn handle_array_field(
         .collect();
 
     if let Some((_, doc_ts)) = non_null_items.iter().find(|(t, _)| *t == TYPE_OBJECT) {
+        if flatten_to_jsonb && doc_ts.as_jsonb {
+            table.columns.push(Column {
+                name: col_name.to_owned(),
+                pg_type: "JSONB".to_owned(),
+                nullable,
+                primary_key: false,
+            });
+            return;
+        }
+
         // Array of documents → child table (one row per array element)
         if let Some(child_fields) = &doc_ts.object {
             let cf = child_fields.clone();
-            add_child_table(table, col_name, &cf, pg_schema);
+            add_child_table(table, col_name, &cf, pg_schema, timestamp_fields);
         } else {
             // Object type but no inner fields schema
             table.columns.push(Column {
@@ -732,7 +733,14 @@ fn handle_array_field(
         }
     } else {
         // Array of scalars → child table with `value` column
-        add_scalar_array_table(table, col_name, &non_null_items, pg_schema);
+        add_scalar_array_table(
+            table,
+            col_name,
+            mongo_field_name,
+            &non_null_items,
+            pg_schema,
+            timestamp_fields,
+        );
     }
 }
 
@@ -781,6 +789,61 @@ fn flatten_object_id_fields(
     }
 }
 
+fn flatten_inline_object_fields(
+    table: &mut Table,
+    fields: &IndexMap<String, FieldSchema>,
+    prefix: &[String],
+    reserved: &HashSet<String>,
+    timestamp_fields: &[String],
+) {
+    let mut reserved_names = table
+        .columns
+        .iter()
+        .map(|column| column.name.clone())
+        .collect::<HashSet<_>>();
+    reserved_names.extend(reserved.iter().cloned());
+    let column_names = inline_object_column_names_with_prefix(fields, prefix, &reserved_names);
+
+    for (path, field) in inline_object_leaf_fields_with_prefix(fields, prefix) {
+        let source_path = path.join(".");
+        let Some(col_name) = column_names.get(&source_path).cloned() else {
+            continue;
+        };
+        let raw_name = path.last().map(String::as_str).unwrap_or_default();
+        let non_null: Vec<(&str, &TypeSchema)> = field
+            .types
+            .iter()
+            .filter(|(t, _)| !is_null_type(t.as_str()))
+            .map(|(t, ts)| (t.as_str(), ts))
+            .collect();
+
+        if non_null.is_empty() {
+            continue;
+        }
+
+        let nullable = non_null.len() < field.types.len() || field.probability < 1.0;
+        let pg_type = if non_null.len() == 1 && non_null[0].0 == TYPE_ARRAY {
+            "JSONB".to_owned()
+        } else if non_null
+            .iter()
+            .any(|(t, _)| *t == TYPE_OBJECT || *t == TYPE_ARRAY)
+        {
+            "JSONB".to_owned()
+        } else if matches_timestamp_field(raw_name, timestamp_fields) {
+            FORCED_TIMESTAMP_PG_TYPE.to_owned()
+        } else {
+            resolve_scalar_pg_type(&non_null, &col_name)
+        };
+
+        table.columns.push(Column {
+            name: col_name,
+            pg_type,
+            nullable,
+            primary_key: false,
+        });
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Main recursive field processor
 // ──────────────────────────────────────────────────────────────────────────────
@@ -790,9 +853,122 @@ pub fn process_fields(
     fields: &IndexMap<String, FieldSchema>,
     col_prefix: &str,
     mark_pk: bool,
+    allow_inline_objects: bool,
     pg_schema: Option<&str>,
+    timestamp_fields: &[String],
 ) {
+    fn reserved_inline_sibling_names(
+        fields: &IndexMap<String, FieldSchema>,
+        current_raw_name: &str,
+        col_prefix: &str,
+        mark_pk: bool,
+        allow_inline_objects: bool,
+    ) -> HashSet<String> {
+        let mut reserved = HashSet::new();
+
+        for (raw_name, field) in fields {
+            if raw_name == current_raw_name {
+                continue;
+            }
+
+            let non_null: Vec<(&str, &TypeSchema)> = field
+                .types
+                .iter()
+                .filter(|(t, _)| !is_null_type(t.as_str()))
+                .map(|(t, ts)| (t.as_str(), ts))
+                .collect();
+
+            if non_null.is_empty() {
+                continue;
+            }
+
+            if raw_name == "_id"
+                && col_prefix.is_empty()
+                && mark_pk
+                && non_null.len() == 1
+                && non_null[0].0 == TYPE_OBJECT
+            {
+                if let Some(sub_fields) = &non_null[0].1.object {
+                    for (path, _) in inline_object_leaf_fields_with_prefix(sub_fields, &[]) {
+                        reserved.insert(sanitize(&path.join("_")));
+                    }
+                }
+                continue;
+            }
+
+            if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
+                let ts = non_null[0].1;
+                if ts.as_jsonb {
+                    reserved.insert(sanitize(&format!("{col_prefix}{raw_name}")));
+                    continue;
+                }
+                if let Some(sub_fields) = &ts.object {
+                    if allow_inline_objects && can_inline_object_fields(sub_fields) {
+                        for (path, _) in inline_object_leaf_fields_with_prefix(sub_fields, &[]) {
+                            if let Some(last) = path.last() {
+                                reserved.insert(sanitize(last));
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if non_null.len() == 1 && non_null[0].0 == TYPE_ARRAY {
+                let ts = non_null[0].1;
+                if ts.array.is_none() {
+                    reserved.insert(sanitize(&format!("{col_prefix}{raw_name}")));
+                }
+                continue;
+            }
+
+            if non_null
+                .iter()
+                .any(|(t, _)| *t == TYPE_OBJECT || *t == TYPE_ARRAY)
+            {
+                reserved.insert(sanitize(&format!("{col_prefix}{raw_name}")));
+                continue;
+            }
+
+            if raw_name == "_id" && col_prefix.is_empty() && mark_pk {
+                reserved.insert("id".to_owned());
+            } else {
+                reserved.insert(sanitize(&format!("{col_prefix}{raw_name}")));
+            }
+        }
+
+        reserved
+    }
+
+    let grouped_root_fields = if col_prefix.is_empty() && mark_pk {
+        grouped_root_array_object_fields(fields)
+    } else {
+        Vec::new()
+    };
+    let grouped_representatives = grouped_root_fields
+        .iter()
+        .map(|group| (group.representative.clone(), group))
+        .collect::<HashMap<_, _>>();
+    let grouped_members = grouped_root_fields
+        .iter()
+        .flat_map(|group| group.members.iter().cloned())
+        .collect::<HashSet<_>>();
+
     for (raw_name, field) in fields {
+        if let Some(group) = grouped_representatives.get(raw_name) {
+            add_grouped_root_child_table(
+                table,
+                &sanitize(raw_name),
+                &group.child_fields,
+                pg_schema,
+                timestamp_fields,
+            );
+            continue;
+        }
+        if grouped_members.contains(raw_name) {
+            continue;
+        }
+
         let col_name = sanitize(&format!("{col_prefix}{raw_name}"));
 
         let non_null: Vec<(&str, &TypeSchema)> = field
@@ -855,7 +1031,7 @@ pub fn process_fields(
                 // Map document (dynamic hex keys)
                 let value_fields = map_value_fields(ts).map(|vf| vf.clone());
                 if let Some(vf) = value_fields {
-                    add_map_table(table, &col_name, &vf, pg_schema);
+                    add_map_table(table, &col_name, &vf, pg_schema, timestamp_fields);
                 } else {
                     table.columns.push(Column {
                         name: col_name,
@@ -868,7 +1044,7 @@ pub fn process_fields(
                 // Map document (dynamic UUID keys)
                 let value_fields = map_uuid_value_fields(ts).map(|vf| vf.clone());
                 if let Some(vf) = value_fields {
-                    add_map_table(table, &col_name, &vf, pg_schema);
+                    add_map_table(table, &col_name, &vf, pg_schema, timestamp_fields);
                 } else {
                     table.columns.push(Column {
                         name: col_name,
@@ -878,8 +1054,26 @@ pub fn process_fields(
                     });
                 }
             } else if let Some(sub_fields) = &ts.object {
-                let sf = sub_fields.clone();
-                add_doc_table(table, &col_name, &sf, pg_schema);
+                if allow_inline_objects && can_inline_object_fields(sub_fields) {
+                    let sibling_reserved =
+                        reserved_inline_sibling_names(
+                            fields,
+                            raw_name,
+                            col_prefix,
+                            mark_pk,
+                            allow_inline_objects,
+                        );
+                    flatten_inline_object_fields(
+                        table,
+                        sub_fields,
+                        std::slice::from_ref(raw_name),
+                        &sibling_reserved,
+                        timestamp_fields,
+                    );
+                } else {
+                    let sf = sub_fields.clone();
+                    add_doc_table(table, &col_name, &sf, pg_schema, timestamp_fields);
+                }
             } else {
                 // Object type but no inner field schema (empty document)
                 table.columns.push(Column {
@@ -897,7 +1091,21 @@ pub fn process_fields(
             let ts = non_null[0].1;
             if let Some(items_field) = &ts.array {
                 let items = *items_field.clone();
-                handle_array_field(table, &col_name, &items, nullable, pg_schema);
+                let flatten_to_jsonb = col_prefix.is_empty()
+                    && mark_pk
+                    && fields.len() == 2
+                    && fields.contains_key("_id")
+                    && raw_name != "_id";
+                handle_array_field(
+                    table,
+                    &col_name,
+                    raw_name,
+                    &items,
+                    nullable,
+                    flatten_to_jsonb,
+                    pg_schema,
+                    timestamp_fields,
+                );
             } else {
                 // Array with no items schema → JSONB
                 table.columns.push(Column {
@@ -928,6 +1136,8 @@ pub fn process_fields(
         let is_pk = raw_name == "_id" && col_prefix.is_empty() && mark_pk;
         let pg_type = if is_pk {
             pk_type_for_id(&non_null)
+        } else if matches_timestamp_field(raw_name, timestamp_fields) {
+            FORCED_TIMESTAMP_PG_TYPE.to_owned()
         } else {
             resolve_scalar_pg_type(&non_null, &col_name)
         };
@@ -977,6 +1187,11 @@ pub fn collect_tables(root: &Table) -> Vec<&Table> {
 }
 
 fn render_column(col: &Column, inline_primary_key: bool) -> String {
+    let rendered_pg_type = if col.pg_type.eq_ignore_ascii_case("VARCHAR(0)") {
+        "TEXT"
+    } else {
+        col.pg_type.as_str()
+    };
     let constraint = if col.primary_key && inline_primary_key {
         " PRIMARY KEY"
     } else if !col.nullable || col.primary_key {
@@ -984,7 +1199,7 @@ fn render_column(col: &Column, inline_primary_key: bool) -> String {
     } else {
         ""
     };
-    format!("    {}{} {}{constraint}", col.name, "", col.pg_type)
+    format!("    {}{} {}{constraint}", col.name, "", rendered_pg_type)
         .trim_end()
         .to_owned()
 }
@@ -1040,13 +1255,128 @@ fn render_table(table: &Table) -> String {
 ///
 /// # Returns
 /// A string containing one or more `CREATE TABLE` statements separated by blank lines.
-pub fn schema_to_ddl(
+pub fn schema_to_ddl_with_timestamp_fields(
     schema: &CollectionSchema,
     table_name: &str,
     pg_schema: Option<&str>,
+    timestamp_fields: &[String],
 ) -> String {
+    if let Some(group) = flatten_grouped_root_array_object_fields(schema) {
+        let mut root = Table::new(sanitize(table_name));
+        root.columns.push(Column {
+            name: "id".to_owned(),
+            pg_type: "BIGSERIAL".to_owned(),
+            nullable: false,
+            primary_key: true,
+        });
+
+        let id_field = schema.object.get("_id").expect("_id should exist");
+        let id_non_null = id_field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !is_null_type(type_name.as_str()))
+            .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+            .collect::<Vec<_>>();
+        root.columns.push(Column {
+            name: flattened_root_parent_id_column(table_name),
+            pg_type: fk_scalar_type(&pk_type_for_id(&id_non_null)).to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+        root.columns.push(Column {
+            name: "key".to_owned(),
+            pg_type: "TEXT".to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+
+        process_fields(
+            &mut root,
+            &group.child_fields,
+            "",
+            false,
+            false,
+            pg_schema,
+            timestamp_fields,
+        );
+
+        let tables = collect_tables(&root);
+        let ddl = tables
+            .iter()
+            .map(|t| render_table(t))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        return prepend_schema_preamble(ddl, pg_schema);
+    }
+
+    if let Some((_, array_field)) = flatten_root_array_object_field(schema) {
+        let array_type = array_field
+            .types
+            .iter()
+            .find(|(type_name, _)| {
+                !is_null_type(type_name.as_str()) && type_name.as_str() == TYPE_ARRAY
+            })
+            .map(|(_, type_schema)| type_schema);
+        let object_ts = array_type
+            .and_then(|type_schema| type_schema.array.as_ref())
+            .and_then(|items_field| items_field.types.get(TYPE_OBJECT));
+        if let Some(object_ts) = object_ts {
+            if !object_ts.as_jsonb {
+                let mut root = Table::new(sanitize(table_name));
+                root.columns.push(Column {
+                    name: "id".to_owned(),
+                    pg_type: "BIGSERIAL".to_owned(),
+                    nullable: false,
+                    primary_key: true,
+                });
+
+                let id_field = schema.object.get("_id").expect("_id should exist");
+                let id_non_null = id_field
+                    .types
+                    .iter()
+                    .filter(|(type_name, _)| !is_null_type(type_name.as_str()))
+                    .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+                    .collect::<Vec<_>>();
+                root.columns.push(Column {
+                    name: flattened_root_parent_id_column(table_name),
+                    pg_type: fk_scalar_type(&pk_type_for_id(&id_non_null)).to_owned(),
+                    nullable: false,
+                    primary_key: false,
+                });
+
+                if let Some(item_fields) = &object_ts.object {
+                    process_fields(
+                        &mut root,
+                        item_fields,
+                        "",
+                        false,
+                        false,
+                        pg_schema,
+                        timestamp_fields,
+                    );
+                }
+
+                let tables = collect_tables(&root);
+                let ddl = tables
+                    .iter()
+                    .map(|t| render_table(t))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                return prepend_schema_preamble(ddl, pg_schema);
+            }
+        }
+    }
+
     let mut root = Table::new(sanitize(table_name));
-    process_fields(&mut root, &schema.object, "", true, pg_schema);
+    process_fields(
+        &mut root,
+        &schema.object,
+        "",
+        true,
+        false,
+        pg_schema,
+        timestamp_fields,
+    );
 
     let tables = collect_tables(&root);
 
@@ -1058,6 +1388,14 @@ pub fn schema_to_ddl(
         .collect::<Vec<_>>()
         .join("\n\n");
     prepend_schema_preamble(ddl, pg_schema)
+}
+
+pub fn schema_to_ddl(
+    schema: &CollectionSchema,
+    table_name: &str,
+    pg_schema: Option<&str>,
+) -> String {
+    schema_to_ddl_with_timestamp_fields(schema, table_name, pg_schema, &[])
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1087,8 +1425,8 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "users", None);
         assert!(ddl.contains("CREATE TABLE users ("), "root table missing");
-        assert!(ddl.contains("name TEXT"), "name column missing");
-        assert!(ddl.contains("score"), "score column missing");
+        assert!(ddl.contains("name VARCHAR(5) NOT NULL"), "name column missing");
+        assert!(ddl.contains("score INTEGER NOT NULL"), "score column missing");
     }
 
     #[test]
@@ -1107,6 +1445,67 @@ mod tests {
     }
 
     #[test]
+    fn test_explicit_null_scalar_field_stays_nullable() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "last_update": bson::Bson::Null },
+            doc! { "_id": 2_i32, "last_update": "2022-08-17 07:57:18.419539" },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "scheduling_jobs", None);
+        assert!(
+            ddl.contains("last_update TEXT"),
+            "nullable scalar column should be emitted"
+        );
+        assert!(
+            !ddl.contains("last_update TEXT NOT NULL"),
+            "explicit null scalar field must not have NOT NULL"
+        );
+    }
+
+    #[test]
+    fn test_schema_json_with_null_and_string_stays_nullable() {
+        let schema: CollectionSchema = serde_json::from_str(
+            r#"{
+    "count": 2,
+    "sampled": 2,
+    "object": {
+        "_id": {
+            "probability": 1.0,
+            "types": {
+                "Number": {
+                    "probability": 1.0,
+                    "sampled": 2,
+                    "values": [1, 2]
+                }
+            }
+        },
+        "last_update": {
+            "probability": 1.0,
+            "types": {
+                "Null": {
+                    "probability": 0.5,
+                    "sampled": 1,
+                    "values": [null]
+                },
+                "String": {
+                    "probability": 0.5,
+                    "sampled": 1,
+                    "values": ["2022-08-17 07:57:18.419539"]
+                }
+            }
+        }
+    }
+}"#,
+        )
+        .expect("schema json should parse");
+        let ddl = schema_to_ddl(&schema, "scheduling_jobs", None);
+        assert!(
+            !ddl.contains("last_update TEXT NOT NULL"),
+            "JSON-backed null scalar field must not have NOT NULL"
+        );
+    }
+
+    #[test]
     fn test_objectid_pk_becomes_text() {
         let docs = vec![doc! { "_id": bson::oid::ObjectId::new(), "x": 1_i32 }];
         let schema = analyze(&docs);
@@ -1118,7 +1517,29 @@ mod tests {
     }
 
     #[test]
-    fn test_numeric_strings_stay_text() {
+    fn test_short_strings_use_tight_varchar() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "code": "abc" },
+            doc! { "_id": 2_i32, "code": "abcde" },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "teams_members", None);
+        assert!(ddl.contains("code VARCHAR(5) NOT NULL"));
+    }
+
+    #[test]
+    fn test_empty_strings_use_varchar_1() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "secondary_localization": "" },
+            doc! { "_id": 2_i32, "secondary_localization": "" },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "archived_projects", None);
+        assert!(ddl.contains("secondary_localization VARCHAR(1) NOT NULL"));
+    }
+
+    #[test]
+    fn test_medium_strings_use_varchar_20() {
         let docs = vec![
             doc! { "_id": 1_i32, "ldap": "20014291" },
             doc! { "_id": 2_i32, "ldap": "20101496" },
@@ -1126,9 +1547,76 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "teams_members", None);
         assert!(
-            ddl.contains("ldap TEXT NOT NULL"),
-            "Numeric-looking strings should remain TEXT"
+            ddl.contains("ldap VARCHAR(20) NOT NULL"),
+            "Strings up to 20 chars should use VARCHAR(20)"
         );
+    }
+
+    #[test]
+    fn test_long_strings_stay_text() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "name": "Schedule of stop/start job(s) are cost optimized" },
+            doc! { "_id": 2_i32, "name": "Another long descriptive string value" },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "advisors", None);
+        assert!(ddl.contains("name TEXT NOT NULL"));
+    }
+
+    #[test]
+    fn test_persisted_varchar_length_drives_ddl() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "code": "abc" },
+            doc! { "_id": 2_i32, "code": "abcdefgh" },
+        ];
+        let mut schema = analyze(&docs);
+        let string_type = schema
+            .object
+            .get_mut("code")
+            .and_then(|field| field.types.get_mut(TYPE_STRING))
+            .expect("code should be inferred as String");
+        string_type.values = None;
+        string_type.max_length = Some(8);
+        string_type.varchar_length = Some(20);
+
+        let ddl = schema_to_ddl(&schema, "teams_members", None);
+        assert!(ddl.contains("code VARCHAR(20) NOT NULL"));
+    }
+
+    #[test]
+    fn test_number_field_stays_double_precision_even_for_whole_samples() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "ram": 1.0_f64 },
+            doc! { "_id": 2_i32, "ram": 4.0_f64 },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "sizings", None);
+        assert!(
+            ddl.contains("ram DOUBLE PRECISION NOT NULL"),
+            "MongoDB Number fields should remain DOUBLE PRECISION for non-id columns"
+        );
+    }
+
+    #[test]
+    fn test_int32_field_emits_integer() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "ram": 1_i32 },
+            doc! { "_id": 2_i32, "ram": 4_i32 },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "sizings", None);
+        assert!(ddl.contains("ram INTEGER NOT NULL"));
+    }
+
+    #[test]
+    fn test_mixed_int_and_double_field_emits_double_precision() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "ram": 1_i32 },
+            doc! { "_id": 2_i32, "ram": 3.5_f64 },
+        ];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "sizings", None);
+        assert!(ddl.contains("ram DOUBLE PRECISION NOT NULL"));
     }
 
     #[test]
@@ -1145,7 +1633,7 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "advisors", None);
         assert!(
-            ddl.contains("CREATE TABLE advisors_advices ("),
+            ddl.contains("CREATE TABLE advices ("),
             "child table for advices missing"
         );
         assert!(
@@ -1168,15 +1656,15 @@ mod tests {
         let ddl = schema_to_ddl(&schema, "executions", None);
 
         assert!(
-            ddl.contains("projectid TEXT NOT NULL"),
+            ddl.contains("projectid "),
             "projectid PK column missing"
         );
         assert!(
-            ddl.contains("provider TEXT NOT NULL"),
+            ddl.contains("provider "),
             "provider PK column missing"
         );
         assert!(
-            ddl.contains("log_type TEXT NOT NULL"),
+            ddl.contains("log_type "),
             "log_type PK column missing"
         );
         assert!(
@@ -1200,7 +1688,7 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "orders", None);
         assert!(
-            ddl.contains("CREATE TABLE orders_addr ("),
+            ddl.contains("CREATE TABLE addr ("),
             "child table for addr missing"
         );
         assert!(ddl.contains("FOREIGN KEY"), "FK constraint missing");
@@ -1212,20 +1700,111 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "posts", None);
         assert!(
-            ddl.contains("CREATE TABLE posts_tags ("),
+            ddl.contains("CREATE TABLE tags ("),
             "scalar array child table missing"
         );
-        assert!(ddl.contains("value TEXT"), "value column missing");
+        assert!(ddl.contains("value VARCHAR(20) NOT NULL"), "value column missing");
+    }
+
+    #[test]
+    fn test_jsonb_array_of_objects_stays_on_root_table() {
+        let docs = vec![doc! {
+            "_id": "pg",
+            "versions": [{
+                "major_version": "13",
+                "grace_date": bson::DateTime::now(),
+                "eol_date": bson::DateTime::now()
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let mut schema = analyzer.finish();
+        schema.mark_objects_as_jsonb();
+
+        let ddl = schema_to_ddl(&schema, "engine", None);
+
+        assert!(ddl.contains("CREATE TABLE engine ("));
+        assert!(ddl.contains("versions JSONB NOT NULL"));
+        assert!(
+            !ddl.contains("CREATE TABLE engine_versions ("),
+            "array of objects marked as jsonb should stay on the root table"
+        );
+    }
+
+    #[test]
+    fn test_array_of_objects_without_jsonb_flag_flattens_into_root_table() {
+        let docs = vec![doc! {
+            "_id": "pg",
+            "versions": [{
+                "major_version": "13",
+                "grace_date": bson::DateTime::now(),
+                "eol_date": bson::DateTime::now()
+            }]
+        }];
+        let schema = analyze(&docs);
+
+        let ddl = schema_to_ddl(&schema, "engine", None);
+
+        assert!(ddl.contains("CREATE TABLE engine ("));
+        assert!(
+            ddl.contains("engine_id VARCHAR(2) NOT NULL"),
+            "flattened root table should keep the collection _id as engine_id"
+        );
+        assert!(
+            ddl.contains("major_version VARCHAR(2) NOT NULL"),
+            "flattened root table should include the array item fields"
+        );
+        assert!(
+            !ddl.contains("CREATE TABLE engine_versions ("),
+            "engine-style arrays should not generate a child table when jsonb=false"
+        );
+        assert!(
+            !ddl.contains("versions JSONB NOT NULL"),
+            "engine should not emit a jsonb column when jsonb=false"
+        );
+    }
+
+    #[test]
+    fn test_jsonb_array_of_objects_with_other_root_fields_keeps_child_table() {
+        let docs = vec![doc! {
+            "_id": 1_i32,
+            "name": "advisor",
+            "advices": [{
+                "advice": "oversized",
+                "object_id": "svc-1"
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let mut schema = analyzer.finish();
+        schema.mark_objects_as_jsonb();
+
+        let ddl = schema_to_ddl(&schema, "advisors", None);
+
+        assert!(ddl.contains("name VARCHAR(20) NOT NULL"));
+        assert!(ddl.contains("CREATE TABLE advices ("));
+        assert!(
+            !ddl.contains("advices JSONB"),
+            "advisors-style arrays should still generate child tables"
+        );
     }
 
     #[test]
     fn test_reserved_word_prefixed() {
-        let docs = vec![doc! { "_id": 1_i32, "order": "asc" }];
+        let docs = vec![doc! { "_id": 1_i32, "order": "asc", "current_timestamp": 42_i32 }];
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "t", None);
         assert!(
             ddl.contains("_order"),
             "reserved word 'order' should be prefixed with _"
+        );
+        assert!(
+            ddl.contains("_current_timestamp"),
+            "reserved word 'current_timestamp' should be prefixed with _"
         );
     }
 
@@ -1236,5 +1815,87 @@ mod tests {
         assert_eq!(sanitize("123abc"), "_123abc");
         assert_eq!(sanitize("order"), "_order");
         assert_eq!(sanitize("_id"), "_id");
+    }
+
+    #[test]
+    fn test_timestamp_field_patterns_force_timestamp_columns() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "last_update": 1_i64 },
+            doc! { "_id": 2_i32, "last_update": "2022-08-17T07:57:18Z" },
+        ];
+        let schema = analyze(&docs);
+        let patterns = vec!["last_update".to_owned(), "*_date".to_owned()];
+
+        let ddl = schema_to_ddl_with_timestamp_fields(&schema, "scheduling_jobs", None, &patterns);
+
+        assert!(ddl.contains("last_update TIMESTAMP WITH TIME ZONE NOT NULL"));
+    }
+
+    #[test]
+    fn groups_same_shape_root_array_fields_into_one_keyed_child_table() {
+        let docs = vec![bson::doc! {
+            "_id": "community-1",
+            "dev": [{
+                "available_localizations": ["eu-west-1"],
+                "provider": "aiven",
+                "cloud": "gcp",
+                "network_exposition": "private_platform"
+            }],
+            "prod": [{
+                "available_localizations": ["eu-west-2"],
+                "provider": "atlas",
+                "cloud": "azure",
+                "network_exposition": "public"
+            }]
+        }];
+        let mut analyzer = crate::analyzer::Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl_with_timestamp_fields(&schema, "communities", None, &[]);
+
+        assert!(ddl.contains("CREATE TABLE communities ("));
+        assert!(ddl.contains("communities_id VARCHAR(20) NOT NULL"));
+        assert!(ddl.contains("key TEXT NOT NULL"));
+        assert!(ddl.contains("CREATE TABLE available_localizations ("));
+        assert!(!ddl.contains("CREATE TABLE communities_dev ("));
+        assert!(!ddl.contains("CREATE TABLE communities_prod ("));
+    }
+
+    #[test]
+    fn restores_scalar_only_object_with_siblings_to_child_table() {
+        let docs = vec![bson::doc! {
+            "_id": "project-1",
+            "environment": "T",
+            "providers": [{
+                "namespace": "fras-t-dba-176c358",
+                "namespace_id": "fras-t-dba-176c358",
+                "provider": "aiven",
+                "metadata": {
+                    "creation_date": "2025-08-11T00:00:00Z",
+                    "status": "created"
+                }
+            }]
+        }];
+        let mut analyzer = crate::analyzer::Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl_with_timestamp_fields(
+            &schema,
+            "projects",
+            None,
+            &["*_date".to_owned()],
+        );
+
+        assert!(ddl.contains("CREATE TABLE providers ("));
+        assert!(ddl.contains("CREATE TABLE metadata ("));
+        assert!(ddl.contains("providers_id BIGINT NOT NULL"));
+        assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
+        assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
     }
 }
