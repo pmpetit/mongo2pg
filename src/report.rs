@@ -287,7 +287,7 @@ pub fn cluster_from_uri(uri: &str) -> String {
 
 /// Render the per-database HTML report string.
 /// `cluster` is the MongoDB host shown in the header (pass an empty string to omit it).
-pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> String {
+pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title: &str) -> String {
     let now = chrono::Utc::now()
         .format("%Y-%m-%d %H:%M:%S UTC")
         .to_string();
@@ -632,7 +632,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
   </style>
 </head>
 <body>
-  <h1>mongo2pg – Migration Report</h1>
+  <h1>mongo2pg – Migration Report {title}</h1>
   <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Database: <strong>{namespace}</strong> &nbsp;|&nbsp; Generated: {now}</p>
 
   <div class="summary-grid">
@@ -712,6 +712,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
 </html>
 "#,
         namespace = namespace,
+        title = title,
         cluster = cluster,
         now = now,
         count = rows.len(),
@@ -1468,10 +1469,10 @@ mod tests {
                     avg_fields_per_doc: 4.2,
                     migrability_score: 6.5,
                     infer_warnings: vec![InferWarningYaml {
-                      kind: "mixed_scalar_types".to_owned(),
+                        kind: "mixed_scalar_types".to_owned(),
                         field_path: "advices[].earnings.monthly_gain".to_owned(),
-                      renamed_to: None,
-                      keyword: None,
+                        renamed_to: None,
+                        keyword: None,
                         dominant_family: "numeric".to_owned(),
                         dominant_ratio: 0.95,
                         minority_families: vec![InferWarningMinorityYaml {
@@ -1496,6 +1497,7 @@ mod tests {
             }],
             "dbapi",
             "cluster0",
+            "Test Infer Warning Highlighting Details",
         );
 
         assert!(html.contains("collection-name has-warning"));
@@ -1507,92 +1509,94 @@ mod tests {
         assert!(html.contains("\"N/A\""));
     }
 
-      #[test]
-      fn render_html_shows_pg_keyword_warning_details() {
+    #[test]
+    fn render_html_shows_pg_keyword_warning_details() {
         let html = render_html(
-          &[CollectionRow {
-            name: "scheduling_executions".to_owned(),
-            stats: CollectionStatsYaml {
-              documents_in_collection: serde_yaml::Value::Number(106_u64.into()),
-              documents_sampled: 106,
-              width_top_level: 7,
-              width_max: 7.0,
-              width_max_level: 1,
-              depth_max: 1,
-              branch_total: 7.0,
-              branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 7.0)]),
-              array_field_count: 0,
-              avg_fields_per_doc: 7.0,
-              migrability_score: 2.0,
-              infer_warnings: vec![InferWarningYaml {
-                kind: "pg_keyword".to_owned(),
-                field_path: "timestamp".to_owned(),
-                renamed_to: Some("_timestamp".to_owned()),
-                keyword: Some("timestamp".to_owned()),
-                dominant_family: String::new(),
-                dominant_ratio: 0.0,
-                minority_families: Vec::new(),
-                observed_types: vec![InferWarningTypeYaml {
-                  type_name: "Int32".to_owned(),
-                  ratio: 0.98,
-                  examples: vec!["1609954220".to_owned()],
-                }],
-              }],
-            },
-            table_names: Vec::new(),
-          }],
-          "dbapi",
-          "cluster0",
+            &[CollectionRow {
+                name: "scheduling_executions".to_owned(),
+                stats: CollectionStatsYaml {
+                    documents_in_collection: serde_yaml::Value::Number(106_u64.into()),
+                    documents_sampled: 106,
+                    width_top_level: 7,
+                    width_max: 7.0,
+                    width_max_level: 1,
+                    depth_max: 1,
+                    branch_total: 7.0,
+                    branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 7.0)]),
+                    array_field_count: 0,
+                    avg_fields_per_doc: 7.0,
+                    migrability_score: 2.0,
+                    infer_warnings: vec![InferWarningYaml {
+                        kind: "pg_keyword".to_owned(),
+                        field_path: "timestamp".to_owned(),
+                        renamed_to: Some("_timestamp".to_owned()),
+                        keyword: Some("timestamp".to_owned()),
+                        dominant_family: String::new(),
+                        dominant_ratio: 0.0,
+                        minority_families: Vec::new(),
+                        observed_types: vec![InferWarningTypeYaml {
+                            type_name: "Int32".to_owned(),
+                            ratio: 0.98,
+                            examples: vec!["1609954220".to_owned()],
+                        }],
+                    }],
+                },
+                table_names: Vec::new(),
+            }],
+            "dbapi",
+            "cluster0",
+            "Test PG Keyword Warning Details",
         );
 
         assert!(html.contains("timestamp"));
         assert!(html.contains("PostgreSQL keyword"));
         assert!(html.contains("_timestamp"));
         assert!(html.contains("Int32"));
-      }
+    }
 
-      #[test]
-      fn render_html_shows_type_name_warning_details() {
+    #[test]
+    fn render_html_shows_type_name_warning_details() {
         let html = render_html(
-          &[CollectionRow {
-            name: "sample".to_owned(),
-            stats: CollectionStatsYaml {
-              documents_in_collection: serde_yaml::Value::Number(10_u64.into()),
-              documents_sampled: 10,
-              width_top_level: 2,
-              width_max: 2.0,
-              width_max_level: 1,
-              depth_max: 1,
-              branch_total: 2.0,
-              branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
-              array_field_count: 0,
-              avg_fields_per_doc: 2.0,
-              migrability_score: 1.5,
-              infer_warnings: vec![InferWarningYaml {
-                kind: "type_name".to_owned(),
-                field_path: "date".to_owned(),
-                renamed_to: None,
-                keyword: Some("date".to_owned()),
-                dominant_family: String::new(),
-                dominant_ratio: 0.0,
-                minority_families: Vec::new(),
-                observed_types: vec![InferWarningTypeYaml {
-                  type_name: "Date".to_owned(),
-                  ratio: 1.0,
-                  examples: vec!["\"2026-05-22 18:50:52.681 +00:00:00\"".to_owned()],
-                }],
-              }],
-            },
-            table_names: Vec::new(),
-          }],
-          "dbapi",
-          "cluster0",
+            &[CollectionRow {
+                name: "sample".to_owned(),
+                stats: CollectionStatsYaml {
+                    documents_in_collection: serde_yaml::Value::Number(10_u64.into()),
+                    documents_sampled: 10,
+                    width_top_level: 2,
+                    width_max: 2.0,
+                    width_max_level: 1,
+                    depth_max: 1,
+                    branch_total: 2.0,
+                    branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
+                    array_field_count: 0,
+                    avg_fields_per_doc: 2.0,
+                    migrability_score: 1.5,
+                    infer_warnings: vec![InferWarningYaml {
+                        kind: "type_name".to_owned(),
+                        field_path: "date".to_owned(),
+                        renamed_to: None,
+                        keyword: Some("date".to_owned()),
+                        dominant_family: String::new(),
+                        dominant_ratio: 0.0,
+                        minority_families: Vec::new(),
+                        observed_types: vec![InferWarningTypeYaml {
+                            type_name: "Date".to_owned(),
+                            ratio: 1.0,
+                            examples: vec!["\"2026-05-22 18:50:52.681 +00:00:00\"".to_owned()],
+                        }],
+                    }],
+                },
+                table_names: Vec::new(),
+            }],
+            "dbapi",
+            "cluster0",
+            "Test Infer Warning Highlighting Details",
         );
 
         assert!(html.contains("field name matches type name"));
         assert!(html.contains("date"));
         assert!(html.contains("Date"));
-      }
+    }
 
     #[test]
     fn render_post_import_html_shows_clickable_md5_details() {
@@ -1639,7 +1643,7 @@ mod tests {
                     name: "advisors".to_owned(),
                     is_array: false,
                     mongo_count: 2,
-                  pg_table_name: Some("dbapi.earnings".to_owned()),
+                    pg_table_name: Some("dbapi.earnings".to_owned()),
                     pg_row_count: Some(2),
                     md5_summary: Some(PostImportMd5Summary {
                         mongo_md5: "mongo-md5".to_owned(),
@@ -1683,6 +1687,7 @@ pub fn render_multi_db_html(
     entries: &[(&str, &[CollectionRow])],
     cluster: &str,
     project_name: &str,
+    title: &str,
 ) -> String {
     let now = chrono::Utc::now()
         .format("%Y-%m-%d %H:%M:%S UTC")
@@ -2067,7 +2072,7 @@ pub fn render_multi_db_html(
   </style>
 </head>
 <body>
-  <h1>mongo2pg – Migration Report</h1>
+  <h1>mongo2pg – Migration Report {title}</h1>
   <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Project: <strong>{project_name}</strong> &nbsp;|&nbsp; Generated: {now}</p>
 
   <div class="summary-grid">
@@ -2138,6 +2143,7 @@ pub fn render_multi_db_html(
 </html>
 "#,
         project_name = project_name,
+        title = title,
         cluster = cluster,
         now = now,
         db_count = cs.db_count,

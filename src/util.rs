@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConfData {
     pub base_dir: PathBuf,
+    pub title: String,
     pub project_dir: String,
     pub source_uri: Option<String>,
     pub target_uri: Option<String>,
@@ -33,6 +34,7 @@ struct TomlProjectConfig {
 
 #[derive(Debug, Deserialize)]
 struct TomlProjectSection {
+    title: String,
     base_dir: PathBuf,
     project_dir: String,
 }
@@ -78,6 +80,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
 
         Ok(ConfData {
             base_dir: parsed.project.base_dir,
+            title: parsed.project.title,
             project_dir: parsed.project.project_dir,
             source_uri: source.uri,
             target_uri: target.uri,
@@ -107,6 +110,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
         }
 
         let mut base_dir: Option<PathBuf> = None;
+        let mut title: String = "mongo2pg Project Title".to_owned();
         let mut project_dir: Option<String> = None;
         let mut source_uri: Option<String> = None;
         let mut target_uri: Option<String> = None;
@@ -122,6 +126,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
                 let parsed = parse_conf_value(val);
                 match key.trim() {
                     "BASE_DIR" => base_dir = Some(PathBuf::from(&parsed)),
+                    "TITLE" => title = parsed,
                     "PROJECT_DIR" => project_dir = Some(parsed),
                     "SOURCE_URI" => source_uri = Some(parsed),
                     "TARGET_URI" => target_uri = Some(parsed),
@@ -145,6 +150,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
 
         Ok(ConfData {
             base_dir,
+            title,
             project_dir,
             source_uri,
             target_uri,
@@ -709,6 +715,7 @@ mod tests {
             &config_path,
             r#"
 [project]
+title = "Test Project"
 base_dir = "/tmp"
 project_dir = "dbapi"
 
@@ -739,6 +746,7 @@ datetime_field = ["last_update", "*_date"]
             &config_path,
             r#"
 [project]
+title = "Test Project"
 base_dir = "/tmp"
 project_dir = "dbapi"
 
