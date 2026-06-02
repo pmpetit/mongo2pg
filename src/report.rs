@@ -789,6 +789,13 @@ fn render_infer_warning_detail(warnings: &[InferWarningYaml]) -> String {
           type_items = type_items,
         );
       }
+      if warning.kind == "nullable_scalar" {
+        return format!(
+          r#"<li><strong>{field}</strong>: {type_name} field can be null/undefined; consider normalizing to a default value.</li>"#,
+          field = escape_html(&warning.field_path),
+          type_name = escape_html(&warning.dominant_family),
+        );
+      }
       let minority = warning
         .minority_families
         .iter()

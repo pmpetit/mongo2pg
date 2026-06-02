@@ -1012,6 +1012,96 @@ fn collect_infer_type_warnings(schema: &CollectionSchema) -> Vec<InferTypeWarnin
     warnings
 }
 
+/// Collect warnings for scalar fields that can be null or undefined.
+/// These fields should be normalized or the PG column should be nullable.
+fn collect_nullable_scalar_warnings(schema: &CollectionSchema) -> Vec<InferWarningYaml> {
+    fn visit_field(path: &str, field: &FieldSchema, warnings: &mut Vec<InferWarningYaml>) {
+        let mut has_scalar = false;
+        let mut scalar_types = Vec::new();
+        let mut has_null = false;
+        let mut has_undefined = false;
+        let mut null_ratio = 0.0;
+        let mut undefined_ratio = 0.0;
+
+        for (type_name, type_schema) in &field.types {
+            match type_name.as_str() {
+                TYPE_NULL => {
+                    has_null = true;
+                    null_ratio = type_schema.probability;
+                }
+                TYPE_UNDEFINED => {
+                    has_undefined = true;
+                    undefined_ratio = type_schema.probability;
+                }
+                _ => {
+                    if scalar_type_family(type_name).is_some() {
+                        has_scalar = true;
+                        scalar_types.push((type_name.clone(), type_schema.probability));
+                    }
+                }
+            }
+        }
+
+        // Warn if we have scalar types and null/undefined
+        if has_scalar && (has_null || has_undefined) {
+            // Get the dominant scalar type
+            scalar_types.sort_by(|a, b| b.1.total_cmp(&a.1));
+            if let Some((dominant_scalar, _)) = scalar_types.first() {
+                let total_nullish = if has_null && has_undefined {
+                    null_ratio + undefined_ratio
+                } else if has_null {
+                    null_ratio
+                } else {
+                    undefined_ratio
+                };
+
+                // Only warn if the nullish probability is significant
+                if total_nullish > 0.0 {
+                    warnings.push(InferWarningYaml {
+                        kind: "nullable_scalar".to_owned(),
+                        field_path: path.to_owned(),
+                        renamed_to: None,
+                        keyword: None,
+                        dominant_family: dominant_scalar.clone(),
+                        dominant_ratio: scalar_types[0].1,
+                        minority_families: Vec::new(),
+                        observed_types: Vec::new(),
+                    });
+                }
+            }
+        }
+
+        // Recurse into nested structures
+        for type_schema in field.types.values() {
+            if let Some(object_fields) = &type_schema.object {
+                for (child_name, child_field) in object_fields {
+                    let child_path = if path.is_empty() {
+                        child_name.clone()
+                    } else {
+                        format!("{path}.{child_name}")
+                    };
+                    visit_field(&child_path, child_field, warnings);
+                }
+            }
+
+            if let Some(array_items) = &type_schema.array {
+                let array_path = if path.is_empty() {
+                    "[]".to_owned()
+                } else {
+                    format!("{path}[]")
+                };
+                visit_field(&array_path, array_items, warnings);
+            }
+        }
+    }
+
+    let mut warnings = Vec::new();
+    for (field_name, field) in &schema.object {
+        visit_field(field_name, field, &mut warnings);
+    }
+    warnings
+}
+
 fn collect_identifier_warnings(schema: &CollectionSchema) -> Vec<InferWarningYaml> {
     fn normalized_pg_identifier(name: &str) -> String {
         name.to_ascii_lowercase()
@@ -1230,6 +1320,7 @@ fn infer_warnings_to_yaml(schema: &CollectionSchema) -> Vec<InferWarningYaml> {
             observed_types: warning.observed_types,
         })
         .collect::<Vec<_>>();
+    warnings.extend(collect_nullable_scalar_warnings(schema));
     warnings.extend(collect_identifier_warnings(schema));
     warnings
 }
@@ -4187,6 +4278,7 @@ mod tests {
     use super::{
         apply_collection_property_filters, build_collection_mappings,
         build_collection_mappings_with_timestamp_fields, collect_infer_type_warnings,
+        collect_nullable_scalar_warnings,
         render_ddl_from_mapping_tables, resolve_collections_dir, sanitize_name,
         should_infer_collection, strip_psql_preamble,
     };
@@ -4914,5 +5006,68 @@ CREATE TABLE demo (
         let warnings = collect_infer_type_warnings(&schema);
 
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn collect_nullable_scalar_warnings_detects_nullable_boolean() {
+        let docs = vec![
+            doc! { "enabled": true },
+            doc! { "enabled": bson::Bson::Null },
+            doc! {},
+        ];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let warnings = collect_nullable_scalar_warnings(&schema);
+
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, "nullable_scalar");
+        assert_eq!(warnings[0].field_path, "enabled");
+        assert_eq!(warnings[0].dominant_family, "Boolean");
+    }
+
+    #[test]
+    fn collect_nullable_scalar_warnings_detects_nullable_in_nested_objects() {
+        let docs = vec![
+            doc! { "config": { "enabled": true } },
+            doc! { "config": { "enabled": bson::Bson::Null } },
+            doc! { "config": {} },
+        ];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let warnings = collect_nullable_scalar_warnings(&schema);
+
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, "nullable_scalar");
+        assert_eq!(warnings[0].field_path, "config.enabled");
+        assert_eq!(warnings[0].dominant_family, "Boolean");
+    }
+
+    #[test]
+    fn collect_nullable_scalar_warnings_detects_nullable_in_array_items() {
+        let docs = vec![
+            doc! { "items": [{ "enabled": true }] },
+            doc! { "items": [{ "enabled": bson::Bson::Null }] },
+            doc! { "items": [] },
+        ];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let warnings = collect_nullable_scalar_warnings(&schema);
+
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].kind, "nullable_scalar");
+        assert_eq!(warnings[0].field_path, "items[].enabled");
+        assert_eq!(warnings[0].dominant_family, "Boolean");
     }
 }
