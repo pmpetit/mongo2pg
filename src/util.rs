@@ -715,6 +715,7 @@ mod tests {
             &config_path,
             r#"
 [project]
+title = "Test Project"
 base_dir = "/tmp"
 project_dir = "dbapi"
 
@@ -745,6 +746,7 @@ datetime_field = ["last_update", "*_date"]
             &config_path,
             r#"
 [project]
+title = "Test Project"
 base_dir = "/tmp"
 project_dir = "dbapi"
 
