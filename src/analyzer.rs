@@ -27,6 +27,9 @@ fn is_false(b: &bool) -> bool {
 // ──────────────────────────────────────────────────────────────────────────────
 
 pub const TYPE_NUMBER: &str = "Number";
+pub const TYPE_DOUBLE: &str = "Double";
+pub const TYPE_INT32: &str = "Int32";
+pub const TYPE_INT64: &str = "Int64";
 pub const TYPE_STRING: &str = "String";
 pub const TYPE_BOOLEAN: &str = "Boolean";
 pub const TYPE_DATE: &str = "Date";
@@ -94,6 +97,12 @@ pub struct TypeSchema {
     /// Reservoir-sampled values (present when value collection is enabled).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub values: Option<Vec<serde_json::Value>>,
+    /// Maximum sampled string length observed for this type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_length: Option<usize>,
+    /// Effective VARCHAR length chosen by the DDL sizing heuristic for this string type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub varchar_length: Option<usize>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -142,6 +151,7 @@ struct TypeAcc {
     nested_object: Option<ObjectAcc>,
     array_items: Option<Box<FieldAcc>>,
     values: Option<ValueReservoir>,
+    max_string_length: Option<usize>,
     /// Distinct serialized values seen for scalar types (capped at [`DISTINCT_CAP`]).
     distinct_values: HashSet<String>,
     /// First 20 distinct values in order of first appearance (scalar types only).
@@ -161,6 +171,7 @@ impl TypeAcc {
             nested_object: None,
             array_items: None,
             values,
+            max_string_length: None,
             distinct_values: HashSet::new(),
             first_distinct_values: Vec::new(),
         }
@@ -197,6 +208,9 @@ impl FieldAcc {
 
         // Collect sample value and track distinct values for scalar types.
         if let Some(v) = bson_to_json_value(bson) {
+            if let Some(len) = v.as_str().map(str::len) {
+                acc.max_string_length = Some(acc.max_string_length.unwrap_or(0).max(len));
+            }
             if let Some(reservoir) = acc.values.as_mut() {
                 reservoir.add(v.clone());
             }
@@ -338,7 +352,7 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
         .types
         .into_iter()
         .map(|(tname, ta)| {
-            let schema = build_type_schema(ta, field_count, total_docs);
+            let schema = build_type_schema(&tname, ta, field_count, total_docs);
             (tname, schema)
         })
         .collect();
@@ -354,6 +368,8 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
             object: None,
             array: None,
             values: None,
+            max_length: None,
+            varchar_length: None,
         };
         type_entries.push((TYPE_UNDEFINED.to_owned(), undef_schema));
     }
@@ -377,7 +393,23 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
     FieldSchema { probability, types }
 }
 
-fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSchema {
+fn inferred_varchar_length(max_length: usize) -> Option<usize> {
+    let max_length = max_length.max(1);
+    if max_length <= 5 {
+        Some(max_length)
+    } else if max_length <= 20 {
+        Some(20)
+    } else {
+        None
+    }
+}
+
+fn build_type_schema(
+    type_name: &str,
+    ta: TypeAcc,
+    field_count: u64,
+    total_docs: u64,
+) -> TypeSchema {
     let probability = if field_count > 0 {
         ta.count as f64 / field_count as f64
     } else {
@@ -431,6 +463,13 @@ fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSche
             .filter(|v| !v.is_empty())
     };
 
+    let max_length = if type_name == TYPE_STRING {
+        ta.max_string_length
+    } else {
+        None
+    };
+    let varchar_length = max_length.and_then(inferred_varchar_length);
+
     TypeSchema {
         probability,
         sampled: ta.count,
@@ -439,6 +478,8 @@ fn build_type_schema(ta: TypeAcc, field_count: u64, total_docs: u64) -> TypeSche
         object,
         array,
         values,
+        max_length,
+        varchar_length,
     }
 }
 
@@ -480,11 +521,14 @@ fn mark_field_as_jsonb(field: &mut FieldSchema) {
 
 /// Map a BSON value to an internal type-name string.
 ///
-/// Int32, Int64, Double, and Float all map to `"Number"`.
-/// `Decimal128` maps to `"Decimal128"` (distinct from `Number`).
+/// Numeric BSON subtypes are kept distinct so schema JSON can report
+/// subtype-specific statistics.
+/// Legacy schema files may still contain `"Number"`.
 pub fn bson_type_name(bson: &Bson) -> &'static str {
     match bson {
-        Bson::Double(_) | Bson::Int32(_) | Bson::Int64(_) => TYPE_NUMBER,
+        Bson::Double(_) => TYPE_DOUBLE,
+        Bson::Int32(_) => TYPE_INT32,
+        Bson::Int64(_) => TYPE_INT64,
         Bson::String(_) => TYPE_STRING,
         Bson::Document(_) => TYPE_OBJECT,
         Bson::Array(_) => TYPE_ARRAY,
@@ -551,7 +595,7 @@ pub fn bson_to_json_value(bson: &Bson) -> Option<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::Analyzer;
+    use super::{Analyzer, TYPE_DOUBLE, TYPE_INT32, TYPE_INT64, TYPE_STRING};
     use bson::doc;
 
     #[test]
@@ -581,5 +625,74 @@ mod tests {
             .get("Array")
             .expect("advices should be typed as array");
         assert_eq!(array_type.sampled, 2);
+    }
+
+    #[test]
+    fn numeric_bson_subtypes_are_kept_separate() {
+        let docs = vec![
+            doc! { "value": 1_i32 },
+            doc! { "value": 2_i64 },
+            doc! { "value": 3.5_f64 },
+        ];
+
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let value = schema
+            .object
+            .get("value")
+            .expect("value field should exist");
+
+        assert!(value.types.contains_key(TYPE_INT32));
+        assert!(value.types.contains_key(TYPE_INT64));
+        assert!(value.types.contains_key(TYPE_DOUBLE));
+    }
+
+    #[test]
+    fn string_types_include_max_and_varchar_lengths() {
+        let docs = vec![doc! { "name": "abcdefgh" }, doc! { "name": "abc" }];
+
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let string_type = schema
+            .object
+            .get("name")
+            .and_then(|field| field.types.get(TYPE_STRING))
+            .expect("name should be inferred as String");
+
+        assert_eq!(string_type.max_length, Some(8));
+        assert_eq!(string_type.varchar_length, Some(20));
+    }
+
+    #[test]
+    fn string_max_length_is_not_limited_to_first_distinct_preview_values() {
+        let mut docs = Vec::new();
+        for idx in 0..20 {
+            docs.push(doc! { "name": format!("short-{idx:02}") });
+        }
+        docs.push(doc! { "name": "mongodb-einrichchmugue" });
+
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let string_type = schema
+            .object
+            .get("name")
+            .and_then(|field| field.types.get(TYPE_STRING))
+            .expect("name should be inferred as String");
+
+        assert_eq!(string_type.max_length, Some(22));
+        assert_eq!(string_type.varchar_length, None);
+        assert_eq!(string_type.values.as_ref().map(Vec::len), Some(20));
     }
 }

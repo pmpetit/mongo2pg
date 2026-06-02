@@ -1,5 +1,6 @@
 //! HTML report generation from per-collection `.stats.yaml` files.
 
+use crate::stats::InferWarningYaml;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -135,6 +136,8 @@ pub struct CollectionStatsYaml {
     pub avg_fields_per_doc: f64,
     #[serde(default)]
     pub migrability_score: f64,
+    #[serde(default)]
+    pub infer_warnings: Vec<InferWarningYaml>,
 }
 
 pub struct CollectionRow {
@@ -153,6 +156,10 @@ impl CollectionRow {
             Some(self.table_names.len())
         }
     }
+
+    pub fn has_infer_warnings(&self) -> bool {
+        !self.stats.infer_warnings.is_empty()
+    }
 }
 
 pub struct PostImportTableRow {
@@ -161,12 +168,34 @@ pub struct PostImportTableRow {
     pub row_count: i64,
 }
 
+#[derive(Clone)]
+pub struct PostImportMd5Column {
+    pub source_field: String,
+    pub target_field: String,
+}
+
+#[derive(Clone)]
+pub struct PostImportMd5MismatchRow {
+    pub row_index: usize,
+    pub mongo_values: Option<Vec<String>>,
+    pub pg_values: Option<Vec<String>>,
+}
+
+#[derive(Clone)]
+pub struct PostImportMd5Summary {
+    pub mongo_md5: String,
+    pub pg_md5: String,
+    pub columns: Vec<PostImportMd5Column>,
+    pub mismatches: Vec<PostImportMd5MismatchRow>,
+}
+
 pub struct PostImportNode {
     pub name: String,
     pub is_array: bool,
     pub mongo_count: u64,
     pub pg_table_name: Option<String>,
     pub pg_row_count: Option<i64>,
+    pub md5_summary: Option<PostImportMd5Summary>,
     pub children: Vec<PostImportNode>,
 }
 
@@ -326,9 +355,19 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
             };
 
             let (name_cell, detail_row) = if r.table_names.is_empty() {
+              let warning_detail = if r.has_infer_warnings() {
+                render_infer_warning_detail(&r.stats.infer_warnings)
+              } else {
+                String::new()
+              };
                 // No SQL schema available – plain name, no expand control
                 (
-                    format!(r#"<td class="name">{}</td>"#, r.name),
+                format!(
+                  r#"<td class="name"><span class="collection-name {warning_class}">{name}</span>{warning_detail}</td>"#,
+                  warning_class = if r.has_infer_warnings() { "has-warning" } else { "" },
+                  name = escape_html(&r.name),
+                  warning_detail = warning_detail,
+                ),
                     String::new(),
                 )
             } else {
@@ -356,12 +395,19 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
                     .join("");
                 let detail_id = format!("detail-{}", r.name);
                 let icon_id = format!("icon-{}", r.name);
+                let warning_detail = if r.has_infer_warnings() {
+                  render_infer_warning_detail(&r.stats.infer_warnings)
+                } else {
+                  String::new()
+                };
                 let name_cell = format!(
                     r#"<td class="name expandable" onclick="toggleDetail('{name}')" title="Click to expand PG tables">
-              <span class="expand-icon" id="{icon_id}">▶</span> {name}
+                <span class="expand-icon" id="{icon_id}">▶</span> <span class="collection-name {warning_class}">{name}</span>{warning_detail}
             </td>"#,
                     name = r.name,
                     icon_id = icon_id,
+                  warning_class = if r.has_infer_warnings() { "has-warning" } else { "" },
+                  warning_detail = warning_detail,
                 );
                 let detail_row = format!(
                     r#"<tr class="detail-row" id="{detail_id}" style="display:none">
@@ -482,6 +528,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
     tr:last-child td {{ border-bottom: none; }}
     tr.collection-row:hover td {{ background: #f0f4f8; }}
     td.name {{ font-weight: 600; color: #2c3e50; }}
+    .collection-name.has-warning {{ color: #b58900; }}
     td.expandable {{
       cursor: pointer;
       user-select: none;
@@ -495,6 +542,39 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
       transition: transform 0.15s;
     }}
     .expand-icon.open {{ transform: rotate(90deg); }}
+    .collection-warning {{ display: inline-block; margin-left: 0.45rem; vertical-align: middle; }}
+    .collection-warning-summary {{
+      display: inline-block;
+      list-style: none;
+      cursor: pointer;
+      border: 1px solid #f4d03f;
+      background: #fcf3cf;
+      color: #9a7d0a;
+      border-radius: 999px;
+      padding: 0.08rem 0.5rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }}
+    .collection-warning-summary::-webkit-details-marker {{ display: none; }}
+    .collection-warning-popover {{
+      margin-top: 0.35rem;
+      min-width: 320px;
+      max-width: 520px;
+      background: #fffdf3;
+      border: 1px solid #f7dc6f;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.08);
+      padding: 0.7rem 0.85rem;
+      color: #5d4b00;
+    }}
+    .collection-warning-title {{ font-size: 0.78rem; font-weight: 700; margin-bottom: 0.45rem; color: #7d6608; }}
+    .collection-warning-list {{ margin: 0; padding-left: 1rem; }}
+    .collection-warning-list > li {{ margin-bottom: 0.5rem; font-size: 0.78rem; line-height: 1.35; }}
+    .collection-warning-list > li:last-child {{ margin-bottom: 0; }}
+    .collection-warning-types {{ margin-top: 0.3rem; padding-left: 1rem; }}
+    .collection-warning-types li {{ margin-bottom: 0.22rem; font-size: 0.75rem; line-height: 1.35; }}
+    .collection-warning-types li:last-child {{ margin-bottom: 0; }}
+    .collection-warning-examples {{ color: #7d6608; }}
     .detail-row td.detail-cell {{
       background: #f8fafc;
       padding: 0.5rem 1rem 0.75rem 2.5rem;
@@ -659,12 +739,160 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str) -> St
     )
 }
 
+fn render_infer_warning_detail(warnings: &[InferWarningYaml]) -> String {
+    let items = warnings
+    .iter()
+    .map(|warning| {
+      let type_items = if warning.observed_types.is_empty() {
+        String::new()
+      } else {
+        let rendered_types = warning
+          .observed_types
+          .iter()
+          .map(|observed_type| {
+            let examples = if observed_type.examples.is_empty() {
+              "no sampled values".to_owned()
+            } else {
+              observed_type
+                .examples
+                .iter()
+                .map(|example| escape_html(example))
+                .collect::<Vec<_>>()
+                .join(", ")
+            };
+            format!(
+              r#"<li><strong>{type_name}</strong> ({ratio:.1}%): <span class="collection-warning-examples">{examples}</span></li>"#,
+              type_name = escape_html(&observed_type.type_name),
+              ratio = observed_type.ratio * 100.0,
+              examples = examples,
+            )
+          })
+          .collect::<Vec<_>>()
+          .join("");
+        format!(r#"<ul class="collection-warning-types">{}</ul>"#, rendered_types)
+      };
+
+      if warning.kind == "pg_keyword" {
+        return format!(
+          r#"<li><strong>{field}</strong>: PostgreSQL keyword <span class="collection-warning-examples">{keyword}</span>; it will be renamed to <span class="collection-warning-examples">{renamed_to}</span>.{type_items}</li>"#,
+          field = escape_html(&warning.field_path),
+          keyword = escape_html(warning.keyword.as_deref().unwrap_or("")),
+          renamed_to = escape_html(warning.renamed_to.as_deref().unwrap_or("")),
+          type_items = type_items,
+        );
+      }
+      if warning.kind == "type_name" {
+        return format!(
+          r#"<li><strong>{field}</strong>: field name matches type name <span class="collection-warning-examples">{keyword}</span>; consider renaming it.{type_items}</li>"#,
+          field = escape_html(&warning.field_path),
+          keyword = escape_html(warning.keyword.as_deref().unwrap_or("")),
+          type_items = type_items,
+        );
+      }
+      let minority = warning
+        .minority_families
+        .iter()
+        .map(|minority| {
+          format!(
+            "{} ({:.1}%)",
+            escape_html(&minority.family),
+            minority.ratio * 100.0
+          )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+      format!(
+        r#"<li><strong>{field}</strong>: dominant {dominant} ({dominant_ratio:.1}%), minority {minority}{type_items}</li>"#,
+        field = escape_html(&warning.field_path),
+        dominant = escape_html(&warning.dominant_family),
+        dominant_ratio = warning.dominant_ratio * 100.0,
+        minority = minority,
+        type_items = type_items,
+      )
+    })
+    .collect::<Vec<_>>()
+    .join("");
+
+    format!(
+        r#"<details class="collection-warning" onclick="event.stopPropagation()"><summary class="collection-warning-summary">warning</summary><div class="collection-warning-popover"><div class="collection-warning-title">Infer warnings</div><ul class="collection-warning-list">{items}</ul></div></details>"#,
+        items = items,
+    )
+}
+
 pub fn render_post_import_html(
     rows: &[PostImportCollectionRow],
     namespace: &str,
     mongo_cluster: &str,
     pg_target: &str,
 ) -> String {
+    fn render_md5_detail(md5_summary: &PostImportMd5Summary) -> String {
+        let summary_label = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
+            escape_html(&md5_summary.mongo_md5)
+        } else {
+            format!(
+                "{} != {}",
+                escape_html(&md5_summary.mongo_md5),
+                escape_html(&md5_summary.pg_md5)
+            )
+        };
+        let columns = md5_summary
+      .columns
+      .iter()
+      .map(|column| {
+        format!(
+          r#"<li><span class="md5-source">{}</span><span class="md5-arrow"> -> </span><span class="md5-target">{}</span></li>"#,
+          escape_html(&column.source_field),
+          escape_html(&column.target_field),
+        )
+      })
+      .collect::<Vec<_>>()
+      .join("");
+        let mismatch_rows = md5_summary
+            .mismatches
+            .iter()
+            .map(|mismatch| {
+                let mongo_values = mismatch
+                    .mongo_values
+                    .as_ref()
+                    .map(|values| escape_html(&format!("[{}]", values.join(", "))))
+                    .unwrap_or_else(|| "missing row".to_owned());
+                let pg_values = mismatch
+                    .pg_values
+                    .as_ref()
+                    .map(|values| escape_html(&format!("[{}]", values.join(", "))))
+                    .unwrap_or_else(|| "missing row".to_owned());
+                format!(
+                    r#"<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td></tr>"#,
+                    mismatch.row_index, mongo_values, pg_values,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        let mismatch_detail = if md5_summary.mismatches.is_empty() {
+            String::new()
+        } else {
+            format!(
+                r#"<div class="md5-mismatch-label">First 5 non-corresponding rows</div><table class="md5-mismatch-table"><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{}</tbody></table>"#,
+                mismatch_rows,
+            )
+        };
+        let state_class = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
+            "is-match"
+        } else {
+            "is-mismatch"
+        };
+
+        format!(
+            r#"<details class="md5-detail {state_class}"><summary class="md5-summary">{summary_label}</summary><div class="md5-popover"><div><strong>MongoDB</strong>: <span class="md5-full">{mongo_md5}</span></div><div><strong>PostgreSQL</strong>: <span class="md5-full">{pg_md5}</span></div><div class="md5-columns-label">Columns involved</div><ul class="md5-columns">{columns}</ul>{mismatch_detail}</div></details>"#,
+            state_class = state_class,
+            summary_label = summary_label,
+            mongo_md5 = escape_html(&md5_summary.mongo_md5),
+            pg_md5 = escape_html(&md5_summary.pg_md5),
+            columns = columns,
+            mismatch_detail = mismatch_detail,
+        )
+    }
+
     fn sum_mongo_rows(node: &PostImportNode) -> u64 {
         node.mongo_count + node.children.iter().map(sum_mongo_rows).sum::<u64>()
     }
@@ -694,9 +922,14 @@ pub fn render_post_import_html(
         let mismatch = node
             .pg_row_count
             .map(|pg_rows| pg_rows - node.mongo_count as i64);
+        let md5_detail = node
+            .md5_summary
+            .as_ref()
+            .map(render_md5_detail)
+            .unwrap_or_default();
         let pg_cell = match (&node.pg_table_name, node.pg_row_count) {
             (Some(table_name), Some(row_count)) => format!(
-                r#"<div class="pg-ref"><span class="pg-table">{}</span><span class="pg-count">{}</span>{}</div>"#,
+                r#"<div class="pg-ref"><span class="pg-table">{}</span><span class="pg-count">{}</span>{}{}{}</div>"#,
                 escape_html(table_name),
                 row_count,
                 match mismatch {
@@ -705,10 +938,17 @@ pub fn render_post_import_html(
                         format!("<span class=\"match-badge is-mismatch\">delta {delta:+}</span>"),
                     None => String::new(),
                 },
+                if md5_detail.is_empty() {
+                    ""
+                } else {
+                    "<span class=\"md5-label\">md5</span>"
+                },
+                md5_detail,
             ),
             (Some(table_name), None) => format!(
-                r#"<div class="pg-ref"><span class="pg-table">{}</span></div>"#,
+                r#"<div class="pg-ref"><span class="pg-table">{}</span>{}</div>"#,
                 escape_html(table_name),
+                md5_detail,
             ),
             _ => "<div class=\"pg-empty\">-</div>".to_owned(),
         };
@@ -911,6 +1151,42 @@ pub fn render_post_import_html(
     }}
     .match-badge.is-match {{ background: #e8f7ef; color: #1e8449; }}
     .match-badge.is-mismatch {{ background: #fdecea; color: #c0392b; }}
+    .md5-label {{ color: #6b7c93; font-size: 0.74rem; font-weight: 700; text-transform: uppercase; }}
+    .md5-detail {{ display: inline-block; }}
+    .md5-summary {{
+      cursor: pointer;
+      list-style: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.74rem;
+      border-radius: 6px;
+      padding: 0.15rem 0.45rem;
+      background: #f4f7fb;
+      border: 1px solid #d6e2ee;
+      color: #334e68;
+      word-break: break-all;
+    }}
+    .md5-detail.is-match .md5-summary {{ border-color: #b7e4c7; background: #ecfdf3; color: #1e8449; }}
+    .md5-detail.is-mismatch .md5-summary {{ border-color: #f5c2c0; background: #fff3f2; color: #c0392b; }}
+    .md5-summary::-webkit-details-marker {{ display: none; }}
+    .md5-popover {{
+      margin-top: 0.35rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #d6e2ee;
+      background: white;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+      min-width: 22rem;
+      max-width: 36rem;
+      font-size: 0.8rem;
+      color: #334e68;
+    }}
+    .md5-full {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }}
+    .md5-columns-label {{ margin-top: 0.45rem; font-weight: 700; color: #1f3a5f; }}
+    .md5-columns {{ margin: 0.35rem 0 0; padding-left: 1.2rem; }}
+    .md5-columns li {{ margin: 0.15rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    .md5-source {{ color: #7c3aed; }}
+    .md5-target {{ color: #2471a3; }}
+    .md5-arrow {{ color: #7f8c8d; }}
     .pg-empty {{ color: #95a5a6; font-style: italic; }}
     .tree-children {{ display: block; }}
     footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
@@ -1153,6 +1429,237 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
         table_rows = table_rows,
         score_db_sum = score_db_sum,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        render_html, render_post_import_html, CollectionRow, CollectionStatsYaml,
+        PostImportCollectionRow, PostImportMd5Column, PostImportMd5MismatchRow,
+        PostImportMd5Summary, PostImportNode,
+    };
+    use crate::stats::{InferWarningMinorityYaml, InferWarningTypeYaml, InferWarningYaml};
+
+    #[test]
+    fn render_html_highlights_collections_with_infer_warnings() {
+        let html = render_html(
+            &[CollectionRow {
+                name: "advisors".to_owned(),
+                stats: CollectionStatsYaml {
+                    documents_in_collection: serde_yaml::Value::Number(2937_u64.into()),
+                    documents_sampled: 2937,
+                    width_top_level: 7,
+                    width_max: 12.0,
+                    width_max_level: 3,
+                    depth_max: 4,
+                    branch_total: 18.0,
+                    branch_per_level: indexmap::IndexMap::from([
+                        ("L1".to_owned(), 3.0),
+                        ("L2".to_owned(), 6.0),
+                    ]),
+                    array_field_count: 1,
+                    avg_fields_per_doc: 4.2,
+                    migrability_score: 6.5,
+                    infer_warnings: vec![InferWarningYaml {
+                      kind: "mixed_scalar_types".to_owned(),
+                        field_path: "advices[].earnings.monthly_gain".to_owned(),
+                      renamed_to: None,
+                      keyword: None,
+                        dominant_family: "numeric".to_owned(),
+                        dominant_ratio: 0.95,
+                        minority_families: vec![InferWarningMinorityYaml {
+                            family: "string".to_owned(),
+                            ratio: 0.05,
+                        }],
+                        observed_types: vec![
+                            InferWarningTypeYaml {
+                                type_name: "Double".to_owned(),
+                                ratio: 0.80,
+                                examples: vec!["12.5".to_owned(), "51.4".to_owned()],
+                            },
+                            InferWarningTypeYaml {
+                                type_name: "String".to_owned(),
+                                ratio: 0.05,
+                                examples: vec!["\"N/A\"".to_owned()],
+                            },
+                        ],
+                    }],
+                },
+                table_names: Vec::new(),
+            }],
+            "dbapi",
+            "cluster0",
+        );
+
+        assert!(html.contains("collection-name has-warning"));
+        assert!(html.contains("Infer warnings"));
+        assert!(html.contains("advices[].earnings.monthly_gain"));
+        assert!(html.contains("minority string (5.0%)"));
+        assert!(html.contains("Double"));
+        assert!(html.contains("12.5, 51.4"));
+        assert!(html.contains("\"N/A\""));
+    }
+
+      #[test]
+      fn render_html_shows_pg_keyword_warning_details() {
+        let html = render_html(
+          &[CollectionRow {
+            name: "scheduling_executions".to_owned(),
+            stats: CollectionStatsYaml {
+              documents_in_collection: serde_yaml::Value::Number(106_u64.into()),
+              documents_sampled: 106,
+              width_top_level: 7,
+              width_max: 7.0,
+              width_max_level: 1,
+              depth_max: 1,
+              branch_total: 7.0,
+              branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 7.0)]),
+              array_field_count: 0,
+              avg_fields_per_doc: 7.0,
+              migrability_score: 2.0,
+              infer_warnings: vec![InferWarningYaml {
+                kind: "pg_keyword".to_owned(),
+                field_path: "timestamp".to_owned(),
+                renamed_to: Some("_timestamp".to_owned()),
+                keyword: Some("timestamp".to_owned()),
+                dominant_family: String::new(),
+                dominant_ratio: 0.0,
+                minority_families: Vec::new(),
+                observed_types: vec![InferWarningTypeYaml {
+                  type_name: "Int32".to_owned(),
+                  ratio: 0.98,
+                  examples: vec!["1609954220".to_owned()],
+                }],
+              }],
+            },
+            table_names: Vec::new(),
+          }],
+          "dbapi",
+          "cluster0",
+        );
+
+        assert!(html.contains("timestamp"));
+        assert!(html.contains("PostgreSQL keyword"));
+        assert!(html.contains("_timestamp"));
+        assert!(html.contains("Int32"));
+      }
+
+      #[test]
+      fn render_html_shows_type_name_warning_details() {
+        let html = render_html(
+          &[CollectionRow {
+            name: "sample".to_owned(),
+            stats: CollectionStatsYaml {
+              documents_in_collection: serde_yaml::Value::Number(10_u64.into()),
+              documents_sampled: 10,
+              width_top_level: 2,
+              width_max: 2.0,
+              width_max_level: 1,
+              depth_max: 1,
+              branch_total: 2.0,
+              branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
+              array_field_count: 0,
+              avg_fields_per_doc: 2.0,
+              migrability_score: 1.5,
+              infer_warnings: vec![InferWarningYaml {
+                kind: "type_name".to_owned(),
+                field_path: "date".to_owned(),
+                renamed_to: None,
+                keyword: Some("date".to_owned()),
+                dominant_family: String::new(),
+                dominant_ratio: 0.0,
+                minority_families: Vec::new(),
+                observed_types: vec![InferWarningTypeYaml {
+                  type_name: "Date".to_owned(),
+                  ratio: 1.0,
+                  examples: vec!["\"2026-05-22 18:50:52.681 +00:00:00\"".to_owned()],
+                }],
+              }],
+            },
+            table_names: Vec::new(),
+          }],
+          "dbapi",
+          "cluster0",
+        );
+
+        assert!(html.contains("field name matches type name"));
+        assert!(html.contains("date"));
+        assert!(html.contains("Date"));
+      }
+
+    #[test]
+    fn render_post_import_html_shows_clickable_md5_details() {
+        let html = render_post_import_html(
+            &[PostImportCollectionRow {
+                name: "scheduling_jobs".to_owned(),
+                document_count: 3,
+                root: PostImportNode {
+                    name: "scheduling_jobs".to_owned(),
+                    is_array: false,
+                    mongo_count: 3,
+                    pg_table_name: Some("dbapi.scheduling_jobs".to_owned()),
+                    pg_row_count: Some(3),
+                    md5_summary: Some(PostImportMd5Summary {
+                        mongo_md5: "abc123".to_owned(),
+                        pg_md5: "abc123".to_owned(),
+                        columns: vec![PostImportMd5Column {
+                            source_field: "last_update".to_owned(),
+                            target_field: "last_update".to_owned(),
+                        }],
+                        mismatches: Vec::new(),
+                    }),
+                    children: Vec::new(),
+                },
+            }],
+            "dbapi.scheduling_jobs",
+            "mongo-host",
+            "pg-host",
+        );
+
+        assert!(html.contains("<details class=\"md5-detail is-match\">"));
+        assert!(html.contains("Columns involved"));
+        assert!(html.contains("last_update"));
+        assert!(html.contains("abc123"));
+    }
+
+    #[test]
+    fn render_post_import_html_shows_first_mismatched_rows() {
+        let html = render_post_import_html(
+            &[PostImportCollectionRow {
+                name: "advisors".to_owned(),
+                document_count: 2,
+                root: PostImportNode {
+                    name: "advisors".to_owned(),
+                    is_array: false,
+                    mongo_count: 2,
+                  pg_table_name: Some("dbapi.earnings".to_owned()),
+                    pg_row_count: Some(2),
+                    md5_summary: Some(PostImportMd5Summary {
+                        mongo_md5: "mongo-md5".to_owned(),
+                        pg_md5: "pg-md5".to_owned(),
+                        columns: vec![PostImportMd5Column {
+                            source_field: "monthly_gain".to_owned(),
+                            target_field: "monthly_gain".to_owned(),
+                        }],
+                        mismatches: vec![PostImportMd5MismatchRow {
+                            row_index: 1,
+                            mongo_values: Some(vec!["12.5".to_owned()]),
+                            pg_values: Some(vec!["\"12.5\"".to_owned()]),
+                        }],
+                    }),
+                    children: Vec::new(),
+                },
+            }],
+            "dbapi.advisors",
+            "mongo-host",
+            "pg-host",
+        );
+
+        assert!(html.contains("First 5 non-corresponding rows"));
+        assert!(html.contains("monthly_gain"));
+        assert!(html.contains("12.5"));
+        assert!(html.contains("\"12.5\""));
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

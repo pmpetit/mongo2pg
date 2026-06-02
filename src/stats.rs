@@ -1,7 +1,7 @@
 //! Schema statistics helpers: width, depth, and branch count.
 
 use crate::pg_table_count::pg_table_count;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::analyzer::{CollectionSchema, FieldSchema, TYPE_ARRAY};
 
@@ -286,6 +286,40 @@ fn top_level_type_summary(schema: &CollectionSchema) -> String {
 }
 
 /// Structured stats suitable for YAML serialisation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InferWarningYaml {
+    #[serde(default = "default_infer_warning_kind")]
+    pub kind: String,
+    pub field_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub renamed_to: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyword: Option<String>,
+    pub dominant_family: String,
+    pub dominant_ratio: f64,
+    pub minority_families: Vec<InferWarningMinorityYaml>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub observed_types: Vec<InferWarningTypeYaml>,
+}
+
+fn default_infer_warning_kind() -> String {
+    "mixed_scalar_types".to_owned()
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InferWarningMinorityYaml {
+    pub family: String,
+    pub ratio: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InferWarningTypeYaml {
+    pub type_name: String,
+    pub ratio: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub examples: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct StatsYaml {
     pub documents_in_collection: serde_yaml::Value,
@@ -310,10 +344,16 @@ pub struct StatsYaml {
     pub max_poly_level: usize,
     /// Per-collection migrability complexity score.
     pub migrability_score: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub infer_warnings: Vec<InferWarningYaml>,
 }
 
 /// Build a [`StatsYaml`] from a schema.
-pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> StatsYaml {
+pub fn stats_to_yaml(
+    schema: &CollectionSchema,
+    total_docs: Option<u64>,
+    infer_warnings: &[InferWarningYaml],
+) -> StatsYaml {
     let s = SchemaStats::compute(schema);
 
     let branch_per_level: indexmap::IndexMap<String, f64> = s
@@ -369,6 +409,7 @@ pub fn stats_to_yaml(schema: &CollectionSchema, total_docs: Option<u64>) -> Stat
         max_poly_ratio: (s.max_poly_ratio * 10000.0).round() / 10000.0,
         max_poly_level: s.max_poly_level,
         migrability_score: score,
+        infer_warnings: infer_warnings.to_vec(),
     }
 }
 
@@ -390,6 +431,8 @@ mod tests {
                 object: None,
                 array: None,
                 values: None,
+                max_length: None,
+                varchar_length: None,
             },
         );
         let mut object = IndexMap::new();
@@ -431,6 +474,8 @@ mod tests {
                     object: None,
                     array: None,
                     values: None,
+                    max_length: None,
+                    varchar_length: None,
                 },
             );
             FieldSchema {
@@ -453,7 +498,7 @@ mod tests {
         let schema = two_field_schema();
         // width=2, avg_fields_per_doc = 1.0 + 0.5 = 1.5
         // distinct_over_avg = 2 / 1.5 ≈ 1.3333
-        let yaml = stats_to_yaml(&schema, Some(2));
+        let yaml = stats_to_yaml(&schema, Some(2), &[]);
         let expected = (2.0_f64 / 1.5 * 10000.0).round() / 10000.0;
         assert!(
             (yaml.distinct_fields_over_avg_fields_per_doc - expected).abs() < 1e-9,
@@ -470,11 +515,37 @@ mod tests {
             sampled: 0,
             object: IndexMap::new(),
         };
-        let yaml = stats_to_yaml(&empty, None);
+        let yaml = stats_to_yaml(&empty, None, &[]);
         assert_eq!(
             yaml.distinct_fields_over_avg_fields_per_doc, 0.0,
             "should be 0 when avg_fields_per_doc is 0"
         );
+    }
+
+    #[test]
+    fn stats_to_yaml_preserves_infer_warnings() {
+        let schema = two_field_schema();
+        let warnings = vec![InferWarningYaml {
+            kind: "mixed_scalar_types".to_owned(),
+            field_path: "advices[].earnings.monthly_gain".to_owned(),
+            renamed_to: None,
+            keyword: None,
+            dominant_family: "numeric".to_owned(),
+            dominant_ratio: 0.95,
+            minority_families: vec![InferWarningMinorityYaml {
+                family: "string".to_owned(),
+                ratio: 0.05,
+            }],
+            observed_types: vec![InferWarningTypeYaml {
+                type_name: "String".to_owned(),
+                ratio: 0.05,
+                examples: vec!["\"N/A\"".to_owned()],
+            }],
+        }];
+
+        let yaml = stats_to_yaml(&schema, Some(2), &warnings);
+
+        assert_eq!(yaml.infer_warnings, warnings);
     }
 
     #[test]

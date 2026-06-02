@@ -49,17 +49,16 @@ fn test_id_sorted_first() {
 }
 
 #[test]
-fn test_numeric_type_mapped_to_number() {
+fn test_numeric_bson_subtypes_are_kept_separate() {
     let docs = vec![
         doc! { "_id": 1, "score": 42_i32 },
         doc! { "_id": 2, "score": 3.14_f64 },
     ];
     let schema = analyze_docs(&docs);
     let score = schema.object.get("score").expect("score field missing");
-    assert!(
-        score.types.contains_key("Number"),
-        "Int32 and f64 should both map to 'Number'"
-    );
+    assert!(score.types.contains_key("Int32"));
+    assert!(score.types.contains_key("Double"));
+    assert!(!score.types.contains_key("Number"));
 }
 
 #[test]

@@ -15,142 +15,19 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use bson::Bson;
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::TryStreamExt;
 use mongodb::Client;
 
+use crate::analyzer::CollectionSchema;
 use crate::schema_diagram::{parse_sql, Table as SqlTable};
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Sanitize  (mirrors to_pg::sanitize so we can reverse-map SQL columns → Mongo fields)
-// ──────────────────────────────────────────────────────────────────────────────
-
-fn is_pg_reserved(s: &str) -> bool {
-    matches!(
-        s,
-        "all"
-            | "analyse"
-            | "analyze"
-            | "and"
-            | "any"
-            | "array"
-            | "as"
-            | "asc"
-            | "asymmetric"
-            | "authorization"
-            | "binary"
-            | "both"
-            | "case"
-            | "cast"
-            | "check"
-            | "collate"
-            | "collation"
-            | "column"
-            | "concurrently"
-            | "constraint"
-            | "create"
-            | "cross"
-            | "current_catalog"
-            | "current_date"
-            | "current_role"
-            | "current_schema"
-            | "current_time"
-            | "current_timestamp"
-            | "current_user"
-            | "default"
-            | "deferrable"
-            | "desc"
-            | "distinct"
-            | "do"
-            | "else"
-            | "end"
-            | "except"
-            | "false"
-            | "fetch"
-            | "for"
-            | "foreign"
-            | "freeze"
-            | "from"
-            | "full"
-            | "grant"
-            | "group"
-            | "having"
-            | "ilike"
-            | "in"
-            | "initially"
-            | "inner"
-            | "intersect"
-            | "into"
-            | "is"
-            | "isnull"
-            | "join"
-            | "lateral"
-            | "leading"
-            | "left"
-            | "like"
-            | "limit"
-            | "localtime"
-            | "localtimestamp"
-            | "natural"
-            | "not"
-            | "notnull"
-            | "null"
-            | "offset"
-            | "on"
-            | "only"
-            | "or"
-            | "order"
-            | "outer"
-            | "overlaps"
-            | "placing"
-            | "primary"
-            | "references"
-            | "returning"
-            | "right"
-            | "select"
-            | "session_user"
-            | "similar"
-            | "some"
-            | "symmetric"
-            | "system_user"
-            | "table"
-            | "tablesample"
-            | "then"
-            | "to"
-            | "trailing"
-            | "true"
-            | "union"
-            | "unique"
-            | "user"
-            | "using"
-            | "variadic"
-            | "verbose"
-            | "when"
-            | "where"
-            | "window"
-            | "with"
-    )
-}
-
-fn sanitize(name: &str) -> String {
-    let s: String = name
-        .to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
-        format!("_{s}")
-    } else {
-        s
-    }
-}
+use crate::util::{
+    flatten_grouped_root_array_object_fields, flatten_root_array_object_field,
+    flattened_root_parent_id_column, grouped_root_array_object_fields, sanitize,
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // BSON → CSV string
@@ -173,35 +50,107 @@ fn bson_to_string(val: &Bson) -> Option<String> {
     }
 }
 
-/// Format a Unix-millisecond timestamp as `YYYY-MM-DDTHH:MM:SS.mmmZ`.
-///
-/// Uses Howard Hinnant's civil-calendar algorithm (public domain) to avoid
-/// pulling in extra feature flags from the `chrono` crate.
+fn numeric_timestamp_to_millis(value: f64) -> Option<i64> {
+    if !value.is_finite() {
+        return None;
+    }
+
+    let abs = value.abs();
+    let millis = if abs >= 1_000_000_000_000_000.0 {
+        value / 1000.0
+    } else if abs >= 1_000_000_000_000.0 {
+        value
+    } else {
+        value * 1000.0
+    };
+
+    Some(millis.round() as i64)
+}
+
+fn format_datetime(dt: DateTime<Utc>) -> String {
+    dt.format("%Y-%m-%d %H:%M:%S%.f%:z").to_string()
+}
+
+fn normalize_datetime_string(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(number) = trimmed.parse::<f64>() {
+        return numeric_timestamp_to_millis(number)
+            .and_then(DateTime::<Utc>::from_timestamp_millis)
+            .map(format_datetime);
+    }
+
+    if let Ok(parsed) = DateTime::parse_from_rfc3339(trimmed) {
+        return Some(format_datetime(parsed.with_timezone(&Utc)));
+    }
+
+    const DATETIME_FORMATS: [&str; 4] = [
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+    ];
+
+    for format in DATETIME_FORMATS {
+        if let Ok(parsed) = NaiveDateTime::parse_from_str(trimmed, format) {
+            return Some(format_datetime(parsed.and_utc()));
+        }
+    }
+
+    if let Ok(parsed) = NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return parsed
+            .and_hms_opt(0, 0, 0)
+            .map(|dt| format_datetime(dt.and_utc()));
+    }
+
+    Some(trimmed.to_owned())
+}
+
+fn bson_to_timestamp_string(val: &Bson) -> Option<String> {
+    match val {
+        Bson::DateTime(dt) => {
+            DateTime::<Utc>::from_timestamp_millis(dt.timestamp_millis()).map(format_datetime)
+        }
+        Bson::Timestamp(ts) => {
+            DateTime::<Utc>::from_timestamp(ts.time as i64, 0).map(format_datetime)
+        }
+        Bson::String(text) => normalize_datetime_string(text),
+        Bson::Int32(value) => numeric_timestamp_to_millis(*value as f64)
+            .and_then(DateTime::<Utc>::from_timestamp_millis)
+            .map(format_datetime),
+        Bson::Int64(value) => numeric_timestamp_to_millis(*value as f64)
+            .and_then(DateTime::<Utc>::from_timestamp_millis)
+            .map(format_datetime),
+        Bson::Double(value) => numeric_timestamp_to_millis(*value)
+            .and_then(DateTime::<Utc>::from_timestamp_millis)
+            .map(format_datetime),
+        Bson::Decimal128(value) => value
+            .to_string()
+            .parse::<f64>()
+            .ok()
+            .and_then(numeric_timestamp_to_millis)
+            .and_then(DateTime::<Utc>::from_timestamp_millis)
+            .map(format_datetime),
+        Bson::Null | Bson::Undefined => None,
+        other => bson_to_string(other),
+    }
+}
+
+fn is_timestamp_col_type(col_type: &str) -> bool {
+    col_type
+        .trim()
+        .to_ascii_uppercase()
+        .starts_with("TIMESTAMP")
+}
+
+/// Format a Unix-millisecond timestamp as a PostgreSQL-ingestible UTC datetime.
 fn format_millis(ms: i64) -> String {
-    let secs = ms.div_euclid(1000);
-    let ms_part = ms.rem_euclid(1000) as u32;
-
-    let days = secs.div_euclid(86400) as i32;
-    let time = secs.rem_euclid(86400) as u32;
-    let (h, mi, s) = (time / 3600, (time % 3600) / 60, time % 60);
-
-    // Gregorian date from days-since-epoch (Hinnant's civil.h)
-    let z = days + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if mo <= 2 { y + 1 } else { y };
-
-    format!(
-        "{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{ms_part:03}Z",
-        mo = mo as u32,
-        d = d as u32,
-    )
+    DateTime::<Utc>::from_timestamp_millis(ms)
+        .map(format_datetime)
+        .unwrap_or_default()
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -264,16 +213,39 @@ struct TableNode {
     /// MongoDB field name at the current document level that yields this table's data.
     /// Empty for the root table.
     mongo_field: String,
+    /// Root-level sibling MongoDB fields that are exported through this same child table.
+    grouped_root_fields: Option<Vec<String>>,
     /// `true` when this child table represents a scalar array
     /// (has exactly 3 columns: pk, fk, `value`).
     is_scalar_array: bool,
     /// Columns whose SQL type is JSONB – serialised as clean JSON rather than
     /// plain text so PostgreSQL COPY can ingest them.
     jsonb_cols: HashSet<String>,
+    /// Columns whose SQL type is timestamp-like and should be exported in a
+    /// PostgreSQL-ingestible timestamp text format.
+    timestamp_cols: HashSet<String>,
+    /// For a promoted root array-of-objects table, the MongoDB array field to iterate.
+    root_array_field: Option<String>,
+    /// For a promoted root array-of-objects table, the root `_id` column stored on each row.
+    root_parent_id_col: Option<String>,
     children: Vec<TableNode>,
 }
 
-fn build_tree(sql_tables: &[SqlTable]) -> Vec<TableNode> {
+#[cfg(test)]
+fn build_tree(
+    sql_tables: &[SqlTable],
+    flattened_root: Option<(String, String)>,
+    grouped_root_sources: &HashMap<String, Vec<String>>,
+) -> Vec<TableNode> {
+    build_tree_with_grouped_root(sql_tables, flattened_root, None, grouped_root_sources)
+}
+
+fn build_tree_with_grouped_root(
+    sql_tables: &[SqlTable],
+    flattened_root: Option<(String, String)>,
+    flattened_grouped_root: Option<(Vec<String>, String)>,
+    grouped_root_sources: &HashMap<String, Vec<String>>,
+) -> Vec<TableNode> {
     let names: std::collections::HashSet<&str> =
         sql_tables.iter().map(|t| t.name.as_str()).collect();
 
@@ -300,14 +272,92 @@ fn build_tree(sql_tables: &[SqlTable]) -> Vec<TableNode> {
     sql_tables
         .iter()
         .filter(|t| !parent_of.contains_key(t.name.as_str()))
-        .map(|r| build_node(r, None, &children_of))
+        .map(|r| {
+            build_node(
+                r,
+                None,
+                &children_of,
+                flattened_root.clone(),
+                flattened_grouped_root.clone(),
+                grouped_root_sources,
+            )
+        })
         .collect()
+}
+
+fn grouped_root_table_sources(
+    schema: &CollectionSchema,
+    coll_name: &str,
+) -> HashMap<String, Vec<String>> {
+    grouped_root_array_object_fields(&schema.object)
+        .into_iter()
+        .map(|group| {
+            (
+                format!(
+                    "{}_{}",
+                    sanitize(coll_name),
+                    sanitize(&group.representative)
+                ),
+                group.members,
+            )
+        })
+        .collect()
+}
+
+fn flattened_root_for_export(
+    sql_tables: &[SqlTable],
+    schema: &CollectionSchema,
+    coll_name: &str,
+) -> Option<(String, String)> {
+    let (field_name, _) = flatten_root_array_object_field(schema)?;
+    let sanitized_field = sanitize(field_name);
+    let root_keeps_jsonb_column = sql_tables.iter().any(|table| {
+        table.foreign_keys.is_empty()
+            && table.columns.iter().any(|column| {
+                column.name == sanitized_field && column.col_type.eq_ignore_ascii_case("JSONB")
+            })
+    });
+
+    if root_keeps_jsonb_column {
+        None
+    } else {
+        Some((
+            field_name.to_owned(),
+            flattened_root_parent_id_column(coll_name),
+        ))
+    }
+}
+
+fn flattened_grouped_root_for_export(
+    sql_tables: &[SqlTable],
+    schema: &CollectionSchema,
+    coll_name: &str,
+) -> Option<(Vec<String>, String)> {
+    let group = flatten_grouped_root_array_object_fields(schema)?;
+    let parent_id_col = flattened_root_parent_id_column(coll_name);
+    let root_table = sql_tables
+        .iter()
+        .find(|table| table.foreign_keys.is_empty())?;
+
+    if root_table
+        .columns
+        .iter()
+        .any(|column| column.name == parent_id_col)
+        && root_table.columns.iter().any(|column| column.name == "key")
+    {
+        Some((group.members, parent_id_col))
+    } else {
+        None
+    }
 }
 
 fn build_node(
     sql_t: &SqlTable,
     parent_name: Option<&str>,
     children_of: &HashMap<&str, Vec<&SqlTable>>,
+    flattened_root: Option<(String, String)>,
+    flattened_grouped_root: Option<(Vec<String>, String)>,
+    grouped_root_sources: &HashMap<String, Vec<String>>,
 ) -> TableNode {
     // The MongoDB field name is the suffix after stripping "<parent>_" from the table name.
     let mongo_field = match parent_name {
@@ -340,15 +390,47 @@ fn build_node(
         .filter(|c| c.col_type.eq_ignore_ascii_case("JSONB"))
         .map(|c| c.name.clone())
         .collect();
+    let timestamp_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| is_timestamp_col_type(&c.col_type))
+        .map(|c| c.name.clone())
+        .collect();
 
     let children: Vec<TableNode> = children_of
         .get(sql_t.name.as_str())
         .map(|cs| {
             cs.iter()
-                .map(|child_sql| build_node(child_sql, Some(&sql_t.name), children_of))
+                .map(|child_sql| {
+                    build_node(
+                        child_sql,
+                        Some(&sql_t.name),
+                        children_of,
+                        None,
+                        None,
+                        grouped_root_sources,
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();
+
+    let (root_array_field, root_parent_id_col, root_grouped_fields) = if parent_name.is_none() {
+        if let Some((field_name, parent_id_col)) = flattened_root {
+            (Some(field_name), Some(parent_id_col), None)
+        } else if let Some((grouped_fields, parent_id_col)) = flattened_grouped_root {
+            (None, Some(parent_id_col), Some(grouped_fields))
+        } else {
+            (None, None, None)
+        }
+    } else {
+        (None, None, None)
+    };
+    let grouped_root_fields = if parent_name.is_some() {
+        grouped_root_sources.get(&sql_t.name).cloned()
+    } else {
+        root_grouped_fields
+    };
 
     TableNode {
         sql_name: sql_t.name.clone(),
@@ -356,8 +438,12 @@ fn build_node(
         pk_cols,
         fk_col,
         mongo_field,
+        grouped_root_fields,
         is_scalar_array,
         jsonb_cols,
+        timestamp_cols,
+        root_array_field,
+        root_parent_id_col,
         children,
     }
 }
@@ -371,6 +457,23 @@ fn build_node(
 /// Tries an exact-name match first, then falls back to comparing sanitized names
 /// so that e.g. `"invoiceId"` in MongoDB matches the `"invoiceid"` SQL column.
 fn find_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bson> {
+    fn collect_nested_matches<'a>(
+        doc: &'a bson::Document,
+        sql_col: &str,
+        matches: &mut Vec<&'a Bson>,
+    ) {
+        for (key, val) in doc.iter() {
+            if let Bson::Document(child_doc) = val {
+                if sanitize(key) == sql_col {
+                    matches.push(val);
+                }
+                if let Some(value) = find_mongo_field(child_doc, sql_col) {
+                    matches.push(value);
+                }
+            }
+        }
+    }
+
     if let Some(v) = doc.get(sql_col) {
         return Some(v);
     }
@@ -378,7 +481,22 @@ fn find_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bs
         if sanitize(key) == sql_col {
             return Some(val);
         }
+        if let Bson::Document(child_doc) = val {
+            let key_prefix = format!("{}_", sanitize(key));
+            if let Some(remainder) = sql_col.strip_prefix(&key_prefix) {
+                if let Some(value) = find_mongo_field(child_doc, remainder) {
+                    return Some(value);
+                }
+            }
+        }
     }
+
+    let mut matches = Vec::new();
+    collect_nested_matches(doc, sql_col, &mut matches);
+    if matches.len() == 1 {
+        return matches.into_iter().next();
+    }
+
     None
 }
 
@@ -406,6 +524,231 @@ fn extract_rows(
         Bson::Document(d) => d,
         _ => return,
     };
+
+    if is_root {
+        if let (Some(root_parent_id_col), Some(grouped_fields)) =
+            (&node.root_parent_id_col, &node.grouped_root_fields)
+        {
+            let parent_source_id = doc.get("_id").and_then(bson_to_string).unwrap_or_default();
+            for grouped_field in grouped_fields {
+                if let Some(Bson::Array(items)) = find_mongo_field(doc, grouped_field) {
+                    for item in items {
+                        let item_doc = match item {
+                            Bson::Document(item_doc) => item_doc,
+                            _ => continue,
+                        };
+                        let c = counters.entry(node.sql_name.clone()).or_insert(0);
+                        *c += 1;
+                        let my_id = c.to_string();
+
+                        let row: Vec<Option<String>> = node
+                            .columns
+                            .iter()
+                            .map(|col| {
+                                if node.pk_cols.iter().any(|pk| pk == col) {
+                                    Some(my_id.clone())
+                                } else if col == root_parent_id_col {
+                                    Some(parent_source_id.clone())
+                                } else if col == "key" {
+                                    Some(grouped_field.clone())
+                                } else {
+                                    find_mongo_field(item_doc, col)
+                                        .map(|v| {
+                                            if node.jsonb_cols.contains(col) {
+                                                Some(
+                                                    serde_json::to_string(&bson_to_json_value(v))
+                                                        .unwrap_or_default(),
+                                                )
+                                            } else if node.timestamp_cols.contains(col) {
+                                                bson_to_timestamp_string(v)
+                                            } else {
+                                                bson_to_string(v)
+                                            }
+                                        })
+                                        .unwrap_or(None)
+                                }
+                            })
+                            .collect();
+
+                        all_rows.entry(node.sql_name.clone()).or_default().push(row);
+
+                        for child in &node.children {
+                            match find_mongo_field(item_doc, &child.mongo_field) {
+                                Some(Bson::Array(arr)) => {
+                                    if child.is_scalar_array {
+                                        for child_item in arr {
+                                            let child_id = {
+                                                let c = counters
+                                                    .entry(child.sql_name.clone())
+                                                    .or_insert(0);
+                                                *c += 1;
+                                                c.to_string()
+                                            };
+                                            let child_row: Vec<Option<String>> = child
+                                                .columns
+                                                .iter()
+                                                .map(|col| {
+                                                    if child.pk_cols.iter().any(|pk| pk == col) {
+                                                        Some(child_id.clone())
+                                                    } else if Some(col) == child.fk_col.as_ref() {
+                                                        Some(my_id.clone())
+                                                    } else if col == "value" {
+                                                        if child.timestamp_cols.contains(col) {
+                                                            bson_to_timestamp_string(child_item)
+                                                        } else {
+                                                            bson_to_string(child_item)
+                                                        }
+                                                    } else {
+                                                        None
+                                                    }
+                                                })
+                                                .collect();
+                                            all_rows
+                                                .entry(child.sql_name.clone())
+                                                .or_default()
+                                                .push(child_row);
+                                        }
+                                    } else {
+                                        for child_item in arr {
+                                            extract_rows(
+                                                child_item,
+                                                child,
+                                                Some(&my_id),
+                                                false,
+                                                all_rows,
+                                                counters,
+                                            );
+                                        }
+                                    }
+                                }
+                                Some(doc_val @ Bson::Document(_)) => {
+                                    extract_rows(
+                                        doc_val,
+                                        child,
+                                        Some(&my_id),
+                                        false,
+                                        all_rows,
+                                        counters,
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        if let (Some(root_array_field), Some(root_parent_id_col)) =
+            (&node.root_array_field, &node.root_parent_id_col)
+        {
+            let parent_source_id = doc.get("_id").and_then(bson_to_string).unwrap_or_default();
+            if let Some(Bson::Array(items)) = find_mongo_field(doc, root_array_field) {
+                for item in items {
+                    let item_doc = match item {
+                        Bson::Document(item_doc) => item_doc,
+                        _ => continue,
+                    };
+                    let c = counters.entry(node.sql_name.clone()).or_insert(0);
+                    *c += 1;
+                    let my_id = c.to_string();
+
+                    let row: Vec<Option<String>> = node
+                        .columns
+                        .iter()
+                        .map(|col| {
+                            if node.pk_cols.iter().any(|pk| pk == col) {
+                                Some(my_id.clone())
+                            } else if col == root_parent_id_col {
+                                Some(parent_source_id.clone())
+                            } else {
+                                find_mongo_field(item_doc, col)
+                                    .map(|v| {
+                                        if node.jsonb_cols.contains(col) {
+                                            Some(
+                                                serde_json::to_string(&bson_to_json_value(v))
+                                                    .unwrap_or_default(),
+                                            )
+                                        } else if node.timestamp_cols.contains(col) {
+                                            bson_to_timestamp_string(v)
+                                        } else {
+                                            bson_to_string(v)
+                                        }
+                                    })
+                                    .unwrap_or(None)
+                            }
+                        })
+                        .collect();
+
+                    all_rows.entry(node.sql_name.clone()).or_default().push(row);
+
+                    for child in &node.children {
+                        match find_mongo_field(item_doc, &child.mongo_field) {
+                            Some(Bson::Array(arr)) => {
+                                if child.is_scalar_array {
+                                    for child_item in arr {
+                                        let child_id = {
+                                            let c =
+                                                counters.entry(child.sql_name.clone()).or_insert(0);
+                                            *c += 1;
+                                            c.to_string()
+                                        };
+                                        let child_row: Vec<Option<String>> = child
+                                            .columns
+                                            .iter()
+                                            .map(|col| {
+                                                if child.pk_cols.iter().any(|pk| pk == col) {
+                                                    Some(child_id.clone())
+                                                } else if Some(col) == child.fk_col.as_ref() {
+                                                    Some(my_id.clone())
+                                                } else if col == "value" {
+                                                    if child.timestamp_cols.contains(col) {
+                                                        bson_to_timestamp_string(child_item)
+                                                    } else {
+                                                        bson_to_string(child_item)
+                                                    }
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .collect();
+                                        all_rows
+                                            .entry(child.sql_name.clone())
+                                            .or_default()
+                                            .push(child_row);
+                                    }
+                                } else {
+                                    for child_item in arr {
+                                        extract_rows(
+                                            child_item,
+                                            child,
+                                            Some(&my_id),
+                                            false,
+                                            all_rows,
+                                            counters,
+                                        );
+                                    }
+                                }
+                            }
+                            Some(doc_val @ Bson::Document(_)) => {
+                                extract_rows(
+                                    doc_val,
+                                    child,
+                                    Some(&my_id),
+                                    false,
+                                    all_rows,
+                                    counters,
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            return;
+        }
+    }
 
     // Assign an ID for this row.
     let my_id: String = if is_root {
@@ -438,6 +781,8 @@ fn extract_rows(
                     .map(|v| {
                         if node.jsonb_cols.contains(col) {
                             Some(serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default())
+                        } else if node.timestamp_cols.contains(col) {
+                            bson_to_timestamp_string(v)
                         } else {
                             bson_to_string(v)
                         }
@@ -451,6 +796,138 @@ fn extract_rows(
 
     // Recurse into child tables.
     for child in &node.children {
+        if let Some(grouped_fields) = &child.grouped_root_fields {
+            for grouped_field in grouped_fields {
+                match find_mongo_field(doc, grouped_field) {
+                    Some(Bson::Array(arr)) => {
+                        for item in arr {
+                            let item_doc = match item {
+                                Bson::Document(item_doc) => item_doc,
+                                _ => continue,
+                            };
+                            let child_id = {
+                                let c = counters.entry(child.sql_name.clone()).or_insert(0);
+                                *c += 1;
+                                c.to_string()
+                            };
+                            let child_row: Vec<Option<String>> = child
+                                .columns
+                                .iter()
+                                .map(|col| {
+                                    if child.pk_cols.iter().any(|pk| pk == col) {
+                                        Some(child_id.clone())
+                                    } else if Some(col) == child.fk_col.as_ref() {
+                                        Some(my_id.clone())
+                                    } else if col == "key" {
+                                        Some(grouped_field.clone())
+                                    } else {
+                                        find_mongo_field(item_doc, col)
+                                            .map(|v| {
+                                                if child.jsonb_cols.contains(col) {
+                                                    Some(
+                                                        serde_json::to_string(&bson_to_json_value(
+                                                            v,
+                                                        ))
+                                                        .unwrap_or_default(),
+                                                    )
+                                                } else if child.timestamp_cols.contains(col) {
+                                                    bson_to_timestamp_string(v)
+                                                } else {
+                                                    bson_to_string(v)
+                                                }
+                                            })
+                                            .unwrap_or(None)
+                                    }
+                                })
+                                .collect();
+                            all_rows
+                                .entry(child.sql_name.clone())
+                                .or_default()
+                                .push(child_row);
+
+                            for grandchild in &child.children {
+                                match find_mongo_field(item_doc, &grandchild.mongo_field) {
+                                    Some(Bson::Array(arr)) => {
+                                        if grandchild.is_scalar_array {
+                                            for item in arr {
+                                                let grandchild_id = {
+                                                    let c = counters
+                                                        .entry(grandchild.sql_name.clone())
+                                                        .or_insert(0);
+                                                    *c += 1;
+                                                    c.to_string()
+                                                };
+                                                let grandchild_row: Vec<Option<String>> =
+                                                    grandchild
+                                                        .columns
+                                                        .iter()
+                                                        .map(|col| {
+                                                            if grandchild
+                                                                .pk_cols
+                                                                .iter()
+                                                                .any(|pk| pk == col)
+                                                            {
+                                                                Some(grandchild_id.clone())
+                                                            } else if Some(col)
+                                                                == grandchild.fk_col.as_ref()
+                                                            {
+                                                                Some(child_id.clone())
+                                                            } else if col == "value" {
+                                                                if grandchild
+                                                                    .timestamp_cols
+                                                                    .contains(col)
+                                                                {
+                                                                    bson_to_timestamp_string(item)
+                                                                } else {
+                                                                    bson_to_string(item)
+                                                                }
+                                                            } else {
+                                                                None
+                                                            }
+                                                        })
+                                                        .collect();
+                                                all_rows
+                                                    .entry(grandchild.sql_name.clone())
+                                                    .or_default()
+                                                    .push(grandchild_row);
+                                            }
+                                        } else {
+                                            for item in arr {
+                                                extract_rows(
+                                                    item,
+                                                    grandchild,
+                                                    Some(&child_id),
+                                                    false,
+                                                    all_rows,
+                                                    counters,
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Some(doc_val @ Bson::Document(_)) => {
+                                        extract_rows(
+                                            doc_val,
+                                            grandchild,
+                                            Some(&child_id),
+                                            false,
+                                            all_rows,
+                                            counters,
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    Some(doc_val @ Bson::Document(_)) => {
+                        extract_rows(doc_val, child, Some(&my_id), false, all_rows, counters);
+                    }
+                    _ => {}
+                }
+            }
+            continue;
+        }
+
         match find_mongo_field(doc, &child.mongo_field) {
             Some(Bson::Array(arr)) => {
                 if child.is_scalar_array {
@@ -470,7 +947,11 @@ fn extract_rows(
                                 } else if Some(col) == child.fk_col.as_ref() {
                                     Some(my_id.clone())
                                 } else if col == "value" {
-                                    bson_to_string(item)
+                                    if child.timestamp_cols.contains(col) {
+                                        bson_to_timestamp_string(item)
+                                    } else {
+                                        bson_to_string(item)
+                                    }
                                 } else {
                                     None
                                 }
@@ -511,6 +992,7 @@ pub async fn export_collection(
     db_name: &str,
     coll_name: &str,
     tables_dir: &Path,
+    collections_dir: &Path,
     data_dir: &Path,
 ) -> Result<()> {
     // Only the SQL filename is sanitized; the MongoDB collection name must stay raw.
@@ -534,7 +1016,28 @@ pub async fn export_collection(
         ));
     }
 
-    let roots = build_tree(&sql_tables);
+    let safe_name = coll_name.replace('/', "_");
+    let schema_path = collections_dir
+        .join(&safe_name)
+        .join(format!("{safe_name}.json"));
+    let (flattened_root, flattened_grouped_root, grouped_root_sources) =
+        std::fs::read_to_string(&schema_path)
+            .ok()
+            .and_then(|content| serde_json::from_str::<CollectionSchema>(&content).ok())
+            .map(|schema| {
+                (
+                    flattened_root_for_export(&sql_tables, &schema, coll_name),
+                    flattened_grouped_root_for_export(&sql_tables, &schema, coll_name),
+                    grouped_root_table_sources(&schema, coll_name),
+                )
+            })
+            .unwrap_or_else(|| (None, None, HashMap::new()));
+    let roots = build_tree_with_grouped_root(
+        &sql_tables,
+        flattened_root,
+        flattened_grouped_root,
+        &grouped_root_sources,
+    );
 
     // Query MongoDB using the original collection name.
     let db = client.database(db_name);
@@ -591,7 +1094,11 @@ pub async fn export_collection(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_tree, extract_rows};
+    use super::{
+        build_tree, build_tree_with_grouped_root, extract_rows, flattened_grouped_root_for_export,
+        flattened_root_for_export, grouped_root_table_sources,
+    };
+    use crate::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
     use bson::{doc, Bson};
     use std::collections::HashMap;
@@ -609,7 +1116,7 @@ CREATE TABLE security_logs (
 "#;
 
         let tables = parse_sql(sql);
-        let roots = build_tree(&tables);
+        let roots = build_tree(&tables, None, &HashMap::new());
         let mut all_rows = HashMap::new();
         let mut counters = HashMap::new();
         let doc = doc! {
@@ -653,7 +1160,7 @@ CREATE TABLE activity_feed (
 "#;
 
         let tables = parse_sql(sql);
-        let roots = build_tree(&tables);
+        let roots = build_tree(&tables, None, &HashMap::new());
         let mut all_rows = HashMap::new();
         let mut counters = HashMap::new();
         let doc = doc! {
@@ -679,5 +1186,349 @@ CREATE TABLE activity_feed (
         assert_eq!(rows[0][0].as_deref(), Some("6267ddea9270b5e839a81ac4"));
         assert_eq!(rows[0][1].as_deref(), Some("Project created"));
         assert_eq!(rows[0][2].as_deref(), Some("FRAS-D-NLX-FEATURE1"));
+    }
+
+    #[test]
+    fn export_promoted_root_array_objects_write_one_row_per_item() {
+        let sql = r#"
+CREATE TABLE engine (
+    id BIGSERIAL PRIMARY KEY,
+    engine_id TEXT NOT NULL,
+    eol_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    grace_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    major_version TEXT NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(
+            &tables,
+            Some(("versions".to_owned(), "engine_id".to_owned())),
+            &HashMap::new(),
+        );
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "pg",
+            "versions": [
+                {
+                    "major_version": "13",
+                    "grace_date": "2025-05-13T00:00:00Z",
+                    "eol_date": "2025-11-13T00:00:00Z"
+                },
+                {
+                    "major_version": "14",
+                    "grace_date": "2026-05-12T00:00:00Z",
+                    "eol_date": "2026-11-12T00:00:00Z"
+                }
+            ]
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("engine").expect("root rows missing");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0][1].as_deref(), Some("pg"));
+        assert_eq!(rows[0][4].as_deref(), Some("13"));
+        assert_eq!(rows[1][1].as_deref(), Some("pg"));
+        assert_eq!(rows[1][4].as_deref(), Some("14"));
+    }
+
+    #[test]
+    fn export_timestamp_columns_coerce_numeric_values_to_iso_strings() {
+        let sql = r#"
+CREATE TABLE scheduling_jobs (
+    id TEXT PRIMARY KEY,
+    last_update TIMESTAMP WITH TIME ZONE NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "job-1",
+            "last_update": 1650468505.273496_f64
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("scheduling_jobs").expect("root rows missing");
+        assert_eq!(rows[0][0].as_deref(), Some("job-1"));
+        assert_eq!(rows[0][1].as_deref(), Some("2022-04-20 15:28:25.273+00:00"));
+    }
+
+    #[test]
+    fn export_groups_same_shape_root_arrays_into_one_keyed_child_table() {
+        let sql = r#"
+CREATE TABLE communities (
+    id BIGSERIAL PRIMARY KEY,
+    communities_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    cloud TEXT NOT NULL,
+    network_exposition TEXT NOT NULL,
+    provider TEXT NOT NULL
+);
+
+CREATE TABLE communities_available_localizations (
+    id BIGSERIAL PRIMARY KEY,
+    communities_id BIGINT NOT NULL,
+    value TEXT NOT NULL,
+    FOREIGN KEY (communities_id) REFERENCES communities (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc! {
+            "_id": "community-1",
+            "dev": [{
+                "provider": "aiven",
+                "cloud": "gcp",
+                "network_exposition": "private_platform"
+            }],
+            "prod": [{
+                "provider": "atlas",
+                "cloud": "azure",
+                "network_exposition": "public"
+            }]
+        });
+        let schema = analyzer.finish();
+
+        let tables = parse_sql(sql);
+        let flattened_grouped_root =
+            flattened_grouped_root_for_export(&tables, &schema, "communities");
+        let grouped_root_sources = grouped_root_table_sources(&schema, "communities");
+        let roots = build_tree_with_grouped_root(
+            &tables,
+            None,
+            flattened_grouped_root,
+            &grouped_root_sources,
+        );
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "community-1",
+            "dev": [{
+                "available_localizations": ["eu-west-1"],
+                "provider": "aiven",
+                "cloud": "gcp",
+                "network_exposition": "private_platform"
+            }],
+            "prod": [{
+                "available_localizations": ["eu-west-2"],
+                "provider": "atlas",
+                "cloud": "azure",
+                "network_exposition": "public"
+            }]
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows
+            .get("communities")
+            .expect("grouped root rows missing");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0][1].as_deref(), Some("community-1"));
+        assert_eq!(rows[0][2].as_deref(), Some("dev"));
+        assert_eq!(rows[1][2].as_deref(), Some("prod"));
+
+        let child_rows = all_rows
+            .get("communities_available_localizations")
+            .expect("grouped nested rows missing");
+        assert_eq!(child_rows.len(), 2);
+    }
+
+    #[test]
+    fn export_restores_scalar_only_object_sibling_child_rows() {
+        let sql = r#"
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY
+);
+
+CREATE TABLE projects_providers (
+    id BIGSERIAL PRIMARY KEY,
+    projects_id TEXT NOT NULL,
+    namespace TEXT NOT NULL,
+    namespace_id TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    FOREIGN KEY (projects_id) REFERENCES projects (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE projects_providers_metadata (
+    id BIGSERIAL PRIMARY KEY,
+    projects_providers_id BIGINT NOT NULL,
+    creation_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    status TEXT NOT NULL,
+    FOREIGN KEY (projects_providers_id) REFERENCES projects_providers (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "project-1",
+            "providers": [{
+                "namespace": "fras-t-dba-176c358",
+                "namespace_id": "fras-t-dba-176c358",
+                "provider": "aiven",
+                "metadata": {
+                    "creation_date": "2025-08-11T00:00:00Z",
+                    "status": "created"
+                }
+            }]
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows
+            .get("projects_providers")
+            .expect("providers rows missing");
+        assert_eq!(rows.len(), 1);
+
+        let metadata_rows = all_rows
+            .get("projects_providers_metadata")
+            .expect("providers metadata rows missing");
+        assert_eq!(metadata_rows.len(), 1);
+        assert_eq!(
+            metadata_rows[0][2].as_deref(),
+            Some("2025-08-11 00:00:00+00:00")
+        );
+        assert_eq!(metadata_rows[0][3].as_deref(), Some("created"));
+    }
+
+    #[test]
+    fn export_timestamp_columns_normalize_rfc3339_strings() {
+        let sql = r#"
+CREATE TABLE scheduling_jobs (
+    id TEXT PRIMARY KEY,
+    last_update TIMESTAMP WITH TIME ZONE NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "job-1",
+            "last_update": "2022-04-20T15:28:25.273Z"
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("scheduling_jobs").expect("root rows missing");
+        assert_eq!(rows[0][1].as_deref(), Some("2022-04-20 15:28:25.273+00:00"));
+    }
+
+    #[test]
+    fn export_jsonb_root_array_objects_stay_on_root_row() {
+        let sql = r#"
+CREATE TABLE engine (
+    id TEXT PRIMARY KEY,
+    versions JSONB NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc! {
+            "_id": "pg",
+            "versions": [
+                {
+                    "major_version": "13",
+                    "grace_date": "2025-05-13T00:00:00Z",
+                    "eol_date": "2025-11-13T00:00:00Z"
+                },
+                {
+                    "major_version": "14",
+                    "grace_date": "2026-05-12T00:00:00Z",
+                    "eol_date": "2026-11-12T00:00:00Z"
+                }
+            ]
+        });
+        let mut schema = analyzer.finish();
+        schema.mark_objects_as_jsonb();
+
+        let flattened_root = flattened_root_for_export(&tables, &schema, "engine");
+        assert!(
+            flattened_root.is_none(),
+            "jsonb root array should not be promoted into one row per item"
+        );
+
+        let roots = build_tree(&tables, flattened_root, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "pg",
+            "versions": [
+                {
+                    "major_version": "13",
+                    "grace_date": "2025-05-13T00:00:00Z",
+                    "eol_date": "2025-11-13T00:00:00Z"
+                },
+                {
+                    "major_version": "14",
+                    "grace_date": "2026-05-12T00:00:00Z",
+                    "eol_date": "2026-11-12T00:00:00Z"
+                }
+            ]
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("engine").expect("root rows missing");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0].as_deref(), Some("pg"));
+        assert_eq!(
+            rows[0][1].as_deref(),
+            Some(
+                "[{\"major_version\":\"13\",\"grace_date\":\"2025-05-13T00:00:00Z\",\"eol_date\":\"2025-11-13T00:00:00Z\"},{\"major_version\":\"14\",\"grace_date\":\"2026-05-12T00:00:00Z\",\"eol_date\":\"2026-11-12T00:00:00Z\"}]"
+            )
+        );
     }
 }

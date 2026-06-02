@@ -27,16 +27,30 @@ use clap::{Args, Parser, Subcommand};
 use flate2::read::GzDecoder;
 use futures::{SinkExt, TryStreamExt};
 use indexmap::IndexMap;
-use mongo2pg::analyzer::{Analyzer, CollectionSchema, FieldSchema, TypeSchema};
+use mongo2pg::analyzer::{
+    Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_NULL, TYPE_OBJECT,
+    TYPE_UNDEFINED,
+};
+use mongo2pg::checkmd5::{compute_md5_summaries_for_collection, run_check_md5};
 use mongo2pg::export::export_collection;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
-    render_post_import_html, PostImportCollectionRow, PostImportNode, PostImportTableRow,
+    render_post_import_html, PostImportCollectionRow, PostImportMd5Column,
+    PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode, PostImportTableRow,
     SYSTEM_DATABASES,
 };
 use mongo2pg::schema_diagram::{load_tables_by_db, parse_sql, render_schema_html};
-use mongo2pg::stats::{format_stats, stats_to_yaml};
-use mongo2pg::to_pg::schema_to_ddl;
+use mongo2pg::stats::{
+    format_stats, stats_to_yaml, InferWarningMinorityYaml, InferWarningTypeYaml, InferWarningYaml,
+};
+use mongo2pg::to_pg::schema_to_ddl_with_timestamp_fields;
+use mongo2pg::util::{
+    can_inline_object_fields, flatten_grouped_root_array_object_fields,
+    flatten_root_array_object_field, flattened_root_parent_id_column,
+    grouped_root_array_object_fields, inline_object_column_names_with_prefix,
+    inline_object_leaf_fields_with_prefix, is_pg_reserved, property_filter_entries_for_collection,
+    read_conf, sanitize, should_infer_collection,
+};
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
 use serde::{Deserialize, Serialize};
@@ -209,6 +223,21 @@ struct ReportArgs {
     /// Connect to MongoDB and PostgreSQL and write a post-import validation report.
     #[arg(long = "post-import", action = clap::ArgAction::SetTrue)]
     post_import: bool,
+
+    /// Compute MongoDB/PostgreSQL MD5 checks during post-import reporting.
+    #[arg(
+        long = "check-md5",
+        action = clap::ArgAction::Set,
+        default_value_t = true,
+        default_missing_value = "true",
+        num_args = 0..=1,
+        requires = "post_import"
+    )]
+    check_md5: bool,
+
+    /// Print one MD5 per row instead of one collection-level aggregated MD5.
+    #[arg(long = "noaggregate", action = clap::ArgAction::SetTrue, requires = "check_md5")]
+    noaggregate: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -286,7 +315,6 @@ struct ClusterReportArgs {
 // ──────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ──────────────────────────────────────────────────────────────────────────────
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -331,6 +359,12 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
         read_conf(conf)?.target_schema
     } else {
         None
+    };
+
+    let config_timestamp_fields: Vec<String> = if let Some(ref conf) = args.config {
+        read_conf(conf)?.timestamp_fields
+    } else {
+        Vec::new()
     };
 
     let (collections_dir, output_dir) = if let Some(ref conf) = args.config {
@@ -459,14 +493,23 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
             .with_context(|| format!("Failed to read {}", json_path.display()))?;
         let schema: CollectionSchema = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse {}", json_path.display()))?;
-        let ddl = schema_to_ddl(
-            &schema,
-            table_name,
-            args.schema
-                .as_deref()
-                .or(config_target_schema.as_deref())
-                .or(Some(table_name)),
-        );
+        let target_schema = args
+            .schema
+            .as_deref()
+            .or(config_target_schema.as_deref())
+            .or(Some(table_name));
+        let ddl = if let Some(mapping_tables) =
+            load_mapping_ddl_tables(json_path.parent().unwrap_or(&collections_dir))?
+        {
+            render_ddl_from_mapping_tables(&mapping_tables, target_schema)
+        } else {
+            schema_to_ddl_with_timestamp_fields(
+                &schema,
+                table_name,
+                target_schema,
+                &config_timestamp_fields,
+            )
+        };
         let db_name = rel_sql
             .parent()
             .and_then(|p| p.file_name())
@@ -510,6 +553,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         conf_number,
         conf_percent,
         conf_jsonb,
+        conf_target_schema,
+        conf_timestamp_fields,
         conf_include,
         conf_exclude,
     ) = if let Some(ref conf) = args.config {
@@ -530,6 +575,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             c.number,
             c.percent,
             c.jsonb,
+            c.target_schema,
+            c.timestamp_fields,
             c.include,
             c.exclude,
         )
@@ -545,6 +592,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             None,
             None,
             false,
+            None,
+            Vec::new(),
             Vec::new(),
             Vec::new(),
         )
@@ -578,7 +627,15 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     match namespace {
         None => {
             // No namespace provided: enumerate all user databases and infer each.
-            infer_all_databases(&client, &args, &conf_include, &conf_exclude, !quiet_infer).await?;
+            infer_all_databases(
+                &client,
+                &args,
+                &conf_include,
+                &conf_exclude,
+                &conf_timestamp_fields,
+                !quiet_infer,
+            )
+            .await?;
         }
         Some(ref ns) if ns.contains('.') => {
             // Single collection: <db>.<collection>
@@ -615,6 +672,10 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 db_name,
                 coll_name,
                 coll_name,
+                conf_target_schema.as_deref(),
+                &conf_include,
+                &conf_exclude,
+                &conf_timestamp_fields,
                 &args,
                 None,
                 Some((1, 1)),
@@ -657,6 +718,10 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     db_name,
                     coll_name,
                     coll_name,
+                    conf_target_schema.as_deref(),
+                    &conf_include,
+                    &conf_exclude,
+                    &conf_timestamp_fields,
                     &args,
                     None,
                     Some((index + 1, total_collections)),
@@ -695,6 +760,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 output: None,
                 namespace: String::new(),
                 post_import: false,
+                check_md5: true,
+                noaggregate: false,
             },
             true,
         )
@@ -770,9 +837,22 @@ fn print_infer_summary(conf: &Path) -> Result<()> {
             total_tables,
         )
     } else {
+        let tables_dir_for_summary = {
+            let db_name = c
+                .namespace
+                .as_deref()
+                .map(|namespace| split_namespace_scope(namespace).0)
+                .filter(|db_name| !db_name.is_empty())
+                .map(|db_name| tables_root.join(db_name));
+            db_name
+                .filter(|dir| dir.is_dir())
+                .unwrap_or_else(|| tables_root.clone())
+        };
         let rows = collect_rows(
             &collections_dir,
-            tables_root.is_dir().then_some(tables_root.as_path()),
+            tables_dir_for_summary
+                .is_dir()
+                .then_some(tables_dir_for_summary.as_path()),
         )?;
         let score = compute_db_score(&c.project_dir, &rows).score_db;
         let table_count = rows
@@ -796,6 +876,364 @@ fn print_infer_summary(conf: &Path) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct InferTypeWarning {
+    field_path: String,
+    dominant_family: String,
+    dominant_ratio: f64,
+    minority_families: Vec<(String, f64)>,
+    observed_types: Vec<InferWarningTypeYaml>,
+}
+
+fn warning_examples(type_schema: &TypeSchema) -> Vec<String> {
+    let mut examples = Vec::new();
+
+    if let Some(values) = &type_schema.values {
+        for value in values {
+            let rendered = serde_json::to_string(value)
+                .expect("serializing infer warning example should succeed");
+            if !examples.iter().any(|existing| existing == &rendered) {
+                examples.push(rendered);
+            }
+            if examples.len() == 5 {
+                break;
+            }
+        }
+    }
+
+    examples
+}
+
+fn scalar_type_family(type_name: &str) -> Option<&'static str> {
+    match type_name {
+        TYPE_NULL | TYPE_UNDEFINED | TYPE_OBJECT | TYPE_ARRAY => None,
+        "Double" | "Int32" | "Int64" | "Decimal128" | "Number" => Some("numeric"),
+        "String" => Some("string"),
+        "Boolean" => Some("boolean"),
+        "Date" | "Timestamp" => Some("datetime"),
+        "ObjectId" => Some("objectid"),
+        "Binary" => Some("binary"),
+        "RegularExpression" => Some("regex"),
+        "JavaScriptCode" | "JavaScriptCodeWithScope" => Some("javascript"),
+        "Symbol" => Some("symbol"),
+        "DbPointer" => Some("dbpointer"),
+        other if other.eq_ignore_ascii_case("undefined") || other.eq_ignore_ascii_case("null") => {
+            None
+        }
+        _ => Some("other"),
+    }
+}
+
+fn collect_infer_type_warnings(schema: &CollectionSchema) -> Vec<InferTypeWarning> {
+    fn visit_field(path: &str, field: &FieldSchema, warnings: &mut Vec<InferTypeWarning>) {
+        let mut family_probs: HashMap<&str, f64> = HashMap::new();
+        let mut total_scalar_prob = 0.0;
+        let mut observed_types = Vec::new();
+
+        for (type_name, type_schema) in &field.types {
+            if let Some(family) = scalar_type_family(type_name) {
+                *family_probs.entry(family).or_insert(0.0) += type_schema.probability;
+                total_scalar_prob += type_schema.probability;
+                observed_types.push(InferWarningTypeYaml {
+                    type_name: type_name.clone(),
+                    ratio: type_schema.probability,
+                    examples: warning_examples(type_schema),
+                });
+            }
+        }
+
+        observed_types.sort_by(|left, right| {
+            right
+                .ratio
+                .total_cmp(&left.ratio)
+                .then_with(|| left.type_name.cmp(&right.type_name))
+        });
+
+        if family_probs.len() > 1 && total_scalar_prob > 0.0 {
+            let mut family_ratios = family_probs
+                .into_iter()
+                .map(|(family, prob)| (family.to_owned(), prob / total_scalar_prob))
+                .collect::<Vec<_>>();
+            family_ratios.sort_by(|left, right| {
+                right
+                    .1
+                    .total_cmp(&left.1)
+                    .then_with(|| left.0.cmp(&right.0))
+            });
+
+            let dominant_ratio = family_ratios[0].1;
+            if dominant_ratio > 0.5 {
+                warnings.push(InferTypeWarning {
+                    field_path: path.to_owned(),
+                    dominant_family: family_ratios[0].0.clone(),
+                    dominant_ratio,
+                    minority_families: family_ratios[1..]
+                        .iter()
+                        .map(|(family, ratio)| (family.clone(), *ratio))
+                        .collect(),
+                    observed_types: observed_types
+                        .into_iter()
+                        .map(|mut observed_type| {
+                            observed_type.ratio /= total_scalar_prob;
+                            observed_type
+                        })
+                        .collect(),
+                });
+            }
+        }
+
+        for type_schema in field.types.values() {
+            if let Some(object_fields) = &type_schema.object {
+                for (child_name, child_field) in object_fields {
+                    let child_path = if path.is_empty() {
+                        child_name.clone()
+                    } else {
+                        format!("{path}.{child_name}")
+                    };
+                    visit_field(&child_path, child_field, warnings);
+                }
+            }
+
+            if let Some(array_items) = &type_schema.array {
+                let array_path = if path.is_empty() {
+                    "[]".to_owned()
+                } else {
+                    format!("{path}[]")
+                };
+                visit_field(&array_path, array_items, warnings);
+            }
+        }
+    }
+
+    let mut warnings = Vec::new();
+    for (field_name, field) in &schema.object {
+        visit_field(field_name, field, &mut warnings);
+    }
+    warnings
+}
+
+fn collect_identifier_warnings(schema: &CollectionSchema) -> Vec<InferWarningYaml> {
+    fn normalized_pg_identifier(name: &str) -> String {
+        name.to_ascii_lowercase()
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect()
+    }
+
+    fn looks_like_type_name(name: &str) -> bool {
+        matches!(
+            name,
+            "array"
+                | "bigint"
+                | "binary"
+                | "bool"
+                | "boolean"
+                | "bytea"
+                | "char"
+                | "character"
+                | "character_varying"
+                | "citext"
+                | "date"
+                | "datetime"
+                | "decimal"
+                | "decimal128"
+                | "double"
+                | "double_precision"
+                | "float4"
+                | "float8"
+                | "int"
+                | "int2"
+                | "int4"
+                | "int8"
+                | "int32"
+                | "int64"
+                | "integer"
+                | "json"
+                | "jsonb"
+                | "null"
+                | "number"
+                | "numeric"
+                | "object"
+                | "objectid"
+                | "real"
+                | "smallint"
+                | "string"
+                | "text"
+                | "time"
+                | "timestamp"
+                | "timestamptz"
+                | "undefined"
+                | "uuid"
+                | "varchar"
+        )
+    }
+
+    fn warning_examples(type_schema: &TypeSchema) -> Vec<String> {
+        type_schema
+            .values
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .take(5)
+            .map(|value| match value {
+                serde_json::Value::String(text) => format!("\"{text}\""),
+                _ => value.to_string(),
+            })
+            .collect()
+    }
+
+    fn observed_types_for_field(field: &FieldSchema) -> Vec<InferWarningTypeYaml> {
+        let mut observed_types = field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+            .map(|(type_name, type_schema)| InferWarningTypeYaml {
+                type_name: type_name.clone(),
+                ratio: type_schema.probability,
+                examples: warning_examples(type_schema),
+            })
+            .collect::<Vec<_>>();
+
+        observed_types.sort_by(|left, right| {
+            right
+                .ratio
+                .total_cmp(&left.ratio)
+                .then_with(|| left.type_name.cmp(&right.type_name))
+        });
+        observed_types
+    }
+
+    fn visit_field(path: &str, field: &FieldSchema, warnings: &mut Vec<InferWarningYaml>) {
+        let raw_name = path
+            .rsplit('.')
+            .next()
+            .unwrap_or(path)
+            .trim_end_matches("[]");
+        let normalized = normalized_pg_identifier(raw_name);
+        let observed_types = observed_types_for_field(field);
+        if !normalized.is_empty() && is_pg_reserved(&normalized) {
+            warnings.push(InferWarningYaml {
+                kind: "pg_keyword".to_owned(),
+                field_path: path.to_owned(),
+                renamed_to: Some(sanitize(raw_name)),
+                keyword: Some(normalized),
+                dominant_family: String::new(),
+                dominant_ratio: 0.0,
+                minority_families: Vec::new(),
+                observed_types,
+            });
+        } else if !normalized.is_empty() && looks_like_type_name(&normalized) {
+            warnings.push(InferWarningYaml {
+                kind: "type_name".to_owned(),
+                field_path: path.to_owned(),
+                renamed_to: None,
+                keyword: Some(normalized),
+                dominant_family: String::new(),
+                dominant_ratio: 0.0,
+                minority_families: Vec::new(),
+                observed_types,
+            });
+        }
+
+        for type_schema in field.types.values() {
+            if let Some(object_fields) = &type_schema.object {
+                for (child_name, child_field) in object_fields {
+                    let child_path = if path.is_empty() {
+                        child_name.clone()
+                    } else {
+                        format!("{path}.{child_name}")
+                    };
+                    visit_field(&child_path, child_field, warnings);
+                }
+            }
+
+            if let Some(array_items) = &type_schema.array {
+                let array_path = if path.is_empty() {
+                    "[]".to_owned()
+                } else {
+                    format!("{path}[]")
+                };
+                visit_field(&array_path, array_items, warnings);
+            }
+        }
+    }
+
+    let mut warnings = Vec::new();
+    for (field_name, field) in &schema.object {
+        visit_field(field_name, field, &mut warnings);
+    }
+    warnings
+}
+
+fn emit_infer_type_warnings(db_name: &str, coll_name: &str, schema: &CollectionSchema) {
+    for warning in collect_infer_type_warnings(schema) {
+        let minority = warning
+            .minority_families
+            .iter()
+            .map(|(family, ratio)| format!("{family} ({:.1}%)", ratio * 100.0))
+            .collect::<Vec<_>>()
+            .join(", ");
+        eprintln!(
+            "  [warn] source {}.{} field {} mixes incompatible scalar types: dominant {} ({:.1}% of non-null values), minority {}. Normalize source values before import.",
+            db_name,
+            coll_name,
+            warning.field_path,
+            warning.dominant_family,
+            warning.dominant_ratio * 100.0,
+            minority,
+        );
+    }
+
+    for warning in collect_identifier_warnings(schema) {
+        if warning.kind == "pg_keyword" {
+            eprintln!(
+                "  [warn] source {}.{} field {} uses PostgreSQL keyword '{}'; it will be renamed to {}.",
+                db_name,
+                coll_name,
+                warning.field_path,
+                warning.keyword.as_deref().unwrap_or(""),
+                warning.renamed_to.as_deref().unwrap_or(""),
+            );
+        } else {
+            eprintln!(
+                "  [warn] source {}.{} field {} matches type name '{}'; consider renaming it.",
+                db_name,
+                coll_name,
+                warning.field_path,
+                warning.keyword.as_deref().unwrap_or(""),
+            );
+        }
+    }
+}
+
+fn infer_warnings_to_yaml(schema: &CollectionSchema) -> Vec<InferWarningYaml> {
+    let mut warnings = collect_infer_type_warnings(schema)
+        .into_iter()
+        .map(|warning| InferWarningYaml {
+            kind: "mixed_scalar_types".to_owned(),
+            field_path: warning.field_path,
+            renamed_to: None,
+            keyword: None,
+            dominant_family: warning.dominant_family,
+            dominant_ratio: warning.dominant_ratio,
+            minority_families: warning
+                .minority_families
+                .into_iter()
+                .map(|(family, ratio)| InferWarningMinorityYaml { family, ratio })
+                .collect(),
+            observed_types: warning.observed_types,
+        })
+        .collect::<Vec<_>>();
+    warnings.extend(collect_identifier_warnings(schema));
+    warnings
+}
+
 /// Infer schemas for all user databases on the server (skipping system databases).
 ///
 /// Output files are written as `<output_dir>/<dbname>/<collname>/`.
@@ -805,6 +1243,7 @@ async fn infer_all_databases(
     args: &InferArgs,
     include: &[String],
     exclude: &[String],
+    timestamp_fields: &[String],
     emit_stats: bool,
 ) -> Result<()> {
     let all_dbs = client
@@ -869,6 +1308,10 @@ async fn infer_all_databases(
                 db_name,
                 coll_name,
                 coll_name,
+                None,
+                include,
+                exclude,
+                timestamp_fields,
                 args,
                 db_out_dir.as_deref(),
                 Some((current_collection, total_collections)),
@@ -907,6 +1350,10 @@ async fn infer_collection(
     db_name: &str,
     coll_name: &str,
     output_name: &str,
+    target_schema: Option<&str>,
+    include: &[String],
+    exclude: &[String],
+    timestamp_fields: &[String],
     args: &InferArgs,
     output_dir_override: Option<&Path>,
     progress: Option<(usize, usize)>,
@@ -1021,6 +1468,7 @@ async fn infer_collection(
     }
 
     let mut schema = analyzer.finish();
+    apply_collection_property_filters(&mut schema, coll_name, include, exclude);
     let total_docs = if let Some(t) = known_total {
         t
     } else {
@@ -1033,6 +1481,8 @@ async fn infer_collection(
     if args.jsonb {
         schema.mark_objects_as_jsonb();
     }
+    let infer_warnings = infer_warnings_to_yaml(&schema);
+    emit_infer_type_warnings(db_name, coll_name, &schema);
     let output_dir = output_dir; // rebind to keep borrow checker happy
 
     let stats_lines = format_stats(&schema, Some(total_docs));
@@ -1051,14 +1501,51 @@ async fn infer_collection(
     }
 
     if let Some(out_dir) = output_dir {
-        write_collection_files(out_dir, db_name, output_name, &schema, &stats_lines)
-            .with_context(|| format!("Failed to write output files for {output_name}"))?;
+        write_collection_files(
+            out_dir,
+            db_name,
+            output_name,
+            target_schema,
+            timestamp_fields,
+            &schema,
+            &stats_lines,
+            &infer_warnings,
+        )
+        .with_context(|| format!("Failed to write output files for {output_name}"))?;
     }
 
     Ok(schema)
 }
 
-#[derive(Serialize)]
+fn apply_collection_property_filters(
+    schema: &mut CollectionSchema,
+    coll_name: &str,
+    include: &[String],
+    exclude: &[String],
+) {
+    let has_collection_wide_include = include.iter().any(|entry| entry == coll_name);
+    let included_properties = property_filter_entries_for_collection(coll_name, include);
+    let excluded_properties = property_filter_entries_for_collection(coll_name, exclude);
+
+    if !has_collection_wide_include && !included_properties.is_empty() {
+        schema.object.retain(|field_name, _| {
+            field_name == "_id"
+                || included_properties
+                    .iter()
+                    .any(|property| *property == field_name)
+        });
+    }
+
+    if !excluded_properties.is_empty() {
+        schema.object.retain(|field_name, _| {
+            !excluded_properties
+                .iter()
+                .any(|property| *property == field_name)
+        });
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct MappingColumn {
     source_field: String,
     target_field: String,
@@ -1066,126 +1553,71 @@ struct MappingColumn {
     nullable: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct DdlColumnMapping {
+    name: String,
+    #[serde(rename = "sql_type", alias = "pg_type")]
+    sql_type: String,
+    nullable: bool,
+    primary_key: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct DdlForeignKeyMapping {
+    from_col: String,
+    to_table: String,
+    to_col: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct DdlTableMapping {
+    name: String,
+    columns: Vec<DdlColumnMapping>,
+    #[serde(default)]
+    foreign_keys: Vec<DdlForeignKeyMapping>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct DdlEditingGuidance {
+    safe_to_edit: Vec<String>,
+    notes: Vec<String>,
+}
+
+fn default_ddl_editing_guidance() -> DdlEditingGuidance {
+    DdlEditingGuidance {
+        safe_to_edit: vec![
+            "pg_mapping.ddl.columns[].sql_type".to_owned(),
+            "pg_mapping.ddl.columns[].nullable".to_owned(),
+            "pg_mapping.ddl.columns[].primary_key".to_owned(),
+            "pg_mapping.ddl.foreign_keys[]".to_owned(),
+        ],
+        notes: vec![
+            "Edit the ddl section, then rerun to-pg to regenerate the SQL file.".to_owned(),
+            "Keep pg_mapping.columns aligned with source-to-target mappings for export and md5."
+                .to_owned(),
+            "Export reads the generated SQL files, so mapping edits take effect after to-pg."
+                .to_owned(),
+        ],
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct PgMapping {
     dbname: String,
     schema_name: String,
     table_name: String,
     columns: Vec<MappingColumn>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ddl: Option<DdlTableMapping>,
+    #[serde(default = "default_ddl_editing_guidance")]
+    ddl_editing: DdlEditingGuidance,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct CollectionMapping {
     collection_name: String,
     dbname: String,
     pg_mapping: PgMapping,
-}
-
-fn is_pg_reserved(s: &str) -> bool {
-    matches!(
-        s,
-        "all"
-            | "analyse"
-            | "analyze"
-            | "and"
-            | "any"
-            | "array"
-            | "as"
-            | "asc"
-            | "asymmetric"
-            | "authorization"
-            | "binary"
-            | "both"
-            | "case"
-            | "cast"
-            | "check"
-            | "collate"
-            | "collation"
-            | "column"
-            | "concurrently"
-            | "constraint"
-            | "create"
-            | "cross"
-            | "current_catalog"
-            | "current_date"
-            | "current_role"
-            | "current_schema"
-            | "current_time"
-            | "current_timestamp"
-            | "current_user"
-            | "default"
-            | "deferrable"
-            | "desc"
-            | "distinct"
-            | "do"
-            | "else"
-            | "end"
-            | "except"
-            | "false"
-            | "fetch"
-            | "for"
-            | "foreign"
-            | "freeze"
-            | "from"
-            | "full"
-            | "grant"
-            | "group"
-            | "having"
-            | "ilike"
-            | "in"
-            | "initially"
-            | "inner"
-            | "intersect"
-            | "into"
-            | "is"
-            | "isnull"
-            | "join"
-            | "lateral"
-            | "leading"
-            | "left"
-            | "like"
-            | "limit"
-            | "localtime"
-            | "localtimestamp"
-            | "natural"
-            | "not"
-            | "notnull"
-            | "null"
-            | "offset"
-            | "on"
-            | "only"
-            | "or"
-            | "order"
-            | "outer"
-            | "overlaps"
-            | "placing"
-            | "primary"
-            | "references"
-            | "returning"
-            | "right"
-            | "select"
-            | "session_user"
-            | "similar"
-            | "some"
-            | "symmetric"
-            | "system_user"
-            | "table"
-            | "tablesample"
-            | "then"
-            | "to"
-            | "trailing"
-            | "true"
-            | "union"
-            | "unique"
-            | "user"
-            | "using"
-            | "variadic"
-            | "verbose"
-            | "when"
-            | "where"
-            | "window"
-            | "with"
-    )
 }
 
 fn sanitize_pg_name(name: &str) -> String {
@@ -1207,55 +1639,1032 @@ fn sanitize_pg_name(name: &str) -> String {
     }
 }
 
-fn build_collection_mapping(
-    db_name: &str,
-    coll_name: &str,
-    schema: &CollectionSchema,
-) -> Option<CollectionMapping> {
-    let ddl = schema_to_ddl(schema, coll_name, None);
-    let root = parse_sql(&ddl).into_iter().next()?;
-    let columns = root
-        .columns
-        .into_iter()
-        .filter_map(|column| {
-            let source_field = if column.name == "id" {
-                schema.object.contains_key("_id").then(|| "_id".to_owned())
-            } else {
-                schema
-                    .object
-                    .keys()
-                    .find(|raw_name| sanitize_pg_name(raw_name) == column.name)
-                    .cloned()
-            }?;
-
-            Some(MappingColumn {
-                source_field,
-                target_field: column.name,
-                data_type: column.col_type.to_lowercase(),
+fn ddl_table_mapping_from_table(table: &mongo2pg::schema_diagram::Table) -> DdlTableMapping {
+    DdlTableMapping {
+        name: table.name.clone(),
+        columns: table
+            .columns
+            .iter()
+            .map(|column| DdlColumnMapping {
+                name: column.name.clone(),
+                sql_type: column.col_type.clone(),
                 nullable: !column.not_null,
+                primary_key: column.primary_key,
             })
-        })
-        .collect();
-
-    Some(CollectionMapping {
-        collection_name: coll_name.to_owned(),
-        dbname: db_name.to_owned(),
-        pg_mapping: PgMapping {
-            dbname: db_name.to_owned(),
-            schema_name: root.name.clone(),
-            table_name: root.name,
-            columns,
-        },
-    })
+            .collect(),
+        foreign_keys: table
+            .foreign_keys
+            .iter()
+            .map(|fk| DdlForeignKeyMapping {
+                from_col: fk.from_col.clone(),
+                to_table: fk.to_table.clone(),
+                to_col: fk.to_col.clone(),
+            })
+            .collect(),
+    }
 }
 
-/// Write `<dir>/<name>/<name>.json`, `<dir>/<name>/<name>.stats.txt`, `<dir>/<name>/<name>.stats.yaml`, and `mapping_<sanitize(name)>.yaml`.
+fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Option<&str>) -> String {
+    fn rendered_sql_type(sql_type: &str) -> &str {
+        if sql_type.eq_ignore_ascii_case("VARCHAR(0)") {
+            "TEXT"
+        } else {
+            sql_type
+        }
+    }
+
+    fn ordered_tables<'a>(tables: &'a [DdlTableMapping]) -> Vec<&'a DdlTableMapping> {
+        let by_name = tables
+            .iter()
+            .map(|table| (table.name.as_str(), table))
+            .collect::<std::collections::HashMap<_, _>>();
+        let mut visited = std::collections::HashSet::new();
+        let mut visiting = std::collections::HashSet::new();
+        let mut ordered = Vec::with_capacity(tables.len());
+
+        fn visit<'a>(
+            table: &'a DdlTableMapping,
+            by_name: &std::collections::HashMap<&'a str, &'a DdlTableMapping>,
+            visited: &mut std::collections::HashSet<&'a str>,
+            visiting: &mut std::collections::HashSet<&'a str>,
+            ordered: &mut Vec<&'a DdlTableMapping>,
+        ) {
+            if visited.contains(table.name.as_str()) {
+                return;
+            }
+            if !visiting.insert(table.name.as_str()) {
+                return;
+            }
+
+            for fk in &table.foreign_keys {
+                if let Some(parent) = by_name.get(fk.to_table.as_str()) {
+                    visit(parent, by_name, visited, visiting, ordered);
+                }
+            }
+
+            visiting.remove(table.name.as_str());
+            visited.insert(table.name.as_str());
+            ordered.push(table);
+        }
+
+        for table in tables {
+            visit(table, &by_name, &mut visited, &mut visiting, &mut ordered);
+        }
+
+        ordered
+    }
+
+    let mut ddl = String::new();
+
+    if let Some(schema) = schema_name {
+        ddl.push_str(&format!(
+            "CREATE SCHEMA IF NOT EXISTS {};\nSET search_path = {};\n\n",
+            quote_ident(schema),
+            quote_ident(schema)
+        ));
+    }
+
+    for table in ordered_tables(tables) {
+        ddl.push_str(&format!("CREATE TABLE {} (\n", table.name));
+
+        let primary_keys = table
+            .columns
+            .iter()
+            .filter(|column| column.primary_key)
+            .map(|column| column.name.clone())
+            .collect::<Vec<_>>();
+
+        let mut lines = table
+            .columns
+            .iter()
+            .map(|column| {
+                let mut line = format!(
+                    "    {} {}",
+                    column.name,
+                    rendered_sql_type(&column.sql_type)
+                );
+                if primary_keys.len() == 1 && column.primary_key {
+                    line.push_str(" PRIMARY KEY");
+                }
+                if !column.nullable && !(primary_keys.len() == 1 && column.primary_key) {
+                    line.push_str(" NOT NULL");
+                }
+                line
+            })
+            .collect::<Vec<_>>();
+
+        if primary_keys.len() > 1 {
+            lines.push(format!("    PRIMARY KEY ({})", primary_keys.join(", ")));
+        }
+
+        lines.extend(table.foreign_keys.iter().map(|fk| {
+            format!(
+                "    FOREIGN KEY ({}) REFERENCES {} ({}) DEFERRABLE INITIALLY DEFERRED",
+                fk.from_col, fk.to_table, fk.to_col
+            )
+        }));
+
+        ddl.push_str(&lines.join(",\n"));
+        ddl.push_str("\n);\n\n");
+    }
+
+    ddl.trim_end().to_owned() + "\n"
+}
+
+fn load_mapping_ddl_tables(collection_dir: &Path) -> Result<Option<Vec<DdlTableMapping>>> {
+    let mut mapping_paths = std::fs::read_dir(collection_dir)
+        .with_context(|| format!("Cannot read {}", collection_dir.display()))?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("mapping_") && name.ends_with(".yaml"))
+        })
+        .collect::<Vec<_>>();
+
+    if mapping_paths.is_empty() {
+        return Ok(None);
+    }
+
+    mapping_paths.sort();
+    let mut tables = Vec::new();
+    for path in mapping_paths {
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        let mapping: CollectionMapping = serde_yaml::from_str(&content)
+            .with_context(|| format!("Failed to parse {}", path.display()))?;
+        let Some(ddl) = mapping.pg_mapping.ddl else {
+            return Ok(None);
+        };
+        tables.push(ddl);
+    }
+
+    Ok(Some(tables))
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn build_collection_mappings(
+    db_name: &str,
+    coll_name: &str,
+    schema_name: Option<&str>,
+    schema: &CollectionSchema,
+) -> Vec<(String, CollectionMapping)> {
+    build_collection_mappings_with_timestamp_fields(
+        db_name,
+        coll_name,
+        schema_name,
+        schema,
+        &[],
+        &std::collections::HashSet::new(),
+    )
+}
+
+fn build_collection_mappings_with_timestamp_fields(
+    db_name: &str,
+    coll_name: &str,
+    schema_name: Option<&str>,
+    schema: &CollectionSchema,
+    timestamp_fields: &[String],
+    reserved_table_names: &std::collections::HashSet<String>,
+) -> Vec<(String, CollectionMapping)> {
+    fn preferred_child_mapping_table_name(parent_name: &str, field: &str) -> String {
+        let field = sanitize_pg_name(field);
+        let ancestor_segments = parent_name.split('_').collect::<Vec<_>>();
+        if ancestor_segments.iter().any(|segment| *segment == field) {
+            let parent_segment = ancestor_segments.last().copied().unwrap_or(parent_name);
+            format!("{parent_segment}_{field}")
+        } else {
+            field
+        }
+    }
+
+    fn child_name_lookup_key(parent_name: &str, field: &str) -> String {
+        format!("{parent_name}\0{}", sanitize_pg_name(field))
+    }
+
+    fn unique_child_mapping_table_name(
+        parent_name: &str,
+        field: &str,
+        reserved_table_names: &std::collections::HashSet<String>,
+        assigned_table_names: &std::collections::HashSet<String>,
+    ) -> String {
+        let field = sanitize_pg_name(field);
+        let parent_segment = parent_name.rsplit('_').next().unwrap_or(parent_name);
+        let mut candidates = Vec::new();
+        for candidate in [
+            preferred_child_mapping_table_name(parent_name, &field),
+            format!("{parent_segment}_{field}"),
+            format!("{parent_name}_{field}"),
+        ] {
+            if !candidates.iter().any(|existing| existing == &candidate) {
+                candidates.push(candidate);
+            }
+        }
+
+        for candidate in candidates {
+            if !reserved_table_names.contains(&candidate)
+                && !assigned_table_names.contains(&candidate)
+            {
+                return candidate;
+            }
+        }
+
+        let mut suffix = 2_usize;
+        loop {
+            let candidate = format!("{parent_name}_{field}_{suffix}");
+            if !reserved_table_names.contains(&candidate)
+                && !assigned_table_names.contains(&candidate)
+            {
+                return candidate;
+            }
+            suffix += 1;
+        }
+    }
+
+    fn resolved_child_mapping_table_name(
+        parent_name: &str,
+        field: &str,
+        resolved_child_table_names: &HashMap<String, String>,
+    ) -> String {
+        resolved_child_table_names
+            .get(&child_name_lookup_key(parent_name, field))
+            .cloned()
+            .unwrap_or_else(|| preferred_child_mapping_table_name(parent_name, field))
+    }
+
+    fn collect_resolved_child_table_names(
+        old_parent_name: &str,
+        new_parent_name: &str,
+        fields: &IndexMap<String, FieldSchema>,
+        is_root: bool,
+        reserved_table_names: &std::collections::HashSet<String>,
+        assigned_table_names: &mut std::collections::HashSet<String>,
+        table_renames: &mut HashMap<String, String>,
+        resolved_child_table_names: &mut HashMap<String, String>,
+    ) {
+        let grouped_root_fields = if is_root {
+            grouped_root_array_object_fields(fields)
+        } else {
+            Vec::new()
+        };
+        let grouped_representatives = grouped_root_fields
+            .iter()
+            .map(|group| (group.representative.clone(), group))
+            .collect::<HashMap<_, _>>();
+        let grouped_members = grouped_root_fields
+            .iter()
+            .flat_map(|group| group.members.iter().cloned())
+            .collect::<std::collections::HashSet<_>>();
+
+        for (raw_name, field) in fields {
+            if let Some(group) = grouped_representatives.get(raw_name) {
+                let old_child = preferred_child_mapping_table_name(old_parent_name, raw_name);
+                let new_child = unique_child_mapping_table_name(
+                    new_parent_name,
+                    raw_name,
+                    reserved_table_names,
+                    assigned_table_names,
+                );
+                assigned_table_names.insert(new_child.clone());
+                table_renames.insert(old_child.clone(), new_child.clone());
+                resolved_child_table_names.insert(
+                    child_name_lookup_key(new_parent_name, raw_name),
+                    new_child.clone(),
+                );
+                collect_resolved_child_table_names(
+                    &old_child,
+                    &new_child,
+                    &group.child_fields,
+                    false,
+                    reserved_table_names,
+                    assigned_table_names,
+                    table_renames,
+                    resolved_child_table_names,
+                );
+                continue;
+            }
+            if grouped_members.contains(raw_name) {
+                continue;
+            }
+
+            let non_null: Vec<(&str, &TypeSchema)> = field
+                .types
+                .iter()
+                .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+                .collect();
+
+            let child_fields = if non_null.len() == 1 && non_null[0].0 == "Object" {
+                let type_schema = non_null[0].1;
+                if type_schema.as_jsonb {
+                    None
+                } else {
+                    type_schema.object.as_ref()
+                }
+            } else if non_null.len() == 1 && non_null[0].0 == "Array" {
+                non_null[0]
+                    .1
+                    .array
+                    .as_ref()
+                    .and_then(|items_field| items_field.types.get("Object"))
+                    .and_then(|type_schema| type_schema.object.as_ref())
+            } else {
+                None
+            };
+
+            if child_fields.is_some() || (non_null.len() == 1 && non_null[0].0 == "Array") {
+                let old_child = preferred_child_mapping_table_name(old_parent_name, raw_name);
+                let new_child = unique_child_mapping_table_name(
+                    new_parent_name,
+                    raw_name,
+                    reserved_table_names,
+                    assigned_table_names,
+                );
+                assigned_table_names.insert(new_child.clone());
+                table_renames.insert(old_child.clone(), new_child.clone());
+                resolved_child_table_names.insert(
+                    child_name_lookup_key(new_parent_name, raw_name),
+                    new_child.clone(),
+                );
+
+                if let Some(child_fields) = child_fields {
+                    collect_resolved_child_table_names(
+                        &old_child,
+                        &new_child,
+                        child_fields,
+                        false,
+                        reserved_table_names,
+                        assigned_table_names,
+                        table_renames,
+                        resolved_child_table_names,
+                    );
+                }
+            }
+        }
+    }
+
+    fn find_source_field_for_column(
+        fields: &IndexMap<String, FieldSchema>,
+        column_name: &str,
+        is_root: bool,
+    ) -> Option<String> {
+        fn reserved_inline_sibling_names(
+            fields: &IndexMap<String, FieldSchema>,
+            current_raw_name: &str,
+            is_root: bool,
+        ) -> std::collections::HashSet<String> {
+            let mut reserved = std::collections::HashSet::new();
+
+            for (raw_name, field) in fields {
+                if raw_name == current_raw_name {
+                    continue;
+                }
+
+                let non_null = field
+                    .types
+                    .iter()
+                    .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                    .collect::<Vec<_>>();
+                if non_null.is_empty() {
+                    continue;
+                }
+
+                if raw_name == "_id"
+                    && is_root
+                    && non_null.len() == 1
+                    && non_null[0].0.as_str() == "Object"
+                {
+                    if let Some(sub_fields) = non_null[0].1.object.as_ref() {
+                        for (path, _) in inline_object_leaf_fields_with_prefix(sub_fields, &[]) {
+                            reserved.insert(sanitize(&path.join("_")));
+                        }
+                    }
+                    continue;
+                }
+
+                if non_null.len() == 1 && non_null[0].0.as_str() == "Object" {
+                    if let Some(sub_fields) = non_null[0].1.object.as_ref() {
+                        if can_inline_object_fields(sub_fields) {
+                            for (path, _) in inline_object_leaf_fields_with_prefix(sub_fields, &[])
+                            {
+                                if let Some(last) = path.last() {
+                                    reserved.insert(sanitize(last));
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                }
+
+                if raw_name == "_id" && is_root {
+                    reserved.insert("id".to_owned());
+                } else {
+                    reserved.insert(sanitize(raw_name));
+                }
+            }
+
+            reserved
+        }
+
+        fn find_nested_source_field(
+            fields: &IndexMap<String, FieldSchema>,
+            column_name: &str,
+            is_root: bool,
+        ) -> Option<String> {
+            for (raw_name, field) in fields {
+                let non_null = field
+                    .types
+                    .iter()
+                    .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                    .collect::<Vec<_>>();
+                if non_null.len() != 1 || non_null[0].0.as_str() != "Object" {
+                    continue;
+                }
+                let Some(sub_fields) = non_null[0].1.object.as_ref() else {
+                    continue;
+                };
+                if !can_inline_object_fields(sub_fields) {
+                    continue;
+                }
+
+                let reserved = reserved_inline_sibling_names(fields, raw_name, is_root);
+                let prefix = vec![raw_name.clone()];
+                let column_names =
+                    inline_object_column_names_with_prefix(sub_fields, &prefix, &reserved);
+                for (source_field, target_field) in column_names {
+                    if target_field == column_name {
+                        return Some(source_field);
+                    }
+                }
+            }
+
+            None
+        }
+
+        if is_root && column_name == "id" && fields.contains_key("_id") {
+            return Some("_id".to_owned());
+        }
+
+        if let Some(raw_name) = fields
+            .keys()
+            .find(|raw_name| sanitize_pg_name(raw_name) == column_name)
+        {
+            return Some(raw_name.clone());
+        }
+
+        if is_root {
+            if let Some(id_object) = fields
+                .get("_id")
+                .and_then(|field| field.types.get("Object"))
+                .and_then(|type_schema| type_schema.object.as_ref())
+            {
+                if let Some(raw_name) = id_object
+                    .keys()
+                    .find(|raw_name| sanitize_pg_name(raw_name) == column_name)
+                {
+                    return Some(raw_name.clone());
+                }
+            }
+        }
+
+        find_nested_source_field(fields, column_name, is_root)
+    }
+
+    fn build_mapping_columns(
+        table: &mongo2pg::schema_diagram::Table,
+        fields: &IndexMap<String, FieldSchema>,
+        is_root: bool,
+    ) -> Vec<MappingColumn> {
+        let foreign_key_columns = table
+            .foreign_keys
+            .iter()
+            .map(|fk| fk.from_col.as_str())
+            .collect::<Vec<_>>();
+
+        table
+            .columns
+            .iter()
+            .filter(|column| foreign_key_columns.iter().all(|fk| *fk != column.name))
+            .filter_map(|column| {
+                if !is_root && column.name == "id" {
+                    return None;
+                }
+
+                let source_field = find_source_field_for_column(fields, &column.name, is_root)?;
+                Some(MappingColumn {
+                    source_field,
+                    target_field: column.name.clone(),
+                    data_type: column.col_type.to_lowercase(),
+                    nullable: !column.not_null,
+                })
+            })
+            .collect()
+    }
+
+    fn collect_table_mappings(
+        db_name: &str,
+        schema_name: &str,
+        table_name: &str,
+        file_stem: &str,
+        fields: &IndexMap<String, FieldSchema>,
+        is_root: bool,
+        emit_current: bool,
+        tables_by_name: &HashMap<String, mongo2pg::schema_diagram::Table>,
+        resolved_child_table_names: &HashMap<String, String>,
+        out: &mut Vec<(String, CollectionMapping)>,
+    ) {
+        let grouped_root_fields = if is_root {
+            grouped_root_array_object_fields(fields)
+        } else {
+            Vec::new()
+        };
+        let grouped_representatives = grouped_root_fields
+            .iter()
+            .map(|group| (group.representative.clone(), group))
+            .collect::<HashMap<_, _>>();
+        let grouped_members = grouped_root_fields
+            .iter()
+            .flat_map(|group| group.members.iter().cloned())
+            .collect::<std::collections::HashSet<_>>();
+
+        if emit_current {
+            if let Some(table) = tables_by_name.get(table_name) {
+                let columns = build_mapping_columns(table, fields, is_root);
+                if !columns.is_empty() {
+                    out.push((
+                        file_stem.to_owned(),
+                        CollectionMapping {
+                            collection_name: file_stem.to_owned(),
+                            dbname: db_name.to_owned(),
+                            pg_mapping: PgMapping {
+                                dbname: db_name.to_owned(),
+                                schema_name: schema_name.to_owned(),
+                                table_name: table.name.clone(),
+                                columns,
+                                ddl: Some(ddl_table_mapping_from_table(table)),
+                                ddl_editing: default_ddl_editing_guidance(),
+                            },
+                        },
+                    ));
+                }
+            }
+        }
+
+        for (raw_name, field) in fields {
+            if let Some(group) = grouped_representatives.get(raw_name) {
+                let child_table = resolved_child_mapping_table_name(
+                    table_name,
+                    raw_name,
+                    resolved_child_table_names,
+                );
+                if let Some(table) = tables_by_name.get(&child_table) {
+                    let foreign_key_columns = table
+                        .foreign_keys
+                        .iter()
+                        .map(|fk| fk.from_col.as_str())
+                        .collect::<Vec<_>>();
+                    let columns = table
+                        .columns
+                        .iter()
+                        .filter(|column| {
+                            column.name != "id"
+                                && foreign_key_columns.iter().all(|fk| *fk != column.name)
+                        })
+                        .filter_map(|column| {
+                            if column.name == "key" {
+                                Some(MappingColumn {
+                                    source_field: "key".to_owned(),
+                                    target_field: column.name.clone(),
+                                    data_type: column.col_type.to_lowercase(),
+                                    nullable: !column.not_null,
+                                })
+                            } else {
+                                find_source_field_for_column(
+                                    &group.child_fields,
+                                    &column.name,
+                                    false,
+                                )
+                                .map(|source_field| {
+                                    MappingColumn {
+                                        source_field,
+                                        target_field: column.name.clone(),
+                                        data_type: column.col_type.to_lowercase(),
+                                        nullable: !column.not_null,
+                                    }
+                                })
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    if !columns.is_empty() {
+                        out.push((
+                            child_table.clone(),
+                            CollectionMapping {
+                                collection_name: child_table.clone(),
+                                dbname: db_name.to_owned(),
+                                pg_mapping: PgMapping {
+                                    dbname: db_name.to_owned(),
+                                    schema_name: schema_name.to_owned(),
+                                    table_name: table.name.clone(),
+                                    columns,
+                                    ddl: Some(ddl_table_mapping_from_table(table)),
+                                    ddl_editing: default_ddl_editing_guidance(),
+                                },
+                            },
+                        ));
+                    }
+                }
+
+                collect_table_mappings(
+                    db_name,
+                    schema_name,
+                    &child_table,
+                    &child_table,
+                    &group.child_fields,
+                    false,
+                    false,
+                    tables_by_name,
+                    resolved_child_table_names,
+                    out,
+                );
+                continue;
+            }
+            if grouped_members.contains(raw_name) {
+                continue;
+            }
+
+            let non_null: Vec<(&str, &TypeSchema)> = field
+                .types
+                .iter()
+                .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+                .collect();
+
+            if non_null.len() == 1 && non_null[0].0 == "Object" {
+                let type_schema = non_null[0].1;
+                if type_schema.as_jsonb {
+                    continue;
+                }
+                if let Some(sub_fields) = &type_schema.object {
+                    let child_table = resolved_child_mapping_table_name(
+                        table_name,
+                        raw_name,
+                        resolved_child_table_names,
+                    );
+                    collect_table_mappings(
+                        db_name,
+                        schema_name,
+                        &child_table,
+                        &child_table,
+                        sub_fields,
+                        false,
+                        true,
+                        tables_by_name,
+                        resolved_child_table_names,
+                        out,
+                    );
+                }
+                continue;
+            }
+
+            if non_null.len() == 1 && non_null[0].0 == "Array" {
+                let type_schema = non_null[0].1;
+                if let Some(items_field) = &type_schema.array {
+                    if let Some(object_schema) = items_field.types.get("Object") {
+                        if let Some(sub_fields) = &object_schema.object {
+                            let child_table = resolved_child_mapping_table_name(
+                                table_name,
+                                raw_name,
+                                resolved_child_table_names,
+                            );
+                            collect_table_mappings(
+                                db_name,
+                                schema_name,
+                                &child_table,
+                                &child_table,
+                                sub_fields,
+                                false,
+                                true,
+                                tables_by_name,
+                                resolved_child_table_names,
+                                out,
+                            );
+                        }
+                    } else {
+                        let child_table = resolved_child_mapping_table_name(
+                            table_name,
+                            raw_name,
+                            resolved_child_table_names,
+                        );
+                        if let Some(table) = tables_by_name.get(&child_table) {
+                            let foreign_key_columns = table
+                                .foreign_keys
+                                .iter()
+                                .map(|fk| fk.from_col.as_str())
+                                .collect::<Vec<_>>();
+                            let columns = table
+                                .columns
+                                .iter()
+                                .filter(|column| {
+                                    column.name != "id"
+                                        && foreign_key_columns.iter().all(|fk| *fk != column.name)
+                                })
+                                .map(|column| MappingColumn {
+                                    source_field: raw_name.clone(),
+                                    target_field: column.name.clone(),
+                                    data_type: column.col_type.to_lowercase(),
+                                    nullable: !column.not_null,
+                                })
+                                .collect::<Vec<_>>();
+                            if !columns.is_empty() {
+                                out.push((
+                                    child_table.clone(),
+                                    CollectionMapping {
+                                        collection_name: child_table.clone(),
+                                        dbname: db_name.to_owned(),
+                                        pg_mapping: PgMapping {
+                                            dbname: db_name.to_owned(),
+                                            schema_name: schema_name.to_owned(),
+                                            table_name: table.name.clone(),
+                                            columns,
+                                            ddl: Some(ddl_table_mapping_from_table(table)),
+                                            ddl_editing: default_ddl_editing_guidance(),
+                                        },
+                                    },
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let ddl = schema_to_ddl_with_timestamp_fields(schema, coll_name, None, timestamp_fields);
+    let mut tables = parse_sql(&ddl);
+    let Some(root_table_name) = tables.first().map(|table| table.name.clone()) else {
+        return Vec::new();
+    };
+    let mapping_schema_name = schema_name.unwrap_or(root_table_name.as_str()).to_owned();
+    let mut assigned_table_names = reserved_table_names.clone();
+    assigned_table_names.insert(root_table_name.clone());
+    let mut table_renames = HashMap::new();
+    let mut resolved_child_table_names = HashMap::new();
+
+    if let Some(group) = flatten_grouped_root_array_object_fields(schema) {
+        collect_resolved_child_table_names(
+            &root_table_name,
+            &root_table_name,
+            &group.child_fields,
+            false,
+            reserved_table_names,
+            &mut assigned_table_names,
+            &mut table_renames,
+            &mut resolved_child_table_names,
+        );
+    } else if let Some((_, array_field)) = flatten_root_array_object_field(schema) {
+        if let Some(item_fields) = array_field
+            .types
+            .get("Array")
+            .and_then(|type_schema| type_schema.array.as_ref())
+            .and_then(|items_field| items_field.types.get("Object"))
+            .and_then(|type_schema| type_schema.object.as_ref())
+        {
+            collect_resolved_child_table_names(
+                &root_table_name,
+                &root_table_name,
+                item_fields,
+                false,
+                reserved_table_names,
+                &mut assigned_table_names,
+                &mut table_renames,
+                &mut resolved_child_table_names,
+            );
+        }
+    } else {
+        collect_resolved_child_table_names(
+            &root_table_name,
+            &root_table_name,
+            &schema.object,
+            true,
+            reserved_table_names,
+            &mut assigned_table_names,
+            &mut table_renames,
+            &mut resolved_child_table_names,
+        );
+    }
+
+    for table in &mut tables {
+        if let Some(new_name) = table_renames.get(&table.name) {
+            table.name = new_name.clone();
+        }
+        for foreign_key in &mut table.foreign_keys {
+            if let Some(new_name) = table_renames.get(&foreign_key.to_table) {
+                foreign_key.to_table = new_name.clone();
+            }
+        }
+    }
+
+    let tables_by_name = tables
+        .into_iter()
+        .map(|table| (table.name.clone(), table))
+        .collect::<HashMap<_, _>>();
+
+    if let Some(group) = flatten_grouped_root_array_object_fields(schema) {
+        let Some(root_table) = tables_by_name.get(&root_table_name) else {
+            return Vec::new();
+        };
+
+        let parent_id_col = flattened_root_parent_id_column(coll_name);
+        let root_columns = root_table
+            .columns
+            .iter()
+            .filter_map(|column| {
+                if column.name == "id" {
+                    return None;
+                }
+                let source_field = if column.name == parent_id_col {
+                    Some("_id".to_owned())
+                } else if column.name == "key" {
+                    Some("key".to_owned())
+                } else {
+                    group
+                        .child_fields
+                        .keys()
+                        .find(|raw_name| sanitize(raw_name) == column.name)
+                        .cloned()
+                }?;
+                Some(MappingColumn {
+                    source_field,
+                    target_field: column.name.clone(),
+                    data_type: column.col_type.to_lowercase(),
+                    nullable: !column.not_null,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let root_file_stem = sanitize(coll_name);
+        let mut mappings = vec![(
+            root_file_stem.clone(),
+            CollectionMapping {
+                collection_name: root_file_stem.clone(),
+                dbname: db_name.to_owned(),
+                pg_mapping: PgMapping {
+                    dbname: db_name.to_owned(),
+                    schema_name: mapping_schema_name.clone(),
+                    table_name: root_table.name.clone(),
+                    columns: root_columns,
+                    ddl: Some(ddl_table_mapping_from_table(root_table)),
+                    ddl_editing: default_ddl_editing_guidance(),
+                },
+            },
+        )];
+
+        collect_table_mappings(
+            db_name,
+            &mapping_schema_name,
+            &root_table_name,
+            &root_file_stem,
+            &group.child_fields,
+            false,
+            false,
+            &tables_by_name,
+            &resolved_child_table_names,
+            &mut mappings,
+        );
+        return mappings;
+    }
+
+    if let Some((_, array_field)) = flatten_root_array_object_field(schema) {
+        let Some(root_table) = tables_by_name.get(&root_table_name) else {
+            return Vec::new();
+        };
+        let item_fields = array_field
+            .types
+            .get("Array")
+            .and_then(|type_schema| type_schema.array.as_ref())
+            .and_then(|items_field| items_field.types.get("Object"))
+            .and_then(|type_schema| type_schema.object.as_ref());
+        let Some(item_fields) = item_fields else {
+            return Vec::new();
+        };
+
+        let parent_id_col = flattened_root_parent_id_column(coll_name);
+        let root_columns = root_table
+            .columns
+            .iter()
+            .filter_map(|column| {
+                if column.name == "id" {
+                    return None;
+                }
+                let source_field = if column.name == parent_id_col {
+                    Some("_id".to_owned())
+                } else {
+                    find_source_field_for_column(item_fields, &column.name, false)
+                }?;
+                Some(MappingColumn {
+                    source_field,
+                    target_field: column.name.clone(),
+                    data_type: column.col_type.to_lowercase(),
+                    nullable: !column.not_null,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let root_file_stem = sanitize_pg_name(coll_name);
+        let mut mappings = vec![(
+            root_file_stem.clone(),
+            CollectionMapping {
+                collection_name: root_file_stem.clone(),
+                dbname: db_name.to_owned(),
+                pg_mapping: PgMapping {
+                    dbname: db_name.to_owned(),
+                    schema_name: mapping_schema_name.clone(),
+                    table_name: root_table.name.clone(),
+                    columns: root_columns,
+                    ddl: Some(ddl_table_mapping_from_table(root_table)),
+                    ddl_editing: default_ddl_editing_guidance(),
+                },
+            },
+        )];
+
+        collect_table_mappings(
+            db_name,
+            &mapping_schema_name,
+            &root_table_name,
+            &root_file_stem,
+            item_fields,
+            false,
+            false,
+            &tables_by_name,
+            &resolved_child_table_names,
+            &mut mappings,
+        );
+        return mappings;
+    }
+
+    let root_file_stem = sanitize_pg_name(coll_name);
+    let mut mappings = Vec::new();
+    collect_table_mappings(
+        db_name,
+        &mapping_schema_name,
+        &root_table_name,
+        &root_file_stem,
+        &schema.object,
+        true,
+        true,
+        &tables_by_name,
+        &resolved_child_table_names,
+        &mut mappings,
+    );
+    mappings
+}
+
+fn load_reserved_mapping_table_names(
+    base: &Path,
+    current_collection_dir: &Path,
+) -> Result<std::collections::HashSet<String>> {
+    let mut reserved = std::collections::HashSet::new();
+
+    for entry in std::fs::read_dir(base)
+        .with_context(|| format!("Failed to read directory {}", base.display()))?
+    {
+        let path = entry?.path();
+        if !path.is_dir() || path == current_collection_dir {
+            continue;
+        }
+
+        for mapping_entry in std::fs::read_dir(&path)
+            .with_context(|| format!("Failed to read directory {}", path.display()))?
+        {
+            let mapping_path = mapping_entry?.path();
+            let Some(file_name) = mapping_path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !file_name.starts_with("mapping_") || !file_name.ends_with(".yaml") {
+                continue;
+            }
+
+            let content = std::fs::read_to_string(&mapping_path)
+                .with_context(|| format!("Failed to read {}", mapping_path.display()))?;
+            let mapping: CollectionMapping = serde_yaml::from_str(&content)
+                .with_context(|| format!("Failed to parse {}", mapping_path.display()))?;
+            reserved.insert(mapping.pg_mapping.table_name);
+        }
+    }
+
+    Ok(reserved)
+}
+
+/// Write `<dir>/<name>/<name>.json`, `<dir>/<name>/<name>.stats.txt`, `<dir>/<name>/<name>.stats.yaml`, and one `mapping_<table>.yaml` per generated table.
 fn write_collection_files(
     base: &Path,
     db_name: &str,
     coll_name: &str,
+    target_schema: Option<&str>,
+    timestamp_fields: &[String],
     schema: &CollectionSchema,
     stats_lines: &[String],
+    infer_warnings: &[InferWarningYaml],
 ) -> Result<()> {
     // Sanitize collection name for use as a filesystem path component:
     // MongoDB allows '/' in collection names; replace with '_' to avoid
@@ -1273,13 +2682,43 @@ fn write_collection_files(
     std::fs::write(&stats_path, stats_lines.join("\n") + "\n")
         .with_context(|| format!("Failed to write {}", stats_path.display()))?;
 
-    let yaml_stats = stats_to_yaml(schema, Some(schema.count));
+    let yaml_stats = stats_to_yaml(schema, Some(schema.count), infer_warnings);
     let yaml_path = dir.join(format!("{safe_name}.stats.yaml"));
     std::fs::write(&yaml_path, serde_yaml::to_string(&yaml_stats)?)
         .with_context(|| format!("Failed to write {}", yaml_path.display()))?;
 
-    if let Some(mapping) = build_collection_mapping(db_name, coll_name, schema) {
-        let mapping_path = dir.join(format!("mapping_{}.yaml", sanitize_pg_name(coll_name)));
+    let reserved_table_names = load_reserved_mapping_table_names(base, &dir)?;
+
+    let mappings = build_collection_mappings_with_timestamp_fields(
+        db_name,
+        coll_name,
+        target_schema,
+        schema,
+        timestamp_fields,
+        &reserved_table_names,
+    );
+    let expected_mapping_files = mappings
+        .iter()
+        .map(|(file_stem, _)| format!("mapping_{}.yaml", file_stem))
+        .collect::<std::collections::HashSet<_>>();
+    for entry in std::fs::read_dir(&dir)
+        .with_context(|| format!("Failed to read directory {}", dir.display()))?
+    {
+        let path = entry?.path();
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if file_name.starts_with("mapping_")
+            && file_name.ends_with(".yaml")
+            && !expected_mapping_files.contains(file_name)
+        {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("Failed to remove {}", path.display()))?;
+        }
+    }
+
+    for (file_stem, mapping) in mappings {
+        let mapping_path = dir.join(format!("mapping_{}.yaml", file_stem));
         std::fs::write(&mapping_path, serde_yaml::to_string(&mapping)?)
             .with_context(|| format!("Failed to write {}", mapping_path.display()))?;
     }
@@ -1316,7 +2755,8 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| ns.split('.').next().unwrap_or(ns))
         .unwrap_or(&args.project_name);
     let conf_content = format!(
-        "[project]\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
+        "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
         args.source_uri
@@ -1383,6 +2823,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     let project_root = c.base_dir.join(&c.project_dir);
     // Use <project_root>/schema/tables/<db_name> for SQL files
     let tables_dir = project_root.join("schema").join("tables").join(&db_name);
+    let collections_dir = resolve_collections_dir(&project_root, &db_name);
     let data_dir = args
         .output_dir
         .clone()
@@ -1500,13 +2941,31 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             index + 1,
             total_collections
         );
-        match export_collection(&client, &db_name, coll_name, &tables_dir, &data_dir).await {
+        match export_collection(
+            &client,
+            &db_name,
+            coll_name,
+            &tables_dir,
+            &collections_dir,
+            &data_dir,
+        )
+        .await
+        {
             Ok(()) => {}
             Err(e) => eprintln!("  warning: {e}"),
         }
     }
 
     Ok(())
+}
+
+fn resolve_collections_dir(project_root: &Path, db_name: &str) -> std::path::PathBuf {
+    let collections_root = project_root.join("source").join("collections");
+    if collections_root.join(db_name).is_dir() {
+        collections_root.join(db_name)
+    } else {
+        collections_root
+    }
 }
 
 async fn run_import(args: ImportArgs) -> Result<()> {
@@ -1774,7 +3233,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     } else {
         namespace.clone()
     };
-    write_post_import_report(&args.config, &post_import_namespace, "").await?;
+    write_post_import_report(&args.config, &post_import_namespace, "", true).await?;
 
     Ok(())
 }
@@ -1789,12 +3248,36 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
             .config
             .as_ref()
             .ok_or_else(|| anyhow!("--post-import requires -c <config>"))?;
+        let namespace = if args.namespace.is_empty() {
+            read_conf(conf)?.namespace.ok_or_else(|| {
+                anyhow!(
+                    "No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file"
+                )
+            })?
+        } else {
+            args.namespace.clone()
+        };
         write_post_import_report(
             conf,
-            &args.namespace,
+            &namespace,
             args.mongo.source_uri.as_deref().unwrap_or(""),
+            args.check_md5,
         )
         .await?;
+
+        if args.check_md5 {
+            let (_, only_collection) = split_namespace_scope(&namespace);
+            let collection = only_collection.ok_or_else(|| {
+                anyhow!("--check-md5 with --post-import requires a single collection namespace like <db>.<collection>")
+            })?;
+            run_check_md5(
+                collection.to_owned(),
+                Some(conf.to_path_buf()),
+                !args.noaggregate,
+            )
+            .await?;
+        }
+
         return Ok(());
     }
 
@@ -1967,6 +3450,7 @@ async fn write_post_import_report(
     conf: &Path,
     namespace_override: &str,
     source_uri_override: &str,
+    include_md5: bool,
 ) -> Result<()> {
     let c = read_conf(conf)?;
     let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
@@ -2009,6 +3493,7 @@ async fn write_post_import_report(
     let output_path = reports_dir.join("post_report.html");
 
     let rows = build_post_import_rows(
+        conf,
         &source_uri,
         &target_database_name
             .map(|db_name| pg_uri_with_database(target_uri, db_name))
@@ -2018,6 +3503,7 @@ async fn write_post_import_report(
         &conf_exclude,
         &collections_dir,
         &schema_tables_root,
+        include_md5,
     )
     .await?;
     let html = render_post_import_html(
@@ -2096,164 +3582,6 @@ fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
 }
 
 /// Values parsed from a project config file produced by `mongo2pg init`.
-struct ConfData {
-    base_dir: PathBuf,
-    project_dir: String,
-    source_uri: Option<String>,
-    target_uri: Option<String>,
-    target_database_name: Option<String>,
-    target_schema: Option<String>,
-    namespace: Option<String>,
-    number: Option<u64>,
-    percent: Option<f64>,
-    jsonb: bool,
-    include: Vec<String>,
-    exclude: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TomlProjectConfig {
-    project: TomlProjectSection,
-    #[serde(default)]
-    source: Option<TomlSourceSection>,
-    #[serde(default)]
-    target: Option<TomlTargetSection>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TomlProjectSection {
-    base_dir: PathBuf,
-    project_dir: String,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TomlSourceSection {
-    uri: Option<String>,
-    namespace: Option<String>,
-    number: Option<u64>,
-    percent: Option<f64>,
-    jsonb: Option<bool>,
-    #[serde(default)]
-    include: Vec<String>,
-    #[serde(default)]
-    exclude: Vec<String>,
-}
-
-fn should_infer_collection(name: &str, include: &[String], exclude: &[String]) -> bool {
-    if !exclude.is_empty() {
-        !exclude.iter().any(|candidate| candidate == name)
-    } else if !include.is_empty() {
-        include.iter().any(|candidate| candidate == name)
-    } else {
-        true
-    }
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct TomlTargetSection {
-    uri: Option<String>,
-    database_name: Option<String>,
-    schema: Option<String>,
-}
-
-/// Parse a project config file produced by `mongo2pg init`.
-fn read_conf(path: &Path) -> Result<ConfData> {
-    fn parse_toml_conf(path: &Path, content: &str) -> Result<ConfData> {
-        let parsed: TomlProjectConfig = toml::from_str(content)
-            .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
-        let source = parsed.source.unwrap_or_default();
-        let target = parsed.target.unwrap_or_default();
-
-        Ok(ConfData {
-            base_dir: parsed.project.base_dir,
-            project_dir: parsed.project.project_dir,
-            source_uri: source.uri,
-            target_uri: target.uri,
-            target_database_name: target.database_name,
-            target_schema: target.schema,
-            namespace: source.namespace,
-            number: source.number,
-            percent: source.percent,
-            jsonb: source.jsonb.unwrap_or(false),
-            include: source.include,
-            exclude: source.exclude,
-        })
-    }
-
-    fn parse_legacy_conf(path: &Path, content: &str) -> Result<ConfData> {
-        fn parse_conf_value(raw: &str) -> String {
-            let value = raw.trim();
-            if value.len() >= 2 {
-                let quoted = (value.starts_with('"') && value.ends_with('"'))
-                    || (value.starts_with('\'') && value.ends_with('\''));
-                if quoted {
-                    return value[1..value.len() - 1].trim().to_owned();
-                }
-            }
-            value.to_owned()
-        }
-
-        let mut base_dir: Option<PathBuf> = None;
-        let mut project_dir: Option<String> = None;
-        let mut source_uri: Option<String> = None;
-        let mut target_uri: Option<String> = None;
-        let mut target_database_name: Option<String> = None;
-        let mut target_schema: Option<String> = None;
-        let mut namespace: Option<String> = None;
-        let mut number: Option<u64> = None;
-        let mut percent: Option<f64> = None;
-        let mut jsonb: bool = false;
-
-        for line in content.lines() {
-            if let Some((key, val)) = line.split_once('=') {
-                let parsed = parse_conf_value(val);
-                match key.trim() {
-                    "BASE_DIR" => base_dir = Some(PathBuf::from(&parsed)),
-                    "PROJECT_DIR" => project_dir = Some(parsed),
-                    "SOURCE_URI" => source_uri = Some(parsed),
-                    "TARGET_URI" => target_uri = Some(parsed),
-                    "TARGET_DATABASE_NAME" => target_database_name = Some(parsed),
-                    "TARGET_SCHEMA" => target_schema = Some(parsed),
-                    "NAMESPACE" => namespace = Some(parsed),
-                    "NUMBER" => number = parsed.parse().ok(),
-                    "PERCENT" => percent = parsed.parse().ok(),
-                    "JSONB" => {
-                        jsonb = matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes")
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        let base_dir =
-            base_dir.ok_or_else(|| anyhow!("BASE_DIR not found in {}", path.display()))?;
-        let project_dir =
-            project_dir.ok_or_else(|| anyhow!("PROJECT_DIR not found in {}", path.display()))?;
-
-        Ok(ConfData {
-            base_dir,
-            project_dir,
-            source_uri,
-            target_uri,
-            target_database_name,
-            target_schema,
-            namespace,
-            number,
-            percent,
-            jsonb,
-            include: Vec::new(),
-            exclude: Vec::new(),
-        })
-    }
-
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read config file {}", path.display()))?;
-
-    match parse_toml_conf(path, &content) {
-        Ok(conf) => Ok(conf),
-        Err(_) => parse_legacy_conf(path, &content),
-    }
-}
 
 fn sanitize_name(name: &str) -> String {
     let mut out = String::new();
@@ -2274,6 +3602,15 @@ fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
+fn normalize_pg_identifier(name: &str) -> String {
+    let trimmed = name.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+        trimmed[1..trimmed.len() - 1].replace("\"\"", "\"")
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 fn split_namespace_scope(namespace: &str) -> (&str, Option<&str>) {
     if let Some((db_name, coll_name)) = namespace.split_once('.') {
         (db_name, Some(coll_name))
@@ -2285,9 +3622,16 @@ fn split_namespace_scope(namespace: &str) -> (&str, Option<&str>) {
 fn extract_search_path(sql: &str) -> Option<String> {
     sql.lines().find_map(|line| {
         let trimmed = line.trim();
-        trimmed
-            .strip_prefix("SET search_path = ")
-            .map(|rest| rest.trim().trim_end_matches(';').trim().to_owned())
+        trimmed.strip_prefix("SET search_path = ").map(|rest| {
+            let first_entry = rest
+                .trim()
+                .trim_end_matches(';')
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .trim();
+            normalize_pg_identifier(first_entry)
+        })
     })
 }
 
@@ -2421,6 +3765,7 @@ fn pg_sslmode(uri: &str) -> Option<&str> {
 }
 
 async fn build_post_import_rows(
+    config_path: &Path,
     source_uri: &str,
     target_uri: &str,
     namespace: &str,
@@ -2428,6 +3773,7 @@ async fn build_post_import_rows(
     exclude: &[String],
     collections_root: &Path,
     schema_tables_root: &Path,
+    include_md5: bool,
 ) -> Result<Vec<PostImportCollectionRow>> {
     #[derive(Clone)]
     enum CountNodeKind {
@@ -2444,6 +3790,7 @@ async fn build_post_import_rows(
         mongo_count: u64,
         pg_table_name: Option<String>,
         pg_row_count: Option<i64>,
+        md5_summary: Option<PostImportMd5Summary>,
         kind: CountNodeKind,
         children: Vec<CountNode>,
     }
@@ -2453,7 +3800,13 @@ async fn build_post_import_rows(
     }
 
     fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> String {
-        let raw = format!("{parent_name}_{field}");
+        let ancestor_segments = parent_name.split('_').collect::<Vec<_>>();
+        let raw = if ancestor_segments.iter().any(|segment| *segment == field) {
+            let parent_segment = ancestor_segments.last().copied().unwrap_or(parent_name);
+            format!("{parent_segment}_{field}")
+        } else {
+            field.to_owned()
+        };
         if let Some(schema) = pg_schema {
             let prefix = format!("{}{}", sanitize_pg_name(schema), "_");
             raw.strip_prefix(&prefix).map(str::to_owned).unwrap_or(raw)
@@ -2467,6 +3820,7 @@ async fn build_post_import_rows(
         fields: &IndexMap<String, FieldSchema>,
         pg_schema: Option<&str>,
         table_counts: &HashMap<String, PostImportTableRow>,
+        md5_summaries: &HashMap<String, PostImportMd5Summary>,
     ) -> Vec<CountNode> {
         let mut nodes = Vec::new();
 
@@ -2498,6 +3852,7 @@ async fn build_post_import_rows(
                             })
                         }),
                         pg_row_count: table_ref.map(|t| t.row_count),
+                        md5_summary: md5_summaries.get(&table_name).cloned(),
                         kind: CountNodeKind::Object {
                             field_name: raw_name.to_string(),
                         },
@@ -2506,6 +3861,7 @@ async fn build_post_import_rows(
                             sub_fields,
                             pg_schema,
                             table_counts,
+                            md5_summaries,
                         ),
                     });
                 }
@@ -2533,6 +3889,7 @@ async fn build_post_import_rows(
                                         sub_fields,
                                         pg_schema,
                                         table_counts,
+                                        md5_summaries,
                                     )
                                 })
                                 .unwrap_or_default(),
@@ -2556,6 +3913,7 @@ async fn build_post_import_rows(
                             })
                         }),
                         pg_row_count: table_ref.map(|t| t.row_count),
+                        md5_summary: md5_summaries.get(&table_name).cloned(),
                         kind,
                         children,
                     });
@@ -2605,6 +3963,7 @@ async fn build_post_import_rows(
             mongo_count: node.mongo_count,
             pg_table_name: node.pg_table_name,
             pg_row_count: node.pg_row_count,
+            md5_summary: node.md5_summary,
             children: node
                 .children
                 .into_iter()
@@ -2655,8 +4014,9 @@ async fn build_post_import_rows(
         }
     });
 
+    let total_collections = collection_names.len();
     let mut rows = Vec::new();
-    for coll_name in collection_names {
+    for (index, coll_name) in collection_names.into_iter().enumerate() {
         let document_count = mongo_db
             .collection::<bson::Document>(&coll_name)
             .count_documents(doc! {})
@@ -2713,6 +4073,57 @@ async fn build_post_import_rows(
                 );
             }
             let root_ref = table_rows.get(&root_table_name);
+            let md5_summaries = if include_md5 {
+                println!(
+                    "[{}/{}] Computing hash (md5) for {}.{}",
+                    index + 1,
+                    total_collections,
+                    db_name,
+                    coll_name
+                );
+                match compute_md5_summaries_for_collection(&coll_name, config_path).await {
+                    Ok(summaries) => summaries
+                        .into_iter()
+                        .map(|table_summary| {
+                            (
+                                table_summary.table_name,
+                                PostImportMd5Summary {
+                                    mongo_md5: table_summary.summary.mongo_md5,
+                                    pg_md5: table_summary.summary.pg_md5,
+                                    columns: table_summary
+                                        .summary
+                                        .columns
+                                        .into_iter()
+                                        .map(|column| PostImportMd5Column {
+                                            source_field: column.source_field,
+                                            target_field: column.target_field,
+                                        })
+                                        .collect(),
+                                    mismatches: table_summary
+                                        .summary
+                                        .mismatches
+                                        .into_iter()
+                                        .map(|mismatch| PostImportMd5MismatchRow {
+                                            row_index: mismatch.row_index,
+                                            mongo_values: mismatch.mongo_values,
+                                            pg_values: mismatch.pg_values,
+                                        })
+                                        .collect(),
+                                },
+                            )
+                        })
+                        .collect::<HashMap<_, _>>(),
+                    Err(err) => {
+                        eprintln!(
+                            "warning: failed to compute md5 summary for {}.{}: {}",
+                            db_name, coll_name, err
+                        );
+                        HashMap::new()
+                    }
+                }
+            } else {
+                HashMap::new()
+            };
             let mut root = CountNode {
                 name: coll_name.clone(),
                 is_array: false,
@@ -2724,12 +4135,14 @@ async fn build_post_import_rows(
                     })
                 }),
                 pg_row_count: root_ref.map(|t| t.row_count),
+                md5_summary: md5_summaries.get(&root_table_name).cloned(),
                 kind: CountNodeKind::Root,
                 children: build_field_nodes(
                     &root_table_name,
                     &schema.object,
                     schema_name.as_deref(),
                     &table_rows,
+                    &md5_summaries,
                 ),
             };
 
@@ -2754,6 +4167,7 @@ async fn build_post_import_rows(
                 mongo_count: document_count,
                 pg_table_name: None,
                 pg_row_count: None,
+                md5_summary: None,
                 children: Vec::new(),
             }
         };
@@ -2770,7 +4184,35 @@ async fn build_post_import_rows(
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_name, should_infer_collection, strip_psql_preamble, TomlProjectConfig};
+    use super::{
+        apply_collection_property_filters, build_collection_mappings,
+        build_collection_mappings_with_timestamp_fields, collect_infer_type_warnings,
+        render_ddl_from_mapping_tables, resolve_collections_dir, sanitize_name,
+        should_infer_collection, strip_psql_preamble,
+    };
+    use bson::doc;
+    use mongo2pg::analyzer::Analyzer;
+    use serde::Deserialize;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[derive(Debug, Deserialize)]
+    struct TestTomlProjectConfig {
+        source: Option<TestTomlSourceSection>,
+        target: Option<TestTomlTargetSection>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct TestTomlSourceSection {
+        #[serde(default)]
+        include: Vec<String>,
+        #[serde(default)]
+        exclude: Vec<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct TestTomlTargetSection {
+        schema: Option<String>,
+    }
 
     #[test]
     fn should_infer_collection_honors_exclude_before_include() {
@@ -2778,7 +4220,7 @@ mod tests {
         let exclude = vec!["users".to_owned(), "audit".to_owned()];
 
         assert!(!should_infer_collection("users", &include, &exclude));
-        assert!(should_infer_collection("orders", &include, &exclude));
+        assert!(!should_infer_collection("orders", &include, &exclude));
     }
 
     #[test]
@@ -2805,8 +4247,61 @@ mod tests {
     }
 
     #[test]
+    fn apply_collection_property_filters_excludes_top_level_property_for_matching_collection() {
+        let docs = vec![doc! {
+            "_id": 1,
+            "name": "project-a",
+            "archived_services": [{"name": "svc-a"}],
+            "tags": ["critical"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let mut schema = analyzer.finish();
+
+        apply_collection_property_filters(
+            &mut schema,
+            "projects",
+            &[],
+            &["projects.archived_services".to_owned()],
+        );
+
+        assert!(schema.object.contains_key("_id"));
+        assert!(schema.object.contains_key("name"));
+        assert!(schema.object.contains_key("tags"));
+        assert!(!schema.object.contains_key("archived_services"));
+    }
+
+    #[test]
+    fn apply_collection_property_filters_includes_only_requested_top_level_properties() {
+        let docs = vec![doc! {
+            "_id": 1,
+            "name": "project-a",
+            "archived_services": [{"name": "svc-a"}],
+            "tags": ["critical"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let mut schema = analyzer.finish();
+
+        apply_collection_property_filters(
+            &mut schema,
+            "projects",
+            &["projects.archived_services".to_owned()],
+            &[],
+        );
+
+        assert_eq!(schema.object.len(), 2);
+        assert!(schema.object.contains_key("_id"));
+        assert!(schema.object.contains_key("archived_services"));
+    }
+
+    #[test]
     fn toml_source_include_and_exclude_are_parsed() {
-        let config: TomlProjectConfig = toml::from_str(
+        let config: TestTomlProjectConfig = toml::from_str(
             r#"
 [project]
 base_dir = "/tmp"
@@ -2826,7 +4321,7 @@ exclude = ["audit"]
 
     #[test]
     fn toml_target_schema_is_parsed() {
-        let config: TomlProjectConfig = toml::from_str(
+        let config: TestTomlProjectConfig = toml::from_str(
             r#"
 [project]
 base_dir = "/tmp"
@@ -2860,5 +4355,564 @@ CREATE TABLE demo (
         assert!(!stripped.contains("CREATE DATABASE"));
         assert!(!stripped.contains("\\connect"));
         assert!(stripped.contains("CREATE TABLE demo"));
+    }
+
+    #[test]
+    fn build_collection_mappings_includes_nested_child_tables() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "name": "advisor",
+            "advices": [{
+                "advice": "oversized",
+                "object_id": "svc-1",
+                "object_type": "SERVICE",
+                "earnings": {
+                    "monthly_gain": 12.5_f64
+                }
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("dbapi", "advisors", None, &schema);
+        let stems = mappings
+            .iter()
+            .map(|(stem, _)| stem.clone())
+            .collect::<Vec<_>>();
+
+        assert!(stems.contains(&"advisors".to_owned()));
+        assert!(stems.contains(&"advices".to_owned()));
+        assert!(stems.contains(&"earnings".to_owned()));
+
+        let advices_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "advices")
+            .map(|(_, mapping)| mapping)
+            .expect("advices mapping should exist");
+        assert!(advices_mapping.pg_mapping.ddl.is_some());
+        let advice_columns = advices_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(advice_columns.contains(&"advice"));
+        assert!(advice_columns.contains(&"object_id"));
+        assert!(!advice_columns.contains(&"advisors_id"));
+
+        let earnings_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "earnings")
+            .map(|(_, mapping)| mapping)
+            .expect("earnings mapping should exist");
+        let earnings_columns = earnings_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(earnings_columns.contains(&"monthly_gain"));
+    }
+
+    #[test]
+    fn build_collection_mappings_keeps_prefix_when_short_name_is_reserved_elsewhere() {
+        let docs = vec![doc! {
+            "_id": "project-1",
+            "team": {
+                "code": "ops",
+                "members": [{
+                    "ldap": "alice",
+                    "roles": ["admin"]
+                }]
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+        let reserved_table_names = std::collections::HashSet::from(["roles".to_owned()]);
+
+        let mappings = build_collection_mappings_with_timestamp_fields(
+            "dbapi",
+            "projects",
+            None,
+            &schema,
+            &[],
+            &reserved_table_names,
+        );
+        let stems = mappings
+            .iter()
+            .map(|(stem, _)| stem.clone())
+            .collect::<Vec<_>>();
+
+        assert!(stems.contains(&"team".to_owned()));
+        assert!(stems.contains(&"members".to_owned()));
+        assert!(stems.contains(&"members_roles".to_owned()));
+        assert!(!stems.contains(&"roles".to_owned()));
+
+        let roles_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "members_roles")
+            .map(|(_, mapping)| mapping)
+            .expect("members_roles mapping should exist");
+        assert_eq!(roles_mapping.pg_mapping.table_name, "members_roles");
+        let ddl = roles_mapping
+            .pg_mapping
+            .ddl
+            .as_ref()
+            .expect("members_roles ddl should exist");
+        assert_eq!(ddl.name, "members_roles");
+        assert!(ddl
+            .foreign_keys
+            .iter()
+            .any(|foreign_key| foreign_key.to_table == "members"));
+    }
+
+    #[test]
+    fn build_collection_mappings_promotes_root_array_objects_into_single_table() {
+        let docs = vec![doc! {
+            "_id": "engine-1",
+            "versions": [
+                {
+                    "major_version": "1",
+                    "eol_date": bson::DateTime::now(),
+                    "grace_date": bson::DateTime::now()
+                }
+            ]
+        }];
+        let mut analyzer = Analyzer::new(false);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("dbapi", "engine", None, &schema);
+        let stems = mappings
+            .iter()
+            .map(|(stem, _)| stem.clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(stems, vec!["engine".to_owned()]);
+
+        let engine_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "engine")
+            .map(|(_, mapping)| mapping)
+            .expect("engine mapping should exist");
+        let engine_columns = engine_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(engine_columns.contains(&("_id", "engine_id")));
+        assert!(engine_columns.contains(&("major_version", "major_version")));
+        assert!(engine_columns.contains(&("eol_date", "eol_date")));
+        assert!(engine_columns.contains(&("grace_date", "grace_date")));
+        assert!(engine_mapping.pg_mapping.ddl.is_some());
+    }
+
+    #[test]
+    fn build_collection_mappings_includes_scalar_array_child_tables() {
+        let docs = vec![doc! {
+            "_id": "sizing-1",
+            "available_versions": ["1", "2"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("dbapi", "sizings", None, &schema);
+        let versions_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "available_versions")
+            .map(|(_, mapping)| mapping)
+            .expect("scalar-array child mapping should exist");
+
+        assert!(versions_mapping.pg_mapping.ddl.is_some());
+        assert!(versions_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .any(|column| column.target_field == "value"
+                && column.source_field == "available_versions"));
+        assert_eq!(versions_mapping.pg_mapping.schema_name, "sizings");
+    }
+
+    #[test]
+    fn build_collection_mappings_groups_same_shape_root_arrays_into_one_keyed_table() {
+        let docs = vec![doc! {
+            "_id": "community-1",
+            "dev": [{
+                "available_localizations": ["eu-west-1"],
+                "provider": "aiven",
+                "cloud": "gcp",
+                "network_exposition": "private_platform"
+            }],
+            "prod": [{
+                "available_localizations": ["eu-west-2"],
+                "provider": "atlas",
+                "cloud": "azure",
+                "network_exposition": "public"
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("dbapi", "communities", None, &schema);
+
+        let communities = mappings
+            .iter()
+            .find(|(stem, _)| stem == "communities")
+            .map(|(_, mapping)| mapping)
+            .expect("grouped mapping should exist");
+        let columns = communities
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(columns.contains(&("_id", "communities_id")));
+        assert!(columns.contains(&("key", "key")));
+        assert!(columns.contains(&("provider", "provider")));
+        assert!(mappings
+            .iter()
+            .any(|(stem, _)| stem == "available_localizations"));
+        assert!(!mappings.iter().any(|(stem, _)| stem == "communities_dev"));
+        assert!(!mappings.iter().any(|(stem, _)| stem == "communities_prod"));
+    }
+
+    #[test]
+    fn build_collection_mappings_flattens_scalar_only_object_with_siblings() {
+        let docs = vec![doc! {
+            "_id": "project-1",
+            "environment": "T",
+            "providers": [{
+                "namespace": "fras-t-dba-176c358",
+                "namespace_id": "fras-t-dba-176c358",
+                "provider": "aiven",
+                "metadata": {
+                    "creation_date": "2025-08-11T00:00:00Z",
+                    "status": "created"
+                }
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("dbapi", "projects", None, &schema);
+
+        let providers = mappings
+            .iter()
+            .find(|(stem, _)| stem == "providers")
+            .map(|(_, mapping)| mapping)
+            .expect("providers mapping should exist");
+        let columns = providers
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(columns.contains(&("namespace", "namespace")));
+        assert!(columns.contains(&("namespace_id", "namespace_id")));
+        assert!(columns.contains(&("provider", "provider")));
+
+        let metadata = mappings
+            .iter()
+            .find(|(stem, _)| stem == "metadata")
+            .map(|(_, mapping)| mapping)
+            .expect("metadata mapping should exist");
+        let metadata_columns = metadata
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
+            .collect::<Vec<_>>();
+        assert!(metadata_columns.contains(&("creation_date", "creation_date")));
+        assert!(metadata_columns.contains(&("status", "status")));
+    }
+
+    #[test]
+    fn build_collection_mappings_uses_configured_target_schema() {
+        let docs = vec![doc! {
+            "_id": "sizing-1",
+            "available_versions": ["1", "2"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings =
+            build_collection_mappings("dbapi", "sizings", Some("shared_schema"), &schema);
+
+        assert!(mappings
+            .iter()
+            .all(|(_, mapping)| mapping.pg_mapping.schema_name == "shared_schema"));
+    }
+
+    #[test]
+    fn build_collection_mappings_forces_configured_timestamp_fields() {
+        let docs = vec![
+            doc! { "_id": 1_i32, "last_update": 1650468505_i64 },
+            doc! { "_id": 2_i32, "last_update": "2022-08-17T07:57:18Z" },
+        ];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+        let patterns = vec!["last_update".to_owned(), "*_date".to_owned()];
+
+        let mappings = build_collection_mappings_with_timestamp_fields(
+            "dbapi",
+            "scheduling_jobs",
+            Some("dbapi"),
+            &schema,
+            &patterns,
+            &std::collections::HashSet::new(),
+        );
+
+        let root_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "scheduling_jobs")
+            .map(|(_, mapping)| mapping)
+            .expect("root mapping should exist");
+
+        assert!(root_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .any(|column| column.source_field == "last_update"
+                && column.data_type == "timestamp with time zone"));
+        assert!(root_mapping
+            .pg_mapping
+            .ddl
+            .as_ref()
+            .expect("ddl mapping should exist")
+            .columns
+            .iter()
+            .any(|column| column.name == "last_update"
+                && column.sql_type == "TIMESTAMP WITH TIME ZONE"));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_uses_editable_mapping_metadata() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "demo".to_owned(),
+                columns: vec![
+                    super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "BIGSERIAL".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    super::DdlColumnMapping {
+                        name: "ram".to_owned(),
+                        sql_type: "NUMERIC".to_owned(),
+                        nullable: false,
+                        primary_key: false,
+                    },
+                ],
+                foreign_keys: Vec::new(),
+            }],
+            Some("dbapi"),
+        );
+
+        assert!(sql.contains("CREATE SCHEMA IF NOT EXISTS \"dbapi\";"));
+        assert!(sql.contains("id BIGSERIAL PRIMARY KEY"));
+        assert!(sql.contains("ram NUMERIC NOT NULL"));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_replaces_varchar_zero_with_text() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "demo".to_owned(),
+                columns: vec![super::DdlColumnMapping {
+                    name: "dbapi_service_id".to_owned(),
+                    sql_type: "VARCHAR(0)".to_owned(),
+                    nullable: true,
+                    primary_key: false,
+                }],
+                foreign_keys: Vec::new(),
+            }],
+            None,
+        );
+
+        assert!(sql.contains("dbapi_service_id TEXT"));
+        assert!(!sql.contains("VARCHAR(0)"));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_orders_parents_before_children() {
+        let sql = render_ddl_from_mapping_tables(
+            &[
+                super::DdlTableMapping {
+                    name: "child".to_owned(),
+                    columns: vec![
+                        super::DdlColumnMapping {
+                            name: "id".to_owned(),
+                            sql_type: "BIGSERIAL".to_owned(),
+                            nullable: false,
+                            primary_key: true,
+                        },
+                        super::DdlColumnMapping {
+                            name: "parent_id".to_owned(),
+                            sql_type: "BIGINT".to_owned(),
+                            nullable: false,
+                            primary_key: false,
+                        },
+                    ],
+                    foreign_keys: vec![super::DdlForeignKeyMapping {
+                        from_col: "parent_id".to_owned(),
+                        to_table: "parent".to_owned(),
+                        to_col: "id".to_owned(),
+                    }],
+                },
+                super::DdlTableMapping {
+                    name: "parent".to_owned(),
+                    columns: vec![super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "BIGSERIAL".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    }],
+                    foreign_keys: Vec::new(),
+                },
+            ],
+            None,
+        );
+
+        let parent_pos = sql
+            .find("CREATE TABLE parent (")
+            .expect("parent table missing");
+        let child_pos = sql
+            .find("CREATE TABLE child (")
+            .expect("child table missing");
+        assert!(
+            parent_pos < child_pos,
+            "parent table should be rendered before child table"
+        );
+    }
+
+    #[test]
+    fn extract_search_path_strips_identifier_quotes() {
+        let sql = "SET search_path = \"dbapi\";";
+
+        assert_eq!(super::extract_search_path(sql).as_deref(), Some("dbapi"));
+    }
+
+    #[test]
+    fn resolve_collections_dir_falls_back_to_flat_layout() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let project_root = std::env::temp_dir().join(format!("mongo2pg-export-test-{unique}"));
+        let collections_root = project_root.join("source").join("collections");
+        std::fs::create_dir_all(&collections_root)
+            .expect("flat collections directory should be created");
+
+        let resolved = resolve_collections_dir(&project_root, "dbapi");
+
+        assert_eq!(resolved, collections_root);
+
+        std::fs::remove_dir_all(&project_root).expect("temp project root should be removed");
+    }
+
+    #[test]
+    fn run_init_writes_default_datetime_field_patterns() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let project_base = std::env::temp_dir().join(format!("mongo2pg-init-test-{unique}"));
+
+        super::run_init(super::InitArgs {
+            project_base: project_base.clone(),
+            project_name: "dbapi".to_owned(),
+            source_uri: None,
+            target_uri: None,
+            namespace: Some("dbapi".to_owned()),
+        })
+        .expect("init should succeed");
+
+        let conf_path = project_base.join("dbapi").join("config").join("dbapi.toml");
+        let content = std::fs::read_to_string(&conf_path).expect("config file should be readable");
+
+        assert!(content.contains(
+            "datetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]"
+        ));
+
+        std::fs::remove_dir_all(&project_base).expect("temp project base should be removed");
+    }
+
+    #[test]
+    fn collect_infer_type_warnings_flags_minor_incompatible_scalar_types() {
+        let docs = vec![
+            doc! { "advices": [{ "earnings": { "monthly_gain": 12.5_f64 } }] },
+            doc! { "advices": [{ "earnings": { "monthly_gain": 7_i32 } }] },
+            doc! { "advices": [{ "earnings": { "monthly_gain": "N/A" } }] },
+            doc! { "advices": [{ "earnings": { "monthly_gain": bson::Bson::Null } }] },
+        ];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let warnings = collect_infer_type_warnings(&schema);
+
+        assert!(warnings.iter().any(|warning| {
+            warning.field_path == "advices[].earnings.monthly_gain"
+                && warning.dominant_family == "numeric"
+                && warning
+                    .minority_families
+                    .iter()
+                    .any(|(family, _)| family == "string")
+                && warning.observed_types.iter().any(|observed_type| {
+                    observed_type.type_name == "String"
+                        && observed_type
+                            .examples
+                            .iter()
+                            .any(|example| example == "\"N/A\"")
+                })
+        }));
+    }
+
+    #[test]
+    fn collect_infer_type_warnings_ignores_compatible_numeric_mix() {
+        let docs = vec![
+            doc! { "value": 12.5_f64 },
+            doc! { "value": 7_i32 },
+            doc! { "value": bson::Bson::Null },
+        ];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let warnings = collect_infer_type_warnings(&schema);
+
+        assert!(warnings.is_empty());
     }
 }
