@@ -31,7 +31,7 @@ use crate::util::{
     flatten_root_array_object_field,
     flattened_root_parent_id_column, is_null_type,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, matches_timestamp_field, sanitize,
+    inline_object_leaf_fields_with_prefix, matches_timestamp_field, scalar_type_family, sanitize,
 };
 
 const FORCED_TIMESTAMP_PG_TYPE: &str = "TIMESTAMP WITH TIME ZONE";
@@ -1118,11 +1118,47 @@ pub fn process_fields(
             continue;
         }
 
-        // ── Object or Array mixed with other types → JSONB ────────────────────
+        // ── Object or Array mixed with other types ────────────────────────────
         if non_null
             .iter()
             .any(|(t, _)| *t == TYPE_OBJECT || *t == TYPE_ARRAY)
         {
+            // Check if there's a dominant scalar type (>90% of non-null probability)
+            // that can be used instead of JSONB
+            let total_non_null_prob: f64 = non_null.iter().map(|(_, ts)| ts.probability).sum();
+            
+            // Group non-null types by their scalar family
+            let mut scalar_families: HashMap<String, f64> = HashMap::new();
+            for (type_name, ts) in &non_null {
+                if let Some(family) = scalar_type_family(type_name) {
+                    *scalar_families.entry(family.to_string()).or_insert(0.0) += ts.probability;
+                }
+            }
+            
+            // Find the dominant scalar family
+            if let Some((dominant_family, dominant_prob)) = scalar_families.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)) {
+                // If dominant scalar family has >90% of non-null probability, use it
+                if dominant_prob / total_non_null_prob > 0.9 {
+                    // Map scalar family to a representative type and get PG type
+                    let pg_type = match dominant_family.as_str() {
+                        "string" => "TEXT",
+                        "numeric" => "DOUBLE PRECISION",
+                        "boolean" => "BOOLEAN",
+                        "datetime" => "TIMESTAMP WITH TIME ZONE",
+                        "objectid" => "TEXT",
+                        _ => "TEXT",
+                    };
+                    table.columns.push(Column {
+                        name: col_name,
+                        pg_type: pg_type.to_owned(),
+                        nullable,
+                        primary_key: false,
+                    });
+                    continue;
+                }
+            }
+            
+            // No dominant scalar type, use JSONB
             table.columns.push(Column {
                 name: col_name,
                 pg_type: "JSONB".to_owned(),

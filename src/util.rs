@@ -697,6 +697,27 @@ pub fn is_null_type(t: &str) -> bool {
     matches!(t, "Null" | "Undefined" | "null" | "undefined")
 }
 
+/// Returns the scalar type family for a BSON type name, or None for non-scalar types.
+pub fn scalar_type_family(type_name: &str) -> Option<&'static str> {
+    match type_name {
+        "Null" | "Undefined" | "Object" | "Array" => None,
+        "ObjectId" => Some("objectid"),
+        "Double" | "Int32" | "Int64" | "Decimal128" | "Number" => Some("numeric"),
+        "String" => Some("string"),
+        "Boolean" => Some("boolean"),
+        "Date" | "Timestamp" => Some("datetime"),
+        "Binary" => Some("binary"),
+        "RegularExpression" => Some("regex"),
+        "JavaScriptCode" | "JavaScriptCodeWithScope" => Some("javascript"),
+        "Symbol" => Some("symbol"),
+        "DbPointer" => Some("dbpointer"),
+        other if other.eq_ignore_ascii_case("undefined") || other.eq_ignore_ascii_case("null") => {
+            None
+        }
+        _ => Some("other"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{property_filter_entries_for_collection, read_conf, should_infer_collection};

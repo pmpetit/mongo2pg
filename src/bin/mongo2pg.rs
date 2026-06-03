@@ -28,7 +28,7 @@ use flate2::read::GzDecoder;
 use futures::{SinkExt, TryStreamExt};
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{
-    Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_NULL, TYPE_OBJECT,
+    Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL,
     TYPE_UNDEFINED,
 };
 use mongo2pg::checkmd5::{compute_md5_summaries_for_collection, run_check_md5};
@@ -49,7 +49,7 @@ use mongo2pg::util::{
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
     inline_object_leaf_fields_with_prefix, is_pg_reserved, property_filter_entries_for_collection,
-    read_conf, sanitize, should_infer_collection,
+    read_conf, scalar_type_family, sanitize, should_infer_collection,
 };
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
@@ -904,36 +904,27 @@ fn warning_examples(type_schema: &TypeSchema) -> Vec<String> {
     examples
 }
 
-fn scalar_type_family(type_name: &str) -> Option<&'static str> {
-    match type_name {
-        TYPE_NULL | TYPE_UNDEFINED | TYPE_OBJECT | TYPE_ARRAY => None,
-        "Double" | "Int32" | "Int64" | "Decimal128" | "Number" => Some("numeric"),
-        "String" => Some("string"),
-        "Boolean" => Some("boolean"),
-        "Date" | "Timestamp" => Some("datetime"),
-        "ObjectId" => Some("objectid"),
-        "Binary" => Some("binary"),
-        "RegularExpression" => Some("regex"),
-        "JavaScriptCode" | "JavaScriptCodeWithScope" => Some("javascript"),
-        "Symbol" => Some("symbol"),
-        "DbPointer" => Some("dbpointer"),
-        other if other.eq_ignore_ascii_case("undefined") || other.eq_ignore_ascii_case("null") => {
-            None
-        }
-        _ => Some("other"),
-    }
-}
-
 fn collect_infer_type_warnings(schema: &CollectionSchema) -> Vec<InferTypeWarning> {
     fn visit_field(path: &str, field: &FieldSchema, warnings: &mut Vec<InferTypeWarning>) {
         let mut family_probs: HashMap<&str, f64> = HashMap::new();
         let mut total_scalar_prob = 0.0;
+        let mut total_non_scalar_prob = 0.0;
+        let mut non_scalar_types: Vec<(&str, f64)> = Vec::new();
         let mut observed_types = Vec::new();
 
         for (type_name, type_schema) in &field.types {
             if let Some(family) = scalar_type_family(type_name) {
                 *family_probs.entry(family).or_insert(0.0) += type_schema.probability;
                 total_scalar_prob += type_schema.probability;
+                observed_types.push(InferWarningTypeYaml {
+                    type_name: type_name.clone(),
+                    ratio: type_schema.probability,
+                    examples: warning_examples(type_schema),
+                });
+            } else {
+                // Non-scalar type (Object, Array, Null, Undefined)
+                total_non_scalar_prob += type_schema.probability;
+                non_scalar_types.push((type_name.as_str(), type_schema.probability));
                 observed_types.push(InferWarningTypeYaml {
                     type_name: type_name.clone(),
                     ratio: type_schema.probability,
@@ -949,6 +940,7 @@ fn collect_infer_type_warnings(schema: &CollectionSchema) -> Vec<InferTypeWarnin
                 .then_with(|| left.type_name.cmp(&right.type_name))
         });
 
+        // Check for scalar-scalar mixing (multiple scalar families)
         if family_probs.len() > 1 && total_scalar_prob > 0.0 {
             let mut family_ratios = family_probs
                 .into_iter()
@@ -975,6 +967,55 @@ fn collect_infer_type_warnings(schema: &CollectionSchema) -> Vec<InferTypeWarnin
                         .into_iter()
                         .map(|mut observed_type| {
                             observed_type.ratio /= total_scalar_prob;
+                            observed_type
+                        })
+                        .collect(),
+                });
+            }
+        } else if !family_probs.is_empty() && total_non_scalar_prob > 0.0 {
+            // Check for scalar + non-scalar mixing (e.g., String + Object)
+            let mut family_ratios: Vec<(String, f64)> = family_probs
+                .into_iter()
+                .map(|(family, prob)| (family.to_owned(), prob))
+                .collect();
+            family_ratios.sort_by(|left, right| {
+                right
+                    .1
+                    .total_cmp(&left.1)
+                    .then_with(|| left.0.cmp(&right.0))
+            });
+
+            let total_prob = total_scalar_prob + total_non_scalar_prob;
+            let dominant_ratio = family_ratios[0].1 / total_prob;
+            
+            // Warn if dominant scalar family has > 90% of the total probability
+            if dominant_ratio > 0.9 {
+                // Map non-scalar type names to a displayable family name
+                let minority_families: Vec<(String, f64)> = non_scalar_types
+                    .into_iter()
+                    .map(|(type_name, prob)| {
+                        // For non-scalar types, use the type name itself as the "family"
+                        // but lowercase it for consistency
+                        let family = match type_name {
+                            "Object" => "object",
+                            "Array" => "array",
+                            "Null" => "null",
+                            "Undefined" => "undefined",
+                            _ => type_name,
+                        };
+                        (family.to_string(), prob / total_prob)
+                    })
+                    .collect();
+                
+                warnings.push(InferTypeWarning {
+                    field_path: path.to_owned(),
+                    dominant_family: family_ratios[0].0.clone(),
+                    dominant_ratio,
+                    minority_families,
+                    observed_types: observed_types
+                        .into_iter()
+                        .map(|mut observed_type| {
+                            observed_type.ratio /= total_prob;
                             observed_type
                         })
                         .collect(),
