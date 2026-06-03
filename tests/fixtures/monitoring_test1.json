@@ -1,0 +1,656 @@
+{
+    "_id": "5fa286a5490140719d985727",
+    "endpoint": "services:discovery",
+    "name": "job_admin_discovery",
+    "timestamp": "2020-11-04 10:47:01.613678",
+    "items": [
+        {
+            "item": {
+                "_id": "FRAS-D-RCZ-GRAFANA1",
+                "application_trigram": "RCZ",
+                "score": "2",
+                "business_unit": "FRAS",
+                "environment": "D",
+                "creator_ldap": "20000327",
+                "contact_email": "raphael.capliez@adeo.com",
+                "metadata": {
+                    "creation_date": "2020-03-12 15:17:33.625070",
+                    "last_action_date": "2020-09-17 11:54:59.815487",
+                    "reconciliation_needed": false
+                },
+                "product": "090e1b52-0dbe-4893-b044-a7df7cdbb7a0",
+                "services": [
+                    {
+                        "name": "pg-352d5739",
+                        "localization": "google-europe-west4",
+                        "sizing": "business-4",
+                        "identifier": "2020-09-10T08:27:46.470721Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "11.9",
+                        "_id": "aiven-pg-352d5739",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-09-10 09:00:05.186379",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "engine": "mongodb",
+                        "name": "mongodb-mongo36",
+                        "localization": "WESTERN_EUROPE",
+                        "sizing": "M10",
+                        "version": "3.6.20",
+                        "identifier": "5f06d362408f3028584689f1",
+                        "cloud": "gcp",
+                        "_id": "atlas-mongodb-mongo36",
+                        "provider": "atlas",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 08:20:52.149009",
+                            "registered_plugins": [
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "mongodb-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-09-17 09:32:45.153344"
+                        }
+                    }
+                ],
+                "providers": [
+                    {
+                        "provider": "atlas",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "privileges": "operator",
+                        "metadata": {
+                            "creation_date": "2020-07-09T00:00:00Z",
+                            "status": "created"
+                        }
+                    },
+                    {
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "privileges": "operator",
+                        "metadata": {
+                            "creation_date": "2020-07-09T00:00:00Z",
+                            "status": "created"
+                        }
+                    }
+                ],
+                "archived_services": [
+                    {
+                        "name": "pg-pgbidon",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-4",
+                        "identifier": "2020-03-12T15:23:09.888147Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "11.7",
+                        "_id": "5e6a5c8a13b21cb61032736a",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-03-12 15:23:10.215088",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "pg-pgbidon",
+                        "localization": "google-europe-west1",
+                        "sizing": "startup-4",
+                        "identifier": "2020-03-12T15:23:09.888147Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "11.7",
+                        "_id": "5e70c977a8f17f84ff9c8e87",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-03-12 15:23:10.215088",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-03-12 16:00:10.813018",
+                            "reconciliation_needed": false,
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "mysql-4034e63",
+                        "localization": "google-europe-west4",
+                        "sizing": "business-4",
+                        "identifier": "2020-03-17T11:46:23.426385Z",
+                        "engine": "mysql",
+                        "cloud": "gcp",
+                        "version": "8.0.19",
+                        "_id": "5e73a535be743575cffca218",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-03-17 12:00:11.932653",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology"
+                            ],
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "pg-pgbidon",
+                        "localization": "google-europe-west1",
+                        "sizing": "startup-4",
+                        "identifier": "2020-03-12T15:23:09.888147Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "11.8",
+                        "_id": "5ec618e654751310d418c97c",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-03-12 15:23:10.215088",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-03-17 12:58:31.793553",
+                            "reconciliation_needed": false,
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "pg-pgbidon",
+                        "localization": "google-europe-west1",
+                        "sizing": "startup-4",
+                        "identifier": "2020-03-12T15:23:09.888147Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "11.8",
+                        "_id": "5f06dca677630360b14cbf7a",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-03-12 15:23:10.215088",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-05-21 06:00:06.235219",
+                            "reconciliation_needed": false,
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "elasticsearch-elasrcz",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-4",
+                        "identifier": "2020-07-09T09:33:08.879962Z",
+                        "engine": "elasticsearch",
+                        "cloud": "gcp",
+                        "version": "6.8.9",
+                        "_id": "5f06eaa577630360b14cbfb3",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 09:33:11.482306",
+                            "registered_plugins": [],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "elasticsearch-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "pg-pgrcz",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-4",
+                        "identifier": "2020-07-09T09:24:30.124435Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "11.8",
+                        "_id": "5f06eaa577630360b14cbfb6",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 09:24:30.648038",
+                            "registered_plugins": [],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "pg-pg96",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-4",
+                        "identifier": "2020-07-09T12:25:17.753038Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "9.6.18",
+                        "_id": "5f0714d577630360b14cc08c",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 12:25:19.436948",
+                            "registered_plugins": [],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "elasticsearch-elasrcz",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-4",
+                        "identifier": "2020-07-09T09:33:08.879962Z",
+                        "engine": "elasticsearch",
+                        "cloud": "gcp",
+                        "version": "6.8.9",
+                        "_id": "5f105d65998b564befc7f5d0",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 09:33:11.482306",
+                            "registered_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "elasticsearch-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-07-09 10:00:05.381172",
+                            "deleted_plugins": [
+                                "scheduling"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "pg-pgrcz",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-4",
+                        "identifier": "2020-07-09T09:24:30.124435Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "11.8",
+                        "_id": "5f105d65998b564befc7f5d2",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 09:24:30.648038",
+                            "registered_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-07-09 10:00:05.588182",
+                            "deleted_plugins": [
+                                "scheduling"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "pg-pg96",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-4",
+                        "identifier": "2020-07-09T12:25:17.753038Z",
+                        "engine": "pg",
+                        "cloud": "gcp",
+                        "version": "9.6.18",
+                        "_id": "5f105d65998b564befc7f5d4",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 12:25:19.436948",
+                            "registered_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "postgresql-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-07-09 13:00:05.513336",
+                            "deleted_plugins": [
+                                "scheduling"
+                            ]
+                        }
+                    },
+                    {
+                        "engine": "mongodb",
+                        "name": "mongodb-mongo36",
+                        "localization": "WESTERN_EUROPE",
+                        "sizing": "M10",
+                        "version": "3.6.19",
+                        "identifier": "5f06d362408f3028584689f1",
+                        "cloud": "gcp",
+                        "_id": "5f2cede50b586caae7f1b1f5",
+                        "provider": "atlas",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 08:20:52.149009",
+                            "registered_plugins": [
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "mongodb-dev-gcp",
+                                "eco_mode": true
+                            }
+                        }
+                    },
+                    {
+                        "engine": "mongodb",
+                        "name": "mongodb-mongo36",
+                        "localization": "WESTERN_EUROPE",
+                        "sizing": "M10",
+                        "version": "3.6.20",
+                        "identifier": "5f06d362408f3028584689f1",
+                        "cloud": "gcp",
+                        "_id": "5f632d3cf7b70e8f8e8e02cf",
+                        "provider": "atlas",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-07-09 08:20:52.149009",
+                            "registered_plugins": [
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "mongodb-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-08-07 06:00:05.129377"
+                        }
+                    },
+                    {
+                        "name": "kafka-rcz",
+                        "localization": "google-europe-west4",
+                        "sizing": "startup-2",
+                        "identifier": "2020-09-17T08:29:06.274848Z",
+                        "engine": "kafka",
+                        "cloud": "gcp",
+                        "version": "",
+                        "_id": "5f634e93347d999fb8e8b5d8",
+                        "provider": "aiven",
+                        "namespace": "fras-d-rcz-grafana1",
+                        "metadata": {
+                            "first_detection_time": "2020-09-17 11:07:31.280766",
+                            "registered_plugins": [
+                                "scheduling"
+                            ],
+                            "managed": false,
+                            "recognized": true,
+                            "plugins": [
+                                "scheduling"
+                            ],
+                            "deleted_plugins": [
+                                "scheduling"
+                            ]
+                        }
+                    }
+                ],
+                "feature": "GRAFANA1",
+                "members": [
+                    "20000327",
+                    "20007433",
+                    "20012907",
+                    "20011111"
+                ],
+                "ip_whitelist": [
+                    "192.168.10.0/24",
+                    "185.151.180.38/32",
+                    "10.204.19.0/24",
+                    "0.0.0.0/0",
+                    "109.7.6.130/32"
+                ],
+                "rate_limit": "200"
+            },
+            "status": "UNKNOWN"
+        },
+        {
+            "item": {
+                "_id": "FRAS-T-NTR-ENT",
+                "application_trigram": "NTR",
+                "business_unit": "FRAS",
+                "environment": "T",
+                "creator_ldap": "20011619",
+                "contact_email": "nadia.triki@adeo.com",
+                "metadata": {
+                    "creation_date": "2020-11-03 07:41:35.001449",
+                    "last_action_date": "2020-11-03 10:40:40.198802",
+                    "orgId": "ADEO",
+                    "reconciliation_needed": false
+                },
+                "product": "090e1b52-0dbe-4893-b044-a7df7cdbb7a0",
+                "services": [],
+                "providers": [],
+                "archived_services": [
+                    {
+                        "name": "elasticsearch-ent",
+                        "localization": "google-asia-northeast1",
+                        "sizing": "startup-4",
+                        "identifier": "2020-11-03T07:43:00.596578Z",
+                        "engine": "elasticsearch",
+                        "cloud": "gcp",
+                        "version": "7.9.1",
+                        "_id": "5fa10e0e8a659f4ac124e8f2",
+                        "provider": "aiven",
+                        "namespace": "fras-t-ntr-ent",
+                        "metadata": {
+                            "first_detection_time": "2020-11-03 07:43:00.773323",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "recognized": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "elasticsearch-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "deleted_plugins": [
+                                "scheduling",
+                                "metrology"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "elasticsearch-ent",
+                        "localization": "google-asia-northeast1",
+                        "sizing": "startup-4",
+                        "identifier": "2020-11-03T07:43:00.596578Z",
+                        "engine": "elasticsearch",
+                        "cloud": "gcp",
+                        "version": "7.9.1",
+                        "_id": "5fa133a85f56e27ed978c54e",
+                        "provider": "aiven",
+                        "namespace": "fras-t-ntr-ent",
+                        "metadata": {
+                            "first_detection_time": "2020-11-03 07:43:00.773323",
+                            "registered_plugins": [
+                                "metrology",
+                                "scheduling"
+                            ],
+                            "managed": true,
+                            "recognized": true,
+                            "plugins": [
+                                "scheduling",
+                                "metrology",
+                                "eco_mode"
+                            ],
+                            "pattern": {
+                                "patternid": "elasticsearch-dev-gcp",
+                                "eco_mode": true
+                            },
+                            "last_update_time": "2020-11-03 08:00:14.181679",
+                            "deleted_plugins": [
+                                "scheduling"
+                            ]
+                        }
+                    }
+                ],
+                "feature": "ENT",
+                "members": [
+                    "20011619"
+                ],
+                "rate_limit": "200",
+                "duration": "3",
+                "enterprise_support": false,
+                "datadog_integration": false
+            },
+            "status": "UNKNOWN"
+        }
+    ]
+}
