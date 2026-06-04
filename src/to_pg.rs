@@ -1934,4 +1934,38 @@ mod tests {
         assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
         assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
     }
+
+
+    #[test]
+    fn monitoring_with_items_skewed_item_between_string_and_object() {
+        let json_str = std::fs::read_to_string("tests/fixtures/monitoring_test1.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "monitoring", None);
+
+        assert!(ddl.contains("CREATE TABLE monitoring ("));
+    }
+
+    #[test]
+    fn monitoring_with_array_in_object_object() {
+        let json_str = std::fs::read_to_string("tests/fixtures/host_verification.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "host_verification", None);
+
+        assert!(ddl.contains("CREATE TABLE host_verification ("));
+    }
+        
 }
