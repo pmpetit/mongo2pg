@@ -103,6 +103,7 @@ pub struct TypeSchema {
     /// Effective VARCHAR length chosen by the DDL sizing heuristic for this string type.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub varchar_length: Option<usize>,
+    pub type_name: String,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -370,6 +371,7 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
             values: None,
             max_length: None,
             varchar_length: None,
+            type_name: TYPE_UNDEFINED.to_owned(),
         };
         type_entries.push((TYPE_UNDEFINED.to_owned(), undef_schema));
     }
@@ -469,6 +471,7 @@ fn build_type_schema(
         None
     };
     let varchar_length = max_length.and_then(inferred_varchar_length);
+    let type_name = type_name.to_owned();
 
     TypeSchema {
         probability,
@@ -480,6 +483,7 @@ fn build_type_schema(
         values,
         max_length,
         varchar_length,
+        type_name,
     }
 }
 
