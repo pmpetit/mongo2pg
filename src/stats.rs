@@ -433,7 +433,6 @@ mod tests {
                 values: None,
                 max_length: None,
                 varchar_length: None,
-                type_name: "Undefined".to_owned(),
             },
         );
         let mut object = IndexMap::new();
@@ -477,7 +476,6 @@ mod tests {
                     values: None,
                     max_length: None,
                     varchar_length: None,
-                    type_name: "Undefined".to_owned(),
                 },
             );
             FieldSchema {

@@ -22,7 +22,7 @@ tokio-postgres = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
-bson = "2"
+bson = { version = "2", features = ["chrono-0_4"] }
 clap = { version = "4", features = ["derive"] }
 indexmap = { version = "2", features = ["serde"] }
 rand = { version = "0.8", features = ["small_rng"] }

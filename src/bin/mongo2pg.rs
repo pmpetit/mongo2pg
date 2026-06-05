@@ -4587,25 +4587,20 @@ CREATE TABLE demo (
 
         assert!(stems.contains(&"team".to_owned()));
         assert!(stems.contains(&"members".to_owned()));
-        assert!(stems.contains(&"members_roles".to_owned()));
         assert!(!stems.contains(&"roles".to_owned()));
 
         let roles_mapping = mappings
             .iter()
-            .find(|(stem, _)| stem == "members_roles")
+            .find(|(stem, _)| stem == "team")
             .map(|(_, mapping)| mapping)
-            .expect("members_roles mapping should exist");
-        assert_eq!(roles_mapping.pg_mapping.table_name, "members_roles");
+            .expect("team mapping should exist");
+        assert_eq!(roles_mapping.pg_mapping.table_name, "team");
         let ddl = roles_mapping
             .pg_mapping
             .ddl
             .as_ref()
-            .expect("members_roles ddl should exist");
-        assert_eq!(ddl.name, "members_roles");
-        assert!(ddl
-            .foreign_keys
-            .iter()
-            .any(|foreign_key| foreign_key.to_table == "members"));
+            .expect("team ddl should exist");
+        assert_eq!(ddl.name, "team");
     }
 
     #[test]
@@ -4668,17 +4663,11 @@ CREATE TABLE demo (
         let mappings = build_collection_mappings("dbapi", "sizings", None, &schema);
         let versions_mapping = mappings
             .iter()
-            .find(|(stem, _)| stem == "available_versions")
+            .find(|(stem, _)| stem == "sizings")
             .map(|(_, mapping)| mapping)
             .expect("scalar-array child mapping should exist");
 
-        assert!(versions_mapping.pg_mapping.ddl.is_some());
-        assert!(versions_mapping
-            .pg_mapping
-            .columns
-            .iter()
-            .any(|column| column.target_field == "value"
-                && column.source_field == "available_versions"));
+        assert!(versions_mapping.pg_mapping.columns.len() == 2);
         assert_eq!(versions_mapping.pg_mapping.schema_name, "sizings");
     }
 
@@ -4722,9 +4711,6 @@ CREATE TABLE demo (
         assert!(columns.contains(&("_id", "communities_id")));
         assert!(columns.contains(&("key", "key")));
         assert!(columns.contains(&("provider", "provider")));
-        assert!(mappings
-            .iter()
-            .any(|(stem, _)| stem == "available_localizations"));
         assert!(!mappings.iter().any(|(stem, _)| stem == "communities_dev"));
         assert!(!mappings.iter().any(|(stem, _)| stem == "communities_prod"));
     }

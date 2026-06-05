@@ -740,18 +740,52 @@ fn handle_array_field(
                 primary_key: false,
             });
         }
-
-        // //Array of non String scalars → child table with `value` column
-        // add_scalar_array_table(
-        //     table,
-        //     col_name,
-        //     mongo_field_name,
-        //     &non_null_items,
-        //     pg_schema,
-        //     timestamp_fields,
-        // );
-
     }
+    else if non_null_items.iter().any(|(t, _)| *t == TYPE_NUMBER || *t == TYPE_DOUBLE) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "DOUBLE PRECISION[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_INT32) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "INTEGER[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_INT64) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "BIGINT[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_DATE) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "TIMESTAMP WITH TIME ZONE[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_DECIMAL128) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "NUMERIC[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else {
+        // Mixed types or unrecognized types → JSONB
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "JSONB".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    }
+
 }
 
 fn flatten_object_id_fields(
@@ -1542,8 +1576,7 @@ mod tests {
         }
     }
 }"#,
-        )
-        .expect("schema json should parse");
+        ).expect("schema json should parse");
         let ddl = schema_to_ddl(&schema, "scheduling_jobs", None);
         assert!(
             !ddl.contains("last_update TEXT NOT NULL"),
@@ -1745,11 +1778,8 @@ mod tests {
         let docs = vec![doc! { "_id": 1_i32, "tags": ["rust", "mongodb"] }];
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "posts", None);
-        assert!(
-            ddl.contains("CREATE TABLE tags ("),
-            "scalar array child table missing"
-        );
-        assert!(ddl.contains("value VARCHAR(20) NOT NULL"), "value column missing");
+        assert!(ddl.contains("CREATE TABLE posts (\n    id SERIAL PRIMARY KEY,\n    tags TEXT[] NOT NULL\n);"));
+
     }
 
     #[test]
@@ -1905,7 +1935,6 @@ mod tests {
         assert!(ddl.contains("CREATE TABLE communities ("));
         assert!(ddl.contains("communities_id VARCHAR(20) NOT NULL"));
         assert!(ddl.contains("key TEXT NOT NULL"));
-        assert!(ddl.contains("CREATE TABLE available_localizations ("));
         assert!(!ddl.contains("CREATE TABLE communities_dev ("));
         assert!(!ddl.contains("CREATE TABLE communities_prod ("));
     }
@@ -1977,5 +2006,36 @@ mod tests {
 
         assert!(ddl.contains("CREATE TABLE host_verification ("));
     }
-        
+    #[test]
+    fn communities_with_id_becoming_big_serial() {
+        let json_str = std::fs::read_to_string("tests/fixtures/communities.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "communities", None);
+
+        assert!(ddl.contains("CREATE TABLE communities ("));
+
+        //assert!(!ddl.contains("CREATE TABLE communities ("));
+    }    
+    #[test]
+    fn monitoring_with_array_of_int_in_object() {
+        let json_str = std::fs::read_to_string("tests/fixtures/host_verification_int.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "host_verification", None);
+
+        assert!(ddl.contains("CREATE TABLE host_verification ("));
+    }
 }

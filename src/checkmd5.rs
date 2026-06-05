@@ -140,7 +140,8 @@ fn bson_to_comparable_json(value: &Bson) -> serde_json::Value {
         Bson::Int32(v) => serde_json::json!(v),
         Bson::Int64(v) => serde_json::json!(v),
         Bson::ObjectId(v) => serde_json::Value::String(v.to_hex()),
-        Bson::DateTime(v) => serde_json::Value::String(v.to_string()),
+        Bson::DateTime(v) => serde_json::Value::String(v.try_to_rfc3339_string().unwrap_or_else(|_| v.to_string())),
+        //Bson::DateTime(v) => serde_json::Value::String(v.to_string()),
         Bson::Timestamp(v) => serde_json::Value::String(v.to_string()),
         Bson::Binary(v) => serde_json::Value::String(v.to_string()),
         Bson::RegularExpression(v) => serde_json::Value::String(v.to_string()),
@@ -1863,5 +1864,34 @@ pg_mapping:
             mismatches[0].pg_values.as_deref(),
             Some(&["p0".to_owned()][..])
         );
+    }
+
+    use chrono::{TimeZone, Utc};
+    use mongodb::bson::DateTime;
+    use crate::checkmd5::bson_to_comparable_json;
+    use serde_json::json;
+    #[test]
+    fn test_datetime_conversion_to_rfc3339() {
+        // --- 1. Arrange: Create the input data ---
+
+        // Create a specific UTC date.
+        // This is the same date from your original example.
+        let test_date = Utc.with_ymd_and_hms(2023, 9, 6, 9, 11, 36).unwrap();
+
+        // Convert the chrono DateTime into a Bson::DateTime.
+        let bson_datetime = Bson::DateTime(DateTime::from(test_date));
+
+        // --- 2. Act: Call the function we want to test ---
+        let result = bson_to_comparable_json(&bson_datetime);
+
+        // --- 3. Assert: Check if the output is correct ---
+
+        // Define the expected output: a JSON string in RFC 3339 format.
+        // The "+00:00" signifies the UTC timezone.
+        let expected_json = json!("2023-09-06T09:11:36Z");
+
+        // Assert that the result matches our expectation.
+        // The test will pass if they are equal, and fail otherwise.
+        assert_eq!(result, expected_json);
     }
 }
