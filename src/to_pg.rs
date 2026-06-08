@@ -776,17 +776,17 @@ fn handle_array_field(
             nullable,
             primary_key: false,
         });
-    } else {
-        // Mixed types or unrecognized types → JSONB
-        table.columns.push(Column {
-            name: col_name.to_owned(),
-            pg_type: "JSONB".to_owned(),
-            nullable,
-            primary_key: false,
-        });
-    }
-
+    } ;
+    // else {
+    //     // Mixed types or unrecognized types → JSONB
+    //     table.columns.push(Column {
+    //         name: col_name.to_owned(),
+    //         pg_type: "JSONB".to_owned(),
+    //         nullable,
+    //         primary_key: false,
+    //     })
 }
+
 
 fn flatten_object_id_fields(
     table: &mut Table,
