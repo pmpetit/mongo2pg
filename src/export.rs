@@ -44,7 +44,46 @@ fn bson_to_string(val: &Bson) -> Option<String> {
         Bson::DateTime(dt) => Some(format_millis(dt.timestamp_millis())),
         Bson::Decimal128(d) => Some(d.to_string()),
         Bson::Timestamp(ts) => Some(ts.time.to_string()),
+        Bson::Array(arr) => {
+            let elements: Vec<String> = arr.iter()
+                // Convert each BSON element in the array to a string
+                .filter_map(bson_to_string)
+                // Format each element for the PostgreSQL array
+                .map(|elem_str| {
+                    let needs_quoting = elem_str.is_empty() 
+                        || elem_str.contains(',') 
+                        || elem_str.contains('{') 
+                        || elem_str.contains('}') 
+                        || elem_str.contains('"') 
+                        || elem_str.contains('\\')
+                        || elem_str.chars().any(char::is_whitespace);
+
+                    if needs_quoting {
+                        // If the string contains special characters, wrap it in double quotes
+                        // and escape any internal quotes or backslashes.
+                        format!("\"{}\"", elem_str.replace('\\', "\\\\").replace('"', "\\\""))
+                    } else {
+                        elem_str
+                    }
+                })
+                .collect();
+
+            // Join all elements with a comma and wrap in curly braces
+            Some(format!("{{{}}}", elements.join(",")))
+        },        
+        // Bson::Array(arr) => {
+        //     let json_string = serde_json::to_string(
+        //         &arr.iter().map(bson_to_json_value).collect::<Vec<_>>()
+        //     )
+        //     .unwrap_or_default();
+        //     Some(format!("ARRAY{}", json_string))
+        // }
+        // Bson::Array(arr) => Some(
+        //     serde_json::to_string(&arr.iter().map(bson_to_json_value).collect::<Vec<_>>())
+        //         .unwrap_or_default(),
+        // ),
         Bson::Null | Bson::Undefined => None,
+        
         // For complex / uncommon types fall back to BSON extended-JSON representation.
         other => Some(serde_json::to_string(other).unwrap_or_default()),
     }
@@ -524,7 +563,6 @@ fn extract_rows(
         Bson::Document(d) => d,
         _ => return,
     };
-
     if is_root {
         if let (Some(root_parent_id_col), Some(grouped_fields)) =
             (&node.root_parent_id_col, &node.grouped_root_fields)
@@ -639,7 +677,6 @@ fn extract_rows(
             }
             return;
         }
-
         if let (Some(root_array_field), Some(root_parent_id_col)) =
             (&node.root_array_field, &node.root_parent_id_col)
         {
@@ -1086,7 +1123,6 @@ pub async fn export_collection(
         gz.finish()
             .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
 
-        eprintln!("  {} rows -> {}", rows.len(), csv_path.display());
     }
 
     Ok(())
@@ -1531,4 +1567,54 @@ CREATE TABLE engine (
             )
         );
     }
+
+    #[test]
+    fn export_array_text_values_are_csv_escaped() {
+        let sql = r#"
+CREATE TABLE host (
+    id BIGSERIAL PRIMARY KEY,
+    host_verifications TEXT[] NOT NULL
+);
+"#;
+        let tables = parse_sql(sql);
+        let mut analyzer = Analyzer::new(true);
+        let doc = doc! {
+            "_id": "10021707",
+            "host_verifications": [
+                "email",
+                "phone",
+                "reviews",
+                "kba"
+            ]
+        };
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+        let flattened_root = flattened_root_for_export(&tables, &schema, "engine");
+        assert!(
+            flattened_root.is_none(),
+            "jsonb root array should not be promoted into one row per item"
+        );      
+        let roots = build_tree(&tables, flattened_root, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();          
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+        let rows = all_rows.get("host").expect("root rows missing");
+        eprintln!("rows={rows:#?}");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][0].as_deref(), Some("10021707"));
+        assert_eq!(
+            rows[0][1].as_deref(),
+            Some(
+                "{email,phone,reviews,kba}"
+            )
+        );        
+    }
+
 }

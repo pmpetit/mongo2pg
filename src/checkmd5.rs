@@ -13,6 +13,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio_postgres::{Client, Row};
+use chrono::{DateTime, SecondsFormat, Utc};
 
 #[derive(Debug, Clone, Deserialize)]
 struct MappingYaml {
@@ -140,7 +141,10 @@ fn bson_to_comparable_json(value: &Bson) -> serde_json::Value {
         Bson::Int32(v) => serde_json::json!(v),
         Bson::Int64(v) => serde_json::json!(v),
         Bson::ObjectId(v) => serde_json::Value::String(v.to_hex()),
-        Bson::DateTime(v) => serde_json::Value::String(v.to_string()),
+        Bson::DateTime(v) => {
+            serde_json::Value::String(v.try_to_rfc3339_string().unwrap_or_else(|_| v.to_string()))
+        }
+        //Bson::DateTime(v) => serde_json::Value::String(v.to_string()),
         Bson::Timestamp(v) => serde_json::Value::String(v.to_string()),
         Bson::Binary(v) => serde_json::Value::String(v.to_string()),
         Bson::RegularExpression(v) => serde_json::Value::String(v.to_string()),
@@ -154,6 +158,7 @@ fn bson_to_comparable_json(value: &Bson) -> serde_json::Value {
         other => serde_json::Value::String(other.to_string()),
     }
 }
+
 
 fn canonicalize_json_value(value: &serde_json::Value) -> String {
     match value {
@@ -174,9 +179,20 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
                 number.to_string()
             }
         }
-        serde_json::Value::String(v) => {
+        serde_json::Value::String(v) => {{
+            // Attempt to parse the string as a standard UTC DateTime.
+            // This will succeed for both "...Z" and "...+00:00" formats.
+            if let Ok(dt) = v.parse::<DateTime<Utc>>() {{
+                // If it's a date, normalize it to the canonical "Z" format (Zulu time).
+                let normalized_ts = dt.to_rfc3339_opts(SecondsFormat::Secs, true);
+                // Return it as a new JSON string literal, e.g., "\"2024-01-15T00:00:00Z\"".
+                return serde_json::to_string(&normalized_ts)
+                    .expect("serializing normalized timestamp should succeed");
+            }}
+
+            // If it's not a timestamp, treat it as a regular string, just like before.
             serde_json::to_string(v).expect("serializing canonical JSON string should succeed")
-        }
+        }}
         serde_json::Value::Array(values) => format!(
             "[{}]",
             values
@@ -1864,4 +1880,34 @@ pg_mapping:
             Some(&["p0".to_owned()][..])
         );
     }
+
+    use crate::checkmd5::bson_to_comparable_json;
+    use chrono::{TimeZone, Utc};
+    use mongodb::bson::DateTime;
+    use serde_json::json;
+    #[test]
+    fn test_datetime_conversion_to_rfc3339() {
+        // --- 1. Arrange: Create the input data ---
+
+        // Create a specific UTC date.
+        // This is the same date from your original example.
+        let test_date = Utc.with_ymd_and_hms(2023, 9, 6, 9, 11, 36).unwrap();
+
+        // Convert the chrono DateTime into a Bson::DateTime.
+        let bson_datetime = Bson::DateTime(DateTime::from(test_date));
+
+        // --- 2. Act: Call the function we want to test ---
+        let result = bson_to_comparable_json(&bson_datetime);
+
+        // --- 3. Assert: Check if the output is correct ---
+
+        // Define the expected output: a JSON string in RFC 3339 format.
+        // The "+00:00" signifies the UTC timezone.
+        let expected_json = json!("2023-09-06T09:11:36Z");
+
+        // Assert that the result matches our expectation.
+        // The test will pass if they are equal, and fail otherwise.
+        assert_eq!(result, expected_json);
+    }
+
 }
