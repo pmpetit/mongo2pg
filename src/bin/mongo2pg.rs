@@ -1303,12 +1303,11 @@ fn collect_identifier_warnings(schema: &CollectionSchema) -> Vec<InferWarningYam
 
 fn emit_infer_type_warnings(db_name: &str, coll_name: &str, schema: &CollectionSchema) {
     for warning in collect_infer_type_warnings(schema) {
-
         let non_null_minorities: Vec<_> = warning
-                    .minority_families
-                    .iter()
-                    .filter(|(family, _ratio)| family.to_string() != "null")
-                    .collect();
+            .minority_families
+            .iter()
+            .filter(|(family, _ratio)| family.to_string() != "null")
+            .collect();
         if !non_null_minorities.is_empty() {
             let minority_details = non_null_minorities
                 .iter()
@@ -1325,7 +1324,7 @@ fn emit_infer_type_warnings(db_name: &str, coll_name: &str, schema: &CollectionS
                 warning.dominant_ratio * 100.0,
                 minority_details,
             );
-        };                
+        };
     }
 
     for warning in collect_identifier_warnings(schema) {
@@ -4340,7 +4339,7 @@ mod tests {
         sanitize_name, should_infer_collection, strip_psql_preamble,
     };
     use bson::doc;
-    use mongo2pg::{analyzer::Analyzer};
+    use mongo2pg::analyzer::Analyzer;
     use serde::Deserialize;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -5114,7 +5113,7 @@ CREATE TABLE demo (
         assert_eq!(warnings[0].dominant_family, "Boolean");
     }
 
-    use crate::{ExportArgs, InferArgs, UriArg, ImportArgs};
+    use crate::{ExportArgs, ImportArgs, InferArgs, UriArg};
     use std::path::PathBuf;
     use tokio_postgres::NoTls;
 
@@ -5135,9 +5134,7 @@ CREATE TABLE demo (
     }
     fn create_default_infer_args(config: PathBuf) -> InferArgs {
         InferArgs {
-            mongo: UriArg {
-                source_uri: None,
-            },
+            mongo: UriArg { source_uri: None },
             namespace: None,
             number: Some(500),
             percent: None, // Set to None because it conflicts with `number`
@@ -5150,10 +5147,7 @@ CREATE TABLE demo (
     }
     fn create_default_export_args(config: PathBuf) -> ExportArgs {
         ExportArgs {
-            mongo:
-                UriArg {
-                    source_uri: None,
-                },
+            mongo: UriArg { source_uri: None },
             collection: None,
             namespace: None,
             output_dir: None,
@@ -5168,13 +5162,12 @@ CREATE TABLE demo (
         }
     }
 
-
-    use testcontainers_modules::{mongo, postgres, testcontainers::runners::AsyncRunner};
-    use crate::{run_export, run_infer, run_init, run_import, run_check_md5};
-    use tempfile::TempDir; // Import the TempDir type
-    use chrono::{DateTime, Utc,TimeZone};
-    use std::fs;
+    use crate::{run_check_md5, run_export, run_import, run_infer, run_init};
+    use chrono::{DateTime, TimeZone, Utc};
     use indoc::indoc;
+    use std::fs;
+    use tempfile::TempDir; // Import the TempDir type
+    use testcontainers_modules::{mongo, postgres, testcontainers::runners::AsyncRunner};
 
     // Data Structures
     #[derive(serde::Serialize)]
@@ -5228,9 +5221,14 @@ CREATE TABLE demo (
         let new_employee = Employee {
             id: 1,
             name: "Jane Doe".to_string(),
-            hire_date: Utc.from_utc_datetime(&chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap().and_hms_opt(0, 0, 0).unwrap()),
+            hire_date: Utc.from_utc_datetime(
+                &chrono::NaiveDate::from_ymd_opt(2024, 1, 15)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            ),
         };
-        let employee_doc= bson::to_document(&new_employee)?;
+        let employee_doc = bson::to_document(&new_employee)?;
         collection.insert_one(employee_doc).await?;
 
         let init_args = create_default_init_args(
@@ -5242,38 +5240,152 @@ CREATE TABLE demo (
         );
         run_init(init_args).expect("init should succeed");
 
-        assert!(temp_dir.path().join("test_project").exists(), "Project directory should be created");
-        assert!(temp_dir.path().join("test_project").join("schema").join("tables").exists(), "Schema tables directory should be created");
-        assert!(temp_dir.path().join("test_project").join("source").join("collections").exists(), "Source collections directory should be created");
-        assert!(temp_dir.path().join("test_project").join("data").exists(), "Data directory should be created");
-        assert!(temp_dir.path().join("test_project").join("config").join("test_project.toml").exists(), "Config file should be created");
-        assert!(temp_dir.path().join("test_project").join("reports").exists(), "Reports folder should be created");
+        assert!(
+            temp_dir.path().join("test_project").exists(),
+            "Project directory should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("schema")
+                .join("tables")
+                .exists(),
+            "Schema tables directory should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("source")
+                .join("collections")
+                .exists(),
+            "Source collections directory should be created"
+        );
+        assert!(
+            temp_dir.path().join("test_project").join("data").exists(),
+            "Data directory should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("config")
+                .join("test_project.toml")
+                .exists(),
+            "Config file should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("reports")
+                .exists(),
+            "Reports folder should be created"
+        );
 
-        let conf_toml= std::fs::read_to_string(temp_dir.path().join("test_project").join("config").join("test_project.toml"))?;
-        assert!(conf_toml.contains(&format!("uri = \"{}\"", mongo_uri)), "Config should contain the MongoDB URI");
-        assert!(conf_toml.contains(&format!("uri = \"{}\"", pg_connection_string)), "Config should contain the PostgreSQL URI");
-        assert!(conf_toml.contains(&format!("base_dir = \"{}\"", temp_dir.path().to_path_buf().display())), "Config should contain the project_base path");
-        assert!(conf_toml.contains("project_dir = \"test_project\""), "Config should contain the project_dir");
-        assert!(conf_toml.contains(&format!("namespace = \"{}\"", db_mongo)), "Config should contain the namespace");
+        let conf_toml = std::fs::read_to_string(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("config")
+                .join("test_project.toml"),
+        )?;
+        assert!(
+            conf_toml.contains(&format!("uri = \"{}\"", mongo_uri)),
+            "Config should contain the MongoDB URI"
+        );
+        assert!(
+            conf_toml.contains(&format!("uri = \"{}\"", pg_connection_string)),
+            "Config should contain the PostgreSQL URI"
+        );
+        assert!(
+            conf_toml.contains(&format!(
+                "base_dir = \"{}\"",
+                temp_dir.path().to_path_buf().display()
+            )),
+            "Config should contain the project_base path"
+        );
+        assert!(
+            conf_toml.contains("project_dir = \"test_project\""),
+            "Config should contain the project_dir"
+        );
+        assert!(
+            conf_toml.contains(&format!("namespace = \"{}\"", db_mongo)),
+            "Config should contain the namespace"
+        );
         assert!(conf_toml.contains("datetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]"), "Config should contain the default datetime field patterns");
-        assert!(conf_toml.contains("jsonb = false"), "Config should contain the default jsonb setting");
+        assert!(
+            conf_toml.contains("jsonb = false"),
+            "Config should contain the default jsonb setting"
+        );
 
-        let infer_args = create_default_infer_args(temp_dir.path().join("test_project").join("config").join("test_project.toml"));
+        let infer_args = create_default_infer_args(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("config")
+                .join("test_project.toml"),
+        );
 
         run_infer(infer_args).await?;
 
-        let ddl_file_path = temp_dir.path()
-        .join("test_project")
-        .join("schema")
-        .join("tables")
-        .join("test_db")
-        .join("employees.sql");
+        let ddl_file_path = temp_dir
+            .path()
+            .join("test_project")
+            .join("schema")
+            .join("tables")
+            .join("test_db")
+            .join("employees.sql");
 
-        assert!(ddl_file_path.exists(), "DDL file for employees should be created");
-        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("employees.json").exists(), "Source collections employees should be created");
-        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("employees.stats.txt").exists(), "Source collections stats txt format for employees should be created");
-        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("employees.stats.yaml").exists(), "Source collections stats yaml format for employees should be created");
-        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("mapping_employees.yaml").exists(), "Source collections mapping yaml format for employees should be created");
+        assert!(
+            ddl_file_path.exists(),
+            "DDL file for employees should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("source")
+                .join("collections")
+                .join("employees")
+                .join("employees.json")
+                .exists(),
+            "Source collections employees should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("source")
+                .join("collections")
+                .join("employees")
+                .join("employees.stats.txt")
+                .exists(),
+            "Source collections stats txt format for employees should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("source")
+                .join("collections")
+                .join("employees")
+                .join("employees.stats.yaml")
+                .exists(),
+            "Source collections stats yaml format for employees should be created"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("source")
+                .join("collections")
+                .join("employees")
+                .join("mapping_employees.yaml")
+                .exists(),
+            "Source collections mapping yaml format for employees should be created"
+        );
 
         let expected_content = indoc! {r#"
             CREATE DATABASE "test_db";
@@ -5287,17 +5399,31 @@ CREATE TABLE demo (
                 hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
                 name VARCHAR(20) NOT NULL
             );
-        "#};    
-        let actual_content = fs::read_to_string(&ddl_file_path)
-            .expect("Should have been able to read the DDL file");
+        "#};
+        let actual_content =
+            fs::read_to_string(&ddl_file_path).expect("Should have been able to read the DDL file");
 
         // It will show a helpful diff if the content does not match.
-        assert_eq!(actual_content.trim(), expected_content.trim());        
+        assert_eq!(actual_content.trim(), expected_content.trim());
 
-        let config = temp_dir.path().join("test_project").join("config").join("test_project.toml");
+        let config = temp_dir
+            .path()
+            .join("test_project")
+            .join("config")
+            .join("test_project.toml");
         let export_args = create_default_export_args(config.clone());
         run_export(export_args).await?;
-        assert!(temp_dir.path().join("test_project").join("data").join("test_db").join("employees").join("employees.csv.gz").exists(), "Exported data employees.csv.gz should be created");
+        assert!(
+            temp_dir
+                .path()
+                .join("test_project")
+                .join("data")
+                .join("test_db")
+                .join("employees")
+                .join("employees.csv.gz")
+                .exists(),
+            "Exported data employees.csv.gz should be created"
+        );
 
         let import_args = create_default_import_args(config.clone());
         run_import(import_args).await?;
@@ -5305,8 +5431,7 @@ CREATE TABLE demo (
         let host_port = pg_container.get_host_port_ipv4(5432).await?;
         let pg_test_db_connection_string = format!(
             "postgres://postgres:postgres@localhost:{}/{}?sslmode=disable",
-            host_port, 
-            "test_db"
+            host_port, "test_db"
         );
         let (client, connection) =
             tokio_postgres::connect(&pg_test_db_connection_string, NoTls).await?;
@@ -5335,7 +5460,9 @@ CREATE TABLE demo (
         assert_eq!(retrieved_name, employee_name);
         assert_eq!(retrieved_date, hire_date);
 
-        run_check_md5("employees".to_owned(), Some(config.clone()), false).await.expect("can't run checkmd5");
+        run_check_md5("employees".to_owned(), Some(config.clone()), false)
+            .await
+            .expect("can't run checkmd5");
 
         Ok(())
     }
