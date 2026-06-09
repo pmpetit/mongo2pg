@@ -1303,21 +1303,29 @@ fn collect_identifier_warnings(schema: &CollectionSchema) -> Vec<InferWarningYam
 
 fn emit_infer_type_warnings(db_name: &str, coll_name: &str, schema: &CollectionSchema) {
     for warning in collect_infer_type_warnings(schema) {
-        let minority = warning
-            .minority_families
-            .iter()
-            .map(|(family, ratio)| format!("{family} ({:.1}%)", ratio * 100.0))
-            .collect::<Vec<_>>()
-            .join(", ");
-        eprintln!(
-            "  [warn] source {}.{} field {} mixes incompatible scalar types: dominant {} ({:.1}% of non-null values), minority {}. Normalize source values before import.",
-            db_name,
-            coll_name,
-            warning.field_path,
-            warning.dominant_family,
-            warning.dominant_ratio * 100.0,
-            minority,
-        );
+
+        let non_null_minorities: Vec<_> = warning
+                    .minority_families
+                    .iter()
+                    .filter(|(family, _ratio)| family.to_string() != "null")
+                    .collect();
+        if !non_null_minorities.is_empty() {
+            let minority_details = non_null_minorities
+                .iter()
+                .map(|(family, ratio)| format!("{} ({:.1}%)", family, ratio * 100.0))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            eprintln!(
+                "  [warn] source {}.{} field {} mixes incompatible scalar types: dominant {} ({:.1}% of non-null values), minority {}. Normalize source values before import.",
+                db_name,
+                coll_name,
+                warning.field_path,
+                warning.dominant_family,
+                warning.dominant_ratio * 100.0,
+                minority_details,
+            );
+        };                
     }
 
     for warning in collect_identifier_warnings(schema) {

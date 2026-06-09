@@ -358,21 +358,21 @@ fn build_field_schema(fa: FieldAcc, total_docs: u64) -> FieldSchema {
         .collect();
 
     // Add implicit Undefined if field was missing from some docs
-    let undefined_count = total_docs.saturating_sub(field_count);
-    if undefined_count > 0 {
-        let undef_schema = TypeSchema {
-            probability: undefined_count as f64 / total_docs as f64,
-            sampled: undefined_count,
-            as_jsonb: false,
-            ndistinct: None,
-            object: None,
-            array: None,
-            values: None,
-            max_length: None,
-            varchar_length: None,
-        };
-        type_entries.push((TYPE_UNDEFINED.to_owned(), undef_schema));
-    }
+    // let undefined_count = total_docs.saturating_sub(field_count);
+    // if undefined_count > 0 {
+    //     let undef_schema = TypeSchema {
+    //         probability: undefined_count as f64 / total_docs as f64,
+    //         sampled: undefined_count,
+    //         as_jsonb: false,
+    //         ndistinct: None,
+    //         object: None,
+    //         array: None,
+    //         values: None,
+    //         max_length: None,
+    //         varchar_length: None,
+    //     };
+    //     type_entries.push((TYPE_UNDEFINED.to_owned(), undef_schema));
+    // }
 
     // Sort type entries by descending count for determinism
     type_entries.sort_by(|(an, _), (bn, _)| {
