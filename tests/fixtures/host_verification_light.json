@@ -1,0 +1,11 @@
+{
+  "_id": "10021707",
+  "host": {
+    "host_verifications": [
+      "email",
+      "phone",
+      "reviews",
+      "kba"
+    ]
+  }
+}

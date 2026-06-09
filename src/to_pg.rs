@@ -16,10 +16,7 @@ use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::{
-    CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_BINARY, TYPE_BOOLEAN, TYPE_CODE,
-    TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_DOUBLE, TYPE_INT32,
-    TYPE_INT64, TYPE_MAXKEY, TYPE_MINKEY, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX,
-    TYPE_STRING, TYPE_SYMBOL, TYPE_TIMESTAMP,
+    CollectionSchema, FieldSchema, TYPE_ARRAY, TYPE_BINARY, TYPE_BOOLEAN, TYPE_CODE, TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_DOUBLE, TYPE_INT32, TYPE_INT64, TYPE_MAXKEY, TYPE_MINKEY, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX, TYPE_STRING, TYPE_SYMBOL, TYPE_TIMESTAMP, TypeSchema
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -498,71 +495,71 @@ fn add_grouped_root_child_table(
     parent.child_tables.push(child);
 }
 
-fn add_scalar_array_table(
-    parent: &mut Table,
-    array_field_col: &str,
-    mongo_field_name: &str,
-    scalar_types: &[(&str, &TypeSchema)],
-    pg_schema: Option<&str>,
-    timestamp_fields: &[String],
-) {
-    let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
-    let parent_pks = find_pk_columns(parent);
+// fn add_scalar_array_table(
+//     parent: &mut Table,
+//     array_field_col: &str,
+//     mongo_field_name: &str,
+//     scalar_types: &[(&str, &TypeSchema)],
+//     pg_schema: Option<&str>,
+//     timestamp_fields: &[String],
+// ) {
+//     let child_name = child_table_name(&parent.name, array_field_col, pg_schema);
+//     let parent_pks = find_pk_columns(parent);
 
-    let mut child = Table::new(child_name);
-    child.columns.push(Column {
-        name: "id".to_owned(),
-        pg_type: "BIGSERIAL".to_owned(),
-        nullable: false,
-        primary_key: true,
-    });
+//     let mut child = Table::new(child_name);
+//     child.columns.push(Column {
+//         name: "id".to_owned(),
+//         pg_type: "BIGSERIAL".to_owned(),
+//         nullable: false,
+//         primary_key: true,
+//     });
 
-    let mut parent_ref = Vec::new();
-    if parent_pks.len() == 1 {
-        let (pk_name, pk_type) = &parent_pks[0];
-        let fk_col = format!("{}_id", parent.name);
-        child.columns.push(Column {
-            name: fk_col.clone(),
-            pg_type: fk_scalar_type(pk_type).to_owned(),
-            nullable: false,
-            primary_key: false,
-        });
-        parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
-    } else {
-        for (pk_name, pk_type) in &parent_pks {
-            let fk_col = format!("{}_{}", parent.name, pk_name);
-            child.columns.push(Column {
-                name: fk_col.clone(),
-                pg_type: fk_scalar_type(pk_type).to_owned(),
-                nullable: false,
-                primary_key: false,
-            });
-            parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
-        }
-    }
-    child.parent_ref = Some(parent_ref);
+//     let mut parent_ref = Vec::new();
+//     if parent_pks.len() == 1 {
+//         let (pk_name, pk_type) = &parent_pks[0];
+//         let fk_col = format!("{}_id", parent.name);
+//         child.columns.push(Column {
+//             name: fk_col.clone(),
+//             pg_type: fk_scalar_type(pk_type).to_owned(),
+//             nullable: false,
+//             primary_key: false,
+//         });
+//         parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+//     } else {
+//         for (pk_name, pk_type) in &parent_pks {
+//             let fk_col = format!("{}_{}", parent.name, pk_name);
+//             child.columns.push(Column {
+//                 name: fk_col.clone(),
+//                 pg_type: fk_scalar_type(pk_type).to_owned(),
+//                 nullable: false,
+//                 primary_key: false,
+//             });
+//             parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+//         }
+//     }
+//     child.parent_ref = Some(parent_ref);
 
-    let non_null: Vec<(&str, &TypeSchema)> = scalar_types
-        .iter()
-        .filter(|(t, _)| !is_null_type(t))
-        .copied()
-        .collect();
-    let value_type = if matches_timestamp_field(mongo_field_name, timestamp_fields) {
-        FORCED_TIMESTAMP_PG_TYPE.to_owned()
-    } else if non_null.is_empty() {
-        "TEXT".to_owned()
-    } else {
-        resolve_scalar_pg_type(&non_null, "value")
-    };
-    child.columns.push(Column {
-        name: "value".to_owned(),
-        pg_type: value_type,
-        nullable: false,
-        primary_key: false,
-    });
+//     let non_null: Vec<(&str, &TypeSchema)> = scalar_types
+//         .iter()
+//         .filter(|(t, _)| !is_null_type(t))
+//         .copied()
+//         .collect();
+//     let value_type = if matches_timestamp_field(mongo_field_name, timestamp_fields) {
+//         FORCED_TIMESTAMP_PG_TYPE.to_owned()
+//     } else if non_null.is_empty() {
+//         "TEXT".to_owned()
+//     } else {
+//         resolve_scalar_pg_type(&non_null, "value")
+//     };
+//     child.columns.push(Column {
+//         name: "value".to_owned(),
+//         pg_type: value_type,
+//         nullable: false,
+//         primary_key: false,
+//     });
 
-    parent.child_tables.push(child);
-}
+//     parent.child_tables.push(child);
+// }
 
 /// Create a 1:1 child table for an embedded document field.
 fn add_doc_table(
@@ -693,7 +690,7 @@ fn add_map_table(
 fn handle_array_field(
     table: &mut Table,
     col_name: &str,
-    mongo_field_name: &str,
+    //mongo_field_name: &str,
     items_field: &FieldSchema,
     nullable: bool,
     flatten_to_jsonb: bool,
@@ -731,18 +728,65 @@ fn handle_array_field(
                 primary_key: false,
             });
         }
-    } else {
-        // Array of scalars → child table with `value` column
-        add_scalar_array_table(
-            table,
-            col_name,
-            mongo_field_name,
-            &non_null_items,
-            pg_schema,
-            timestamp_fields,
-        );
     }
+    
+    if non_null_items.iter().any(|(t, _)| *t == TYPE_STRING) { 
+        {
+            table.columns.push(Column {
+                name: col_name.to_owned(),
+                pg_type: "TEXT[]".to_owned(),
+                // pg_type: "JSONB".to_owned(),
+                nullable,
+                primary_key: false,
+            });
+        }
+    }
+    else if non_null_items.iter().any(|(t, _)| *t == TYPE_NUMBER || *t == TYPE_DOUBLE) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "DOUBLE PRECISION[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_INT32) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "INTEGER[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_INT64) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "BIGINT[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_DATE) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "TIMESTAMP WITH TIME ZONE[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } else if non_null_items.iter().any(|(t, _)| *t == TYPE_DECIMAL128) {
+        table.columns.push(Column {
+            name: col_name.to_owned(),
+            pg_type: "NUMERIC[]".to_owned(),
+            nullable,
+            primary_key: false,
+        });
+    } ;
+    // else {
+    //     // Mixed types or unrecognized types → JSONB
+    //     table.columns.push(Column {
+    //         name: col_name.to_owned(),
+    //         pg_type: "JSONB".to_owned(),
+    //         nullable,
+    //         primary_key: false,
+    //     })
 }
+
 
 fn flatten_object_id_fields(
     table: &mut Table,
@@ -1099,7 +1143,7 @@ pub fn process_fields(
                 handle_array_field(
                     table,
                     &col_name,
-                    raw_name,
+                    //raw_name,
                     &items,
                     nullable,
                     flatten_to_jsonb,
@@ -1532,8 +1576,7 @@ mod tests {
         }
     }
 }"#,
-        )
-        .expect("schema json should parse");
+        ).expect("schema json should parse");
         let ddl = schema_to_ddl(&schema, "scheduling_jobs", None);
         assert!(
             !ddl.contains("last_update TEXT NOT NULL"),
@@ -1735,11 +1778,8 @@ mod tests {
         let docs = vec![doc! { "_id": 1_i32, "tags": ["rust", "mongodb"] }];
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "posts", None);
-        assert!(
-            ddl.contains("CREATE TABLE tags ("),
-            "scalar array child table missing"
-        );
-        assert!(ddl.contains("value VARCHAR(20) NOT NULL"), "value column missing");
+        assert!(ddl.contains("CREATE TABLE posts (\n    id SERIAL PRIMARY KEY,\n    tags TEXT[] NOT NULL\n);"));
+
     }
 
     #[test]
@@ -1895,7 +1935,6 @@ mod tests {
         assert!(ddl.contains("CREATE TABLE communities ("));
         assert!(ddl.contains("communities_id VARCHAR(20) NOT NULL"));
         assert!(ddl.contains("key TEXT NOT NULL"));
-        assert!(ddl.contains("CREATE TABLE available_localizations ("));
         assert!(!ddl.contains("CREATE TABLE communities_dev ("));
         assert!(!ddl.contains("CREATE TABLE communities_prod ("));
     }
@@ -1933,5 +1972,70 @@ mod tests {
         assert!(ddl.contains("providers_id BIGINT NOT NULL"));
         assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
         assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
+    }
+
+
+    #[test]
+    fn monitoring_with_items_skewed_item_between_string_and_object() {
+        let json_str = std::fs::read_to_string("tests/fixtures/monitoring_test1.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "monitoring", None);
+
+        assert!(ddl.contains("CREATE TABLE monitoring ("));
+    }
+
+    #[test]
+    fn monitoring_with_array_in_object_object() {
+        let json_str = std::fs::read_to_string("tests/fixtures/host_verification_light.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "host_verification", None);
+
+        assert!(ddl.contains("CREATE TABLE host_verification ("));
+    }
+    #[test]
+    fn communities_with_id_becoming_big_serial() {
+        let json_str = std::fs::read_to_string("tests/fixtures/communities.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "communities", None);
+
+        assert!(ddl.contains("CREATE TABLE communities ("));
+
+        //assert!(!ddl.contains("CREATE TABLE communities ("));
+    }    
+    #[test]
+    fn monitoring_with_array_of_int_in_object() {
+        let json_str = std::fs::read_to_string("tests/fixtures/host_verification_int.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "host_verification", None);
+
+        assert!(ddl.contains("CREATE TABLE host_verification ("));
     }
 }

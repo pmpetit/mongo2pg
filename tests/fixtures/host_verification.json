@@ -1,0 +1,130 @@
+{
+  "_id": "10021707",
+  "listing_url": "https://www.airbnb.com/rooms/10021707",
+  "name": "Private Room in Bushwick",
+  "summary": "Here exists a very cozy room for rent in a shared 4-bedroom apartment. It is located one block off of the JMZ at Myrtle Broadway.  The neighborhood is diverse and appeals to a variety of people.",
+  "space": "",
+  "description": "Here exists a very cozy room for rent in a shared 4-bedroom apartment. It is located one block off of the JMZ at Myrtle Broadway.  The neighborhood is diverse and appeals to a variety of people.",
+  "neighborhood_overview": "",
+  "notes": "",
+  "transit": "",
+  "access": "",
+  "interaction": "",
+  "house_rules": "",
+  "property_type": "Apartment",
+  "room_type": "Private room",
+  "bed_type": "Real Bed",
+  "minimum_nights": "14",
+  "maximum_nights": "1125",
+  "cancellation_policy": "flexible",
+  "last_scraped": {
+    "$date": "2019-03-06T05:00:00.000Z"
+  },
+  "calendar_last_scraped": {
+    "$date": "2019-03-06T05:00:00.000Z"
+  },
+  "first_review": {
+    "$date": "2016-01-31T05:00:00.000Z"
+  },
+  "last_review": {
+    "$date": "2016-01-31T05:00:00.000Z"
+  },
+  "accommodates": 1,
+  "bedrooms": 1,
+  "beds": 1,
+  "number_of_reviews": 1,
+  "bathrooms": {
+    "$numberDecimal": "1.5"
+  },
+  "amenities": [
+    "Internet",
+    "Wifi",
+    "Air conditioning",
+    "Kitchen",
+    "Buzzer/wireless intercom",
+    "Heating",
+    "Smoke detector",
+    "Carbon monoxide detector",
+    "Essentials",
+    "Lock on bedroom door"
+  ],
+  "price": {
+    "$numberDecimal": "40.00"
+  },
+  "extra_people": {
+    "$numberDecimal": "0.00"
+  },
+  "guests_included": {
+    "$numberDecimal": "1"
+  },
+  "images": {
+    "thumbnail_url": "",
+    "medium_url": "",
+    "picture_url": "https://a0.muscache.com/im/pictures/72844c8c-fec2-440e-a752-bba9b268c361.jpg?aki_policy=large",
+    "xl_picture_url": ""
+  },
+  "host": {
+    "host_id": "11275734",
+    "host_url": "https://www.airbnb.com/users/show/11275734",
+    "host_name": "Josh",
+    "host_location": "New York, New York, United States",
+    "host_about": "",
+    "host_thumbnail_url": "https://a0.muscache.com/im/users/11275734/profile_pic/1405792127/original.jpg?aki_policy=profile_small",
+    "host_picture_url": "https://a0.muscache.com/im/users/11275734/profile_pic/1405792127/original.jpg?aki_policy=profile_x_medium",
+    "host_neighbourhood": "Bushwick",
+    "host_is_superhost": false,
+    "host_has_profile_pic": true,
+    "host_identity_verified": true,
+    "host_listings_count": 1,
+    "host_total_listings_count": 1,
+    "host_verifications": [
+      "email",
+      "phone",
+      "reviews",
+      "kba"
+    ]
+  },
+  "address": {
+    "street": "Brooklyn, NY, United States",
+    "suburb": "Brooklyn",
+    "government_area": "Bushwick",
+    "market": "New York",
+    "country": "United States",
+    "country_code": "US",
+    "location": {
+      "type": "Point",
+      "coordinates": [
+        -73.93615,
+        40.69791
+      ],
+      "is_location_exact": true
+    }
+  },
+  "availability": {
+    "availability_30": 0,
+    "availability_60": 0,
+    "availability_90": 0,
+    "availability_365": 0
+  },
+  "review_scores": {
+    "review_scores_accuracy": 10,
+    "review_scores_cleanliness": 10,
+    "review_scores_checkin": 10,
+    "review_scores_communication": 10,
+    "review_scores_location": 8,
+    "review_scores_value": 8,
+    "review_scores_rating": 100
+  },
+  "reviews": [
+    {
+      "_id": "61050713",
+      "date": {
+        "$date": "2016-01-31T05:00:00.000Z"
+      },
+      "listing_id": "10021707",
+      "reviewer_id": "52006105",
+      "reviewer_name": "Antoine",
+      "comments": "Josh was out of town during my 1 month stay. His roommates greeted and helped get me settled. They were great hosts and all around cool people. I'm a Brooklynite, but have never lived in Bushwick.\r\nIf you're looking for an hip, authentic, and convenient Brooklyn experience, this spot is for you.  You can literally see the Subway platform from Josh's window. Also a couple steps away from anything you could possibly need... restaurants, juice bar, organic grocery, etc. "
+    }
+  ]
+}

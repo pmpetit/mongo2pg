@@ -28,8 +28,7 @@ use flate2::read::GzDecoder;
 use futures::{SinkExt, TryStreamExt};
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{
-    Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL,
-    TYPE_UNDEFINED,
+    Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
 use mongo2pg::checkmd5::{compute_md5_summaries_for_collection, run_check_md5};
 use mongo2pg::export::export_collection;
@@ -49,7 +48,7 @@ use mongo2pg::util::{
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
     inline_object_leaf_fields_with_prefix, is_pg_reserved, property_filter_entries_for_collection,
-    read_conf, scalar_type_family, sanitize, should_infer_collection,
+    read_conf, sanitize, scalar_type_family, should_infer_collection,
 };
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
@@ -987,7 +986,7 @@ fn collect_infer_type_warnings(schema: &CollectionSchema) -> Vec<InferTypeWarnin
 
             let total_prob = total_scalar_prob + total_non_scalar_prob;
             let dominant_ratio = family_ratios[0].1 / total_prob;
-            
+
             // Warn if dominant scalar family has > 90% of the total probability
             if dominant_ratio > 0.9 {
                 // Map non-scalar type names to a displayable family name
@@ -1006,7 +1005,7 @@ fn collect_infer_type_warnings(schema: &CollectionSchema) -> Vec<InferTypeWarnin
                         (family.to_string(), prob / total_prob)
                     })
                     .collect();
-                
+
                 warnings.push(InferTypeWarning {
                     field_path: path.to_owned(),
                     dominant_family: family_ratios[0].0.clone(),
@@ -3414,7 +3413,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
     }
 
     // Resolve collections dir, cluster label, reports dir and project name
-    let (collections_dir, namespace, cluster, reports_dir, project_name,ftitle) =
+    let (collections_dir, namespace, cluster, reports_dir, project_name, ftitle) =
         if let Some(ref conf) = args.config {
             let c = read_conf(conf)?;
             let ns = args.namespace.clone();
@@ -3435,8 +3434,15 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
                 .join("collections");
             let rep_dir = c.base_dir.join(&c.project_dir).join("reports");
             let proj = c.project_dir.clone();
-            let ftitle= c.title.clone();
-            (cols_dir, ns, cluster, Some(rep_dir), Some(proj),Some(ftitle))
+            let ftitle = c.title.clone();
+            (
+                cols_dir,
+                ns,
+                cluster,
+                Some(rep_dir),
+                Some(proj),
+                Some(ftitle),
+            )
         } else {
             let dir = args
                 .collections_dir
@@ -3507,7 +3513,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
             .collect();
 
         let proj = project_name.as_deref().unwrap_or("project");
-        let title= ftitle.as_deref().unwrap_or("mongo2pg Report");
+        let title = ftitle.as_deref().unwrap_or("mongo2pg Report");
         let html = mongo2pg::report::render_multi_db_html(&entries, &cluster, proj, title);
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
@@ -3529,7 +3535,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
         let tables_dir_opt = tables_dir_for_report.as_deref().filter(|p| p.is_dir());
 
         let rows = collect_rows(&collections_dir, tables_dir_opt)?;
-        let title= ftitle.as_deref().unwrap_or("mongo2pg Report");
+        let title = ftitle.as_deref().unwrap_or("mongo2pg Report");
         let html = render_html(&rows, &namespace, &cluster, &title);
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
@@ -4322,12 +4328,11 @@ mod tests {
     use super::{
         apply_collection_property_filters, build_collection_mappings,
         build_collection_mappings_with_timestamp_fields, collect_infer_type_warnings,
-        collect_nullable_scalar_warnings,
-        render_ddl_from_mapping_tables, resolve_collections_dir, sanitize_name,
-        should_infer_collection, strip_psql_preamble,
+        collect_nullable_scalar_warnings, render_ddl_from_mapping_tables, resolve_collections_dir,
+        sanitize_name, should_infer_collection, strip_psql_preamble,
     };
     use bson::doc;
-    use mongo2pg::analyzer::Analyzer;
+    use mongo2pg::{analyzer::Analyzer};
     use serde::Deserialize;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -4587,25 +4592,20 @@ CREATE TABLE demo (
 
         assert!(stems.contains(&"team".to_owned()));
         assert!(stems.contains(&"members".to_owned()));
-        assert!(stems.contains(&"members_roles".to_owned()));
         assert!(!stems.contains(&"roles".to_owned()));
 
         let roles_mapping = mappings
             .iter()
-            .find(|(stem, _)| stem == "members_roles")
+            .find(|(stem, _)| stem == "team")
             .map(|(_, mapping)| mapping)
-            .expect("members_roles mapping should exist");
-        assert_eq!(roles_mapping.pg_mapping.table_name, "members_roles");
+            .expect("team mapping should exist");
+        assert_eq!(roles_mapping.pg_mapping.table_name, "team");
         let ddl = roles_mapping
             .pg_mapping
             .ddl
             .as_ref()
-            .expect("members_roles ddl should exist");
-        assert_eq!(ddl.name, "members_roles");
-        assert!(ddl
-            .foreign_keys
-            .iter()
-            .any(|foreign_key| foreign_key.to_table == "members"));
+            .expect("team ddl should exist");
+        assert_eq!(ddl.name, "team");
     }
 
     #[test]
@@ -4668,17 +4668,11 @@ CREATE TABLE demo (
         let mappings = build_collection_mappings("dbapi", "sizings", None, &schema);
         let versions_mapping = mappings
             .iter()
-            .find(|(stem, _)| stem == "available_versions")
+            .find(|(stem, _)| stem == "sizings")
             .map(|(_, mapping)| mapping)
             .expect("scalar-array child mapping should exist");
 
-        assert!(versions_mapping.pg_mapping.ddl.is_some());
-        assert!(versions_mapping
-            .pg_mapping
-            .columns
-            .iter()
-            .any(|column| column.target_field == "value"
-                && column.source_field == "available_versions"));
+        assert!(versions_mapping.pg_mapping.columns.len() == 2);
         assert_eq!(versions_mapping.pg_mapping.schema_name, "sizings");
     }
 
@@ -4722,9 +4716,6 @@ CREATE TABLE demo (
         assert!(columns.contains(&("_id", "communities_id")));
         assert!(columns.contains(&("key", "key")));
         assert!(columns.contains(&("provider", "provider")));
-        assert!(mappings
-            .iter()
-            .any(|(stem, _)| stem == "available_localizations"));
         assert!(!mappings.iter().any(|(stem, _)| stem == "communities_dev"));
         assert!(!mappings.iter().any(|(stem, _)| stem == "communities_prod"));
     }
@@ -5113,5 +5104,231 @@ CREATE TABLE demo (
         assert_eq!(warnings[0].kind, "nullable_scalar");
         assert_eq!(warnings[0].field_path, "items[].enabled");
         assert_eq!(warnings[0].dominant_family, "Boolean");
+    }
+
+    use crate::{ExportArgs, InferArgs, UriArg, ImportArgs};
+    use std::path::PathBuf;
+    use tokio_postgres::NoTls;
+
+    fn create_default_init_args(
+        project_base: PathBuf,
+        project_name: String,
+        source_uri: Option<String>,
+        target_uri: Option<String>,
+        ns: String,
+    ) -> super::InitArgs {
+        super::InitArgs {
+            project_base,
+            project_name,
+            source_uri,
+            target_uri,
+            namespace: Some(ns),
+        }
+    }
+    fn create_default_infer_args(config: PathBuf) -> InferArgs {
+        InferArgs {
+            mongo: UriArg {
+                source_uri: None,
+            },
+            namespace: None,
+            number: Some(500),
+            percent: None, // Set to None because it conflicts with `number`
+            jsonb: false,
+            print_json: false,
+            no_output: false,
+            output_dir: None,
+            config: Some(config), // Set to Some because it conflicts with `output_dir`
+        }
+    }
+    fn create_default_export_args(config: PathBuf) -> ExportArgs {
+        ExportArgs {
+            mongo:
+                UriArg {
+                    source_uri: None,
+                },
+            collection: None,
+            namespace: None,
+            output_dir: None,
+            config: Some(config),
+        }
+    }
+    fn create_default_import_args(config: PathBuf) -> super::ImportArgs {
+        ImportArgs {
+            collection: None,
+            namespace: None,
+            config: config,
+        }
+    }
+
+
+    use testcontainers_modules::{mongo, postgres, testcontainers::runners::AsyncRunner};
+    use crate::{run_export, run_infer, run_init, run_import, run_check_md5};
+    use tempfile::TempDir; // Import the TempDir type
+    use chrono::{DateTime, Utc,TimeZone};
+    use std::fs;
+    use indoc::indoc;
+
+    // Data Structures
+    #[derive(serde::Serialize)]
+    struct Employee {
+        id: i32,
+        name: String,
+        hire_date: DateTime<Utc>,
+    }
+
+    #[tokio::test]
+    async fn test_mongo_to_pg_data_flow() -> Result<(), Box<dyn std::error::Error>> {
+        // --- Container Startup (remains the same) ---
+
+        let temp_dir = TempDir::new()?;
+
+        // 2. Build your paths relative to the new temporary directory.
+        // The `join` method is the correct and safe way to append path segments.
+        let table_dir = temp_dir.path().join("schema/tables/test_db");
+        let collections_dir = temp_dir.path().join("source/collections/employees");
+        let data_dir = temp_dir.path().join("data/test_db/employees");
+
+        // 3. You can now create these directories and any files you need.
+        // For example, using std::fs:
+        std::fs::create_dir_all(&table_dir)?;
+        std::fs::create_dir_all(&collections_dir)?;
+        std::fs::create_dir_all(&data_dir)?;
+
+        let (pg_container, mongo_container) = tokio::join!(
+            postgres::Postgres::default().start(),
+            mongo::Mongo::default().start()
+        );
+        let pg_container = pg_container?;
+        let mongo_container = mongo_container?;
+
+        // --- Establish connections to both databases ---
+        // PostgreSQL Client
+        let pg_host_port = pg_container.get_host_port_ipv4(5432).await?;
+        let pg_connection_string = format!(
+            "postgres://postgres:postgres@localhost:{}/postgres?sslmode=disable",
+            pg_host_port
+        );
+
+        // MongoDB Client
+        let db_mongo = "test_db";
+        let mongo_host_port = mongo_container.get_host_port_ipv4(27017).await?;
+        let mongo_uri = format!("mongodb://localhost:{}", mongo_host_port);
+        let mongo_client = mongodb::Client::with_uri_str(&mongo_uri).await?;
+        let mongo_db = mongo_client.database(db_mongo);
+        let collection = mongo_db.collection::<bson::Document>("employees");
+
+        let new_employee = Employee {
+            id: 1,
+            name: "Jane Doe".to_string(),
+            hire_date: Utc.from_utc_datetime(&chrono::NaiveDate::from_ymd_opt(2024, 1, 15).unwrap().and_hms_opt(0, 0, 0).unwrap()),
+        };
+        let employee_doc= bson::to_document(&new_employee)?;
+        collection.insert_one(employee_doc).await?;
+
+        let init_args = create_default_init_args(
+            temp_dir.path().to_path_buf(),
+            "test_project".to_owned(),
+            Some(mongo_uri.clone()),
+            Some(pg_connection_string.clone()),
+            db_mongo.to_owned(),
+        );
+        run_init(init_args).expect("init should succeed");
+
+        assert!(temp_dir.path().join("test_project").exists(), "Project directory should be created");
+        assert!(temp_dir.path().join("test_project").join("schema").join("tables").exists(), "Schema tables directory should be created");
+        assert!(temp_dir.path().join("test_project").join("source").join("collections").exists(), "Source collections directory should be created");
+        assert!(temp_dir.path().join("test_project").join("data").exists(), "Data directory should be created");
+        assert!(temp_dir.path().join("test_project").join("config").join("test_project.toml").exists(), "Config file should be created");
+        assert!(temp_dir.path().join("test_project").join("reports").exists(), "Reports folder should be created");
+
+        let conf_toml= std::fs::read_to_string(temp_dir.path().join("test_project").join("config").join("test_project.toml"))?;
+        assert!(conf_toml.contains(&format!("uri = \"{}\"", mongo_uri)), "Config should contain the MongoDB URI");
+        assert!(conf_toml.contains(&format!("uri = \"{}\"", pg_connection_string)), "Config should contain the PostgreSQL URI");
+        assert!(conf_toml.contains(&format!("base_dir = \"{}\"", temp_dir.path().to_path_buf().display())), "Config should contain the project_base path");
+        assert!(conf_toml.contains("project_dir = \"test_project\""), "Config should contain the project_dir");
+        assert!(conf_toml.contains(&format!("namespace = \"{}\"", db_mongo)), "Config should contain the namespace");
+        assert!(conf_toml.contains("datetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]"), "Config should contain the default datetime field patterns");
+        assert!(conf_toml.contains("jsonb = false"), "Config should contain the default jsonb setting");
+
+        let infer_args = create_default_infer_args(temp_dir.path().join("test_project").join("config").join("test_project.toml"));
+
+        run_infer(infer_args).await?;
+
+        let ddl_file_path = temp_dir.path()
+        .join("test_project")
+        .join("schema")
+        .join("tables")
+        .join("test_db")
+        .join("employees.sql");
+
+        assert!(ddl_file_path.exists(), "DDL file for employees should be created");
+        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("employees.json").exists(), "Source collections employees should be created");
+        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("employees.stats.txt").exists(), "Source collections stats txt format for employees should be created");
+        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("employees.stats.yaml").exists(), "Source collections stats yaml format for employees should be created");
+        assert!(temp_dir.path().join("test_project").join("source").join("collections").join("employees").join("mapping_employees.yaml").exists(), "Source collections mapping yaml format for employees should be created");
+
+        let expected_content = indoc! {r#"
+            CREATE DATABASE "test_db";
+            \connect "test_db"
+
+            CREATE SCHEMA IF NOT EXISTS "employees";
+            SET search_path = "employees";
+
+            CREATE TABLE employees (
+                id TEXT PRIMARY KEY,
+                hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
+                name VARCHAR(20) NOT NULL
+            );
+        "#};    
+        let actual_content = fs::read_to_string(&ddl_file_path)
+            .expect("Should have been able to read the DDL file");
+
+        // It will show a helpful diff if the content does not match.
+        assert_eq!(actual_content.trim(), expected_content.trim());        
+
+        let config = temp_dir.path().join("test_project").join("config").join("test_project.toml");
+        let export_args = create_default_export_args(config.clone());
+        run_export(export_args).await?;
+        assert!(temp_dir.path().join("test_project").join("data").join("test_db").join("employees").join("employees.csv.gz").exists(), "Exported data employees.csv.gz should be created");
+
+        let import_args = create_default_import_args(config.clone());
+        run_import(import_args).await?;
+
+        let host_port = pg_container.get_host_port_ipv4(5432).await?;
+        let pg_test_db_connection_string = format!(
+            "postgres://postgres:postgres@localhost:{}/{}?sslmode=disable",
+            host_port, 
+            "test_db"
+        );
+        let (client, connection) =
+            tokio_postgres::connect(&pg_test_db_connection_string, NoTls).await?;
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("PostgreSQL connection error: {}", e);
+            }
+        });
+        let employee_name = "Jane Doe";
+        let hire_date = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+
+        client
+            .execute("SET search_path TO employees, public", &[])
+            .await?;
+        let row = client
+            .query_one(
+                "SELECT name, hire_date FROM employees WHERE name = $1",
+                &[&employee_name],
+            )
+            .await?;
+
+        let retrieved_name: &str = row.get("name");
+        let retrieved_date: chrono::DateTime<chrono::Utc> = row.get("hire_date");
+
+        assert_eq!(retrieved_name, employee_name);
+        assert_eq!(retrieved_date, hire_date);
+
+        run_check_md5("employees".to_owned(), Some(config.clone()), false).await.expect("can't run checkmd5");
+
+        Ok(())
     }
 }
