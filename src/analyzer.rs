@@ -102,7 +102,7 @@ pub struct TypeSchema {
     pub max_length: Option<usize>,
     /// Effective VARCHAR length chosen by the DDL sizing heuristic for this string type.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub varchar_length: Option<usize>
+    pub varchar_length: Option<usize>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
