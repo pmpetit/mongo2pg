@@ -1782,8 +1782,18 @@ pub fn render_multi_db_html(
                         "#c0392b"
                     };
                     let (name_cell, detail_row) = if r.table_names.is_empty() {
+                        let warning_detail = if r.has_infer_warnings() {
+                            render_infer_warning_detail(&r.stats.infer_warnings)
+                        } else {
+                            String::new()
+                        };
                         (
-                            format!(r#"<td class="name">{}</td>"#, r.name),
+                            format!(
+                                r#"<td class="name"><span class="collection-name {warning_class}">{name}</span>{warning_detail}</td>"#,
+                                warning_class = if r.has_infer_warnings() { "has-warning" } else { "" },
+                                name = escape_html(&r.name),
+                                warning_detail = warning_detail,
+                            ),
                             String::new(),
                         )
                     } else {
@@ -1813,13 +1823,20 @@ pub fn render_multi_db_html(
                         let detail_id = format!("detail-{db_name}-{}", r.name);
                         let icon_id = format!("icon-{db_name}-{}", r.name);
                         let key = format!("{db_name}-{}", r.name);
+                        let warning_detail = if r.has_infer_warnings() {
+                            render_infer_warning_detail(&r.stats.infer_warnings)
+                        } else {
+                            String::new()
+                        };
                         let name_cell = format!(
                             r#"<td class="name expandable" onclick="toggleDetail('{key}')" title="Click to expand PG tables">
-              <span class="expand-icon" id="{icon_id}">▶</span> {coll}
+              <span class="expand-icon" id="{icon_id}">▶</span> <span class="collection-name {warning_class}">{coll}</span>{warning_detail}
             </td>"#,
                             key = key,
                             icon_id = icon_id,
-                            coll = r.name,
+                            coll = escape_html(&r.name),
+                            warning_class = if r.has_infer_warnings() { "has-warning" } else { "" },
+                            warning_detail = warning_detail,
                         );
                         let detail_row = format!(
                             r#"<tr class="detail-row" id="{detail_id}" style="display:none">
@@ -2007,6 +2024,40 @@ pub fn render_multi_db_html(
       transition: transform 0.15s;
     }}
     .expand-icon.open {{ transform: rotate(90deg); }}
+    .collection-name.has-warning {{ color: #b58900; }}
+    .collection-warning {{ display: inline-block; margin-left: 0.45rem; vertical-align: middle; }}
+    .collection-warning-summary {{
+      display: inline-block;
+      list-style: none;
+      cursor: pointer;
+      border: 1px solid #f4d03f;
+      background: #fcf3cf;
+      color: #9a7d0a;
+      border-radius: 999px;
+      padding: 0.08rem 0.5rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }}
+    .collection-warning-summary::-webkit-details-marker {{ display: none; }}
+    .collection-warning-popover {{
+      margin-top: 0.35rem;
+      min-width: 320px;
+      max-width: 520px;
+      background: #fffdf3;
+      border: 1px solid #f7dc6f;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.08);
+      padding: 0.7rem 0.85rem;
+      color: #5d4b00;
+    }}
+    .collection-warning-title {{ font-size: 0.78rem; font-weight: 700; margin-bottom: 0.45rem; color: #7d6608; }}
+    .collection-warning-list {{ margin: 0; padding-left: 1rem; }}
+    .collection-warning-list > li {{ margin-bottom: 0.5rem; font-size: 0.78rem; line-height: 1.35; }}
+    .collection-warning-list > li:last-child {{ margin-bottom: 0; }}
+    .collection-warning-types {{ margin-top: 0.3rem; padding-left: 1rem; }}
+    .collection-warning-types li {{ margin-bottom: 0.22rem; font-size: 0.75rem; line-height: 1.35; }}
+    .collection-warning-types li:last-child {{ margin-bottom: 0; }}
+    .collection-warning-examples {{ color: #7d6608; }}
     .detail-row td.detail-cell {{
       background: #f8fafc;
       padding: 0.5rem 1rem 0.75rem 2.5rem;
