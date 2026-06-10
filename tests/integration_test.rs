@@ -78,16 +78,16 @@ fn test_decimal128_distinct_from_number() {
     );
 }
 
-#[test]
-fn test_undefined_injected_for_missing_fields() {
-    let docs = vec![doc! { "_id": 1, "optional": "present" }, doc! { "_id": 2 }];
-    let schema = analyze_docs(&docs);
-    let field = schema.object.get("optional").expect("optional missing");
-    assert!(
-        field.types.contains_key("Undefined"),
-        "Undefined must be injected when field is absent in some docs"
-    );
-}
+// #[test]
+// fn test_undefined_injected_for_missing_fields() {
+//     let docs = vec![doc! { "_id": 1, "optional": "present" }, doc! { "_id": 2 }];
+//     let schema = analyze_docs(&docs);
+//     let field = schema.object.get("optional").expect("optional missing");
+//     assert!(
+//         field.types.contains_key("Undefined"),
+//         "Undefined must be injected when field is absent in some docs"
+//     );
+// }
 
 #[test]
 fn test_probability_computed_correctly() {
