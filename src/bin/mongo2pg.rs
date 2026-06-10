@@ -120,6 +120,10 @@ struct InferArgs {
     #[arg(long = "namespace")]
     namespace: Option<String>,
 
+    /// MongoDB source connection URI to store in the project config
+    #[arg(long = "source-uri")]
+    source_uri: Option<String>,
+
     /// Number of documents to sample (mutually exclusive with --percent); default 1000
     #[arg(short = 'n', long = "number", conflicts_with = "percent")]
     number: Option<u64>,
@@ -2893,7 +2897,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| ns.split('.').next().unwrap_or(ns))
         .unwrap_or(&args.project_name);
     let conf_content = format!(
-        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\nnamespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n#namespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
@@ -2904,7 +2908,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         args.namespace
             .as_deref()
             .map(|ns| format!("\"{}\"", ns.replace('"', "\\\"")))
-            .unwrap_or_else(|| "\"mydb\"".to_owned()),
+            .unwrap_or_else(|| "my_db".to_owned()),
         args.target_uri
             .as_deref()
             .map(|u| format!("\"{}\"", u.replace('"', "\\\"")))
