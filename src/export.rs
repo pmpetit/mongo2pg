@@ -45,23 +45,27 @@ fn bson_to_string(val: &Bson) -> Option<String> {
         Bson::Decimal128(d) => Some(d.to_string()),
         Bson::Timestamp(ts) => Some(ts.time.to_string()),
         Bson::Array(arr) => {
-            let elements: Vec<String> = arr.iter()
+            let elements: Vec<String> = arr
+                .iter()
                 // Convert each BSON element in the array to a string
                 .filter_map(bson_to_string)
                 // Format each element for the PostgreSQL array
                 .map(|elem_str| {
-                    let needs_quoting = elem_str.is_empty() 
-                        || elem_str.contains(',') 
-                        || elem_str.contains('{') 
-                        || elem_str.contains('}') 
-                        || elem_str.contains('"') 
+                    let needs_quoting = elem_str.is_empty()
+                        || elem_str.contains(',')
+                        || elem_str.contains('{')
+                        || elem_str.contains('}')
+                        || elem_str.contains('"')
                         || elem_str.contains('\\')
                         || elem_str.chars().any(char::is_whitespace);
 
                     if needs_quoting {
                         // If the string contains special characters, wrap it in double quotes
                         // and escape any internal quotes or backslashes.
-                        format!("\"{}\"", elem_str.replace('\\', "\\\\").replace('"', "\\\""))
+                        format!(
+                            "\"{}\"",
+                            elem_str.replace('\\', "\\\\").replace('"', "\\\"")
+                        )
                     } else {
                         elem_str
                     }
@@ -70,7 +74,7 @@ fn bson_to_string(val: &Bson) -> Option<String> {
 
             // Join all elements with a comma and wrap in curly braces
             Some(format!("{{{}}}", elements.join(",")))
-        },        
+        }
         // Bson::Array(arr) => {
         //     let json_string = serde_json::to_string(
         //         &arr.iter().map(bson_to_json_value).collect::<Vec<_>>()
@@ -83,7 +87,7 @@ fn bson_to_string(val: &Bson) -> Option<String> {
         //         .unwrap_or_default(),
         // ),
         Bson::Null | Bson::Undefined => None,
-        
+
         // For complex / uncommon types fall back to BSON extended-JSON representation.
         other => Some(serde_json::to_string(other).unwrap_or_default()),
     }
@@ -1122,7 +1126,6 @@ pub async fn export_collection(
 
         gz.finish()
             .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
-
     }
 
     Ok(())
@@ -1593,10 +1596,10 @@ CREATE TABLE host (
         assert!(
             flattened_root.is_none(),
             "jsonb root array should not be promoted into one row per item"
-        );      
+        );
         let roots = build_tree(&tables, flattened_root, &HashMap::new());
         let mut all_rows = HashMap::new();
-        let mut counters = HashMap::new();          
+        let mut counters = HashMap::new();
         extract_rows(
             &Bson::Document(doc),
             &roots[0],
@@ -1609,12 +1612,6 @@ CREATE TABLE host (
         eprintln!("rows={rows:#?}");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0][0].as_deref(), Some("10021707"));
-        assert_eq!(
-            rows[0][1].as_deref(),
-            Some(
-                "{email,phone,reviews,kba}"
-            )
-        );        
+        assert_eq!(rows[0][1].as_deref(), Some("{email,phone,reviews,kba}"));
     }
-
 }

@@ -198,7 +198,7 @@ struct InitArgs {
 
     /// Namespace to store in the project config (e.g. mydb or mydb.mycoll); when omitted,
     /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
-    #[arg(long)]
+    #[arg(long = "namespace")]
     namespace: Option<String>,
 }
 
@@ -2896,8 +2896,13 @@ fn run_init(args: InitArgs) -> Result<()> {
         .as_deref()
         .map(|ns| ns.split('.').next().unwrap_or(ns))
         .unwrap_or(&args.project_name);
+    let namespace_line = args
+        .namespace
+        .as_deref()
+        .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
+        .unwrap_or_else(|| "#namespace = my_db".to_owned());
     let conf_content = format!(
-        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n#namespace = {}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
@@ -2905,10 +2910,7 @@ fn run_init(args: InitArgs) -> Result<()> {
             .as_deref()
             .map(|u| format!("\"{}\"", u.replace('"', "\\\"")))
             .unwrap_or_else(|| "\"mongodb://localhost:27017\"".to_owned()),
-        args.namespace
-            .as_deref()
-            .map(|ns| format!("\"{}\"", ns.replace('"', "\\\"")))
-            .unwrap_or_else(|| "my_db".to_owned()),
+        namespace_line,
         args.target_uri
             .as_deref()
             .map(|u| format!("\"{}\"", u.replace('"', "\\\"")))
@@ -4999,6 +5001,8 @@ CREATE TABLE demo (
         assert!(content.contains(
             "datetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]"
         ));
+        assert!(content.contains("namespace = \"dbapi\""));
+        assert!(!content.contains("#namespace = \"dbapi\""));
 
         std::fs::remove_dir_all(&project_base).expect("temp project base should be removed");
     }
@@ -5117,7 +5121,7 @@ CREATE TABLE demo (
         assert_eq!(warnings[0].dominant_family, "Boolean");
     }
 
-    use crate::{ExportArgs, ImportArgs, InferArgs, UriArg};
+    use crate::{ExportArgs, ImportArgs, InferArgs, InitArgs, UriArg};
     use std::path::PathBuf;
     use tokio_postgres::NoTls;
 
@@ -5126,20 +5130,21 @@ CREATE TABLE demo (
         project_name: String,
         source_uri: Option<String>,
         target_uri: Option<String>,
-        ns: String,
-    ) -> super::InitArgs {
-        super::InitArgs {
+        namespace: Option<String>,
+    ) -> InitArgs {
+        InitArgs {
             project_base,
             project_name,
             source_uri,
             target_uri,
-            namespace: Some(ns),
+            namespace,
         }
     }
     fn create_default_infer_args(config: PathBuf) -> InferArgs {
         InferArgs {
             mongo: UriArg { source_uri: None },
             namespace: None,
+            source_uri: None,
             number: Some(500),
             percent: None, // Set to None because it conflicts with `number`
             jsonb: false,
@@ -5240,7 +5245,7 @@ CREATE TABLE demo (
             "test_project".to_owned(),
             Some(mongo_uri.clone()),
             Some(pg_connection_string.clone()),
-            db_mongo.to_owned(),
+            Some(db_mongo.to_owned()),
         );
         run_init(init_args).expect("init should succeed");
 
@@ -5296,11 +5301,11 @@ CREATE TABLE demo (
                 .join("test_project.toml"),
         )?;
         assert!(
-            conf_toml.contains(&format!("uri = \"{}\"", mongo_uri)),
+            conf_toml.contains(&format!("uri = {mongo_uri:?}")),
             "Config should contain the MongoDB URI"
         );
         assert!(
-            conf_toml.contains(&format!("uri = \"{}\"", pg_connection_string)),
+            conf_toml.contains(&format!("uri = {pg_connection_string:?}")),
             "Config should contain the PostgreSQL URI"
         );
         assert!(

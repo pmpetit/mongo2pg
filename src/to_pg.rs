@@ -16,7 +16,10 @@ use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 
 use crate::analyzer::{
-    CollectionSchema, FieldSchema, TYPE_ARRAY, TYPE_BINARY, TYPE_BOOLEAN, TYPE_CODE, TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_DOUBLE, TYPE_INT32, TYPE_INT64, TYPE_MAXKEY, TYPE_MINKEY, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX, TYPE_STRING, TYPE_SYMBOL, TYPE_TIMESTAMP, TypeSchema
+    CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_BINARY, TYPE_BOOLEAN, TYPE_CODE,
+    TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_DOUBLE, TYPE_INT32,
+    TYPE_INT64, TYPE_MAXKEY, TYPE_MINKEY, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX,
+    TYPE_STRING, TYPE_SYMBOL, TYPE_TIMESTAMP,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -25,10 +28,10 @@ use crate::analyzer::{
 
 use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
-    flatten_root_array_object_field,
-    flattened_root_parent_id_column, is_null_type,
+    flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, matches_timestamp_field, scalar_type_family, sanitize,
+    inline_object_leaf_fields_with_prefix, is_null_type, matches_timestamp_field, sanitize,
+    scalar_type_family,
 };
 
 const FORCED_TIMESTAMP_PG_TYPE: &str = "TIMESTAMP WITH TIME ZONE";
@@ -348,10 +351,7 @@ fn map_value_fields(doc_ts: &TypeSchema) -> Option<&IndexMap<String, FieldSchema
 fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> String {
     let ancestor_segments = parent_name.split('_').collect::<Vec<_>>();
     let raw = if ancestor_segments.iter().any(|segment| *segment == field) {
-        let parent_segment = ancestor_segments
-            .last()
-            .copied()
-            .unwrap_or(parent_name);
+        let parent_segment = ancestor_segments.last().copied().unwrap_or(parent_name);
         format!("{parent_segment}_{field}")
     } else {
         field.to_owned()
@@ -729,8 +729,8 @@ fn handle_array_field(
             });
         }
     }
-    
-    if non_null_items.iter().any(|(t, _)| *t == TYPE_STRING) { 
+
+    if non_null_items.iter().any(|(t, _)| *t == TYPE_STRING) {
         {
             table.columns.push(Column {
                 name: col_name.to_owned(),
@@ -740,8 +740,10 @@ fn handle_array_field(
                 primary_key: false,
             });
         }
-    }
-    else if non_null_items.iter().any(|(t, _)| *t == TYPE_NUMBER || *t == TYPE_DOUBLE) {
+    } else if non_null_items
+        .iter()
+        .any(|(t, _)| *t == TYPE_NUMBER || *t == TYPE_DOUBLE)
+    {
         table.columns.push(Column {
             name: col_name.to_owned(),
             pg_type: "DOUBLE PRECISION[]".to_owned(),
@@ -776,7 +778,7 @@ fn handle_array_field(
             nullable,
             primary_key: false,
         });
-    } ;
+    };
     // else {
     //     // Mixed types or unrecognized types → JSONB
     //     table.columns.push(Column {
@@ -786,7 +788,6 @@ fn handle_array_field(
     //         primary_key: false,
     //     })
 }
-
 
 fn flatten_object_id_fields(
     table: &mut Table,
@@ -1099,14 +1100,13 @@ pub fn process_fields(
                 }
             } else if let Some(sub_fields) = &ts.object {
                 if allow_inline_objects && can_inline_object_fields(sub_fields) {
-                    let sibling_reserved =
-                        reserved_inline_sibling_names(
-                            fields,
-                            raw_name,
-                            col_prefix,
-                            mark_pk,
-                            allow_inline_objects,
-                        );
+                    let sibling_reserved = reserved_inline_sibling_names(
+                        fields,
+                        raw_name,
+                        col_prefix,
+                        mark_pk,
+                        allow_inline_objects,
+                    );
                     flatten_inline_object_fields(
                         table,
                         sub_fields,
@@ -1170,7 +1170,7 @@ pub fn process_fields(
             // Check if there's a dominant scalar type (>90% of non-null probability)
             // that can be used instead of JSONB
             let total_non_null_prob: f64 = non_null.iter().map(|(_, ts)| ts.probability).sum();
-            
+
             // Group non-null types by their scalar family
             let mut scalar_families: HashMap<String, f64> = HashMap::new();
             for (type_name, ts) in &non_null {
@@ -1178,9 +1178,12 @@ pub fn process_fields(
                     *scalar_families.entry(family.to_string()).or_insert(0.0) += ts.probability;
                 }
             }
-            
+
             // Find the dominant scalar family
-            if let Some((dominant_family, dominant_prob)) = scalar_families.into_iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)) {
+            if let Some((dominant_family, dominant_prob)) = scalar_families
+                .into_iter()
+                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            {
                 // If dominant scalar family has >90% of non-null probability, use it
                 if dominant_prob / total_non_null_prob > 0.9 {
                     // Map scalar family to a representative type and get PG type
@@ -1201,7 +1204,7 @@ pub fn process_fields(
                     continue;
                 }
             }
-            
+
             // No dominant scalar type, use JSONB
             table.columns.push(Column {
                 name: col_name,
@@ -1505,8 +1508,14 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "users", None);
         assert!(ddl.contains("CREATE TABLE users ("), "root table missing");
-        assert!(ddl.contains("name VARCHAR(5) NOT NULL"), "name column missing");
-        assert!(ddl.contains("score INTEGER NOT NULL"), "score column missing");
+        assert!(
+            ddl.contains("name VARCHAR(5) NOT NULL"),
+            "name column missing"
+        );
+        assert!(
+            ddl.contains("score INTEGER NOT NULL"),
+            "score column missing"
+        );
     }
 
     #[test]
@@ -1576,7 +1585,8 @@ mod tests {
         }
     }
 }"#,
-        ).expect("schema json should parse");
+        )
+        .expect("schema json should parse");
         let ddl = schema_to_ddl(&schema, "scheduling_jobs", None);
         assert!(
             !ddl.contains("last_update TEXT NOT NULL"),
@@ -1734,18 +1744,9 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "executions", None);
 
-        assert!(
-            ddl.contains("projectid "),
-            "projectid PK column missing"
-        );
-        assert!(
-            ddl.contains("provider "),
-            "provider PK column missing"
-        );
-        assert!(
-            ddl.contains("log_type "),
-            "log_type PK column missing"
-        );
+        assert!(ddl.contains("projectid "), "projectid PK column missing");
+        assert!(ddl.contains("provider "), "provider PK column missing");
+        assert!(ddl.contains("log_type "), "log_type PK column missing");
         assert!(
             ddl.contains("last_execution "),
             "data field should stay on root table"
@@ -1778,8 +1779,9 @@ mod tests {
         let docs = vec![doc! { "_id": 1_i32, "tags": ["rust", "mongodb"] }];
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "posts", None);
-        assert!(ddl.contains("CREATE TABLE posts (\n    id SERIAL PRIMARY KEY,\n    tags TEXT[] NOT NULL\n);"));
-
+        assert!(ddl.contains(
+            "CREATE TABLE posts (\n    id SERIAL PRIMARY KEY,\n    tags TEXT[] NOT NULL\n);"
+        ));
     }
 
     #[test]
@@ -1960,12 +1962,8 @@ mod tests {
         }
         let schema = analyzer.finish();
 
-        let ddl = schema_to_ddl_with_timestamp_fields(
-            &schema,
-            "projects",
-            None,
-            &["*_date".to_owned()],
-        );
+        let ddl =
+            schema_to_ddl_with_timestamp_fields(&schema, "projects", None, &["*_date".to_owned()]);
 
         assert!(ddl.contains("CREATE TABLE providers ("));
         assert!(ddl.contains("CREATE TABLE metadata ("));
@@ -1973,7 +1971,6 @@ mod tests {
         assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
         assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
     }
-
 
     #[test]
     fn monitoring_with_items_skewed_item_between_string_and_object() {
@@ -2022,7 +2019,7 @@ mod tests {
         assert!(ddl.contains("CREATE TABLE communities ("));
 
         //assert!(!ddl.contains("CREATE TABLE communities ("));
-    }    
+    }
     #[test]
     fn monitoring_with_array_of_int_in_object() {
         let json_str = std::fs::read_to_string("tests/fixtures/host_verification_int.json")
