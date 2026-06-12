@@ -54,19 +54,27 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             artifact: mongo2pg-linux-aarch64
-          - os: macos-13
-            target: x86_64-apple-darwin
-            artifact: mongo2pg-macos-x86_64
           - os: macos-14
             target: aarch64-apple-darwin
-            artifact: mongo2pg-macos-aarch64
+            artifact: mongo2pg-macos-14-aarch64
+          - os: macos-15
+            target: aarch64-apple-darwin
+            artifact: mongo2pg-macos-15-aarch64
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            artifact: mongo2pg-macos-15-x86_64
+          - os: macos-26
+            target: aarch64-apple-darwin
+            artifact: mongo2pg-macos-26-aarch64
+          - os: macos-26-intel
+            target: x86_64-apple-darwin
+            artifact: mongo2pg-macos-26-x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: mongo2pg-windows-x86_64.exe
           - os: windows-11-arm
             target: aarch64-pc-windows-msvc
             artifact: mongo2pg-windows-aarch64.exe
-
 
     steps:
       - uses: actions/checkout@v6.0.2
@@ -83,8 +91,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key:
-            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
 
       - name: Build release binary
