@@ -3,7 +3,7 @@ name: PR Preview Build
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
     paths:
       - "src/**"
       - "Cargo.toml"
@@ -110,8 +110,12 @@ jobs:
     name: Publish PR preview release
     needs: build
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.action != 'closed'
+    permissions:
+      contents: write
+      pull-requests: write
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -180,10 +184,12 @@ jobs:
     name: Delete preview release on PR close
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Delete preview release and tag
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           TAG="pr-${{ github.event.pull_request.number }}-preview"
           gh release delete "$TAG" --repo ${{ github.repository }} --yes 2>/dev/null || true
