@@ -63,12 +63,6 @@ jobs:
           - os: macos-15-intel
             target: x86_64-apple-darwin
             artifact: mongo2pg-macos-15-x86_64
-          - os: macos-26
-            target: aarch64-apple-darwin
-            artifact: mongo2pg-macos-26-aarch64
-          - os: macos-26-intel
-            target: x86_64-apple-darwin
-            artifact: mongo2pg-macos-26-x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: mongo2pg-windows-x86_64.exe
