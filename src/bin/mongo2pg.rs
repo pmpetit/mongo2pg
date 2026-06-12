@@ -1759,7 +1759,17 @@ struct PgMapping {
 struct CollectionMapping {
     collection_name: String,
     dbname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mongo_path: Option<String>,
     pg_mapping: PgMapping,
+}
+
+fn mongo_path_from_segments(segments: &[String]) -> Option<String> {
+    if segments.is_empty() {
+        Some(".".to_owned())
+    } else {
+        Some(format!(".{}", segments.join(".")))
+    }
 }
 
 fn sanitize_pg_name(name: &str) -> String {
@@ -2308,6 +2318,7 @@ fn build_collection_mappings_with_timestamp_fields(
         schema_name: &str,
         table_name: &str,
         file_stem: &str,
+        mongo_path_segments: &[String],
         fields: &IndexMap<String, FieldSchema>,
         is_root: bool,
         emit_current: bool,
@@ -2338,6 +2349,7 @@ fn build_collection_mappings_with_timestamp_fields(
                         CollectionMapping {
                             collection_name: file_stem.to_owned(),
                             dbname: db_name.to_owned(),
+                            mongo_path: mongo_path_from_segments(mongo_path_segments),
                             pg_mapping: PgMapping {
                                 dbname: db_name.to_owned(),
                                 schema_name: schema_name.to_owned(),
@@ -2398,11 +2410,14 @@ fn build_collection_mappings_with_timestamp_fields(
                         })
                         .collect::<Vec<_>>();
                     if !columns.is_empty() {
+                        let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                        child_mongo_path_segments.push(raw_name.clone());
                         out.push((
                             child_table.clone(),
                             CollectionMapping {
                                 collection_name: child_table.clone(),
                                 dbname: db_name.to_owned(),
+                                mongo_path: mongo_path_from_segments(&child_mongo_path_segments),
                                 pg_mapping: PgMapping {
                                     dbname: db_name.to_owned(),
                                     schema_name: schema_name.to_owned(),
@@ -2421,6 +2436,11 @@ fn build_collection_mappings_with_timestamp_fields(
                     schema_name,
                     &child_table,
                     &child_table,
+                    &{
+                        let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                        child_mongo_path_segments.push(raw_name.clone());
+                        child_mongo_path_segments
+                    },
                     &group.child_fields,
                     false,
                     false,
@@ -2457,6 +2477,11 @@ fn build_collection_mappings_with_timestamp_fields(
                         schema_name,
                         &child_table,
                         &child_table,
+                        &{
+                            let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                            child_mongo_path_segments.push(raw_name.clone());
+                            child_mongo_path_segments
+                        },
                         sub_fields,
                         false,
                         true,
@@ -2483,6 +2508,12 @@ fn build_collection_mappings_with_timestamp_fields(
                                 schema_name,
                                 &child_table,
                                 &child_table,
+                                &{
+                                    let mut child_mongo_path_segments =
+                                        mongo_path_segments.to_vec();
+                                    child_mongo_path_segments.push(raw_name.clone());
+                                    child_mongo_path_segments
+                                },
                                 sub_fields,
                                 false,
                                 true,
@@ -2518,11 +2549,16 @@ fn build_collection_mappings_with_timestamp_fields(
                                 })
                                 .collect::<Vec<_>>();
                             if !columns.is_empty() {
+                                let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                                child_mongo_path_segments.push(raw_name.clone());
                                 out.push((
                                     child_table.clone(),
                                     CollectionMapping {
                                         collection_name: child_table.clone(),
                                         dbname: db_name.to_owned(),
+                                        mongo_path: mongo_path_from_segments(
+                                            &child_mongo_path_segments,
+                                        ),
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
                                             schema_name: schema_name.to_owned(),
@@ -2650,6 +2686,7 @@ fn build_collection_mappings_with_timestamp_fields(
             CollectionMapping {
                 collection_name: root_file_stem.clone(),
                 dbname: db_name.to_owned(),
+                mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -2666,6 +2703,7 @@ fn build_collection_mappings_with_timestamp_fields(
             &mapping_schema_name,
             &root_table_name,
             &root_file_stem,
+            &Vec::new(),
             &group.child_fields,
             false,
             false,
@@ -2718,6 +2756,7 @@ fn build_collection_mappings_with_timestamp_fields(
             CollectionMapping {
                 collection_name: root_file_stem.clone(),
                 dbname: db_name.to_owned(),
+                mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -2734,6 +2773,7 @@ fn build_collection_mappings_with_timestamp_fields(
             &mapping_schema_name,
             &root_table_name,
             &root_file_stem,
+            &Vec::new(),
             item_fields,
             false,
             false,
@@ -2751,6 +2791,7 @@ fn build_collection_mappings_with_timestamp_fields(
         &mapping_schema_name,
         &root_table_name,
         &root_file_stem,
+        &Vec::new(),
         &schema.object,
         true,
         true,
