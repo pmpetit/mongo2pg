@@ -5225,6 +5225,8 @@ CREATE TABLE demo (
         id: i32,
         name: String,
         hire_date: DateTime<Utc>,
+        created_at: String,
+        last_update: String,
     }
 
     #[tokio::test]
@@ -5277,6 +5279,8 @@ CREATE TABLE demo (
                     .and_hms_opt(0, 0, 0)
                     .unwrap(),
             ),
+            created_at: "2024-01-15T00:00:00Z".to_string(),
+            last_update: "2024-01-15T00:00:00Z".to_string(),
         };
         let employee_doc = bson::to_document(&new_employee)?;
         collection.insert_one(employee_doc).await?;
@@ -5380,6 +5384,8 @@ CREATE TABLE demo (
 
         run_infer(infer_args).await?;
 
+        println!("Inserted employee into MongoDB: {:?}", new_employee.name);
+
         let ddl_file_path = temp_dir
             .path()
             .join("test_project")
@@ -5446,7 +5452,9 @@ CREATE TABLE demo (
 
             CREATE TABLE employees (
                 id TEXT PRIMARY KEY,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                 hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
+                last_update TIMESTAMP WITH TIME ZONE NOT NULL,
                 name VARCHAR(20) NOT NULL
             );
         "#};
@@ -5493,22 +5501,28 @@ CREATE TABLE demo (
         });
         let employee_name = "Jane Doe";
         let hire_date = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+        let created_at = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+        let last_update = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
 
         client
             .execute("SET search_path TO employees, public", &[])
             .await?;
         let row = client
             .query_one(
-                "SELECT name, hire_date FROM employees WHERE name = $1",
+                "SELECT name, hire_date, created_at, last_update FROM employees WHERE name = $1",
                 &[&employee_name],
             )
             .await?;
 
         let retrieved_name: &str = row.get("name");
         let retrieved_date: chrono::DateTime<chrono::Utc> = row.get("hire_date");
+        let retrieved_created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+        let retrieved_last_update: chrono::DateTime<chrono::Utc> = row.get("last_update");
 
         assert_eq!(retrieved_name, employee_name);
         assert_eq!(retrieved_date, hire_date);
+        assert_eq!(retrieved_created_at, created_at);
+        assert_eq!(retrieved_last_update, last_update);
 
         run_check_md5("employees".to_owned(), Some(config.clone()), false)
             .await
