@@ -1,0 +1,46 @@
+{
+  "_id": "638f63236f4453d6ef97db3d",
+  "name": "scheduler_is_activated",
+  "type": "finops",
+  "result_message": "Stop jobs are not in place.",
+  "status": "KO",
+  "severity": "HIGH",
+  "can_be_disabled": true,
+  "can_be_remediated": true,
+  "advices": [
+    {
+      "id": "5ffd036a9add84ad88e6fdb5eb3cba01fdc3ee17",
+      "advice": "Create stop job with default schedule: 55 19 * * 1-5.",
+      "object_type": "SERVICE",
+      "object_id": "aiven-pg-stocktakingorchestrator",
+      "remediator_params": {
+        "to_create": true,
+        "job_type": "stop"
+      },
+      "earnings": {
+        "current_monthly_cost": 75.19,
+        "monthly_cost_after_remediation": 23.79,
+        "monthly_gain": 51.4
+      },
+      "remediation_plan": {}
+    },
+    {
+      "id": "467eec9772331f0f54664efc1190de1a6cac4f68",
+      "advice": "Create stop job with default schedule: 55 19 * * 1-5.",
+      "object_type": "SERVICE",
+      "object_id": "aiven-pg-stocktakingorchestrator-replica",
+      "remediator_params": {
+        "to_create": true,
+        "job_type": "stop"
+      },
+      "earnings": {
+        "current_monthly_cost": 75.19,
+        "monthly_cost_after_remediation": 23.79,
+        "monthly_gain": 51.4
+      },
+      "remediation_plan": {}
+    }
+  ],
+  "project_id": "FRAS-A-TIS",
+  "date": "2022-12-21 18:00:57.731421"
+}

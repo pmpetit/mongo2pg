@@ -32,6 +32,7 @@ use mongo2pg::analyzer::{
 };
 use mongo2pg::checkmd5::{compute_md5_summaries_for_collection, run_check_md5};
 use mongo2pg::export::export_collection;
+use mongo2pg::mapping_path::mapping_mongo_path_for_table;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
     render_post_import_html, PostImportCollectionRow, PostImportMd5Column,
@@ -1764,14 +1765,6 @@ struct CollectionMapping {
     pg_mapping: PgMapping,
 }
 
-fn mongo_path_from_segments(segments: &[String]) -> Option<String> {
-    if segments.is_empty() {
-        Some(".".to_owned())
-    } else {
-        Some(format!(".{}", segments.join(".")))
-    }
-}
-
 fn sanitize_pg_name(name: &str) -> String {
     let s: String = name
         .to_lowercase()
@@ -2349,7 +2342,7 @@ fn build_collection_mappings_with_timestamp_fields(
                         CollectionMapping {
                             collection_name: file_stem.to_owned(),
                             dbname: db_name.to_owned(),
-                            mongo_path: mongo_path_from_segments(mongo_path_segments),
+                            mongo_path: mapping_mongo_path_for_table(table_name, tables_by_name),
                             pg_mapping: PgMapping {
                                 dbname: db_name.to_owned(),
                                 schema_name: schema_name.to_owned(),
@@ -2417,7 +2410,10 @@ fn build_collection_mappings_with_timestamp_fields(
                             CollectionMapping {
                                 collection_name: child_table.clone(),
                                 dbname: db_name.to_owned(),
-                                mongo_path: mongo_path_from_segments(&child_mongo_path_segments),
+                                mongo_path: mapping_mongo_path_for_table(
+                                    &child_table,
+                                    tables_by_name,
+                                ),
                                 pg_mapping: PgMapping {
                                     dbname: db_name.to_owned(),
                                     schema_name: schema_name.to_owned(),
@@ -2556,8 +2552,9 @@ fn build_collection_mappings_with_timestamp_fields(
                                     CollectionMapping {
                                         collection_name: child_table.clone(),
                                         dbname: db_name.to_owned(),
-                                        mongo_path: mongo_path_from_segments(
-                                            &child_mongo_path_segments,
+                                        mongo_path: mapping_mongo_path_for_table(
+                                            &child_table,
+                                            tables_by_name,
                                         ),
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
@@ -4587,6 +4584,7 @@ CREATE TABLE demo (
             .find(|(stem, _)| stem == "advices")
             .map(|(_, mapping)| mapping)
             .expect("advices mapping should exist");
+        assert_eq!(advices_mapping.mongo_path.as_deref(), Some(".advisors"));
         assert!(advices_mapping.pg_mapping.ddl.is_some());
         let advice_columns = advices_mapping
             .pg_mapping
@@ -4603,6 +4601,10 @@ CREATE TABLE demo (
             .find(|(stem, _)| stem == "earnings")
             .map(|(_, mapping)| mapping)
             .expect("earnings mapping should exist");
+        assert_eq!(
+            earnings_mapping.mongo_path.as_deref(),
+            Some(".advisors.advices")
+        );
         let earnings_columns = earnings_mapping
             .pg_mapping
             .columns
