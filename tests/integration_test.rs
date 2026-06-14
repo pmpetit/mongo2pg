@@ -5,6 +5,7 @@
 
 use bson::{doc, Bson};
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
+use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     compute_cluster_score, render_cluster_html, DatabaseScore, SYSTEM_DATABASES,
 };
@@ -541,5 +542,29 @@ fn test_render_mongo_schema_html_structure() {
     assert!(
         html.contains("mermaid"),
         "HTML must reference the Mermaid library"
+    );
+}
+
+#[test]
+fn test_advisors_fixture_mapping_mongo_paths() {
+    let fixture_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/advisors.json");
+    let content = std::fs::read_to_string(fixture_path).expect("fixture should be readable");
+    let _doc: bson::Document = serde_json::from_str(&content).expect("fixture must be valid JSON");
+
+    assert_eq!(
+        mapping_mongo_path_for_segments("advisors", &[]).as_deref(),
+        Some("."),
+    );
+    assert_eq!(
+        mapping_mongo_path_for_segments("advisors", &["advices".to_owned()]).as_deref(),
+        Some(".advisors.advices"),
+    );
+    assert_eq!(
+        mapping_mongo_path_for_segments(
+            "advisors",
+            &["advices".to_owned(), "earnings".to_owned()],
+        )
+        .as_deref(),
+        Some(".advisors.advices.earnings"),
     );
 }

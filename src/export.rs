@@ -177,6 +177,32 @@ fn bson_to_timestamp_string(val: &Bson) -> Option<String> {
             .and_then(numeric_timestamp_to_millis)
             .and_then(DateTime::<Utc>::from_timestamp_millis)
             .map(format_datetime),
+        Bson::Array(arr) => {
+            let elements: Vec<String> = arr
+                .iter()
+                .filter_map(bson_to_timestamp_string)
+                .map(|elem_str| {
+                    let needs_quoting = elem_str.is_empty()
+                        || elem_str.contains(',')
+                        || elem_str.contains('{')
+                        || elem_str.contains('}')
+                        || elem_str.contains('"')
+                        || elem_str.contains('\\')
+                        || elem_str.chars().any(char::is_whitespace);
+
+                    if needs_quoting {
+                        format!(
+                            "\"{}\"",
+                            elem_str.replace('\\', "\\\\").replace('"', "\\\"")
+                        )
+                    } else {
+                        elem_str
+                    }
+                })
+                .collect();
+
+            Some(format!("{{{}}}", elements.join(",")))
+        }
         Bson::Null | Bson::Undefined => None,
         other => bson_to_string(other),
     }
@@ -1495,6 +1521,44 @@ CREATE TABLE scheduling_jobs (
 
         let rows = all_rows.get("scheduling_jobs").expect("root rows missing");
         assert_eq!(rows[0][1].as_deref(), Some("2022-04-20 15:28:25.273+00:00"));
+    }
+
+    #[test]
+    fn export_timestamp_array_columns_normalize_string_items() {
+        let sql = r#"
+CREATE TABLE engine (
+    id TEXT PRIMARY KEY,
+    release_date TIMESTAMP WITH TIME ZONE[] NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "engine-1",
+            "release_date": [
+                "2025-01-01T00:00:00Z",
+                "2025-01-02T00:00:00Z"
+            ]
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("engine").expect("root rows missing");
+        assert_eq!(rows[0][0].as_deref(), Some("engine-1"));
+        assert_eq!(
+            rows[0][1].as_deref(),
+            Some("{\"2025-01-01 00:00:00+00:00\",\"2025-01-02 00:00:00+00:00\"}")
+        );
     }
 
     #[test]

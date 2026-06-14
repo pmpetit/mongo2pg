@@ -512,13 +512,35 @@ mongo2pg [infer] -c <CONFIG> [OPTIONS]
 | `-o, --output-dir <DIR>` | Write output files into `<dir>/` for each collection |
 | `--print-json` | Print the inferred schema JSON to stdout |
 
-When `-c` or `-o` is given, each collection produces three files:
+When `-c` or `-o` is given, each collection produces:
 
 ```
 source/collections/<name>/
     <name>.json          ← inferred schema (JSON)
     <name>.stats.txt     ← human-readable stats
     <name>.stats.yaml    ← structured stats (consumed by report)
+    mapping_*.yaml       ← source-to-PostgreSQL table mappings
+```
+
+Each generated `mapping_*.yaml` starts with:
+
+```yaml
+collection_name: <table-name>
+dbname: <mongo-db>
+mongo_path: .               # root mapping
+# or .parent.child          # nested/object-derived child table mapping
+pg_mapping:
+  ...
+```
+
+Example nested mapping:
+
+```yaml
+collection_name: services_metadata
+dbname: retail
+mongo_path: .services.metadata
+pg_mapping:
+  ...
 ```
 
 ### Inferring all databases (no `--namespace`)
