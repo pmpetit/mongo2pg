@@ -5,13 +5,11 @@
 
 use bson::{doc, Bson};
 use mongo2pg::analyzer::{Analyzer, CollectionSchema};
-use mongo2pg::mapping_path::mapping_mongo_path_for_table;
+use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     compute_cluster_score, render_cluster_html, DatabaseScore, SYSTEM_DATABASES,
 };
-use mongo2pg::schema_diagram::parse_sql;
 use mongo2pg::stats::SchemaStats;
-use mongo2pg::to_pg::schema_to_ddl_with_timestamp_fields;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -549,41 +547,24 @@ fn test_render_mongo_schema_html_structure() {
 
 #[test]
 fn test_advisors_fixture_mapping_mongo_paths() {
-    use std::collections::HashMap;
-
     let fixture_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/advisors.json");
     let content = std::fs::read_to_string(fixture_path).expect("fixture should be readable");
-    let doc: bson::Document = serde_json::from_str(&content).expect("fixture must be valid JSON");
-
-    let schema = analyze_docs(&[doc]);
-    let ddl = schema_to_ddl_with_timestamp_fields(
-        &schema,
-        "advisors",
-        None,
-        &[
-            "created_at".to_owned(),
-            "last_update".to_owned(),
-            "updated_at".to_owned(),
-            "*_date".to_owned(),
-            "date".to_owned(),
-        ],
-    );
-    let tables = parse_sql(&ddl);
-    let tables_by_name: HashMap<String, mongo2pg::schema_diagram::Table> = tables
-        .into_iter()
-        .map(|table| (table.name.clone(), table))
-        .collect();
+    let _doc: bson::Document = serde_json::from_str(&content).expect("fixture must be valid JSON");
 
     assert_eq!(
-        mapping_mongo_path_for_table("advisors", &tables_by_name).as_deref(),
+        mapping_mongo_path_for_segments("advisors", &[]).as_deref(),
         Some("."),
     );
     assert_eq!(
-        mapping_mongo_path_for_table("advices", &tables_by_name).as_deref(),
-        Some(".advisors"),
+        mapping_mongo_path_for_segments("advisors", &["advices".to_owned()]).as_deref(),
+        Some(".advisors.advices"),
     );
     assert_eq!(
-        mapping_mongo_path_for_table("earnings", &tables_by_name).as_deref(),
-        Some(".advisors.advices"),
+        mapping_mongo_path_for_segments(
+            "advisors",
+            &["advices".to_owned(), "earnings".to_owned()],
+        )
+        .as_deref(),
+        Some(".advisors.advices.earnings"),
     );
 }

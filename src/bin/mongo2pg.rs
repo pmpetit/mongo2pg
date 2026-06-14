@@ -32,7 +32,7 @@ use mongo2pg::analyzer::{
 };
 use mongo2pg::checkmd5::{compute_md5_summaries_for_collection, run_check_md5};
 use mongo2pg::export::export_collection;
-use mongo2pg::mapping_path::mapping_mongo_path_for_table;
+use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
     render_post_import_html, PostImportCollectionRow, PostImportMd5Column,
@@ -2308,6 +2308,7 @@ fn build_collection_mappings_with_timestamp_fields(
 
     fn collect_table_mappings(
         db_name: &str,
+        root_collection_name: &str,
         schema_name: &str,
         table_name: &str,
         file_stem: &str,
@@ -2342,7 +2343,10 @@ fn build_collection_mappings_with_timestamp_fields(
                         CollectionMapping {
                             collection_name: file_stem.to_owned(),
                             dbname: db_name.to_owned(),
-                            mongo_path: mapping_mongo_path_for_table(table_name, tables_by_name),
+                            mongo_path: mapping_mongo_path_for_segments(
+                                root_collection_name,
+                                mongo_path_segments,
+                            ),
                             pg_mapping: PgMapping {
                                 dbname: db_name.to_owned(),
                                 schema_name: schema_name.to_owned(),
@@ -2410,9 +2414,9 @@ fn build_collection_mappings_with_timestamp_fields(
                             CollectionMapping {
                                 collection_name: child_table.clone(),
                                 dbname: db_name.to_owned(),
-                                mongo_path: mapping_mongo_path_for_table(
-                                    &child_table,
-                                    tables_by_name,
+                                mongo_path: mapping_mongo_path_for_segments(
+                                    root_collection_name,
+                                    &child_mongo_path_segments,
                                 ),
                                 pg_mapping: PgMapping {
                                     dbname: db_name.to_owned(),
@@ -2429,6 +2433,7 @@ fn build_collection_mappings_with_timestamp_fields(
 
                 collect_table_mappings(
                     db_name,
+                    root_collection_name,
                     schema_name,
                     &child_table,
                     &child_table,
@@ -2470,6 +2475,7 @@ fn build_collection_mappings_with_timestamp_fields(
                     );
                     collect_table_mappings(
                         db_name,
+                        root_collection_name,
                         schema_name,
                         &child_table,
                         &child_table,
@@ -2501,6 +2507,7 @@ fn build_collection_mappings_with_timestamp_fields(
                             );
                             collect_table_mappings(
                                 db_name,
+                                root_collection_name,
                                 schema_name,
                                 &child_table,
                                 &child_table,
@@ -2552,9 +2559,9 @@ fn build_collection_mappings_with_timestamp_fields(
                                     CollectionMapping {
                                         collection_name: child_table.clone(),
                                         dbname: db_name.to_owned(),
-                                        mongo_path: mapping_mongo_path_for_table(
-                                            &child_table,
-                                            tables_by_name,
+                                        mongo_path: mapping_mongo_path_for_segments(
+                                            root_collection_name,
+                                            &child_mongo_path_segments,
                                         ),
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
@@ -2697,6 +2704,7 @@ fn build_collection_mappings_with_timestamp_fields(
 
         collect_table_mappings(
             db_name,
+            coll_name,
             &mapping_schema_name,
             &root_table_name,
             &root_file_stem,
@@ -2767,6 +2775,7 @@ fn build_collection_mappings_with_timestamp_fields(
 
         collect_table_mappings(
             db_name,
+            coll_name,
             &mapping_schema_name,
             &root_table_name,
             &root_file_stem,
@@ -2785,6 +2794,7 @@ fn build_collection_mappings_with_timestamp_fields(
     let mut mappings = Vec::new();
     collect_table_mappings(
         db_name,
+        coll_name,
         &mapping_schema_name,
         &root_table_name,
         &root_file_stem,
@@ -4584,7 +4594,10 @@ CREATE TABLE demo (
             .find(|(stem, _)| stem == "advices")
             .map(|(_, mapping)| mapping)
             .expect("advices mapping should exist");
-        assert_eq!(advices_mapping.mongo_path.as_deref(), Some(".advisors"));
+        assert_eq!(
+            advices_mapping.mongo_path.as_deref(),
+            Some(".advisors.advices")
+        );
         assert!(advices_mapping.pg_mapping.ddl.is_some());
         let advice_columns = advices_mapping
             .pg_mapping
@@ -4603,7 +4616,7 @@ CREATE TABLE demo (
             .expect("earnings mapping should exist");
         assert_eq!(
             earnings_mapping.mongo_path.as_deref(),
-            Some(".advisors.advices")
+            Some(".advisors.advices.earnings")
         );
         let earnings_columns = earnings_mapping
             .pg_mapping
@@ -4828,6 +4841,42 @@ CREATE TABLE demo (
             .collect::<Vec<_>>();
         assert!(metadata_columns.contains(&("creation_date", "creation_date")));
         assert!(metadata_columns.contains(&("status", "status")));
+    }
+
+    #[test]
+    fn build_collection_mappings_uses_mongo_field_names_in_path_for_renamed_tables() {
+        let docs = vec![doc! {
+            "_id": "project-1",
+            "metadata": {
+                "project_type": "demo"
+            },
+            "services": [{
+                "metadata": {
+                    "created_from": "auto",
+                    "first_detection_time": "2024-01-01 00:00:00",
+                    "last_update_time": "2024-01-01 00:00:00",
+                    "managed": true,
+                    "recognized": true
+                }
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("dbapi", "projects", None, &schema);
+        let services_metadata = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.pg_mapping.table_name == "services_metadata")
+            .map(|(_, mapping)| mapping)
+            .expect("services_metadata mapping should exist");
+
+        assert_eq!(
+            services_metadata.mongo_path.as_deref(),
+            Some(".projects.services.metadata")
+        );
     }
 
     #[test]
