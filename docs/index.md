@@ -32,10 +32,11 @@ PostgreSQL.
 | Schema inference | Samples MongoDB collections and writes JSON schema-like structure plus stats |
 | Project workflow | `init` creates a repeatable migration project with config, source, schema, data, and report folders |
 | PostgreSQL DDL generation | `infer` refreshes PostgreSQL `CREATE TABLE` statements under `schema/tables/` when used with a project config |
+| Collection filtering | Configure `[source].include` / `[source].exclude` in TOML to scope `infer`, `to-pg`, `export`, and `import` runs (`exclude` wins) |
 | Per-collection PostgreSQL schemas | Each collection is deployed into its own PostgreSQL schema by default |
 | CSV export | `export` expands MongoDB documents into `.csv.gz` files matching the generated SQL tables |
 | PostgreSQL import | `import` creates PostgreSQL objects and loads exported `.csv.gz` files using `TARGET_URI` |
-| HTML reporting | `infer` writes collection-level and schema-level reports, and `report` can regenerate them from existing files |
+| HTML reporting | `infer` writes collection-level and schema-level reports, flags collections with infer warnings, and `report` can regenerate them from existing files |
 | Post-import validation | `import` writes `reports/post_report.html` automatically, and `report --post-import` can regenerate it later |
 
 ---
@@ -73,7 +74,7 @@ mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.toml --post-imp
 
 ```text
 <project>/
-  config/                project configuration (`SOURCE_URI`, `TARGET_URI`, `NAMESPACE`)
+  config/                project configuration (`[source]`, `[target]`, include/exclude filters)
   source/collections/    inferred collection schemas and stats
   schema/tables/         generated PostgreSQL DDL
   data/                  exported `.csv.gz` files

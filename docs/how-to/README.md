@@ -60,6 +60,27 @@ mongo2pg infer \
 With `-c <config>`, `infer` also refreshes SQL files under `schema/tables/`
 and the main reports under `reports/`.
 
+When sampled data contains incompatible scalar families for same field (for
+example numeric and string), `infer` stores warning details in
+`<collection>.stats.yaml` and highlights affected collections in
+`reports/main.html`.
+
+---
+
+## How to include or exclude collections from config
+
+Set filters in the TOML config under `[source]`:
+
+```toml
+[source]
+namespace = "sample_airbnb"
+include = ["listingsAndReviews", "reviews"]
+exclude = ["reviews"]
+```
+
+Filtering is applied consistently by `infer`, `to-pg`, `export`, and `import`.
+If both lists are set, `exclude` takes precedence.
+
 ---
 
 ## How to export relational CSV files
