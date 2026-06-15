@@ -79,7 +79,7 @@ This writes one folder per collection under `source/collections/` with:
 - `<collection>.json`
 - `<collection>.stats.txt`
 - `<collection>.stats.yaml`
-- `mapping_<collection>.yaml` (for future use only)
+- `mapping_*.yaml` (source-to-PostgreSQL table mappings; `mongo_path` is `.` for root and `.a.b` for nested paths)
 
 It also generates:
 

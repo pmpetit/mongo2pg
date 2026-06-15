@@ -32,6 +32,7 @@ use mongo2pg::analyzer::{
 };
 use mongo2pg::checkmd5::{compute_md5_summaries_for_collection, run_check_md5};
 use mongo2pg::export::export_collection;
+use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
     render_post_import_html, PostImportCollectionRow, PostImportMd5Column,
@@ -1759,6 +1760,8 @@ struct PgMapping {
 struct CollectionMapping {
     collection_name: String,
     dbname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mongo_path: Option<String>,
     pg_mapping: PgMapping,
 }
 
@@ -2305,9 +2308,11 @@ fn build_collection_mappings_with_timestamp_fields(
 
     fn collect_table_mappings(
         db_name: &str,
+        root_collection_name: &str,
         schema_name: &str,
         table_name: &str,
         file_stem: &str,
+        mongo_path_segments: &[String],
         fields: &IndexMap<String, FieldSchema>,
         is_root: bool,
         emit_current: bool,
@@ -2338,6 +2343,10 @@ fn build_collection_mappings_with_timestamp_fields(
                         CollectionMapping {
                             collection_name: file_stem.to_owned(),
                             dbname: db_name.to_owned(),
+                            mongo_path: mapping_mongo_path_for_segments(
+                                root_collection_name,
+                                mongo_path_segments,
+                            ),
                             pg_mapping: PgMapping {
                                 dbname: db_name.to_owned(),
                                 schema_name: schema_name.to_owned(),
@@ -2398,11 +2407,17 @@ fn build_collection_mappings_with_timestamp_fields(
                         })
                         .collect::<Vec<_>>();
                     if !columns.is_empty() {
+                        let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                        child_mongo_path_segments.push(raw_name.clone());
                         out.push((
                             child_table.clone(),
                             CollectionMapping {
                                 collection_name: child_table.clone(),
                                 dbname: db_name.to_owned(),
+                                mongo_path: mapping_mongo_path_for_segments(
+                                    root_collection_name,
+                                    &child_mongo_path_segments,
+                                ),
                                 pg_mapping: PgMapping {
                                     dbname: db_name.to_owned(),
                                     schema_name: schema_name.to_owned(),
@@ -2418,9 +2433,15 @@ fn build_collection_mappings_with_timestamp_fields(
 
                 collect_table_mappings(
                     db_name,
+                    root_collection_name,
                     schema_name,
                     &child_table,
                     &child_table,
+                    &{
+                        let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                        child_mongo_path_segments.push(raw_name.clone());
+                        child_mongo_path_segments
+                    },
                     &group.child_fields,
                     false,
                     false,
@@ -2454,9 +2475,15 @@ fn build_collection_mappings_with_timestamp_fields(
                     );
                     collect_table_mappings(
                         db_name,
+                        root_collection_name,
                         schema_name,
                         &child_table,
                         &child_table,
+                        &{
+                            let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                            child_mongo_path_segments.push(raw_name.clone());
+                            child_mongo_path_segments
+                        },
                         sub_fields,
                         false,
                         true,
@@ -2480,9 +2507,16 @@ fn build_collection_mappings_with_timestamp_fields(
                             );
                             collect_table_mappings(
                                 db_name,
+                                root_collection_name,
                                 schema_name,
                                 &child_table,
                                 &child_table,
+                                &{
+                                    let mut child_mongo_path_segments =
+                                        mongo_path_segments.to_vec();
+                                    child_mongo_path_segments.push(raw_name.clone());
+                                    child_mongo_path_segments
+                                },
                                 sub_fields,
                                 false,
                                 true,
@@ -2518,11 +2552,17 @@ fn build_collection_mappings_with_timestamp_fields(
                                 })
                                 .collect::<Vec<_>>();
                             if !columns.is_empty() {
+                                let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                                child_mongo_path_segments.push(raw_name.clone());
                                 out.push((
                                     child_table.clone(),
                                     CollectionMapping {
                                         collection_name: child_table.clone(),
                                         dbname: db_name.to_owned(),
+                                        mongo_path: mapping_mongo_path_for_segments(
+                                            root_collection_name,
+                                            &child_mongo_path_segments,
+                                        ),
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
                                             schema_name: schema_name.to_owned(),
@@ -2650,6 +2690,7 @@ fn build_collection_mappings_with_timestamp_fields(
             CollectionMapping {
                 collection_name: root_file_stem.clone(),
                 dbname: db_name.to_owned(),
+                mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -2663,9 +2704,11 @@ fn build_collection_mappings_with_timestamp_fields(
 
         collect_table_mappings(
             db_name,
+            coll_name,
             &mapping_schema_name,
             &root_table_name,
             &root_file_stem,
+            &Vec::new(),
             &group.child_fields,
             false,
             false,
@@ -2718,6 +2761,7 @@ fn build_collection_mappings_with_timestamp_fields(
             CollectionMapping {
                 collection_name: root_file_stem.clone(),
                 dbname: db_name.to_owned(),
+                mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -2731,9 +2775,11 @@ fn build_collection_mappings_with_timestamp_fields(
 
         collect_table_mappings(
             db_name,
+            coll_name,
             &mapping_schema_name,
             &root_table_name,
             &root_file_stem,
+            &Vec::new(),
             item_fields,
             false,
             false,
@@ -2748,9 +2794,11 @@ fn build_collection_mappings_with_timestamp_fields(
     let mut mappings = Vec::new();
     collect_table_mappings(
         db_name,
+        coll_name,
         &mapping_schema_name,
         &root_table_name,
         &root_file_stem,
+        &Vec::new(),
         &schema.object,
         true,
         true,
@@ -4546,6 +4594,10 @@ CREATE TABLE demo (
             .find(|(stem, _)| stem == "advices")
             .map(|(_, mapping)| mapping)
             .expect("advices mapping should exist");
+        assert_eq!(
+            advices_mapping.mongo_path.as_deref(),
+            Some(".advisors.advices")
+        );
         assert!(advices_mapping.pg_mapping.ddl.is_some());
         let advice_columns = advices_mapping
             .pg_mapping
@@ -4562,6 +4614,10 @@ CREATE TABLE demo (
             .find(|(stem, _)| stem == "earnings")
             .map(|(_, mapping)| mapping)
             .expect("earnings mapping should exist");
+        assert_eq!(
+            earnings_mapping.mongo_path.as_deref(),
+            Some(".advisors.advices.earnings")
+        );
         let earnings_columns = earnings_mapping
             .pg_mapping
             .columns
@@ -4785,6 +4841,42 @@ CREATE TABLE demo (
             .collect::<Vec<_>>();
         assert!(metadata_columns.contains(&("creation_date", "creation_date")));
         assert!(metadata_columns.contains(&("status", "status")));
+    }
+
+    #[test]
+    fn build_collection_mappings_uses_mongo_field_names_in_path_for_renamed_tables() {
+        let docs = vec![doc! {
+            "_id": "project-1",
+            "metadata": {
+                "project_type": "demo"
+            },
+            "services": [{
+                "metadata": {
+                    "created_from": "auto",
+                    "first_detection_time": "2024-01-01 00:00:00",
+                    "last_update_time": "2024-01-01 00:00:00",
+                    "managed": true,
+                    "recognized": true
+                }
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("dbapi", "projects", None, &schema);
+        let services_metadata = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.pg_mapping.table_name == "services_metadata")
+            .map(|(_, mapping)| mapping)
+            .expect("services_metadata mapping should exist");
+
+        assert_eq!(
+            services_metadata.mongo_path.as_deref(),
+            Some(".projects.services.metadata")
+        );
     }
 
     #[test]
@@ -5184,6 +5276,8 @@ CREATE TABLE demo (
         id: i32,
         name: String,
         hire_date: DateTime<Utc>,
+        created_at: String,
+        last_update: String,
     }
 
     #[tokio::test]
@@ -5236,6 +5330,8 @@ CREATE TABLE demo (
                     .and_hms_opt(0, 0, 0)
                     .unwrap(),
             ),
+            created_at: "2024-01-15T00:00:00Z".to_string(),
+            last_update: "2024-01-15T00:00:00Z".to_string(),
         };
         let employee_doc = bson::to_document(&new_employee)?;
         collection.insert_one(employee_doc).await?;
@@ -5339,6 +5435,8 @@ CREATE TABLE demo (
 
         run_infer(infer_args).await?;
 
+        println!("Inserted employee into MongoDB: {:?}", new_employee.name);
+
         let ddl_file_path = temp_dir
             .path()
             .join("test_project")
@@ -5405,7 +5503,9 @@ CREATE TABLE demo (
 
             CREATE TABLE employees (
                 id TEXT PRIMARY KEY,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                 hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
+                last_update TIMESTAMP WITH TIME ZONE NOT NULL,
                 name VARCHAR(20) NOT NULL
             );
         "#};
@@ -5452,22 +5552,28 @@ CREATE TABLE demo (
         });
         let employee_name = "Jane Doe";
         let hire_date = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+        let created_at = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+        let last_update = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
 
         client
             .execute("SET search_path TO employees, public", &[])
             .await?;
         let row = client
             .query_one(
-                "SELECT name, hire_date FROM employees WHERE name = $1",
+                "SELECT name, hire_date, created_at, last_update FROM employees WHERE name = $1",
                 &[&employee_name],
             )
             .await?;
 
         let retrieved_name: &str = row.get("name");
         let retrieved_date: chrono::DateTime<chrono::Utc> = row.get("hire_date");
+        let retrieved_created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+        let retrieved_last_update: chrono::DateTime<chrono::Utc> = row.get("last_update");
 
         assert_eq!(retrieved_name, employee_name);
         assert_eq!(retrieved_date, hire_date);
+        assert_eq!(retrieved_created_at, created_at);
+        assert_eq!(retrieved_last_update, last_update);
 
         run_check_md5("employees".to_owned(), Some(config.clone()), false)
             .await

@@ -690,7 +690,7 @@ fn add_map_table(
 fn handle_array_field(
     table: &mut Table,
     col_name: &str,
-    //mongo_field_name: &str,
+    raw_name: &str,
     items_field: &FieldSchema,
     nullable: bool,
     flatten_to_jsonb: bool,
@@ -731,10 +731,15 @@ fn handle_array_field(
     }
 
     if non_null_items.iter().any(|(t, _)| *t == TYPE_STRING) {
+        let pg_type = if matches_timestamp_field(raw_name, timestamp_fields) {
+            "TIMESTAMP WITH TIME ZONE[]"
+        } else {
+            "TEXT[]"
+        };
         {
             table.columns.push(Column {
                 name: col_name.to_owned(),
-                pg_type: "TEXT[]".to_owned(),
+                pg_type: pg_type.to_owned(),
                 // pg_type: "JSONB".to_owned(),
                 nullable,
                 primary_key: false,
@@ -1143,7 +1148,7 @@ pub fn process_fields(
                 handle_array_field(
                     table,
                     &col_name,
-                    //raw_name,
+                    raw_name,
                     &items,
                     nullable,
                     flatten_to_jsonb,
@@ -1907,6 +1912,20 @@ mod tests {
         let ddl = schema_to_ddl_with_timestamp_fields(&schema, "scheduling_jobs", None, &patterns);
 
         assert!(ddl.contains("last_update TIMESTAMP WITH TIME ZONE NOT NULL"));
+    }
+
+    #[test]
+    fn test_timestamp_field_patterns_force_timestamp_array_columns_for_string_arrays() {
+        let docs = vec![doc! {
+            "_id": 1_i32,
+            "release_date": ["2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"]
+        }];
+        let schema = analyze(&docs);
+
+        let ddl =
+            schema_to_ddl_with_timestamp_fields(&schema, "releases", None, &["*_date".to_owned()]);
+
+        assert!(ddl.contains("release_date TIMESTAMP WITH TIME ZONE[] NOT NULL"));
     }
 
     #[test]
