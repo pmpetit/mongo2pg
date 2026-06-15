@@ -56,10 +56,12 @@ base_dir = "docker_tutorial"
 project_dir = "mycluster"
 
 [source]
-uri = "mongodb://user:pass@localhost:2717/?authSource=admin"
+uri = "mongodb://user:pass@localhost:27017/?authSource=admin"
 namespace = "sample_airbnb"
 number = 1000
 jsonb = false
+include = []
+exclude = []
 
 [target]
 uri = "postgres://postgres:x@localhost:5432/postgres?sslmode=require"
@@ -86,6 +88,10 @@ It also generates:
 - PostgreSQL DDL under `schema/tables/<db>/`
 - the main HTML report in `reports/main.html`
 - schema diagrams in `reports/*.schema.html`
+
+If a field mixes incompatible scalar families in sampled data, the collection
+name is highlighted in `reports/main.html` and warning details are persisted in
+`<collection>.stats.yaml`.
 
 output is
 
