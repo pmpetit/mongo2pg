@@ -21,8 +21,8 @@ download the archive that matches your platform:
 ### Linux / macOS
 
 ```bash
-# Replace <version> and <platform> with your values, e.g. v0.3.7 and linux-x86_64
-version="v0.3.7"
+# Replace <version> and <platform> with your values, e.g. v0.5.3 and linux-x86_64
+version="v0.5.3"
 platform="linux-x86_64"
 curl -fL "https://github.com/pmpetit/mongo2pg/releases/download/${version}/mongo2pg-${platform}" \
   -o mongo2pg

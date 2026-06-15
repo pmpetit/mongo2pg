@@ -53,6 +53,11 @@ mongo2pg infer -c <config>
 | `--print-json` | Print the inferred schema JSON to stdout |
 | `-c, --config` | Project config file |
 
+When using `-c <config>`, collection filters from `[source].include` and
+`[source].exclude` are applied (`exclude` takes precedence).
+Collections with infer warnings are highlighted in `reports/main.html`, and
+warning details are also written to each `<collection>.stats.yaml`.
+
 ---
 
 ## `mongo2pg export`
@@ -70,6 +75,9 @@ mongo2pg export [collection] -c <config> [--output-dir <dir>] [--namespace <db-o
 | `-c, --config` | Project config file |
 | `--output-dir` | CSV output directory override |
 | `--namespace` | Database or fully qualified collection namespace |
+
+With `-c <config>`, `[source].include` / `[source].exclude` filters are also
+applied before export.
 
 ---
 
@@ -105,5 +113,8 @@ mongo2pg import [collection] -c <config> [--namespace <db-or-db.collection>]
 | `[collection]` | Optional collection name |
 | `-c, --config` | Project config file |
 | `--namespace` | Database or fully qualified collection namespace |
+
+With `-c <config>`, `[source].include` / `[source].exclude` filters are also
+applied before import.
 
 ---
