@@ -20,6 +20,8 @@ struct MappingYaml {
     #[serde(default)]
     #[serde(alias = "dbname")]
     mongo_dbname: Option<String>,
+    #[serde(default)]
+    mongo_path: Option<String>,
     pg_mapping: PgMappingYaml,
 }
 
@@ -968,6 +970,26 @@ fn discover_mapping_targets_for_collection(
     collection: &str,
     conf: &crate::util::ConfData,
 ) -> Result<Vec<MappingTarget>> {
+    fn parse_mongo_path(path: &str) -> SourcePath {
+        let trimmed = path.trim();
+        let segments = if trimmed == "." || trimmed.is_empty() {
+            Vec::new()
+        } else {
+            trimmed
+                .trim_start_matches('.')
+                .split('.')
+                .filter(|segment| !segment.is_empty())
+                .map(|segment| segment.to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        SourcePath {
+            path: segments,
+            scalar_array_field: None,
+            grouped_fields: None,
+        }
+    }
+
     let (_, collections_dir) = collection_paths_from_conf(conf)?;
     let safe_collection_name = collection.replace('/', "_");
     let coll_dir = collections_dir.join(&safe_collection_name);
@@ -993,13 +1015,26 @@ fn discover_mapping_targets_for_collection(
         .map(|mapping_path| {
             let mut mapping_yaml = read_mapping_yaml(&mapping_path)?;
             let table_name = mapping_yaml.pg_mapping.table_name.clone();
-            let source_path = source_paths.get(&table_name).cloned().ok_or_else(|| {
-                anyhow!(
-                    "No MongoDB source path found for table {} in {}",
-                    table_name,
-                    mapping_path.display()
-                )
-            })?;
+            let source_path = source_paths
+                .get(&table_name)
+                .cloned()
+                .or_else(|| {
+                    mapping_yaml.mongo_path.as_deref().map(|mongo_path| {
+                        let parsed = parse_mongo_path(mongo_path);
+                        source_paths
+                            .values()
+                            .find(|candidate| candidate.path == parsed.path)
+                            .cloned()
+                            .unwrap_or(parsed)
+                    })
+                })
+                .ok_or_else(|| {
+                    anyhow!(
+                        "No MongoDB source path found for table {} in {}",
+                        table_name,
+                        mapping_path.display()
+                    )
+                })?;
             backfill_mapping_columns_from_schema(
                 collection,
                 &schema,
@@ -1278,7 +1313,9 @@ async fn collect_hash_records_for_target(
 
     let mut find_action = mongo_collection.find(doc! {});
     if target.source_path.path.is_empty() {
-        find_action = find_action.sort(mongo_sort_doc(&source_fields));
+        find_action = find_action
+            .sort(mongo_sort_doc(&source_fields))
+            .allow_disk_use(true);
     }
     let mut cursor = find_action.await?;
     let mut mongo_records = Vec::new();
