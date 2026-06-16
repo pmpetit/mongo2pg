@@ -37,7 +37,7 @@ services:
       MONGODB_INITDB_ROOT_PASSWORD: pass
       MONGO_REPLICA_SET_KEY: mongo2pgdevkey
     ports:
-      - "2717:27017"
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
       - ./mongodb-entrypoint.sh:/usr/local/bin/mongodb-entrypoint.sh:ro
@@ -86,7 +86,7 @@ services:
       [
         "/bin/bash",
         "-lc",
-        'if mongosh ''mongodb://user:pass@mongodb:27017/admin?authSource=admin'' --quiet --eval ''db.getSiblingDB("sample_mflix").getCollectionNames().length > 0'' | grep -qx ''true''; then echo ''MongoDB sample datasets already loaded, skipping seed''; exit 0; fi && apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/mongodb-sample-dataset && git clone --depth 1 https://github.com/neelabalan/mongodb-sample-dataset /tmp/mongodb-sample-dataset && cd /tmp/mongodb-sample-dataset && bash script.sh mongodb 27017 user pass',
+        'if mongosh ''mongodb://user:pass@mongodb:27017/admin?authSource=admin'' --quiet --eval ''db.getSiblingDB("sample_airbnb").getCollectionNames().length > 0'' | grep -qx ''true''; then echo ''MongoDB sample datasets already loaded, skipping seed''; exit 0; fi && apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/mongodb-sample-dataset && git clone --depth 1 https://github.com/neelabalan/mongodb-sample-dataset /tmp/mongodb-sample-dataset && cd /tmp/mongodb-sample-dataset && bash script.sh mongodb 27017 user pass',
       ]
 
   # --- APACHE KAFKA (KRaft Mode - No Zookeeper) ---
@@ -186,7 +186,7 @@ services:
       [
         "sh",
         "-lc",
-        'until curl -fsS http://kafkaconnect:8083/connectors; do sleep 2; done && curl -fsS -X PUT -H ''Content-Type: application/json'' http://kafkaconnect:8083/connectors/sample-airbnb-mongodb/config -d ''{"connector.class":"io.debezium.connector.mongodb.MongoDbConnector","tasks.max":"1","mongodb.connection.string":"mongodb://user:pass@mongodb:27017/?authSource=admin&replicaSet=rs0","topic.prefix":"mongo2pg_sample_airbnb","database.include.list":"sample_airbnb","snapshot.mode":"initial"}''',
+        'until curl -fsS http://kafkaconnect:8083/connectors; do sleep 2; done && curl -fsS -X PUT -H ''Content-Type: application/json'' http://kafkaconnect:8083/connectors/sample-airbnb-mongodb/config -d ''{"connector.class":"io.debezium.connector.mongodb.MongoDbConnector","tasks.max":"1","mongodb.connection.string":"mongodb://user:pass@localhost:27017/?authSource=admin","topic.prefix":"mongo2pg_sample_airbnb","database.include.list":"sample_airbnb","snapshot.mode":"initial"}''',
       ]
 
   # --- KAFKA UI ---
