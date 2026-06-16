@@ -195,7 +195,7 @@ services:
       mongodb-seed:
         condition: service_completed_successfully
 
- kafkaconnect-init:
+  kafkaconnect-init:
     image: curlimages/curl:8.8.0
     container_name: kafka_connect_init
     depends_on:
