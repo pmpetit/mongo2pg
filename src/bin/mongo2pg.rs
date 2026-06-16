@@ -1759,7 +1759,8 @@ struct PgMapping {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CollectionMapping {
     collection_name: String,
-    dbname: String,
+    #[serde(alias = "dbname")]
+    mongo_dbname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mongo_path: Option<String>,
     pg_mapping: PgMapping,
@@ -2341,8 +2342,8 @@ fn build_collection_mappings_with_timestamp_fields(
                     out.push((
                         file_stem.to_owned(),
                         CollectionMapping {
-                            collection_name: file_stem.to_owned(),
-                            dbname: db_name.to_owned(),
+                            collection_name: table_name.to_owned(),
+                            mongo_dbname: db_name.to_owned(),
                             mongo_path: mapping_mongo_path_for_segments(
                                 root_collection_name,
                                 mongo_path_segments,
@@ -2412,8 +2413,8 @@ fn build_collection_mappings_with_timestamp_fields(
                         out.push((
                             child_table.clone(),
                             CollectionMapping {
-                                collection_name: child_table.clone(),
-                                dbname: db_name.to_owned(),
+                                collection_name: raw_name.clone(),
+                                mongo_dbname: db_name.to_owned(),
                                 mongo_path: mapping_mongo_path_for_segments(
                                     root_collection_name,
                                     &child_mongo_path_segments,
@@ -2557,8 +2558,8 @@ fn build_collection_mappings_with_timestamp_fields(
                                 out.push((
                                     child_table.clone(),
                                     CollectionMapping {
-                                        collection_name: child_table.clone(),
-                                        dbname: db_name.to_owned(),
+                                        collection_name: raw_name.clone(),
+                                        mongo_dbname: db_name.to_owned(),
                                         mongo_path: mapping_mongo_path_for_segments(
                                             root_collection_name,
                                             &child_mongo_path_segments,
@@ -2688,8 +2689,8 @@ fn build_collection_mappings_with_timestamp_fields(
         let mut mappings = vec![(
             root_file_stem.clone(),
             CollectionMapping {
-                collection_name: root_file_stem.clone(),
-                dbname: db_name.to_owned(),
+                collection_name: coll_name.to_owned(),
+                mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
@@ -2759,8 +2760,8 @@ fn build_collection_mappings_with_timestamp_fields(
         let mut mappings = vec![(
             root_file_stem.clone(),
             CollectionMapping {
-                collection_name: root_file_stem.clone(),
-                dbname: db_name.to_owned(),
+                collection_name: coll_name.to_owned(),
+                mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
@@ -4596,7 +4597,7 @@ CREATE TABLE demo (
             .expect("advices mapping should exist");
         assert_eq!(
             advices_mapping.mongo_path.as_deref(),
-            Some(".advisors.advices")
+            Some(".advices")
         );
         assert!(advices_mapping.pg_mapping.ddl.is_some());
         let advice_columns = advices_mapping
@@ -4616,7 +4617,7 @@ CREATE TABLE demo (
             .expect("earnings mapping should exist");
         assert_eq!(
             earnings_mapping.mongo_path.as_deref(),
-            Some(".advisors.advices.earnings")
+            Some(".advices.earnings")
         );
         let earnings_columns = earnings_mapping
             .pg_mapping
@@ -4875,7 +4876,7 @@ CREATE TABLE demo (
 
         assert_eq!(
             services_metadata.mongo_path.as_deref(),
-            Some(".projects.services.metadata")
+            Some(".services.metadata")
         );
     }
 

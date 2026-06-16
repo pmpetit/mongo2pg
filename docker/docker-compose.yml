@@ -83,11 +83,32 @@ services:
       mongodb-init:
         condition: service_completed_successfully
     entrypoint:
-      [
-        "/bin/bash",
-        "-lc",
-        'if mongosh ''mongodb://user:pass@mongodb:27017/admin?authSource=admin'' --quiet --eval ''db.getSiblingDB("sample_airbnb").getCollectionNames().length > 0'' | grep -qx ''true''; then echo ''MongoDB sample datasets already loaded, skipping seed''; exit 0; fi && apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/mongodb-sample-dataset && git clone --depth 1 https://github.com/neelabalan/mongodb-sample-dataset /tmp/mongodb-sample-dataset && cd /tmp/mongodb-sample-dataset && bash script.sh mongodb 27017 user pass',
-      ]
+      - /bin/bash
+      - -lc
+      - |
+        echo 'Waiting for MongoDB primary...'
+        # Loop until the replica set has a primary member
+        until mongosh 'mongodb://user:pass@mongodb:27017/admin?authSource=admin&replicaSet=rs0' --quiet --eval 'db.isMaster().ismaster' | grep -q 'true'; do
+          echo -n '.'
+          sleep 2
+        done
+        echo ' MongoDB primary is UP!'
+
+        # Check if data is already seeded
+        if mongosh 'mongodb://user:pass@mongodb:27017/admin?authSource=admin' --quiet --eval 'db.getSiblingDB("sample_airbnb").getCollectionNames().length > 0' | grep -qx 'true'; then
+          echo 'MongoDB sample datasets already loaded, skipping seed'
+          exit 0
+        fi
+
+        # Install dependencies and run the seeding script
+        echo 'Seeding MongoDB with sample data...'
+        apt-get update && \
+        apt-get install -y --no-install-recommends git ca-certificates && \
+        rm -rf /var/lib/apt/lists/* && \
+        rm -rf /tmp/mongodb-sample-dataset && \
+        git clone --depth 1 https://github.com/neelabalan/mongodb-sample-dataset /tmp/mongodb-sample-dataset && \
+        cd /tmp/mongodb-sample-dataset && \
+        bash script.sh mongodb 27017 user pass
 
   # --- APACHE KAFKA (KRaft Mode - No Zookeeper) ---
   kafka:
@@ -174,7 +195,7 @@ services:
       mongodb-seed:
         condition: service_completed_successfully
 
-  kafkaconnect-init:
+ kafkaconnect-init:
     image: curlimages/curl:8.8.0
     container_name: kafka_connect_init
     depends_on:
@@ -183,11 +204,27 @@ services:
       mongodb-seed:
         condition: service_completed_successfully
     entrypoint:
-      [
-        "sh",
-        "-lc",
-        'until curl -fsS http://kafkaconnect:8083/connectors; do sleep 2; done && curl -fsS -X PUT -H ''Content-Type: application/json'' http://kafkaconnect:8083/connectors/sample-airbnb-mongodb/config -d ''{"connector.class":"io.debezium.connector.mongodb.MongoDbConnector","tasks.max":"1","mongodb.connection.string":"mongodb://user:pass@localhost:27017/?authSource=admin","topic.prefix":"mongo2pg_sample_airbnb","database.include.list":"sample_airbnb","snapshot.mode":"initial"}''',
-      ]
+      - sh
+      - -lc
+      - |
+        echo "Waiting for Kafka Connect to be available..."
+        until curl -fsS http://kafkaconnect:8083/connectors; do
+          sleep 2
+        done
+
+        echo "Kafka Connect is up. Creating Debezium MongoDB connector..."
+        curl -fsS -X PUT \
+          -H 'Content-Type: application/json' \
+          http://kafkaconnect:8083/connectors/sample-airbnb-mongodb/config \
+          -d '{
+            "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
+            "tasks.max": "1",
+            "mongodb.connection.string": "mongodb://user:pass@mongodb:27017/?replicaSet=rs0&authSource=admin",
+            "topic.prefix": "mongo2pg_sample_airbnb",
+            "database.include.list": "sample_airbnb",
+            "snapshot.mode": "initial"
+          }'
+        echo "\nConnector created successfully."
 
   # --- KAFKA UI ---
   kafkaui:

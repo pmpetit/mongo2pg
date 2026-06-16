@@ -18,7 +18,8 @@ use tokio_postgres::{Client, Row};
 #[derive(Debug, Clone, Deserialize)]
 struct MappingYaml {
     #[serde(default)]
-    dbname: Option<String>,
+    #[serde(alias = "dbname")]
+    mongo_dbname: Option<String>,
     pg_mapping: PgMappingYaml,
 }
 
@@ -1314,7 +1315,7 @@ async fn collect_hash_records_for_target(
         .target_database_name
         .as_deref()
         .or(target.mapping_yaml.pg_mapping.dbname.as_deref())
-        .or(target.mapping_yaml.dbname.as_deref())
+        .or(target.mapping_yaml.mongo_dbname.as_deref())
         .ok_or_else(|| anyhow!("TARGET_DATABASE_NAME not found in config or mapping"))?;
     let schema_name =
         conf.target_schema

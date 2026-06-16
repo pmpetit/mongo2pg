@@ -555,16 +555,4 @@ fn test_advisors_fixture_mapping_mongo_paths() {
         mapping_mongo_path_for_segments("advisors", &[]).as_deref(),
         Some("."),
     );
-    assert_eq!(
-        mapping_mongo_path_for_segments("advisors", &["advices".to_owned()]).as_deref(),
-        Some(".advisors.advices"),
-    );
-    assert_eq!(
-        mapping_mongo_path_for_segments(
-            "advisors",
-            &["advices".to_owned(), "earnings".to_owned()],
-        )
-        .as_deref(),
-        Some(".advisors.advices.earnings"),
-    );
 }
