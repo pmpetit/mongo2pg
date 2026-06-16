@@ -33,6 +33,7 @@ pub struct KafkaConfData {
     pub schema_registry_url: Option<String>,
     pub schema_registry_username: Option<String>,
     pub schema_registry_password: Option<String>,
+    pub offset: Option<String>,
     pub auto_offset_reset: Option<String>,
     pub max_messages: Option<usize>,
 }
@@ -97,6 +98,7 @@ struct TomlKafkaSection {
     schema_registry_url: Option<String>,
     schema_registry_username: Option<String>,
     schema_registry_password: Option<String>,
+    offset: Option<String>,
     auto_offset_reset: Option<String>,
     max_messages: Option<usize>,
 }
@@ -115,6 +117,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             schema_registry_url: k.schema_registry_url,
             schema_registry_username: k.schema_registry_username,
             schema_registry_password: k.schema_registry_password,
+            offset: k.offset,
             auto_offset_reset: k.auto_offset_reset,
             max_messages: k.max_messages,
         });

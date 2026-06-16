@@ -24,7 +24,7 @@ use anyhow::{anyhow, Context, Result};
 use apache_avro::{from_avro_datum, types::Value as AvroValue, Schema};
 use bson::{doc, Bson};
 use bytes::Bytes;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use flate2::read::GzDecoder;
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use indexmap::IndexMap;
@@ -129,10 +129,6 @@ struct InferArgs {
     /// via NAMESPACE in the config file.
     #[arg(long = "namespace")]
     namespace: Option<String>,
-
-    /// MongoDB source connection URI to store in the project config
-    #[arg(long = "source-uri")]
-    source_uri: Option<String>,
 
     /// Number of documents to sample (mutually exclusive with --percent); default 1000
     #[arg(short = 'n', long = "number", conflicts_with = "percent")]
@@ -338,6 +334,13 @@ struct KafkaImportArgs {
     /// Optional max messages to consume in this run. Overrides [kafka].max_messages.
     #[arg(long = "max-messages")]
     max_messages: Option<usize>,
+
+    /// Optional consumer offset policy for missing group offsets.
+    /// Supported values: latest, earliest, 0.
+    /// `0` enables snapshot-equivalent mode (truncate + fresh group + earliest + idle stop).
+    /// Overrides [kafka].offset and [kafka].auto_offset_reset.
+    #[arg(long = "offset", value_parser = ["latest", "earliest", "0"])]
+    offset: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -347,7 +350,10 @@ struct KafkaImportArgs {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
+    let Cli { command, infer } = cli;
+    validate_command_and_args(&command, infer.as_ref())?;
+
+    match command {
         Some(Command::Init(args)) => run_init(args),
         Some(Command::ToPg(args)) => run_to_pg(args, false),
         Some(Command::Report(args)) => run_report(args, false).await,
@@ -356,8 +362,155 @@ async fn main() -> Result<()> {
         Some(Command::KafkaImport(args)) => run_kafka_import(args).await,
         Some(Command::Infer(args)) => run_infer(args).await,
         Some(Command::ClusterReport(args)) => run_cluster_report(args),
-        None => run_infer(cli.infer.expect("clap ensures args are present")).await,
+        None => match infer {
+            Some(args) => run_infer(args).await,
+            None => {
+                Cli::command().print_help()?;
+                println!();
+                Ok(())
+            }
+        },
     }
+}
+
+fn validate_command_and_args(command: &Option<Command>, infer: Option<&InferArgs>) -> Result<()> {
+    match command {
+        Some(Command::Infer(args)) => validate_infer_args(args),
+        Some(Command::Init(args)) => {
+            if let Some(uri) = args.source_uri.as_deref() {
+                validate_source_uri(uri)?;
+            }
+            if let Some(uri) = args.target_uri.as_deref() {
+                validate_target_uri(uri)?;
+            }
+            if let Some(ns) = args.namespace.as_deref() {
+                validate_namespace_arg(ns)?;
+            }
+            Ok(())
+        }
+        Some(Command::ToPg(args)) => {
+            if args.table.is_some() && args.collection.is_none() {
+                return Err(anyhow!("--table requires <collection>"));
+            }
+            Ok(())
+        }
+        Some(Command::Report(args)) => {
+            if let Some(uri) = args.mongo.source_uri.as_deref() {
+                validate_source_uri(uri)?;
+            }
+            Ok(())
+        }
+        Some(Command::Export(args)) => {
+            if args.config.is_none() {
+                return Err(anyhow!("export requires -c/--config"));
+            }
+            if let Some(uri) = args.mongo.source_uri.as_deref() {
+                validate_source_uri(uri)?;
+            }
+            if let Some(ns) = args.namespace.as_deref() {
+                validate_namespace_arg(ns)?;
+            }
+            Ok(())
+        }
+        Some(Command::Import(args)) => {
+            if let Some(ns) = args.namespace.as_deref() {
+                validate_namespace_arg(ns)?;
+            }
+            Ok(())
+        }
+        Some(Command::ClusterReport(args)) => {
+            if args.configs.is_empty() {
+                return Err(anyhow!(
+                    "cluster-report requires at least one --configs value"
+                ));
+            }
+            Ok(())
+        }
+        Some(Command::KafkaImport(args)) => {
+            if let Some(offset) = args.offset.as_deref() {
+                if !matches!(offset, "latest" | "earliest" | "0") {
+                    return Err(anyhow!("--offset must be one of: latest, earliest, 0"));
+                }
+            }
+            Ok(())
+        }
+        None => {
+            if let Some(args) = infer {
+                validate_infer_args(args)
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+fn validate_infer_args(args: &InferArgs) -> Result<()> {
+    if args.config.is_none() && args.mongo.source_uri.is_none() {
+        return Err(anyhow!(
+            "infer requires --source-uri when -c/--config is not provided"
+        ));
+    }
+
+    if let Some(uri) = args.mongo.source_uri.as_deref() {
+        validate_source_uri(uri)?;
+    }
+
+    if let Some(ns) = args.namespace.as_deref() {
+        validate_namespace_arg(ns)?;
+    }
+
+    if let Some(number) = args.number {
+        if number == 0 {
+            return Err(anyhow!("--number must be greater than 0"));
+        }
+    }
+
+    if let Some(percent) = args.percent {
+        if !(0.0 < percent && percent <= 100.0) {
+            return Err(anyhow!("--percent must be > 0 and <= 100"));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_namespace_arg(ns: &str) -> Result<()> {
+    if ns.trim().is_empty() {
+        return Err(anyhow!("namespace cannot be empty"));
+    }
+    if ns.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err(anyhow!("namespace contains unsafe characters"));
+    }
+    if let Some((db, coll)) = ns.split_once('.') {
+        if db.is_empty() || coll.is_empty() {
+            return Err(anyhow!("namespace must be <db> or <db>.<collection>"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_source_uri(uri: &str) -> Result<()> {
+    if uri.is_empty() || uri.chars().any(|c| c.is_control()) {
+        return Err(anyhow!("source URI contains unsafe characters"));
+    }
+    if !(uri.starts_with("mongodb://") || uri.starts_with("mongodb+srv://")) {
+        return Err(anyhow!(
+            "source URI must start with mongodb:// or mongodb+srv://"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_target_uri(uri: &str) -> Result<()> {
+    if uri.is_empty() || uri.chars().any(|c| c.is_control()) {
+        return Err(anyhow!("target URI contains unsafe characters"));
+    }
+    if !(uri.starts_with("postgres://") || uri.starts_with("postgresql://")) {
+        return Err(anyhow!(
+            "target URI must start with postgres:// or postgresql://"
+        ));
+    }
+    Ok(())
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -2980,7 +3133,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
         .unwrap_or_else(|| "#namespace = my_db".to_owned());
     let conf_content = format!(
-        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\nauto_offset_reset = \"earliest\"\n# max_messages = 1000\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
@@ -3648,8 +3801,80 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         current
     }
 
+    fn format_table_insert_exec_summary(table_insert_execs: &HashMap<String, u64>) -> String {
+        if table_insert_execs.is_empty() {
+            return "none".to_owned();
+        }
+
+        let mut entries = table_insert_execs
+            .iter()
+            .map(|(table, count)| (table.clone(), *count))
+            .collect::<Vec<_>>();
+        entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        entries
+            .into_iter()
+            .map(|(table, count)| format!("{table}:{count}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     fn escape_sql_string(raw: &str) -> String {
         raw.replace('\'', "''")
+    }
+
+    fn cast_string_literal(raw: &str, sql_type: Option<&str>) -> String {
+        let escaped = escape_sql_string(raw);
+        if let Some(sql_type) = sql_type {
+            format!("CAST('{escaped}' AS {sql_type})")
+        } else {
+            format!("'{escaped}'")
+        }
+    }
+
+    // Map Debezium/Mongo Extended JSON wrappers to PostgreSQL SQL literals.
+    // Keep this centralized so adding new wrappers is easy.
+    fn map_extended_json_literal(value: &Value, sql_type: Option<&str>) -> Option<String> {
+        let obj = value.as_object()?;
+
+        if let Some(Value::String(raw)) = obj
+            .get("$numberDecimal")
+            .or_else(|| obj.get("$numberDouble"))
+            .or_else(|| obj.get("$numberLong"))
+            .or_else(|| obj.get("$numberInt"))
+        {
+            return Some(cast_string_literal(raw, sql_type));
+        }
+
+        if let Some(date_value) = obj.get("$date") {
+            return match date_value {
+                Value::String(raw) => Some(cast_string_literal(raw, sql_type)),
+                Value::Number(raw) => raw
+                    .as_i64()
+                    .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                    .or_else(|| {
+                        raw.as_u64()
+                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                    })
+                    .or_else(|| {
+                        raw.as_f64()
+                            .map(|ms| format!("to_timestamp({ms} / 1000.0)"))
+                    }),
+                Value::Object(inner) => {
+                    if let Some(Value::String(ms_raw)) = inner.get("$numberLong") {
+                        ms_raw
+                            .parse::<i64>()
+                            .ok()
+                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+        }
+
+        None
     }
 
     fn sql_literal(value: Option<&Value>, sql_type: Option<&str>) -> String {
@@ -3693,6 +3918,9 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 }
             }
             Value::Object(_) => {
+                if let Some(mapped) = map_extended_json_literal(value, sql_type) {
+                    return mapped;
+                }
                 let as_json = value.to_string();
                 match sql_type {
                     Some(t) if t.to_ascii_lowercase().contains("json") => {
@@ -3701,6 +3929,68 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     _ => format!("'{}'", escape_sql_string(&as_json)),
                 }
             }
+        }
+    }
+
+    fn varchar_limit(sql_type: Option<&str>) -> Option<usize> {
+        let sql = sql_type?.trim().to_ascii_lowercase();
+        let prefix = if sql.starts_with("varchar(") {
+            "varchar("
+        } else if sql.starts_with("character varying(") {
+            "character varying("
+        } else {
+            return None;
+        };
+        let rest = &sql[prefix.len()..];
+        let end = rest.find(')')?;
+        rest[..end].trim().parse::<usize>().ok()
+    }
+
+    fn validate_varchar_value(
+        value: Option<&Value>,
+        sql_type: Option<&str>,
+        source_field: &str,
+        target_field: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        let Some(limit) = varchar_limit(sql_type) else {
+            return Ok(());
+        };
+        let Some(Value::String(text)) = value else {
+            return Ok(());
+        };
+        let value_len = text.chars().count();
+        if value_len > limit {
+            return Err(anyhow!(
+                "value exceeds varchar limit: source_field={} target_field={} table={} sql_type={} value_len={} limit={} value_sample={}",
+                source_field,
+                target_field,
+                table_name,
+                sql_type.unwrap_or("varchar"),
+                value_len,
+                limit,
+                text.chars().take(80).collect::<String>()
+            ));
+        }
+        Ok(())
+    }
+
+    fn debezium_document(value: Option<&Value>) -> Result<Option<Value>> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        match value {
+            Value::Object(_) => Ok(Some(value.clone())),
+            Value::String(raw) => {
+                let parsed: Value = serde_json::from_str(raw)
+                    .with_context(|| "Failed to parse Debezium document JSON string")?;
+                if parsed.is_object() {
+                    Ok(Some(parsed))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
         }
     }
 
@@ -3820,12 +4110,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         payload_doc: &Value,
         mappings: &[CollectionMapping],
         fallback_schema: Option<&str>,
-    ) -> Result<()> {
+        table_insert_execs: &mut HashMap<String, u64>,
+    ) -> Result<u64> {
         let root_mapping = mappings
             .iter()
             .find(|mapping| is_root_mapping(mapping))
             .ok_or_else(|| anyhow!("No root mapping (mongo_path: .) found"))?;
         let root_table = qualified_table_name(root_mapping, fallback_schema);
+        let mut affected_rows = 0_u64;
 
         let mut columns = Vec::new();
         let mut values = Vec::new();
@@ -3834,6 +4126,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 .as_object()
                 .and_then(|obj| obj.get(&column.source_field));
             let sql_type = column_sql_type(root_mapping, &column.target_field);
+            validate_varchar_value(
+                raw_value,
+                sql_type,
+                &column.source_field,
+                &column.target_field,
+                &root_table,
+            )?;
             columns.push(quote_ident(&column.target_field));
             values.push(sql_literal(raw_value, sql_type));
         }
@@ -3872,7 +4171,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 updates.join(", "),
             )
         };
-        pg_client.execute(upsert_sql.as_str(), &[]).await?;
+        affected_rows += pg_client.execute(upsert_sql.as_str(), &[]).await?;
+        *table_insert_execs.entry(root_table.clone()).or_insert(0) += 1;
 
         let root_pk_source = root_source_field_for_pk(root_mapping, &root_pk)
             .ok_or_else(|| anyhow!("Root mapping primary key not found in mapped columns"))?;
@@ -3906,6 +4206,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     child_columns.push(quote_ident(&mapped.target_field));
                     let val = obj.get(&mapped.source_field);
                     let sql_type = column_sql_type(child_mapping, &mapped.target_field);
+                    validate_varchar_value(
+                        val,
+                        sql_type,
+                        &mapped.source_field,
+                        &mapped.target_field,
+                        &child_table,
+                    )?;
                     child_values.push(sql_literal(val, sql_type));
                 }
                 let insert_sql = format!(
@@ -3914,11 +4221,12 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     child_columns.join(", "),
                     child_values.join(", ")
                 );
-                pg_client.execute(insert_sql.as_str(), &[]).await?;
+                affected_rows += pg_client.execute(insert_sql.as_str(), &[]).await?;
+                *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
             }
         }
 
-        Ok(())
+        Ok(affected_rows)
     }
 
     async fn apply_delete_event(
@@ -4070,6 +4378,49 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         Ok(())
     }
 
+    async fn truncate_tables_for_snapshot(
+        pg_client: &tokio_postgres::Client,
+        mappings_by_collection: &HashMap<String, Vec<CollectionMapping>>,
+        fallback_schema: Option<&str>,
+    ) -> Result<usize> {
+        let mut qualified_tables = std::collections::HashSet::new();
+
+        for mappings in mappings_by_collection.values() {
+            for mapping in mappings {
+                let schema = mapping.pg_mapping.schema_name.trim();
+                let schema = if schema.is_empty() {
+                    fallback_schema
+                } else {
+                    Some(schema)
+                };
+                let qualified = match schema {
+                    Some(schema) => {
+                        format!(
+                            "{}.{}",
+                            quote_ident(schema),
+                            quote_ident(&mapping.pg_mapping.table_name)
+                        )
+                    }
+                    None => quote_ident(&mapping.pg_mapping.table_name),
+                };
+                qualified_tables.insert(qualified);
+            }
+        }
+
+        let mut tables = qualified_tables.into_iter().collect::<Vec<_>>();
+        tables.sort();
+
+        for qualified in &tables {
+            let sql = format!("TRUNCATE TABLE {qualified} CASCADE");
+            pg_client
+                .batch_execute(&sql)
+                .await
+                .with_context(|| format!("Failed to truncate table {qualified} for snapshot"))?;
+        }
+
+        Ok(tables.len())
+    }
+
     let conf = read_conf(&args.config)?;
     let kafka_conf = conf
         .kafka
@@ -4089,6 +4440,26 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .group_id
         .clone()
         .unwrap_or_else(|| "mongo2pg-kafka-import".to_owned());
+    let configured_offset = kafka_conf
+        .offset
+        .clone()
+        .or_else(|| kafka_conf.auto_offset_reset.clone())
+        .unwrap_or_else(|| "earliest".to_owned());
+    let effective_offset = args
+        .offset
+        .clone()
+        .unwrap_or_else(|| configured_offset.clone());
+    let snapshot_mode = effective_offset == "0";
+
+    let effective_group_id = if snapshot_mode {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_secs();
+        format!("{group_id}-snapshot-{ts}")
+    } else {
+        group_id.clone()
+    };
     let topics = if args.topics.is_empty() {
         kafka_conf.topics.clone()
     } else {
@@ -4115,13 +4486,15 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
     let mappings_by_collection = load_collection_mapping_folders(&conf, namespace_db_name)?;
 
-    let auto_offset_reset = kafka_conf
-        .auto_offset_reset
-        .clone()
-        .unwrap_or_else(|| "earliest".to_owned());
+    let configured_auto_offset_reset = configured_offset;
+    let auto_offset_reset = if snapshot_mode {
+        "earliest".to_owned()
+    } else {
+        effective_offset
+    };
     let consumer: StreamConsumer = ClientConfig::new()
         .set("bootstrap.servers", &bootstrap_servers)
-        .set("group.id", &group_id)
+        .set("group.id", &effective_group_id)
         .set("enable.auto.commit", "true")
         .set("auto.offset.reset", &auto_offset_reset)
         .create()
@@ -4133,19 +4506,84 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .with_context(|| format!("Failed to subscribe topics: {}", topics.join(", ")))?;
 
     println!(
-        "Kafka import started. group_id={}, topics={}, target_db={}",
-        group_id,
+        "Kafka import started. group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
+        effective_group_id,
         topics.join(","),
-        target_database_name
+        target_database_name,
+        snapshot_mode,
+        auto_offset_reset
     );
+
+    if snapshot_mode {
+        println!(
+            "Snapshot mode enabled (offset=0): truncating mapped PostgreSQL tables before consuming Kafka messages"
+        );
+        let truncated = truncate_tables_for_snapshot(
+            &pg_client,
+            &mappings_by_collection,
+            conf.target_schema.as_deref(),
+        )
+        .await?;
+        println!(
+            "Snapshot mode: truncated {} mapped PostgreSQL table(s) before consuming",
+            truncated
+        );
+    } else {
+        println!(
+            "Snapshot mode disabled: PostgreSQL tables are not truncated (offset={})",
+            auto_offset_reset
+        );
+    }
 
     let http_client = reqwest::Client::builder().build()?;
     let mut schema_cache: HashMap<u32, Schema> = HashMap::new();
     let max_messages = args.max_messages.or(kafka_conf.max_messages);
     let mut processed = 0_usize;
+    let mut polled = 0_usize;
+    let mut skipped_topic = 0_usize;
+    let mut skipped_db = 0_usize;
+    let mut skipped_mapping = 0_usize;
+    let mut skipped_no_payload = 0_usize;
+    let mut decode_failed = 0_usize;
+    let mut apply_failed = 0_usize;
+    let mut snapshot_inserted_rows = 0_u64;
+    let mut table_insert_execs: HashMap<String, u64> = HashMap::new();
+
+    println!(
+        "Kafka import diagnostics enabled: fallback_auto_offset_reset={} (configured={}), used_only_when_no_valid_committed_offset=true, max_messages={}",
+        auto_offset_reset,
+        configured_auto_offset_reset,
+        max_messages
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_owned())
+    );
+    println!(
+        "Loaded mapping folders for {} collection(s)",
+        mappings_by_collection.len()
+    );
 
     let mut stream = consumer.stream();
-    while let Some(message_result) = stream.next().await {
+    loop {
+        let next_item = if snapshot_mode {
+            match tokio::time::timeout(Duration::from_secs(10), stream.next()).await {
+                Ok(item) => item,
+                Err(_) => {
+                    println!(
+                        "Snapshot mode: idle timeout reached (10s without new messages), stopping."
+                    );
+                    break;
+                }
+            }
+        } else {
+            stream.next().await
+        };
+
+        let Some(message_result) = next_item else {
+            println!("Kafka stream ended by broker/consumer");
+            break;
+        };
+
+        polled += 1;
         let message = match message_result {
             Ok(msg) => msg,
             Err(err) => {
@@ -4158,14 +4596,17 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let Some((db_name, collection_name)) =
             parse_topic_db_collection(topic, kafka_conf.topic_prefix.as_deref())
         else {
+            skipped_topic += 1;
             continue;
         };
         if db_name != namespace_db_name {
+            skipped_db += 1;
             continue;
         }
 
         let folder_name = sanitize_name(&collection_name);
         let Some(mappings) = mappings_by_collection.get(&folder_name) else {
+            skipped_mapping += 1;
             eprintln!(
                 "warning: no mapping folder for collection '{}' (expected '{}')",
                 collection_name, folder_name
@@ -4174,6 +4615,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         };
 
         let Some(bytes) = message.payload() else {
+            skipped_no_payload += 1;
             continue;
         };
         let decoded = match decode_message_value(
@@ -4188,6 +4630,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         {
             Ok(value) => value,
             Err(err) => {
+                decode_failed += 1;
                 eprintln!("warning: failed to decode message on topic {topic}: {err}");
                 continue;
             }
@@ -4202,12 +4645,26 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .get("op")
             .and_then(|value| value.as_str())
             .unwrap_or("u");
-        let after = payload.get("after");
-        let before = payload.get("before");
+        let after = match debezium_document(payload.get("after")) {
+            Ok(value) => value,
+            Err(err) => {
+                decode_failed += 1;
+                eprintln!("warning: failed to parse Debezium 'after' for topic {topic}: {err:#}");
+                continue;
+            }
+        };
+        let before = match debezium_document(payload.get("before")) {
+            Ok(value) => value,
+            Err(err) => {
+                decode_failed += 1;
+                eprintln!("warning: failed to parse Debezium 'before' for topic {topic}: {err:#}");
+                continue;
+            }
+        };
 
         let result = match op {
             "d" => {
-                if let Some(before_doc) = before {
+                if let Some(before_doc) = before.as_ref() {
                     apply_delete_event(
                         &pg_client,
                         before_doc,
@@ -4215,34 +4672,69 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                         conf.target_schema.as_deref(),
                     )
                     .await
+                    .map(|_| 0_u64)
                 } else {
-                    Ok(())
+                    Ok(0_u64)
                 }
             }
             _ => {
-                if let Some(after_doc) = after {
+                if let Some(after_doc) = after.as_ref() {
                     apply_upsert_event(
                         &pg_client,
                         after_doc,
                         mappings,
                         conf.target_schema.as_deref(),
+                        &mut table_insert_execs,
                     )
                     .await
                 } else {
-                    Ok(())
+                    Ok(0_u64)
                 }
             }
         };
 
-        if let Err(err) = result {
-            eprintln!(
-                "warning: apply failed topic={} collection={} op={}: {}",
-                topic, collection_name, op, err
-            );
-            continue;
-        }
+        let applied_rows = match result {
+            Ok(rows) => rows,
+            Err(err) => {
+                apply_failed += 1;
+                eprintln!(
+                    "warning: apply failed topic={} collection={} op={}: {:#}\n  hint: extend map_extended_json_literal() in src/bin/mongo2pg.rs to support this payload shape\n  hint: constraint errors include source_field and target_field in details",
+                    topic, collection_name, op, err
+                );
+                continue;
+            }
+        };
 
         processed += 1;
+        if snapshot_mode {
+            snapshot_inserted_rows += applied_rows;
+        }
+        if processed <= 5 || processed % 100 == 0 {
+            println!(
+                "Kafka apply ok: processed={} topic={} collection={} op={} affected_rows={}",
+                processed, topic, collection_name, op, applied_rows
+            );
+        }
+
+        if polled % 100 == 0 {
+            println!(
+                "Kafka progress: polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
+                polled,
+                processed,
+                skipped_topic,
+                skipped_db,
+                skipped_mapping,
+                skipped_no_payload,
+                decode_failed,
+                apply_failed
+            );
+            println!(
+                "Kafka progress tables: impacted_tables={}, insert_execs={}",
+                table_insert_execs.len(),
+                format_table_insert_exec_summary(&table_insert_execs)
+            );
+        }
+
         if let Some(limit) = max_messages {
             if processed >= limit {
                 println!("Reached --max-messages limit ({limit}), stopping.");
@@ -4251,7 +4743,28 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         }
     }
 
-    println!("Kafka import finished. processed_messages={processed}");
+    println!(
+        "Kafka import finished. polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
+        polled,
+        processed,
+        skipped_topic,
+        skipped_db,
+        skipped_mapping,
+        skipped_no_payload,
+        decode_failed,
+        apply_failed
+    );
+    println!(
+        "Kafka import table summary: impacted_tables={}, insert_execs={}",
+        table_insert_execs.len(),
+        format_table_insert_exec_summary(&table_insert_execs)
+    );
+    if snapshot_mode {
+        println!(
+            "Snapshot summary: total affected rows applied to PostgreSQL={} (upserts + child inserts)",
+            snapshot_inserted_rows
+        );
+    }
     Ok(())
 }
 
@@ -6046,7 +6559,6 @@ CREATE TABLE demo (
         InferArgs {
             mongo: UriArg { source_uri: None },
             namespace: None,
-            source_uri: None,
             number: Some(500),
             percent: None, // Set to None because it conflicts with `number`
             jsonb: false,
