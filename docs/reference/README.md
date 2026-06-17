@@ -155,11 +155,15 @@ schema_registry_url = "http://localhost:8081"
 | `max_messages` | No | Stop after this many successfully applied messages |
 | `batch_log_messages` | No | Progress log interval for `kafka-import`. Default: `100` |
 
-`*` `topics` can be omitted only when you pass `--topics` on the CLI.
+`*` `topics` can be omitted when either:
+
+- `--topics` is passed on the CLI, or
+- `topic_prefix` is set and matching broker topics are auto-discovered.
 
 ### Topic parsing behavior
 
 - With `topic_prefix` set, topic names must start with `<topic_prefix>.`.
+- If `topics` is empty, `kafka-import` auto-discovers broker topics starting with `<topic_prefix>.` and subscribes to them.
 - The prefix is removed, then the last two segments are interpreted as `<db>.<collection>`.
 - Messages whose topic does not match the prefix are skipped.
 

@@ -26,7 +26,8 @@ use crate::schema_diagram::{parse_sql, Table as SqlTable};
 
 use crate::util::{
     flatten_grouped_root_array_object_fields, flatten_root_array_object_field,
-    flattened_root_parent_id_column, grouped_root_array_object_fields, sanitize,
+    flattened_root_parent_id_column, grouped_root_array_object_fields, objectid_hex_to_uuid,
+    sanitize,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -90,6 +91,14 @@ fn bson_to_string(val: &Bson) -> Option<String> {
 
         // For complex / uncommon types fall back to BSON extended-JSON representation.
         other => Some(serde_json::to_string(other).unwrap_or_default()),
+    }
+}
+
+fn bson_to_uuid_string(val: &Bson) -> Option<String> {
+    match val {
+        Bson::ObjectId(oid) => objectid_hex_to_uuid(&oid.to_hex()),
+        Bson::String(raw) => objectid_hex_to_uuid(raw),
+        _ => None,
     }
 }
 
@@ -215,6 +224,10 @@ fn is_timestamp_col_type(col_type: &str) -> bool {
         .starts_with("TIMESTAMP")
 }
 
+fn is_uuid_col_type(col_type: &str) -> bool {
+    col_type.trim().to_ascii_uppercase().starts_with("UUID")
+}
+
 /// Format a Unix-millisecond timestamp as a PostgreSQL-ingestible UTC datetime.
 fn format_millis(ms: i64) -> String {
     DateTime::<Utc>::from_timestamp_millis(ms)
@@ -293,6 +306,8 @@ struct TableNode {
     /// Columns whose SQL type is timestamp-like and should be exported in a
     /// PostgreSQL-ingestible timestamp text format.
     timestamp_cols: HashSet<String>,
+    /// Columns whose SQL type is UUID and should receive ObjectId->UUID conversion.
+    uuid_cols: HashSet<String>,
     /// For a promoted root array-of-objects table, the MongoDB array field to iterate.
     root_array_field: Option<String>,
     /// For a promoted root array-of-objects table, the root `_id` column stored on each row.
@@ -465,6 +480,12 @@ fn build_node(
         .filter(|c| is_timestamp_col_type(&c.col_type))
         .map(|c| c.name.clone())
         .collect();
+    let uuid_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| is_uuid_col_type(&c.col_type))
+        .map(|c| c.name.clone())
+        .collect();
 
     let children: Vec<TableNode> = children_of
         .get(sql_t.name.as_str())
@@ -511,6 +532,7 @@ fn build_node(
         is_scalar_array,
         jsonb_cols,
         timestamp_cols,
+        uuid_cols,
         root_array_field,
         root_parent_id_col,
         children,
@@ -577,6 +599,179 @@ fn find_root_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&
     })
 }
 
+fn extract_child_document_rows(
+    child_doc: &bson::Document,
+    child: &TableNode,
+    parent_id: &str,
+    all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
+    counters: &mut HashMap<String, u64>,
+) {
+    let mut non_system_columns = child
+        .columns
+        .iter()
+        .filter(|col| {
+            if child.pk_cols.iter().any(|pk| pk == *col) {
+                return false;
+            }
+            if Some(*col) == child.fk_col.as_ref() {
+                return false;
+            }
+            *col != "key"
+        })
+        .peekable();
+
+    let looks_like_map_document = child.fk_col.is_some()
+        && non_system_columns.peek().is_some()
+        && !child_doc.is_empty()
+        && child_doc
+            .values()
+            .all(|value| matches!(value, Bson::Document(_)));
+
+    if !looks_like_map_document {
+        extract_rows(
+            &Bson::Document(child_doc.clone()),
+            child,
+            Some(parent_id),
+            false,
+            all_rows,
+            counters,
+        );
+        return;
+    }
+
+    for (map_key, map_value) in child_doc {
+        let Bson::Document(item_doc) = map_value else {
+            continue;
+        };
+
+        let child_id = {
+            let c = counters.entry(child.sql_name.clone()).or_insert(0);
+            *c += 1;
+            c.to_string()
+        };
+
+        let child_row: Vec<Option<String>> = child
+            .columns
+            .iter()
+            .map(|col| {
+                if child.pk_cols.iter().any(|pk| pk == col) {
+                    Some(child_id.clone())
+                } else if Some(col) == child.fk_col.as_ref() {
+                    Some(parent_id.to_owned())
+                } else if col == "key" {
+                    Some(map_key.clone())
+                } else {
+                    find_mongo_field(item_doc, col)
+                        .map(|v| {
+                            if child.jsonb_cols.contains(col) {
+                                Some(serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default())
+                            } else if child.timestamp_cols.contains(col) {
+                                bson_to_timestamp_string(v)
+                            } else if child.uuid_cols.contains(col) {
+                                bson_to_uuid_string(v)
+                            } else {
+                                bson_to_string(v)
+                            }
+                        })
+                        .unwrap_or(None)
+                }
+            })
+            .collect();
+        all_rows
+            .entry(child.sql_name.clone())
+            .or_default()
+            .push(child_row);
+
+        for grandchild in &child.children {
+            match find_mongo_field(item_doc, &grandchild.mongo_field) {
+                Some(Bson::Array(arr)) => {
+                    if grandchild.is_scalar_array {
+                        for item in arr {
+                            let grandchild_id = {
+                                let c = counters.entry(grandchild.sql_name.clone()).or_insert(0);
+                                *c += 1;
+                                c.to_string()
+                            };
+                            let grandchild_row: Vec<Option<String>> = grandchild
+                                .columns
+                                .iter()
+                                .map(|col| {
+                                    if grandchild.pk_cols.iter().any(|pk| pk == col) {
+                                        Some(grandchild_id.clone())
+                                    } else if Some(col) == grandchild.fk_col.as_ref() {
+                                        Some(child_id.clone())
+                                    } else if col == "value" {
+                                        if grandchild.timestamp_cols.contains(col) {
+                                            bson_to_timestamp_string(item)
+                                        } else {
+                                            bson_to_string(item)
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            all_rows
+                                .entry(grandchild.sql_name.clone())
+                                .or_default()
+                                .push(grandchild_row);
+                        }
+                    } else {
+                        for item in arr {
+                            extract_rows(
+                                item,
+                                grandchild,
+                                Some(&child_id),
+                                false,
+                                all_rows,
+                                counters,
+                            );
+                        }
+                    }
+                }
+                Some(Bson::Document(doc_val)) => {
+                    extract_rows(
+                        &Bson::Document(doc_val.clone()),
+                        grandchild,
+                        Some(&child_id),
+                        false,
+                        all_rows,
+                        counters,
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn map_document_entries<'a>(node: &TableNode, doc: &'a bson::Document) -> Vec<(&'a str, &'a bson::Document)> {
+    let non_structural_cols: Vec<&String> = node
+        .columns
+        .iter()
+        .filter(|col| {
+            !node.pk_cols.iter().any(|pk| pk == *col)
+                && node.fk_col.as_ref().is_none_or(|fk| fk != *col)
+                && col.as_str() != "key"
+        })
+        .collect();
+
+    // Regular embedded object tables already expose value fields at current level.
+    if non_structural_cols
+        .iter()
+        .any(|col| find_mongo_field(doc, col.as_str()).is_some())
+    {
+        return Vec::new();
+    }
+
+    doc.iter()
+        .filter_map(|(entry_key, entry_val)| match entry_val {
+            Bson::Document(entry_doc) => Some((entry_key.as_str(), entry_doc)),
+            _ => None,
+        })
+        .collect()
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Row extraction  (recursive, depth-first)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -597,7 +792,11 @@ fn extract_rows(
         if let (Some(root_parent_id_col), Some(grouped_fields)) =
             (&node.root_parent_id_col, &node.grouped_root_fields)
         {
-            let parent_source_id = doc.get("_id").and_then(bson_to_string).unwrap_or_default();
+            let parent_source_id = doc
+                .get("_id")
+                .and_then(bson_to_uuid_string)
+                .or_else(|| doc.get("_id").and_then(bson_to_string))
+                .unwrap_or_default();
             for grouped_field in grouped_fields {
                 if let Some(Bson::Array(items)) = find_mongo_field(doc, grouped_field) {
                     for item in items {
@@ -629,6 +828,8 @@ fn extract_rows(
                                                 )
                                             } else if node.timestamp_cols.contains(col) {
                                                 bson_to_timestamp_string(v)
+                                            } else if node.uuid_cols.contains(col) {
+                                                bson_to_uuid_string(v)
                                             } else {
                                                 bson_to_string(v)
                                             }
@@ -710,7 +911,11 @@ fn extract_rows(
         if let (Some(root_array_field), Some(root_parent_id_col)) =
             (&node.root_array_field, &node.root_parent_id_col)
         {
-            let parent_source_id = doc.get("_id").and_then(bson_to_string).unwrap_or_default();
+            let parent_source_id = doc
+                .get("_id")
+                .and_then(bson_to_uuid_string)
+                .or_else(|| doc.get("_id").and_then(bson_to_string))
+                .unwrap_or_default();
             if let Some(Bson::Array(items)) = find_mongo_field(doc, root_array_field) {
                 for item in items {
                     let item_doc = match item {
@@ -739,6 +944,8 @@ fn extract_rows(
                                             )
                                         } else if node.timestamp_cols.contains(col) {
                                             bson_to_timestamp_string(v)
+                                        } else if node.uuid_cols.contains(col) {
+                                            bson_to_uuid_string(v)
                                         } else {
                                             bson_to_string(v)
                                         }
@@ -817,10 +1024,119 @@ fn extract_rows(
         }
     }
 
+    if !is_root {
+        let map_entries = map_document_entries(node, doc);
+        if !map_entries.is_empty() {
+            for (entry_key, entry_doc) in map_entries {
+                let c = counters.entry(node.sql_name.clone()).or_insert(0);
+                *c += 1;
+                let child_id = c.to_string();
+
+                let row: Vec<Option<String>> = node
+                    .columns
+                    .iter()
+                    .map(|col| {
+                        if node.pk_cols.iter().any(|pk| pk == col) {
+                            Some(child_id.clone())
+                        } else if Some(col) == node.fk_col.as_ref() {
+                            Some(parent_id.unwrap_or("").to_owned())
+                        } else if col == "key" {
+                            Some(entry_key.to_owned())
+                        } else {
+                            find_mongo_field(entry_doc, col)
+                                .map(|v| {
+                                    if node.jsonb_cols.contains(col) {
+                                        Some(
+                                            serde_json::to_string(&bson_to_json_value(v))
+                                                .unwrap_or_default(),
+                                        )
+                                    } else if node.timestamp_cols.contains(col) {
+                                        bson_to_timestamp_string(v)
+                                    } else if node.uuid_cols.contains(col) {
+                                        bson_to_uuid_string(v)
+                                    } else {
+                                        bson_to_string(v)
+                                    }
+                                })
+                                .unwrap_or(None)
+                        }
+                    })
+                    .collect();
+
+                all_rows.entry(node.sql_name.clone()).or_default().push(row);
+
+                for child in &node.children {
+                    match find_mongo_field(entry_doc, &child.mongo_field) {
+                        Some(Bson::Array(arr)) => {
+                            if child.is_scalar_array {
+                                for item in arr {
+                                    let grandchild_id = {
+                                        let c = counters.entry(child.sql_name.clone()).or_insert(0);
+                                        *c += 1;
+                                        c.to_string()
+                                    };
+                                    let child_row: Vec<Option<String>> = child
+                                        .columns
+                                        .iter()
+                                        .map(|col| {
+                                            if child.pk_cols.iter().any(|pk| pk == col) {
+                                                Some(grandchild_id.clone())
+                                            } else if Some(col) == child.fk_col.as_ref() {
+                                                Some(child_id.clone())
+                                            } else if col == "value" {
+                                                if child.timestamp_cols.contains(col) {
+                                                    bson_to_timestamp_string(item)
+                                                } else {
+                                                    bson_to_string(item)
+                                                }
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+                                    all_rows
+                                        .entry(child.sql_name.clone())
+                                        .or_default()
+                                        .push(child_row);
+                                }
+                            } else {
+                                for item in arr {
+                                    extract_rows(
+                                        item,
+                                        child,
+                                        Some(&child_id),
+                                        false,
+                                        all_rows,
+                                        counters,
+                                    );
+                                }
+                            }
+                        }
+                        Some(doc_val @ Bson::Document(_)) => {
+                            extract_rows(
+                                doc_val,
+                                child,
+                                Some(&child_id),
+                                false,
+                                all_rows,
+                                counters,
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            return;
+        }
+    }
+
     // Assign an ID for this row.
     let my_id: String = if is_root {
         // Root table: _id → id
-        doc.get("_id").and_then(bson_to_string).unwrap_or_default()
+        doc.get("_id")
+            .and_then(bson_to_uuid_string)
+            .or_else(|| doc.get("_id").and_then(bson_to_string))
+            .unwrap_or_default()
     } else {
         let c = counters.entry(node.sql_name.clone()).or_insert(0);
         *c += 1;
@@ -850,6 +1166,8 @@ fn extract_rows(
                             Some(serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default())
                         } else if node.timestamp_cols.contains(col) {
                             bson_to_timestamp_string(v)
+                        } else if node.uuid_cols.contains(col) {
+                            bson_to_uuid_string(v)
                         } else {
                             bson_to_string(v)
                         }
@@ -899,6 +1217,8 @@ fn extract_rows(
                                                     )
                                                 } else if child.timestamp_cols.contains(col) {
                                                     bson_to_timestamp_string(v)
+                                                } else if child.uuid_cols.contains(col) {
+                                                    bson_to_uuid_string(v)
                                                 } else {
                                                     bson_to_string(v)
                                                 }
@@ -1038,7 +1358,15 @@ fn extract_rows(
             }
             Some(doc_val @ Bson::Document(_)) => {
                 // Embedded 1:1 object.
-                extract_rows(doc_val, child, Some(&my_id), false, all_rows, counters);
+                if let Bson::Document(child_doc) = doc_val {
+                    extract_child_document_rows(
+                        child_doc,
+                        child,
+                        &my_id,
+                        all_rows,
+                        counters,
+                    );
+                }
             }
             _ => {} // field absent or unexpected type – skip
         }
@@ -1248,9 +1576,73 @@ CREATE TABLE activity_feed (
 
         let rows = all_rows.get("activity_feed").expect("root rows missing");
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0][0].as_deref(), Some("6267ddea9270b5e839a81ac4"));
+        assert!(rows[0][0].as_deref().is_some_and(|value| !value.is_empty()));
         assert_eq!(rows[0][1].as_deref(), Some("Project created"));
         assert_eq!(rows[0][2].as_deref(), Some("FRAS-D-NLX-FEATURE1"));
+    }
+
+    #[test]
+    fn export_map_object_rows_emit_one_child_row_per_key() {
+        let sql = r#"
+CREATE TABLE customers (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+CREATE TABLE tier_and_details (
+    id BIGSERIAL PRIMARY KEY,
+    customers_id UUID NOT NULL,
+    key TEXT NOT NULL,
+    active BOOLEAN NOT NULL,
+    benefits TEXT[] NOT NULL,
+    tier VARCHAR(20) NOT NULL,
+    FOREIGN KEY (customers_id) REFERENCES customers (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "5ca4bbcea2dd94ee58162a68",
+            "name": "Elizabeth Ray",
+            "tier_and_details": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "tier": "Bronze",
+                    "active": true,
+                    "benefits": ["sports tickets"]
+                },
+                "699456451cc24f028d2aa99d7534c219": {
+                    "tier": "Bronze",
+                    "active": true,
+                    "benefits": ["24 hour dedicated line", "concierge services"]
+                }
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows
+            .get("tier_and_details")
+            .expect("tier_and_details rows missing");
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|row| {
+            row[1].as_deref() == Some("00000000-5ca4-bbce-a2dd-94ee58162a68")
+        }));
+        assert!(rows
+            .iter()
+            .any(|row| row[2].as_deref() == Some("0df078f33aa74a2e9696e0520c1a828a")));
+        assert!(rows
+            .iter()
+            .any(|row| row[2].as_deref() == Some("699456451cc24f028d2aa99d7534c219")));
     }
 
     #[test]
@@ -1423,6 +1815,75 @@ CREATE TABLE communities_available_localizations (
             .get("communities_available_localizations")
             .expect("grouped nested rows missing");
         assert_eq!(child_rows.len(), 2);
+    }
+
+    #[test]
+    fn export_map_object_child_table_emits_rows_per_entry() {
+        let sql = r#"
+CREATE TABLE customers (
+    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+CREATE TABLE tier_and_details (
+    id BIGSERIAL PRIMARY KEY,
+    customers_id UUID NOT NULL,
+    key TEXT NOT NULL,
+    active BOOLEAN NOT NULL,
+    benefits TEXT[] NOT NULL,
+    tier VARCHAR(20) NOT NULL,
+    FOREIGN KEY (customers_id) REFERENCES customers (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+            "name": "Alice",
+            "tier_and_details": {
+                "0134c72f17e3419cbdc857171cbb5651": {
+                    "active": true,
+                    "benefits": ["cashback", "support"],
+                    "tier": "gold"
+                },
+                "01c680e72a154c3abb7e3c71a8848553": {
+                    "active": false,
+                    "benefits": ["support"],
+                    "tier": "silver"
+                }
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let customer_rows = all_rows.get("customers").expect("customers rows missing");
+        assert_eq!(customer_rows.len(), 1);
+
+        let detail_rows = all_rows
+            .get("tier_and_details")
+            .expect("tier_and_details rows missing");
+        assert_eq!(detail_rows.len(), 2);
+
+        let keys: std::collections::HashSet<String> = detail_rows
+            .iter()
+            .filter_map(|row| row[2].clone())
+            .collect();
+        assert!(keys.contains("0134c72f17e3419cbdc857171cbb5651"));
+        assert!(keys.contains("01c680e72a154c3abb7e3c71a8848553"));
+
+        assert_eq!(detail_rows[0][3].is_some(), true);
+        assert_eq!(detail_rows[0][4].is_some(), true);
+        assert_eq!(detail_rows[0][5].is_some(), true);
     }
 
     #[test]

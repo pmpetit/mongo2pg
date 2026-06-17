@@ -3,7 +3,7 @@ use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_pg_reserved, read_conf,
+    inline_object_leaf_fields_with_prefix, is_pg_reserved, read_conf, scalar_type_family,
 };
 use anyhow::{anyhow, Context, Result};
 use bson::{doc, Bson, Document};
@@ -11,7 +11,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use futures::TryStreamExt;
 use postgres_native_tls::MakeTlsConnector;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tokio_postgres::{Client, Row};
 
@@ -245,10 +245,10 @@ fn is_textual_pg_type(data_type: Option<&str>) -> bool {
     )
 }
 
-fn mongo_source_is_string_only(
+fn mongo_source_scalar_families(
     fields: &indexmap::IndexMap<String, FieldSchema>,
     source_field: &str,
-) -> bool {
+) -> HashSet<String> {
     fn is_null_type_name(type_name: &str) -> bool {
         matches!(type_name, "Null" | "Undefined")
     }
@@ -261,19 +261,17 @@ fn mongo_source_is_string_only(
 
     while let Some(segment) = segments.next() {
         let Some(field_schema) = current_fields.get(segment) else {
-            return false;
+            return HashSet::new();
         };
 
         if segments.peek().is_none() {
-            let non_null_types = field_schema
+            return field_schema
                 .types
                 .keys()
                 .filter(|type_name| !is_null_type_name(type_name.as_str()))
-                .collect::<Vec<_>>();
-            return !non_null_types.is_empty()
-                && non_null_types
-                    .iter()
-                    .all(|type_name| type_name.as_str() == "String");
+                .filter_map(|type_name| scalar_type_family(type_name.as_str()))
+                .map(|family| family.to_owned())
+                .collect::<HashSet<_>>();
         }
 
         let next_fields = field_schema
@@ -295,15 +293,72 @@ fn mongo_source_is_string_only(
             });
 
         let Some(next_fields) = next_fields else {
-            return false;
+            return HashSet::new();
         };
         current_fields = next_fields;
     }
 
-    false
+    HashSet::new()
 }
 
-fn drop_incompatible_string_columns(
+fn target_type_family(data_type: Option<&str>) -> Option<&'static str> {
+    let raw = data_type?.trim().to_ascii_lowercase();
+    let mut cut = raw.len();
+    for marker in [
+        " default ",
+        " primary key",
+        " not null",
+        " null",
+        " references ",
+        " check ",
+        " unique",
+    ] {
+        if let Some(idx) = raw.find(marker) {
+            cut = cut.min(idx);
+        }
+    }
+    let raw = raw[..cut].trim().to_owned();
+
+    if matches!(
+        raw.as_str(),
+        "text" | "varchar" | "character varying" | "char" | "character" | "bpchar" | "citext"
+    ) || raw.starts_with("varchar(")
+        || raw.starts_with("character varying(")
+    {
+        return Some("string");
+    }
+
+    if raw == "uuid" {
+        return Some("uuid");
+    }
+
+    if raw.contains("timestamp") || raw == "date" || raw.starts_with("time") {
+        return Some("datetime");
+    }
+
+    if matches!(
+        raw.as_str(),
+        "smallint"
+            | "integer"
+            | "bigint"
+            | "real"
+            | "double precision"
+            | "numeric"
+            | "decimal"
+            | "serial"
+            | "bigserial"
+    ) {
+        return Some("numeric");
+    }
+
+    if raw == "boolean" {
+        return Some("boolean");
+    }
+
+    None
+}
+
+fn drop_incompatible_columns(
     schema: &CollectionSchema,
     source_path: &SourcePath,
     mapping_yaml: &mut MappingYaml,
@@ -330,12 +385,16 @@ fn drop_incompatible_string_columns(
                 .get(&column.target_field)
                 .map(String::as_str)
         });
-        let target_is_textual = is_textual_pg_type(target_type);
-        if target_is_textual {
+        let Some(target_family) = target_type_family(target_type) else {
+            return true;
+        };
+
+        let source_families = mongo_source_scalar_families(&fields, &column.source_field);
+        if source_families.is_empty() {
             return true;
         }
 
-        !mongo_source_is_string_only(&fields, &column.source_field)
+        source_families.contains(target_family)
     });
 }
 
@@ -1135,7 +1194,7 @@ fn discover_mapping_targets_for_collection(
                 &source_path,
                 &mut mapping_yaml,
             );
-            drop_incompatible_string_columns(&schema, &source_path, &mut mapping_yaml);
+            drop_incompatible_columns(&schema, &source_path, &mut mapping_yaml);
             Ok(MappingTarget {
                 source_collection: collection.to_owned(),
                 mapping_path,
@@ -1542,10 +1601,10 @@ pub async fn run_check_md5(
 mod tests {
     use super::{
         aggregate_md5_hexes, backfill_mapping_columns_from_schema, build_mapping_source_paths,
-        collect_mismatched_record_samples, extract_source_documents, format_record_values,
-        md5_hex_from_fragments, mongo_field_literal, mongo_field_literal_for_type,
-        mongo_hash_record, mongo_sort_doc, normalize_json_literal, pg_select_query, HashRecord,
-        MappingYaml, SourcePath,
+        collect_mismatched_record_samples, drop_incompatible_columns, extract_source_documents,
+        format_record_values, md5_hex_from_fragments, mongo_field_literal,
+        mongo_field_literal_for_type, mongo_hash_record, mongo_sort_doc, normalize_json_literal,
+        pg_select_query, HashRecord, MappingYaml, SourcePath,
     };
     use crate::analyzer::Analyzer;
     use bson::{doc, Bson};
@@ -1982,6 +2041,150 @@ pg_mapping:
             mongo_field_literal(&doc, "metadata.creation_date"),
             "\"2025-08-11T00:00:00Z\""
         );
+    }
+
+    #[test]
+    fn drop_incompatible_columns_skips_objectid_to_uuid() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "status": "ok"
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mut mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: accounts
+  columns:
+    - { source_field: _id, target_field: id, data_type: UUID }
+    - { source_field: status, target_field: status, data_type: TEXT }
+  ddl:
+    columns:
+      - { name: id, sql_type: UUID }
+      - { name: status, sql_type: TEXT }
+    foreign_keys: []
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        drop_incompatible_columns(
+            &schema,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            &mut mapping_yaml,
+        );
+
+        let remaining_targets = mapping_yaml
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(!remaining_targets.contains(&"id"));
+        assert!(remaining_targets.contains(&"status"));
+    }
+
+    #[test]
+    fn drop_incompatible_columns_skips_string_to_datetime() {
+        let docs = vec![doc! {
+            "status": "ok",
+            "monthly_gain": "0"
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mut mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: advisors
+  columns:
+    - { source_field: status, target_field: status, data_type: TEXT }
+    - { source_field: monthly_gain, target_field: monthly_gain, data_type: "TIMESTAMP WITH TIME ZONE" }
+  ddl:
+    columns:
+      - { name: status, sql_type: TEXT }
+      - { name: monthly_gain, sql_type: "TIMESTAMP WITH TIME ZONE" }
+    foreign_keys: []
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        drop_incompatible_columns(
+            &schema,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            &mut mapping_yaml,
+        );
+
+        let remaining_targets = mapping_yaml
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(remaining_targets.contains(&"status"));
+        assert!(!remaining_targets.contains(&"monthly_gain"));
+    }
+
+    #[test]
+    fn drop_incompatible_columns_skips_objectid_to_uuid_when_uuid_from_ddl_with_default() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "status": "ok"
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mut mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: accounts
+  columns:
+    - { source_field: _id, target_field: id }
+    - { source_field: status, target_field: status }
+  ddl:
+    columns:
+      - { name: id, sql_type: "UUID DEFAULT public.gen_random_uuid() PRIMARY KEY" }
+      - { name: status, sql_type: TEXT }
+    foreign_keys: []
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        drop_incompatible_columns(
+            &schema,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            &mut mapping_yaml,
+        );
+
+        let remaining_targets = mapping_yaml
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(!remaining_targets.contains(&"id"));
+        assert!(remaining_targets.contains(&"status"));
     }
 
     #[test]

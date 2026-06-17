@@ -51,8 +51,9 @@ use mongo2pg::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_pg_reserved, property_filter_entries_for_collection,
-    read_conf, sanitize, scalar_type_family, should_infer_collection,
+    inline_object_leaf_fields_with_prefix, is_pg_reserved, objectid_hex_to_uuid,
+    property_filter_entries_for_collection, read_conf, sanitize, scalar_type_family,
+    should_infer_collection,
 };
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
@@ -2041,6 +2042,8 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
 
     let mut ddl = String::new();
 
+    ddl.push_str("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n\n");
+
     if let Some(schema) = schema_name {
         ddl.push_str(&format!(
             "CREATE SCHEMA IF NOT EXISTS {};\nSET search_path = {};\n\n",
@@ -2068,6 +2071,9 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
                     column.name,
                     rendered_sql_type(&column.sql_type)
                 );
+                if column.primary_key && column.sql_type.eq_ignore_ascii_case("uuid") {
+                    line.push_str(" DEFAULT public.gen_random_uuid()");
+                }
                 if primary_keys.len() == 1 && column.primary_key {
                     line.push_str(" PRIMARY KEY");
                 }
@@ -2152,6 +2158,54 @@ fn build_collection_mappings_with_timestamp_fields(
     timestamp_fields: &[String],
     reserved_table_names: &std::collections::HashSet<String>,
 ) -> Vec<(String, CollectionMapping)> {
+    fn is_uuid_like_key(name: &str) -> bool {
+        let parts = name.split('-').collect::<Vec<_>>();
+        name.len() == 36
+            && parts.len() == 5
+            && parts[0].len() == 8
+            && parts[1].len() == 4
+            && parts[2].len() == 4
+            && parts[3].len() == 4
+            && parts[4].len() == 12
+            && parts
+                .iter()
+                .all(|part| part.chars().all(|ch| ch.is_ascii_hexdigit()))
+    }
+
+    fn map_document_value_fields<'a>(
+        sub_fields: &'a IndexMap<String, FieldSchema>,
+    ) -> Option<&'a IndexMap<String, FieldSchema>> {
+        if sub_fields.is_empty()
+            || !sub_fields.keys().all(|key| {
+                !key.is_empty()
+                    && key.chars().all(|ch| ch.is_ascii_hexdigit())
+                    && (key.len() >= 8 || is_uuid_like_key(key))
+            })
+        {
+            return None;
+        }
+
+        for field in sub_fields.values() {
+            let non_null = field
+                .types
+                .iter()
+                .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                .collect::<Vec<_>>();
+            if non_null.len() == 1
+                && non_null[0].0.as_str() == "Object"
+                && non_null[0]
+                    .1
+                    .object
+                    .as_ref()
+                    .is_some_and(|obj| !obj.is_empty())
+            {
+                return non_null[0].1.object.as_ref();
+            }
+        }
+
+        None
+    }
+
     fn preferred_child_mapping_table_name(parent_name: &str, field: &str) -> String {
         let field = sanitize_pg_name(field);
         let ancestor_segments = parent_name.split('_').collect::<Vec<_>>();
@@ -2657,6 +2711,93 @@ fn build_collection_mappings_with_timestamp_fields(
                         raw_name,
                         resolved_child_table_names,
                     );
+
+                    if let Some(value_fields) = map_document_value_fields(sub_fields) {
+                        if let Some(table) = tables_by_name.get(&child_table) {
+                            let foreign_key_columns = table
+                                .foreign_keys
+                                .iter()
+                                .map(|fk| fk.from_col.as_str())
+                                .collect::<Vec<_>>();
+                            let columns = table
+                                .columns
+                                .iter()
+                                .filter(|column| {
+                                    column.name != "id"
+                                        && foreign_key_columns.iter().all(|fk| *fk != column.name)
+                                })
+                                .filter_map(|column| {
+                                    if column.name == "key" {
+                                        Some(MappingColumn {
+                                            source_field: "key".to_owned(),
+                                            target_field: column.name.clone(),
+                                            data_type: column.col_type.to_lowercase(),
+                                            nullable: !column.not_null,
+                                        })
+                                    } else {
+                                        find_source_field_for_column(
+                                            value_fields,
+                                            &column.name,
+                                            false,
+                                        )
+                                        .map(
+                                            |source_field| MappingColumn {
+                                                source_field,
+                                                target_field: column.name.clone(),
+                                                data_type: column.col_type.to_lowercase(),
+                                                nullable: !column.not_null,
+                                            },
+                                        )
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+
+                            if !columns.is_empty() {
+                                let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                                child_mongo_path_segments.push(raw_name.clone());
+                                out.push((
+                                    child_table.clone(),
+                                    CollectionMapping {
+                                        collection_name: raw_name.clone(),
+                                        mongo_dbname: db_name.to_owned(),
+                                        mongo_path: mapping_mongo_path_for_segments(
+                                            root_collection_name,
+                                            &child_mongo_path_segments,
+                                        ),
+                                        pg_mapping: PgMapping {
+                                            dbname: db_name.to_owned(),
+                                            schema_name: schema_name.to_owned(),
+                                            table_name: table.name.clone(),
+                                            columns,
+                                            ddl: Some(ddl_table_mapping_from_table(table)),
+                                            ddl_editing: default_ddl_editing_guidance(),
+                                        },
+                                    },
+                                ));
+                            }
+                        }
+
+                        collect_table_mappings(
+                            db_name,
+                            root_collection_name,
+                            schema_name,
+                            &child_table,
+                            &child_table,
+                            &{
+                                let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                                child_mongo_path_segments.push(raw_name.clone());
+                                child_mongo_path_segments
+                            },
+                            value_fields,
+                            false,
+                            false,
+                            tables_by_name,
+                            resolved_child_table_names,
+                            out,
+                        );
+                        continue;
+                    }
+
                     collect_table_mappings(
                         db_name,
                         root_collection_name,
@@ -3134,7 +3275,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
         .unwrap_or_else(|| "#namespace = my_db".to_owned());
     let conf_content = format!(
-        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
@@ -3748,6 +3889,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     fn parse_topic_db_collection(
         topic: &str,
         topic_prefix: Option<&str>,
+        default_db_name: Option<&str>,
     ) -> Option<(String, String)> {
         let mut effective = topic;
         if let Some(prefix) = topic_prefix {
@@ -3758,13 +3900,24 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             effective = &topic[prefix_with_dot.len()..];
         }
         let segments = effective.split('.').collect::<Vec<_>>();
-        if segments.len() < 2 {
-            return None;
+        if segments.len() >= 2 {
+            return Some((
+                segments[segments.len() - 2].to_owned(),
+                segments[segments.len() - 1].to_owned(),
+            ));
         }
-        Some((
-            segments[segments.len() - 2].to_owned(),
-            segments[segments.len() - 1].to_owned(),
-        ))
+
+        // Some deployments set topic_prefix to include db name already
+        // (for example mongo2pg.sample_analytics), so only <collection>
+        // remains after prefix trimming. In that case fall back to configured
+        // namespace database for the db segment.
+        if segments.len() == 1 {
+            if let Some(db_name) = default_db_name {
+                return Some((db_name.to_owned(), segments[0].to_owned()));
+            }
+        }
+
+        None
     }
 
     fn mongo_path_segments(mongo_path: Option<&str>) -> Vec<&str> {
@@ -3822,6 +3975,45 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         current
     }
 
+    fn find_value_in_nested_json_object<'a>(obj: &'a serde_json::Map<String, Value>, source_field: &str) -> Option<&'a Value> {
+        if let Some(value) = obj.get(source_field) {
+            return Some(value);
+        }
+
+        fn visit<'a>(value: &'a Value, source_field: &str, out: &mut Vec<&'a Value>) {
+            match value {
+                Value::Object(map) => {
+                    if let Some(found) = map.get(source_field) {
+                        out.push(found);
+                    }
+                    for child in map.values() {
+                        visit(child, source_field, out);
+                    }
+                }
+                Value::Array(items) => {
+                    for item in items {
+                        visit(item, source_field, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut matches = Vec::new();
+        for value in obj.values() {
+            visit(value, source_field, &mut matches);
+            if matches.len() > 1 {
+                break;
+            }
+        }
+
+        if matches.len() == 1 {
+            Some(matches[0])
+        } else {
+            None
+        }
+    }
+
     fn format_table_insert_exec_summary(table_insert_execs: &HashMap<String, u64>) -> String {
         if table_insert_execs.is_empty() {
             return "none".to_owned();
@@ -3844,14 +4036,44 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         raw.replace('\'', "''")
     }
 
+    fn normalized_sql_type(sql_type: Option<&str>) -> Option<String> {
+        let raw = sql_type?.trim();
+        if raw.is_empty() {
+            return None;
+        }
+
+        let lowered = raw.to_ascii_lowercase();
+        let mut cut = raw.len();
+        for marker in [
+            " default ",
+            " primary key",
+            " not null",
+            " null",
+            " references ",
+            " check ",
+            " unique",
+        ] {
+            if let Some(idx) = lowered.find(marker) {
+                cut = cut.min(idx);
+            }
+        }
+
+        let base = raw[..cut].trim();
+        if base.is_empty() {
+            None
+        } else {
+            Some(base.to_owned())
+        }
+    }
+
     fn cast_string_literal(raw: &str, sql_type: Option<&str>) -> String {
         let escaped = escape_sql_string(raw);
-        if let Some(sql_type) = sql_type {
+        if let Some(sql_type) = normalized_sql_type(sql_type) {
             let normalized = match sql_type.trim().to_ascii_lowercase().as_str() {
                 "smallserial" | "serial2" => "SMALLINT",
                 "serial" | "serial4" => "INTEGER",
                 "bigserial" | "serial8" => "BIGINT",
-                _ => sql_type,
+                _ => &sql_type,
             };
             format!("CAST('{escaped}' AS {normalized})")
         } else {
@@ -3863,6 +4085,21 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     // Keep this centralized so adding new wrappers is easy.
     fn map_extended_json_literal(value: &Value, sql_type: Option<&str>) -> Option<String> {
         let obj = value.as_object()?;
+
+        let normalized = normalized_sql_type(sql_type);
+
+        if let Some(Value::String(raw)) = obj.get("$oid") {
+            if normalized
+                .as_deref()
+                .map(|t| t.eq_ignore_ascii_case("uuid"))
+                .unwrap_or(false)
+            {
+                return objectid_hex_to_uuid(raw)
+                    .map(|uuid| cast_string_literal(&uuid, sql_type))
+                    .or_else(|| Some(cast_string_literal(raw, sql_type)));
+            }
+            return Some(cast_string_literal(raw, sql_type));
+        }
 
         if let Some(Value::String(raw)) = obj
             .get("$numberDecimal")
@@ -3919,7 +4156,19 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 }
             }
             Value::Number(v) => v.to_string(),
-            Value::String(v) => format!("'{}'", escape_sql_string(v)),
+            Value::String(v) => {
+                let normalized = normalized_sql_type(sql_type);
+                if normalized
+                    .as_deref()
+                    .map(|t| t.eq_ignore_ascii_case("uuid"))
+                    .unwrap_or(false)
+                {
+                    if let Some(uuid) = objectid_hex_to_uuid(v) {
+                        return cast_string_literal(&uuid, sql_type);
+                    }
+                }
+                format!("'{}'", escape_sql_string(v))
+            }
             Value::Array(items) => {
                 let elements = items
                     .iter()
@@ -3938,7 +4187,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                if let Some(array_type) = sql_type.filter(|t| t.contains("[]")) {
+                if let Some(array_type) = normalized_sql_type(sql_type).filter(|t| t.contains("[]"))
+                {
                     format!("ARRAY[{elements}]::{array_type}")
                 } else {
                     format!("'{}'", escape_sql_string(&value.to_string()))
@@ -3949,7 +4199,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     return mapped;
                 }
                 let as_json = value.to_string();
-                match sql_type {
+                match normalized_sql_type(sql_type) {
                     Some(t) if t.to_ascii_lowercase().contains("json") => {
                         format!("'{}'::{t}", escape_sql_string(&as_json))
                     }
@@ -3960,7 +4210,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     fn varchar_limit(sql_type: Option<&str>) -> Option<usize> {
-        let sql = sql_type?.trim().to_ascii_lowercase();
+        let sql = normalized_sql_type(sql_type)?.to_ascii_lowercase();
         let prefix = if sql.starts_with("varchar(") {
             "varchar("
         } else if sql.starts_with("character varying(") {
@@ -4006,6 +4256,34 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let Some(value) = value else {
             return Ok(None);
         };
+
+        fn unwrap_union_tagged_value(value: &Value) -> &Value {
+            const UNION_TAGS: [&str; 12] = [
+                "null", "string", "boolean", "int", "long", "float", "double", "bytes",
+                "array", "map", "record", "enum",
+            ];
+
+            let mut current = value;
+            loop {
+                let Value::Object(obj) = current else {
+                    break;
+                };
+                if obj.len() != 1 {
+                    break;
+                }
+                let Some((tag, inner)) = obj.iter().next() else {
+                    break;
+                };
+                if UNION_TAGS.contains(&tag.as_str()) {
+                    current = inner;
+                } else {
+                    break;
+                }
+            }
+            current
+        }
+
+        let value = unwrap_union_tagged_value(value);
         match value {
             Value::Object(_) => Ok(Some(value.clone())),
             Value::String(raw) => {
@@ -4351,46 +4629,44 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 let child_pk_sql_type = column_sql_type(child_mapping, &child_pk);
 
                 for node in child_nodes {
-                    let Value::Object(obj) = node else {
-                        continue;
-                    };
+                    for obj in child_row_objects_for_mapping(node, child_mapping) {
+                        let mut child_columns = vec![quote_ident(&fk.from_col)];
+                        let mut child_values = vec![parent_pk_literal.clone()];
+                        for mapped in &child_mapping.pg_mapping.columns {
+                            child_columns.push(quote_ident(&mapped.target_field));
+                            let val = obj
+                                .get(&mapped.source_field)
+                                .or_else(|| {
+                                    find_value_in_nested_json_object(&obj, &mapped.source_field)
+                                });
+                            let sql_type = column_sql_type(child_mapping, &mapped.target_field);
+                            validate_varchar_value(
+                                val,
+                                sql_type,
+                                &mapped.source_field,
+                                &mapped.target_field,
+                                &child_table,
+                            )?;
+                            child_values.push(sql_literal(val, sql_type));
+                        }
 
-                    let mut child_columns = vec![quote_ident(&fk.from_col)];
-                    let mut child_values = vec![parent_pk_literal.clone()];
-                    for mapped in &child_mapping.pg_mapping.columns {
-                        child_columns.push(quote_ident(&mapped.target_field));
-                        let val = obj.get(&mapped.source_field);
-                        let sql_type = column_sql_type(child_mapping, &mapped.target_field);
-                        validate_varchar_value(
-                            val,
-                            sql_type,
-                            &mapped.source_field,
-                            &mapped.target_field,
-                            &child_table,
-                        )?;
-                        child_values.push(sql_literal(val, sql_type));
+                        let insert_sql = format!(
+                            "INSERT INTO {} ({}) VALUES ({}) RETURNING {}::text",
+                            child_table,
+                            child_columns.join(", "),
+                            child_values.join(", "),
+                            quote_ident(&child_pk)
+                        );
+                        let row = pg_client.query_one(insert_sql.as_str(), &[]).await?;
+                        let inserted_pk_text: String = row.try_get(0)?;
+
+                        affected_rows += 1;
+                        *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
+
+                        let inserted_pk_literal =
+                            cast_string_literal(&inserted_pk_text, child_pk_sql_type);
+                        pending.push((child_mapping, Value::Object(obj), inserted_pk_literal));
                     }
-
-                    let insert_sql = format!(
-                        "INSERT INTO {} ({}) VALUES ({}) RETURNING {}::text",
-                        child_table,
-                        child_columns.join(", "),
-                        child_values.join(", "),
-                        quote_ident(&child_pk)
-                    );
-                    let row = pg_client.query_one(insert_sql.as_str(), &[]).await?;
-                    let inserted_pk_text: String = row.try_get(0)?;
-
-                    affected_rows += 1;
-                    *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
-
-                    let inserted_pk_literal =
-                        cast_string_literal(&inserted_pk_text, child_pk_sql_type);
-                    pending.push((
-                        child_mapping,
-                        Value::Object(obj.clone()),
-                        inserted_pk_literal,
-                    ));
                 }
             }
         }
@@ -4636,16 +4912,11 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     } else {
         group_id.clone()
     };
-    let topics = if args.topics.is_empty() {
+    let mut topics = if args.topics.is_empty() {
         kafka_conf.topics.clone()
     } else {
         args.topics.clone()
     };
-    if topics.is_empty() {
-        return Err(anyhow!(
-            "No Kafka topics configured. Set [kafka].topics or pass --topics"
-        ));
-    }
 
     let target_uri = conf
         .target_uri
@@ -4680,6 +4951,39 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .set("message.timeout.ms", "5000")
         .create()
         .with_context(|| "Failed to create Kafka DLQ producer")?;
+
+    if topics.is_empty() {
+        if let Some(prefix) = kafka_conf.topic_prefix.as_deref() {
+            let metadata = consumer
+                .fetch_metadata(None, Duration::from_secs(10))
+                .with_context(|| {
+                    format!(
+                        "Failed to fetch Kafka metadata while resolving topic prefix '{}'",
+                        prefix
+                    )
+                })?;
+            let prefix_with_dot = format!("{prefix}.");
+            topics = metadata
+                .topics()
+                .iter()
+                .map(|topic| topic.name().to_owned())
+                .filter(|topic| topic.starts_with(&prefix_with_dot))
+                .collect::<Vec<_>>();
+            topics.sort();
+            topics.dedup();
+
+            if topics.is_empty() {
+                return Err(anyhow!(
+                    "No Kafka topics matched prefix '{}'. Set [kafka].topics, pass --topics, or create topics with this prefix.",
+                    prefix
+                ));
+            }
+        } else {
+            return Err(anyhow!(
+                "No Kafka topics configured. Set [kafka].topics, set [kafka].topic_prefix, or pass --topics"
+            ));
+        }
+    }
 
     let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
     consumer
@@ -4777,9 +5081,11 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         };
 
         let topic = message.topic();
-        let Some((db_name, collection_name)) =
-            parse_topic_db_collection(topic, kafka_conf.topic_prefix.as_deref())
-        else {
+        let Some((db_name, collection_name)) = parse_topic_db_collection(
+            topic,
+            kafka_conf.topic_prefix.as_deref(),
+            Some(namespace_db_name),
+        ) else {
             skipped_topic += 1;
             continue;
         };
@@ -4825,11 +5131,39 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .and_then(|value| value.as_object())
             .map(|obj| Value::Object(obj.clone()))
             .unwrap_or(decoded);
+
+        fn unwrap_union_tagged_value(value: &Value) -> &Value {
+            const UNION_TAGS: [&str; 12] = [
+                "null", "string", "boolean", "int", "long", "float", "double", "bytes",
+                "array", "map", "record", "enum",
+            ];
+
+            let mut current = value;
+            loop {
+                let Value::Object(obj) = current else {
+                    break;
+                };
+                if obj.len() != 1 {
+                    break;
+                }
+                let Some((tag, inner)) = obj.iter().next() else {
+                    break;
+                };
+                if UNION_TAGS.contains(&tag.as_str()) {
+                    current = inner;
+                } else {
+                    break;
+                }
+            }
+            current
+        }
+
         let op = payload
             .get("op")
+            .map(unwrap_union_tagged_value)
             .and_then(|value| value.as_str())
             .unwrap_or("u");
-        let after = match debezium_document(payload.get("after")) {
+        let after = match debezium_document(payload.get("after").map(unwrap_union_tagged_value)) {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
@@ -4837,7 +5171,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 continue;
             }
         };
-        let before = match debezium_document(payload.get("before")) {
+        let before = match debezium_document(payload.get("before").map(unwrap_union_tagged_value)) {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
@@ -5454,6 +5788,136 @@ fn csv_line_at(contents: &str, line_number: usize) -> Option<&str> {
     }
 }
 
+fn child_row_objects_for_mapping(
+    node: &Value,
+    child_mapping: &CollectionMapping,
+) -> Vec<serde_json::Map<String, Value>> {
+    match node {
+        Value::Array(items) => {
+            let mut out = Vec::new();
+            for item in items {
+                out.extend(child_row_objects_for_mapping(item, child_mapping));
+            }
+            return out;
+        }
+        Value::String(raw) => {
+            if let Ok(parsed) = serde_json::from_str::<Value>(raw) {
+                return child_row_objects_for_mapping(&parsed, child_mapping);
+            }
+            return Vec::new();
+        }
+        _ => {}
+    }
+
+    let Value::Object(obj) = node else {
+        return Vec::new();
+    };
+
+    let mapped_source_fields = child_mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .map(|column| column.source_field.as_str())
+        .collect::<Vec<_>>();
+
+    let has_mapped_fields = |candidate: &serde_json::Map<String, Value>| {
+        mapped_source_fields
+            .iter()
+            .any(|field| candidate.contains_key(*field))
+    };
+
+    let expects_key_column = child_mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .any(|mapped| mapped.source_field == "key");
+
+    // Some connectors wrap arrays/objects before the actual row payload.
+    // If current object has none of mapped fields, recursively unwrap known
+    // wrapper keys first, then any nested aggregate container.
+    // For map-style objects that rely on dynamic keys, defer to dedicated
+    // map expansion branch below.
+    let likely_map_style_object = expects_key_column
+        && !obj.contains_key("key")
+        && obj.values().all(|value| matches!(value, Value::Object(_) | Value::String(_)));
+
+    if !has_mapped_fields(obj) && !likely_map_style_object {
+        for wrapper_key in ["items", "array", "values", "records", "value", "transactions"] {
+            if let Some(wrapped) = obj.get(wrapper_key) {
+                let extracted = child_row_objects_for_mapping(wrapped, child_mapping);
+                if !extracted.is_empty() {
+                    return extracted;
+                }
+            }
+        }
+
+        for wrapped in obj.values() {
+            match wrapped {
+                Value::Array(_) | Value::Object(_) | Value::String(_) => {
+                    let extracted = child_row_objects_for_mapping(wrapped, child_mapping);
+                    if !extracted.is_empty() {
+                        return extracted;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let row_from_entry_value = |entry_value: &Value| -> Option<serde_json::Map<String, Value>> {
+        match entry_value {
+            Value::Object(entry_obj) => Some(entry_obj.clone()),
+            Value::String(raw) => serde_json::from_str::<Value>(raw)
+                .ok()
+                .and_then(|parsed| parsed.as_object().cloned()),
+            _ => None,
+        }
+    };
+
+    let key_from_row_or_entry = |row: &serde_json::Map<String, Value>, entry_key: &str| {
+        row.values()
+            .find_map(|value| match value {
+                Value::String(text) if text == entry_key => Some(text.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| entry_key.to_owned())
+    };
+
+    // Some connectors encode map entries as {"key": "...", "value": {...}}.
+    // Normalize that shape to plain row object.
+    if let Some(value_node) = obj.get("value") {
+        if let Some(mut row) = row_from_entry_value(value_node) {
+            if expects_key_column {
+                if let Some(Value::String(existing_key)) = obj.get("key") {
+                    let key_value = key_from_row_or_entry(&row, existing_key);
+                    row.insert("key".to_owned(), Value::String(key_value));
+                }
+            }
+            return vec![row];
+        }
+    }
+
+    // Map-style object branch: { "dynamic_key": { ...row... }, ... }
+    // Expand into one row per entry; inject dynamic key only when mapping requires it.
+    if !obj.contains_key("key") {
+        let mut expanded = Vec::new();
+        for (entry_key, entry_value) in obj {
+            if let Some(mut row) = row_from_entry_value(entry_value) {
+                if expects_key_column {
+                    let key_value = key_from_row_or_entry(&row, entry_key);
+                    row.insert("key".to_owned(), Value::String(key_value));
+                }
+                expanded.push(row);
+            }
+        }
+        if !expanded.is_empty() {
+            return expanded;
+        }
+    }
+
+    vec![obj.clone()]
+}
+
 async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
     let mut tls_builder = native_tls::TlsConnector::builder();
     if matches!(pg_sslmode(target_uri), Some(mode) if mode.eq_ignore_ascii_case("require")) {
@@ -5926,8 +6390,9 @@ mod tests {
     use super::{
         apply_collection_property_filters, build_collection_mappings,
         build_collection_mappings_with_timestamp_fields, collect_infer_type_warnings,
-        collect_nullable_scalar_warnings, render_ddl_from_mapping_tables, resolve_collections_dir,
-        sanitize_name, should_infer_collection, strip_psql_preamble,
+        child_row_objects_for_mapping, collect_nullable_scalar_warnings,
+        render_ddl_from_mapping_tables, resolve_collections_dir, sanitize_name,
+        should_infer_collection, strip_psql_preamble,
     };
     use bson::doc;
     use mongo2pg::analyzer::Analyzer;
@@ -5950,7 +6415,7 @@ mod tests {
 
     #[derive(Debug, Deserialize)]
     struct TestTomlTargetSection {
-        schema: Option<String>,
+        schema_name: Option<String>,
     }
 
     #[test]
@@ -5960,6 +6425,84 @@ mod tests {
 
         assert!(!should_infer_collection("users", &include, &exclude));
         assert!(!should_infer_collection("orders", &include, &exclude));
+    }
+
+    #[test]
+    fn child_row_objects_for_mapping_expands_dynamic_map_entries() {
+        let mapping_yaml = r#"
+collection_name: tier_and_details
+mongo_dbname: sample_analytics
+mongo_path: .tier_and_details
+pg_mapping:
+  dbname: sample_analytics
+  schema_name: sample_analytics
+  table_name: tier_and_details
+  columns:
+    - source_field: key
+      target_field: key
+      data_type: text
+      nullable: false
+    - source_field: active
+      target_field: active
+      data_type: boolean
+      nullable: false
+    - source_field: tier
+      target_field: tier
+      data_type: text
+      nullable: false
+  ddl:
+    name: tier_and_details
+    columns:
+      - name: id
+        sql_type: BIGSERIAL
+        nullable: false
+        primary_key: true
+      - name: customers_id
+        sql_type: UUID
+        nullable: false
+        primary_key: false
+      - name: key
+        sql_type: TEXT
+        nullable: false
+        primary_key: false
+      - name: active
+        sql_type: BOOLEAN
+        nullable: false
+        primary_key: false
+      - name: tier
+        sql_type: TEXT
+        nullable: false
+        primary_key: false
+    foreign_keys:
+      - from_col: customers_id
+        to_table: customers
+        to_col: id
+"#;
+
+        let mapping: super::CollectionMapping = serde_yaml::from_str(mapping_yaml).unwrap();
+        let node = serde_json::json!({
+            "0df078f33aa74a2e9696e0520c1a828a": { "tier": "Bronze", "active": true },
+            "699456451cc24f028d2aa99d7534c219": { "tier": "Silver", "active": false }
+        });
+
+        let rows = child_row_objects_for_mapping(&node, &mapping);
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|row| {
+            row.get("key")
+                == Some(&serde_json::Value::String(
+                    "0df078f33aa74a2e9696e0520c1a828a".to_owned()
+                ))
+                && row.get("tier") == Some(&serde_json::Value::String("Bronze".to_owned()))
+                && row.get("active") == Some(&serde_json::Value::Bool(true))
+        }));
+        assert!(rows.iter().any(|row| {
+            row.get("key")
+                == Some(&serde_json::Value::String(
+                    "699456451cc24f028d2aa99d7534c219".to_owned()
+                ))
+                && row.get("tier") == Some(&serde_json::Value::String("Silver".to_owned()))
+                && row.get("active") == Some(&serde_json::Value::Bool(false))
+        }));
     }
 
     #[test]
@@ -6059,7 +6602,7 @@ exclude = ["audit"]
     }
 
     #[test]
-    fn toml_target_schema_is_parsed() {
+    fn toml_target_schema_name_is_parsed() {
         let config: TestTomlProjectConfig = toml::from_str(
             r#"
 [project]
@@ -6067,13 +6610,13 @@ base_dir = "/tmp"
 project_dir = "demo"
 
 [target]
-schema = "shared_schema"
+schema_name = "shared_schema"
 "#,
         )
         .expect("config should parse");
 
         let target = config.target.expect("target section should exist");
-        assert_eq!(target.schema.as_deref(), Some("shared_schema"));
+        assert_eq!(target.schema_name.as_deref(), Some("shared_schema"));
     }
 
     #[test]
@@ -7032,11 +7575,13 @@ CREATE TABLE demo (
             CREATE DATABASE "test_db";
             \connect "test_db"
 
+            CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
             CREATE SCHEMA IF NOT EXISTS "employees";
             SET search_path = "employees";
 
             CREATE TABLE employees (
-                id TEXT PRIMARY KEY,
+                id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
                 created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                 hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
                 last_update TIMESTAMP WITH TIME ZONE NOT NULL,

@@ -8,7 +8,7 @@
 //! * `Array` of objects → child table with a FK (one row per array element).
 //! * `Array` of scalars → child table with a `value` column.
 //! * Mixed-type fields (Object/Array combined with scalars) → `JSONB`.
-//! * Hex-keyed map documents → child table with an extra `key TEXT NOT NULL` column.
+//! * Hex-keyed map documents → child table from map values.
 //!
 //! The public entry point is [`schema_to_ddl`].
 
@@ -45,7 +45,7 @@ fn bson_type_to_pg(t: &str) -> &'static str {
         TYPE_BOOLEAN => "BOOLEAN",
         TYPE_DATE => "TIMESTAMP WITH TIME ZONE",
         TYPE_DECIMAL128 => "NUMERIC",
-        TYPE_OBJECTID => "TEXT",
+        TYPE_OBJECTID => "UUID",
         TYPE_BINARY => "BYTEA",
         TYPE_TIMESTAMP => "BIGINT",
         TYPE_REGEX | TYPE_SYMBOL | TYPE_CODE | TYPE_CODE_W_SCOPE | TYPE_DBPOINTER | TYPE_MAXKEY
@@ -187,7 +187,7 @@ fn pk_type_for_id(non_null: &[(&str, &TypeSchema)]) -> String {
     }
     let (name, ts) = non_null[0];
     if name == TYPE_OBJECTID {
-        return "TEXT".to_owned();
+        return "UUID".to_owned();
     }
     if name == TYPE_DOUBLE || name == TYPE_NUMBER {
         return "BIGSERIAL".to_owned();
@@ -364,13 +364,14 @@ fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> 
     }
 }
 
-/// Optionally prepend `CREATE SCHEMA` + `SET search_path` preamble.
+/// Prepend extension setup and optionally `CREATE SCHEMA` + `SET search_path` preamble.
 fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
+    let extension = "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n\n";
     match pg_schema {
-        None => ddl,
+        None => format!("{extension}{ddl}"),
         Some(schema) => {
             let s = sanitize(schema);
-            format!("CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s};\n\n{ddl}")
+            format!("{extension}CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s};\n\n{ddl}")
         }
     }
 }
@@ -618,7 +619,7 @@ fn add_doc_table(
 }
 
 /// Create a child table for a MongoDB map document (dynamic hex-keyed sub-fields).
-/// An extra `key TEXT NOT NULL` column holds the original dynamic key.
+/// Dynamic map keys are not materialized as dedicated SQL columns.
 fn add_map_table(
     parent: &mut Table,
     map_field_col: &str,
@@ -661,19 +662,6 @@ fn add_map_table(
         }
     }
     child.parent_ref = Some(parent_ref);
-
-    // Use UUID type if all keys are UUIDs, else TEXT
-    let key_type = if value_fields.keys().all(|k| is_uuid_keyed_name(k)) {
-        "UUID"
-    } else {
-        "TEXT"
-    };
-    child.columns.push(Column {
-        name: "key".to_owned(),
-        pg_type: key_type.to_owned(),
-        nullable: false,
-        primary_key: false,
-    });
 
     process_fields(
         &mut child,
@@ -1197,7 +1185,7 @@ pub fn process_fields(
                         "numeric" => "DOUBLE PRECISION",
                         "boolean" => "BOOLEAN",
                         "datetime" => "TIMESTAMP WITH TIME ZONE",
-                        "objectid" => "TEXT",
+                        "objectid" => "UUID",
                         _ => "TEXT",
                     };
                     table.columns.push(Column {
@@ -1280,6 +1268,11 @@ fn render_column(col: &Column, inline_primary_key: bool) -> String {
     } else {
         col.pg_type.as_str()
     };
+    let default_clause = if col.primary_key && col.pg_type.eq_ignore_ascii_case("UUID") {
+        " DEFAULT public.gen_random_uuid()"
+    } else {
+        ""
+    };
     let constraint = if col.primary_key && inline_primary_key {
         " PRIMARY KEY"
     } else if !col.nullable || col.primary_key {
@@ -1287,9 +1280,12 @@ fn render_column(col: &Column, inline_primary_key: bool) -> String {
     } else {
         ""
     };
-    format!("    {}{} {}{constraint}", col.name, "", rendered_pg_type)
-        .trim_end()
-        .to_owned()
+    format!(
+        "    {}{} {}{}{}",
+        col.name, "", rendered_pg_type, default_clause, constraint
+    )
+    .trim_end()
+    .to_owned()
 }
 
 fn render_table(table: &Table) -> String {
@@ -1600,13 +1596,13 @@ mod tests {
     }
 
     #[test]
-    fn test_objectid_pk_becomes_text() {
+    fn test_objectid_pk_becomes_uuid() {
         let docs = vec![doc! { "_id": bson::oid::ObjectId::new(), "x": 1_i32 }];
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "t", None);
         assert!(
-            ddl.contains("id TEXT PRIMARY KEY"),
-            "ObjectId PK should become TEXT"
+            ddl.contains("id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY"),
+            "ObjectId PK should become UUID"
         );
     }
 
@@ -2053,5 +2049,22 @@ mod tests {
         let ddl = schema_to_ddl(&schema, "host_verification", None);
 
         assert!(ddl.contains("CREATE TABLE host_verification ("));
+    }
+
+    #[test]
+    fn customers_fixture_generates_expected_tables() {
+        let json_str = std::fs::read_to_string("tests/fixtures/customers.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "customers", None);
+
+        assert!(ddl.contains("CREATE TABLE customers ("));
+        assert!(ddl.contains("CREATE TABLE tier_and_details ("));
     }
 }
