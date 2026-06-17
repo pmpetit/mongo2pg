@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Kafka import dead-letter queue (DLQ)**: when a Kafka message cannot be applied to PostgreSQL, the original message is now copied to topic `dlq_<source_topic>` with the original key/payload when available.
+- **Kafka config `batch_log_messages`**: added `[kafka].batch_log_messages` to control progress log frequency during `kafka-import` (default remains 100 when unset).
+
+### Changed
+
+- **Kafka import nested mapping support**: Kafka upsert/delete logic now traverses nested mapping trees (child-of-child tables) instead of only root direct children, so mappings such as `.address.location` are applied correctly.
+- **Kafka import progress logging cadence**: replaced hard-coded `100`-message logging intervals with configurable `batch_log_messages`.
+
+### Fixed
+
+- **CLI default dispatch panic**: removed brittle `expect("clap ensures args are present")` fallback and added safe handling for no-subcommand invocation.
+- **CLI Infer argument duplication**: removed duplicate `--source-uri` definition in `infer` args that triggered Clap debug assertions.
+- **Kafka nested insert cast for serial PKs**: normalized casts so PostgreSQL does not receive `CAST(... AS BIGSERIAL|SERIAL|SMALLSERIAL)` in recursive insert paths.
+- **Post-import `check-md5` Mongo sort limit (error 13103)**: removed MongoDB-side sort-by-all-fields in MD5 collection flow and rely on local deterministic sorting to avoid "too many compound keys" failures.
+- **Post-import `check-md5` type mismatch noise**: when a MongoDB source field is string-only but the mapped PostgreSQL target type is non-text (not `TEXT`/`VARCHAR`-family), that column is now excluded from MD5 comparison to prevent false mismatches (for example `_id` string vs `BIGSERIAL`, string dates vs `TIMESTAMP`).
+
 ## [0.5.3] - 2026-06-15
 
 ### Changed

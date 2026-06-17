@@ -2,50 +2,53 @@
 
 Contributions are welcome, here is a starting process to help you to set up your env.
 
-## Step 1 — Start MongoDB community in Docker
+## Step 1 — Start the local Docker stack
 
 ```bash
-docker run --name mongodb -d \
-  -p 2717:27017 \
-  -e MONGO_INITDB_ROOT_USERNAME=user \
-  -e MONGO_INITDB_ROOT_PASSWORD=pass \
-  mongodb/mongodb-community-server
+cd docker
+docker compose up -d
 ```
 
-Verify it is running:
+This stack starts:
+
+- PostgreSQL
+- MongoDB as a single-node replica set
+- a one-shot `mongodb-init` container that initializes the replica set
+- a one-shot `mongodb-seed` container that clones the sample dataset repository and imports it into MongoDB only when the sample datasets are not already present
+- Kafka and Schema Registry
+
+Verify the long-running services are up:
 
 ```bash
-docker ps | grep mongodb
+docker compose ps
+```
+
+If you want a clean restart that also recreates the MongoDB data volume and reloads the sample datasets, run:
+
+```bash
+docker compose down -v
+docker compose up -d
 ```
 
 ---
 
-## Step 2 — Import the sample datasets
+## Step 2 — MongoDB sample data seeding details
 
-Clone the sample dataset repository and run its import script:
+The Compose stack now seeds MongoDB automatically with:
 
 ```bash
 git clone https://github.com/neelabalan/mongodb-sample-dataset
 cd mongodb-sample-dataset
+bash script.sh 'mongodb://user:pass@mongodb:27017/?authSource=admin'
 ```
 
-The `start.sh` script uses `mongoimport` to load the data. It expects the MongoDB tools to be available. If you do not have `mongoimport` installed locally, run it inside the container:
+That command is executed by the `mongodb-seed` service inside Docker after the replica set is ready.
+If `sample_mflix` is already present, the seeding container exits immediately without re-importing the sample datasets.
+
+If you want to rerun the sample import manually outside Compose, clone the same repository and run:
 
 ```bash
-# Copy the datasets into the container
-docker cp . mongodb:/tmp/mongodb-sample-dataset
-
-# Run the import from inside the container
-docker exec -it mongodb bash -c "
-  cd /tmp/mongodb-sample-dataset &&
-  bash start.sh 'mongodb://user:pass@localhost:27017/?authSource=admin'
-"
-```
-
-If `mongoimport` is available locally, you can pass the source URI directly:
-
-```bash
-bash start.sh 'mongodb://user:pass@localhost:2717/?authSource=admin'
+bash script.sh localhost 2717 user pass
 ```
 
 ## Tasks

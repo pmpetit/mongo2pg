@@ -21,6 +21,22 @@ pub struct ConfData {
     pub timestamp_fields: Vec<String>,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
+    pub kafka: Option<KafkaConfData>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct KafkaConfData {
+    pub bootstrap_servers: Option<String>,
+    pub group_id: Option<String>,
+    pub topics: Vec<String>,
+    pub topic_prefix: Option<String>,
+    pub schema_registry_url: Option<String>,
+    pub schema_registry_username: Option<String>,
+    pub schema_registry_password: Option<String>,
+    pub offset: Option<String>,
+    pub auto_offset_reset: Option<String>,
+    pub max_messages: Option<usize>,
+    pub batch_log_messages: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +46,8 @@ struct TomlProjectConfig {
     source: Option<TomlSourceSection>,
     #[serde(default)]
     target: Option<TomlTargetSection>,
+    #[serde(default)]
+    kafka: Option<TomlKafkaSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,12 +89,41 @@ struct TomlTargetSection {
     schema: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct TomlKafkaSection {
+    bootstrap_servers: Option<String>,
+    group_id: Option<String>,
+    #[serde(default)]
+    topics: Vec<String>,
+    topic_prefix: Option<String>,
+    schema_registry_url: Option<String>,
+    schema_registry_username: Option<String>,
+    schema_registry_password: Option<String>,
+    offset: Option<String>,
+    auto_offset_reset: Option<String>,
+    max_messages: Option<usize>,
+    batch_log_messages: Option<usize>,
+}
+
 pub fn read_conf(path: &Path) -> Result<ConfData> {
     fn parse_toml_conf(path: &Path, content: &str) -> Result<ConfData> {
         let parsed: TomlProjectConfig = toml::from_str(content)
             .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
         let source = parsed.source.unwrap_or_default();
         let target = parsed.target.unwrap_or_default();
+        let kafka = parsed.kafka.map(|k| KafkaConfData {
+            bootstrap_servers: k.bootstrap_servers,
+            group_id: k.group_id,
+            topics: k.topics,
+            topic_prefix: k.topic_prefix,
+            schema_registry_url: k.schema_registry_url,
+            schema_registry_username: k.schema_registry_username,
+            schema_registry_password: k.schema_registry_password,
+            offset: k.offset,
+            auto_offset_reset: k.auto_offset_reset,
+            max_messages: k.max_messages,
+            batch_log_messages: k.batch_log_messages,
+        });
 
         Ok(ConfData {
             base_dir: parsed.project.base_dir,
@@ -93,6 +140,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             timestamp_fields: source.datetime_field,
             include: source.include,
             exclude: source.exclude,
+            kafka,
         })
     }
 
@@ -163,6 +211,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             timestamp_fields: default_timestamp_fields(),
             include: Vec::new(),
             exclude: Vec::new(),
+            kafka: None,
         })
     }
 

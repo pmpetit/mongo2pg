@@ -21,16 +21,19 @@ use std::pin::pin;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use apache_avro::{from_avro_datum, types::Value as AvroValue, Schema};
 use bson::{doc, Bson};
 use bytes::Bytes;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use flate2::read::GzDecoder;
-use futures::{SinkExt, TryStreamExt};
+use futures::{SinkExt, StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use mongo2pg::analyzer::{
     Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
-use mongo2pg::checkmd5::{compute_md5_summaries_for_collection, run_check_md5};
+use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
+#[cfg(test)]
+use mongo2pg::checkmd5::run_check_md5;
 use mongo2pg::export::export_collection;
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
@@ -53,7 +56,12 @@ use mongo2pg::util::{
 };
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
+use rdkafka::consumer::{Consumer, StreamConsumer};
+use rdkafka::message::Message;
+use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::ClientConfig;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use strsim::jaro_winkler;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -107,6 +115,8 @@ enum Command {
     Import(ImportArgs),
     /// Generate a cluster-level HTML report aggregating scores across multiple databases
     ClusterReport(ClusterReportArgs),
+    /// Consume Kafka CDC topics and apply mapping-based updates into PostgreSQL
+    KafkaImport(KafkaImportArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -120,10 +130,6 @@ struct InferArgs {
     /// via NAMESPACE in the config file.
     #[arg(long = "namespace")]
     namespace: Option<String>,
-
-    /// MongoDB source connection URI to store in the project config
-    #[arg(long = "source-uri")]
-    source_uri: Option<String>,
 
     /// Number of documents to sample (mutually exclusive with --percent); default 1000
     #[arg(short = 'n', long = "number", conflicts_with = "percent")]
@@ -316,6 +322,28 @@ struct ClusterReportArgs {
     cluster_label: String,
 }
 
+#[derive(Parser, Debug)]
+struct KafkaImportArgs {
+    /// Path to the project config file (TOML)
+    #[arg(short = 'c', long = "config")]
+    config: PathBuf,
+
+    /// Optional explicit topics list (comma-separated). Overrides [kafka].topics from config.
+    #[arg(long = "topics", value_delimiter = ',')]
+    topics: Vec<String>,
+
+    /// Optional max messages to consume in this run. Overrides [kafka].max_messages.
+    #[arg(long = "max-messages")]
+    max_messages: Option<usize>,
+
+    /// Optional consumer offset policy for missing group offsets.
+    /// Supported values: latest, earliest, 0.
+    /// `0` enables snapshot-equivalent mode (truncate + fresh group + earliest + idle stop).
+    /// Overrides [kafka].offset and [kafka].auto_offset_reset.
+    #[arg(long = "offset", value_parser = ["latest", "earliest", "0"])]
+    offset: Option<String>,
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ──────────────────────────────────────────────────────────────────────────────
@@ -323,16 +351,167 @@ struct ClusterReportArgs {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
+    let Cli { command, infer } = cli;
+    validate_command_and_args(&command, infer.as_ref())?;
+
+    match command {
         Some(Command::Init(args)) => run_init(args),
         Some(Command::ToPg(args)) => run_to_pg(args, false),
         Some(Command::Report(args)) => run_report(args, false).await,
         Some(Command::Export(args)) => run_export(args).await,
         Some(Command::Import(args)) => run_import(args).await,
+        Some(Command::KafkaImport(args)) => run_kafka_import(args).await,
         Some(Command::Infer(args)) => run_infer(args).await,
         Some(Command::ClusterReport(args)) => run_cluster_report(args),
-        None => run_infer(cli.infer.expect("clap ensures args are present")).await,
+        None => match infer {
+            Some(args) => run_infer(args).await,
+            None => {
+                Cli::command().print_help()?;
+                println!();
+                Ok(())
+            }
+        },
     }
+}
+
+fn validate_command_and_args(command: &Option<Command>, infer: Option<&InferArgs>) -> Result<()> {
+    match command {
+        Some(Command::Infer(args)) => validate_infer_args(args),
+        Some(Command::Init(args)) => {
+            if let Some(uri) = args.source_uri.as_deref() {
+                validate_source_uri(uri)?;
+            }
+            if let Some(uri) = args.target_uri.as_deref() {
+                validate_target_uri(uri)?;
+            }
+            if let Some(ns) = args.namespace.as_deref() {
+                validate_namespace_arg(ns)?;
+            }
+            Ok(())
+        }
+        Some(Command::ToPg(args)) => {
+            if args.table.is_some() && args.collection.is_none() {
+                return Err(anyhow!("--table requires <collection>"));
+            }
+            Ok(())
+        }
+        Some(Command::Report(args)) => {
+            if let Some(uri) = args.mongo.source_uri.as_deref() {
+                validate_source_uri(uri)?;
+            }
+            Ok(())
+        }
+        Some(Command::Export(args)) => {
+            if args.config.is_none() {
+                return Err(anyhow!("export requires -c/--config"));
+            }
+            if let Some(uri) = args.mongo.source_uri.as_deref() {
+                validate_source_uri(uri)?;
+            }
+            if let Some(ns) = args.namespace.as_deref() {
+                validate_namespace_arg(ns)?;
+            }
+            Ok(())
+        }
+        Some(Command::Import(args)) => {
+            if let Some(ns) = args.namespace.as_deref() {
+                validate_namespace_arg(ns)?;
+            }
+            Ok(())
+        }
+        Some(Command::ClusterReport(args)) => {
+            if args.configs.is_empty() {
+                return Err(anyhow!(
+                    "cluster-report requires at least one --configs value"
+                ));
+            }
+            Ok(())
+        }
+        Some(Command::KafkaImport(args)) => {
+            if let Some(offset) = args.offset.as_deref() {
+                if !matches!(offset, "latest" | "earliest" | "0") {
+                    return Err(anyhow!("--offset must be one of: latest, earliest, 0"));
+                }
+            }
+            Ok(())
+        }
+        None => {
+            if let Some(args) = infer {
+                validate_infer_args(args)
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+fn validate_infer_args(args: &InferArgs) -> Result<()> {
+    if args.config.is_none() && args.mongo.source_uri.is_none() {
+        return Err(anyhow!(
+            "infer requires --source-uri when -c/--config is not provided"
+        ));
+    }
+
+    if let Some(uri) = args.mongo.source_uri.as_deref() {
+        validate_source_uri(uri)?;
+    }
+
+    if let Some(ns) = args.namespace.as_deref() {
+        validate_namespace_arg(ns)?;
+    }
+
+    if let Some(number) = args.number {
+        if number == 0 {
+            return Err(anyhow!("--number must be greater than 0"));
+        }
+    }
+
+    if let Some(percent) = args.percent {
+        if !(0.0 < percent && percent <= 100.0) {
+            return Err(anyhow!("--percent must be > 0 and <= 100"));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_namespace_arg(ns: &str) -> Result<()> {
+    if ns.trim().is_empty() {
+        return Err(anyhow!("namespace cannot be empty"));
+    }
+    if ns.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return Err(anyhow!("namespace contains unsafe characters"));
+    }
+    if let Some((db, coll)) = ns.split_once('.') {
+        if db.is_empty() || coll.is_empty() {
+            return Err(anyhow!("namespace must be <db> or <db>.<collection>"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_source_uri(uri: &str) -> Result<()> {
+    if uri.is_empty() || uri.chars().any(|c| c.is_control()) {
+        return Err(anyhow!("source URI contains unsafe characters"));
+    }
+    if !(uri.starts_with("mongodb://") || uri.starts_with("mongodb+srv://")) {
+        return Err(anyhow!(
+            "source URI must start with mongodb:// or mongodb+srv://"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_target_uri(uri: &str) -> Result<()> {
+    if uri.is_empty() || uri.chars().any(|c| c.is_control()) {
+        return Err(anyhow!("target URI contains unsafe characters"));
+    }
+    if !(uri.starts_with("postgres://") || uri.starts_with("postgresql://")) {
+        return Err(anyhow!(
+            "target URI must start with postgres:// or postgresql://"
+        ));
+    }
+    Ok(())
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1759,7 +1938,8 @@ struct PgMapping {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CollectionMapping {
     collection_name: String,
-    dbname: String,
+    #[serde(alias = "dbname")]
+    mongo_dbname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mongo_path: Option<String>,
     pg_mapping: PgMapping,
@@ -2338,11 +2518,15 @@ fn build_collection_mappings_with_timestamp_fields(
             if let Some(table) = tables_by_name.get(table_name) {
                 let columns = build_mapping_columns(table, fields, is_root);
                 if !columns.is_empty() {
+                    let mapping_collection_name = mongo_path_segments
+                        .last()
+                        .cloned()
+                        .unwrap_or_else(|| root_collection_name.to_owned());
                     out.push((
                         file_stem.to_owned(),
                         CollectionMapping {
-                            collection_name: file_stem.to_owned(),
-                            dbname: db_name.to_owned(),
+                            collection_name: mapping_collection_name,
+                            mongo_dbname: db_name.to_owned(),
                             mongo_path: mapping_mongo_path_for_segments(
                                 root_collection_name,
                                 mongo_path_segments,
@@ -2412,8 +2596,8 @@ fn build_collection_mappings_with_timestamp_fields(
                         out.push((
                             child_table.clone(),
                             CollectionMapping {
-                                collection_name: child_table.clone(),
-                                dbname: db_name.to_owned(),
+                                collection_name: raw_name.clone(),
+                                mongo_dbname: db_name.to_owned(),
                                 mongo_path: mapping_mongo_path_for_segments(
                                     root_collection_name,
                                     &child_mongo_path_segments,
@@ -2557,8 +2741,8 @@ fn build_collection_mappings_with_timestamp_fields(
                                 out.push((
                                     child_table.clone(),
                                     CollectionMapping {
-                                        collection_name: child_table.clone(),
-                                        dbname: db_name.to_owned(),
+                                        collection_name: raw_name.clone(),
+                                        mongo_dbname: db_name.to_owned(),
                                         mongo_path: mapping_mongo_path_for_segments(
                                             root_collection_name,
                                             &child_mongo_path_segments,
@@ -2688,8 +2872,8 @@ fn build_collection_mappings_with_timestamp_fields(
         let mut mappings = vec![(
             root_file_stem.clone(),
             CollectionMapping {
-                collection_name: root_file_stem.clone(),
-                dbname: db_name.to_owned(),
+                collection_name: coll_name.to_owned(),
+                mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
@@ -2759,8 +2943,8 @@ fn build_collection_mappings_with_timestamp_fields(
         let mut mappings = vec![(
             root_file_stem.clone(),
             CollectionMapping {
-                collection_name: root_file_stem.clone(),
-                dbname: db_name.to_owned(),
+                collection_name: coll_name.to_owned(),
+                mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
@@ -2950,7 +3134,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
         .unwrap_or_else(|| "#namespace = my_db".to_owned());
     let conf_content = format!(
-        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
@@ -3430,6 +3614,1372 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     Ok(())
 }
 
+async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
+    async fn publish_to_dlq(
+        producer: &FutureProducer,
+        source_topic: &str,
+        key: Option<&[u8]>,
+        payload: &[u8],
+    ) -> Result<()> {
+        let dlq_topic = format!("dlq_{source_topic}");
+        let mut record = FutureRecord::to(&dlq_topic).payload(payload);
+        if let Some(key) = key {
+            record = record.key(key);
+        }
+
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .map_err(|(err, _)| anyhow!("DLQ publish failed for topic {dlq_topic}: {err}"))?;
+
+        Ok(())
+    }
+
+    #[derive(Deserialize)]
+    struct SchemaRegistrySchemaResponse {
+        schema: String,
+    }
+
+    fn avro_to_json(value: AvroValue) -> Value {
+        match value {
+            AvroValue::Null => Value::Null,
+            AvroValue::Boolean(v) => Value::Bool(v),
+            AvroValue::Int(v) => Value::Number(v.into()),
+            AvroValue::Long(v) => Value::Number(v.into()),
+            AvroValue::Float(v) => serde_json::Number::from_f64(v as f64)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
+            AvroValue::Double(v) => serde_json::Number::from_f64(v)
+                .map(Value::Number)
+                .unwrap_or(Value::Null),
+            AvroValue::String(v) => Value::String(v),
+            AvroValue::Array(values) => {
+                Value::Array(values.into_iter().map(avro_to_json).collect())
+            }
+            AvroValue::Map(map) => Value::Object(
+                map.into_iter()
+                    .map(|(k, v)| (k, avro_to_json(v)))
+                    .collect::<serde_json::Map<String, Value>>(),
+            ),
+            AvroValue::Union(_, boxed) => avro_to_json(*boxed),
+            AvroValue::Record(fields) => Value::Object(
+                fields
+                    .into_iter()
+                    .map(|(k, v)| (k, avro_to_json(v)))
+                    .collect::<serde_json::Map<String, Value>>(),
+            ),
+            AvroValue::Enum(_, symbol) => Value::String(symbol),
+            AvroValue::Uuid(v) => Value::String(v.to_string()),
+            AvroValue::Decimal(v) => Value::String(format!("{v:?}")),
+            AvroValue::BigDecimal(v) => Value::String(v.to_string()),
+            _ => Value::Null,
+        }
+    }
+
+    async fn fetch_schema_by_id(
+        client: &reqwest::Client,
+        schema_registry_url: &str,
+        schema_registry_username: Option<&str>,
+        schema_registry_password: Option<&str>,
+        schema_id: u32,
+    ) -> Result<Schema> {
+        let mut request = client.get(format!(
+            "{}/schemas/ids/{}",
+            schema_registry_url.trim_end_matches('/'),
+            schema_id
+        ));
+        if let Some(username) = schema_registry_username {
+            request = request.basic_auth(username, schema_registry_password.map(|s| s.to_owned()));
+        }
+        let response = request
+            .send()
+            .await
+            .with_context(|| format!("Failed to fetch schema id {schema_id} from Schema Registry"))?
+            .error_for_status()
+            .with_context(|| format!("Schema Registry returned error for schema id {schema_id}"))?;
+        let payload: SchemaRegistrySchemaResponse = response
+            .json()
+            .await
+            .with_context(|| "Failed to parse Schema Registry schema response")?;
+        Schema::parse_str(&payload.schema)
+            .with_context(|| format!("Failed to parse Avro schema id {schema_id}"))
+    }
+
+    async fn decode_message_value(
+        bytes: &[u8],
+        schema_registry_url: Option<&str>,
+        schema_registry_username: Option<&str>,
+        schema_registry_password: Option<&str>,
+        http_client: &reqwest::Client,
+        schema_cache: &mut HashMap<u32, Schema>,
+    ) -> Result<Value> {
+        if bytes.len() > 5 && bytes[0] == 0 {
+            let schema_id = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
+            let schema = if let Some(schema) = schema_cache.get(&schema_id) {
+                schema.clone()
+            } else {
+                let url = schema_registry_url.ok_or_else(|| {
+                    anyhow!(
+                        "Confluent framing detected but kafka.schema_registry_url is not configured"
+                    )
+                })?;
+                let parsed = fetch_schema_by_id(
+                    http_client,
+                    url,
+                    schema_registry_username,
+                    schema_registry_password,
+                    schema_id,
+                )
+                .await?;
+                schema_cache.insert(schema_id, parsed.clone());
+                parsed
+            };
+
+            let mut slice: &[u8] = &bytes[5..];
+            let avro = from_avro_datum(&schema, &mut slice, None)
+                .with_context(|| "Failed to decode Avro payload")?;
+            return Ok(avro_to_json(avro));
+        }
+
+        serde_json::from_slice::<Value>(bytes)
+            .with_context(|| "Failed to decode message as JSON payload")
+    }
+
+    fn parse_topic_db_collection(
+        topic: &str,
+        topic_prefix: Option<&str>,
+    ) -> Option<(String, String)> {
+        let mut effective = topic;
+        if let Some(prefix) = topic_prefix {
+            let prefix_with_dot = format!("{prefix}.");
+            if !topic.starts_with(&prefix_with_dot) {
+                return None;
+            }
+            effective = &topic[prefix_with_dot.len()..];
+        }
+        let segments = effective.split('.').collect::<Vec<_>>();
+        if segments.len() < 2 {
+            return None;
+        }
+        Some((
+            segments[segments.len() - 2].to_owned(),
+            segments[segments.len() - 1].to_owned(),
+        ))
+    }
+
+    fn mongo_path_segments(mongo_path: Option<&str>) -> Vec<&str> {
+        mongo_path
+            .unwrap_or(".")
+            .trim()
+            .trim_start_matches('.')
+            .split('.')
+            .filter(|segment| !segment.is_empty())
+            .collect()
+    }
+
+    fn values_at_path<'a>(value: &'a Value, segments: &[&str]) -> Vec<&'a Value> {
+        let mut current = vec![value];
+        for segment in segments {
+            let mut next = Vec::new();
+            for item in current {
+                match item {
+                    Value::Object(map) => {
+                        if let Some(child) = map.get(*segment) {
+                            match child {
+                                Value::Array(arr) => {
+                                    for val in arr {
+                                        next.push(val);
+                                    }
+                                }
+                                _ => next.push(child),
+                            }
+                        }
+                    }
+                    Value::Array(arr) => {
+                        for entry in arr {
+                            if let Value::Object(obj) = entry {
+                                if let Some(child) = obj.get(*segment) {
+                                    match child {
+                                        Value::Array(inner) => {
+                                            for val in inner {
+                                                next.push(val);
+                                            }
+                                        }
+                                        _ => next.push(child),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            current = next;
+            if current.is_empty() {
+                break;
+            }
+        }
+        current
+    }
+
+    fn format_table_insert_exec_summary(table_insert_execs: &HashMap<String, u64>) -> String {
+        if table_insert_execs.is_empty() {
+            return "none".to_owned();
+        }
+
+        let mut entries = table_insert_execs
+            .iter()
+            .map(|(table, count)| (table.clone(), *count))
+            .collect::<Vec<_>>();
+        entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        entries
+            .into_iter()
+            .map(|(table, count)| format!("{table}:{count}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn escape_sql_string(raw: &str) -> String {
+        raw.replace('\'', "''")
+    }
+
+    fn cast_string_literal(raw: &str, sql_type: Option<&str>) -> String {
+        let escaped = escape_sql_string(raw);
+        if let Some(sql_type) = sql_type {
+            let normalized = match sql_type.trim().to_ascii_lowercase().as_str() {
+                "smallserial" | "serial2" => "SMALLINT",
+                "serial" | "serial4" => "INTEGER",
+                "bigserial" | "serial8" => "BIGINT",
+                _ => sql_type,
+            };
+            format!("CAST('{escaped}' AS {normalized})")
+        } else {
+            format!("'{escaped}'")
+        }
+    }
+
+    // Map Debezium/Mongo Extended JSON wrappers to PostgreSQL SQL literals.
+    // Keep this centralized so adding new wrappers is easy.
+    fn map_extended_json_literal(value: &Value, sql_type: Option<&str>) -> Option<String> {
+        let obj = value.as_object()?;
+
+        if let Some(Value::String(raw)) = obj
+            .get("$numberDecimal")
+            .or_else(|| obj.get("$numberDouble"))
+            .or_else(|| obj.get("$numberLong"))
+            .or_else(|| obj.get("$numberInt"))
+        {
+            return Some(cast_string_literal(raw, sql_type));
+        }
+
+        if let Some(date_value) = obj.get("$date") {
+            return match date_value {
+                Value::String(raw) => Some(cast_string_literal(raw, sql_type)),
+                Value::Number(raw) => raw
+                    .as_i64()
+                    .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                    .or_else(|| {
+                        raw.as_u64()
+                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                    })
+                    .or_else(|| {
+                        raw.as_f64()
+                            .map(|ms| format!("to_timestamp({ms} / 1000.0)"))
+                    }),
+                Value::Object(inner) => {
+                    if let Some(Value::String(ms_raw)) = inner.get("$numberLong") {
+                        ms_raw
+                            .parse::<i64>()
+                            .ok()
+                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+        }
+
+        None
+    }
+
+    fn sql_literal(value: Option<&Value>, sql_type: Option<&str>) -> String {
+        let Some(value) = value else {
+            return "NULL".to_owned();
+        };
+
+        match value {
+            Value::Null => "NULL".to_owned(),
+            Value::Bool(v) => {
+                if *v {
+                    "TRUE".to_owned()
+                } else {
+                    "FALSE".to_owned()
+                }
+            }
+            Value::Number(v) => v.to_string(),
+            Value::String(v) => format!("'{}'", escape_sql_string(v)),
+            Value::Array(items) => {
+                let elements = items
+                    .iter()
+                    .map(|item| match item {
+                        Value::Null => "NULL".to_owned(),
+                        Value::Bool(v) => {
+                            if *v {
+                                "TRUE".to_owned()
+                            } else {
+                                "FALSE".to_owned()
+                            }
+                        }
+                        Value::Number(v) => v.to_string(),
+                        Value::String(v) => format!("'{}'", escape_sql_string(v)),
+                        other => format!("'{}'", escape_sql_string(&other.to_string())),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if let Some(array_type) = sql_type.filter(|t| t.contains("[]")) {
+                    format!("ARRAY[{elements}]::{array_type}")
+                } else {
+                    format!("'{}'", escape_sql_string(&value.to_string()))
+                }
+            }
+            Value::Object(_) => {
+                if let Some(mapped) = map_extended_json_literal(value, sql_type) {
+                    return mapped;
+                }
+                let as_json = value.to_string();
+                match sql_type {
+                    Some(t) if t.to_ascii_lowercase().contains("json") => {
+                        format!("'{}'::{t}", escape_sql_string(&as_json))
+                    }
+                    _ => format!("'{}'", escape_sql_string(&as_json)),
+                }
+            }
+        }
+    }
+
+    fn varchar_limit(sql_type: Option<&str>) -> Option<usize> {
+        let sql = sql_type?.trim().to_ascii_lowercase();
+        let prefix = if sql.starts_with("varchar(") {
+            "varchar("
+        } else if sql.starts_with("character varying(") {
+            "character varying("
+        } else {
+            return None;
+        };
+        let rest = &sql[prefix.len()..];
+        let end = rest.find(')')?;
+        rest[..end].trim().parse::<usize>().ok()
+    }
+
+    fn validate_varchar_value(
+        value: Option<&Value>,
+        sql_type: Option<&str>,
+        source_field: &str,
+        target_field: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        let Some(limit) = varchar_limit(sql_type) else {
+            return Ok(());
+        };
+        let Some(Value::String(text)) = value else {
+            return Ok(());
+        };
+        let value_len = text.chars().count();
+        if value_len > limit {
+            return Err(anyhow!(
+                "value exceeds varchar limit: source_field={} target_field={} table={} sql_type={} value_len={} limit={} value_sample={}",
+                source_field,
+                target_field,
+                table_name,
+                sql_type.unwrap_or("varchar"),
+                value_len,
+                limit,
+                text.chars().take(80).collect::<String>()
+            ));
+        }
+        Ok(())
+    }
+
+    fn debezium_document(value: Option<&Value>) -> Result<Option<Value>> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        match value {
+            Value::Object(_) => Ok(Some(value.clone())),
+            Value::String(raw) => {
+                let parsed: Value = serde_json::from_str(raw)
+                    .with_context(|| "Failed to parse Debezium document JSON string")?;
+                if parsed.is_object() {
+                    Ok(Some(parsed))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn column_sql_type<'a>(mapping: &'a CollectionMapping, target_field: &str) -> Option<&'a str> {
+        mapping
+            .pg_mapping
+            .ddl
+            .as_ref()?
+            .columns
+            .iter()
+            .find(|column| column.name == target_field)
+            .map(|column| column.sql_type.as_str())
+    }
+
+    fn qualified_table_name(mapping: &CollectionMapping, fallback_schema: Option<&str>) -> String {
+        let schema = mapping.pg_mapping.schema_name.as_str().trim();
+        let schema = if schema.is_empty() {
+            fallback_schema
+        } else {
+            Some(schema)
+        };
+        match schema {
+            Some(s) => format!(
+                "{}.{}",
+                quote_ident(s),
+                quote_ident(&mapping.pg_mapping.table_name)
+            ),
+            None => quote_ident(&mapping.pg_mapping.table_name),
+        }
+    }
+
+    fn root_primary_key(mapping: &CollectionMapping) -> Option<String> {
+        mapping
+            .pg_mapping
+            .ddl
+            .as_ref()?
+            .columns
+            .iter()
+            .find(|column| column.primary_key)
+            .map(|column| column.name.clone())
+    }
+
+    fn root_source_field_for_pk(mapping: &CollectionMapping, pk: &str) -> Option<String> {
+        mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .find(|column| column.target_field == pk)
+            .map(|column| column.source_field.clone())
+    }
+
+    fn is_root_mapping(mapping: &CollectionMapping) -> bool {
+        mapping.mongo_path.as_deref().unwrap_or(".").trim() == "."
+    }
+
+    fn direct_children_for_parent<'a>(
+        mappings: &'a [CollectionMapping],
+        parent_table: &str,
+    ) -> Vec<(&'a CollectionMapping, &'a DdlForeignKeyMapping)> {
+        mappings
+            .iter()
+            .filter(|mapping| !is_root_mapping(mapping))
+            .filter_map(|mapping| {
+                let ddl = mapping.pg_mapping.ddl.as_ref()?;
+                let fk = ddl
+                    .foreign_keys
+                    .iter()
+                    .find(|fk| fk.to_table == parent_table && fk.to_col == "id")?;
+                Some((mapping, fk))
+            })
+            .collect()
+    }
+
+    fn mapping_depth(mapping: &CollectionMapping) -> usize {
+        mongo_path_segments(mapping.mongo_path.as_deref()).len()
+    }
+
+    fn mapping_pk_column(mapping: &CollectionMapping) -> Option<String> {
+        mapping
+            .pg_mapping
+            .ddl
+            .as_ref()?
+            .columns
+            .iter()
+            .find(|column| column.primary_key)
+            .map(|column| column.name.clone())
+    }
+
+    fn child_segments_relative_to_parent(
+        child_mapping: &CollectionMapping,
+        parent_mapping: &CollectionMapping,
+    ) -> Vec<String> {
+        let child_segments = mongo_path_segments(child_mapping.mongo_path.as_deref())
+            .into_iter()
+            .map(|segment| segment.to_owned())
+            .collect::<Vec<_>>();
+        let parent_segments = mongo_path_segments(parent_mapping.mongo_path.as_deref())
+            .into_iter()
+            .map(|segment| segment.to_owned())
+            .collect::<Vec<_>>();
+
+        if child_segments.len() >= parent_segments.len()
+            && child_segments
+                .iter()
+                .take(parent_segments.len())
+                .eq(parent_segments.iter())
+        {
+            child_segments[parent_segments.len()..].to_vec()
+        } else {
+            child_segments
+        }
+    }
+
+    fn build_delete_sql_for_mapping(
+        mapping: &CollectionMapping,
+        mappings: &[CollectionMapping],
+        root_table_name: &str,
+        root_pk_literal: &str,
+        fallback_schema: Option<&str>,
+    ) -> Option<String> {
+        let mut chain: Vec<(&CollectionMapping, &DdlForeignKeyMapping)> = Vec::new();
+        let mut current = mapping;
+
+        while current.pg_mapping.table_name != root_table_name {
+            let ddl = current.pg_mapping.ddl.as_ref()?;
+            let fk = ddl.foreign_keys.iter().find(|fk| fk.to_col == "id")?;
+            chain.push((current, fk));
+            current = mappings
+                .iter()
+                .find(|candidate| candidate.pg_mapping.table_name == fk.to_table)?;
+        }
+
+        if chain.is_empty() {
+            return None;
+        }
+
+        let from = format!(
+            "{} AS t0",
+            qualified_table_name(chain[0].0, fallback_schema)
+        );
+        let using_clause = if chain.len() > 1 {
+            let using_tables = chain
+                .iter()
+                .enumerate()
+                .skip(1)
+                .map(|(idx, (table_mapping, _))| {
+                    format!(
+                        "{} AS t{}",
+                        qualified_table_name(table_mapping, fallback_schema),
+                        idx
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(" USING {using_tables}")
+        } else {
+            String::new()
+        };
+
+        let mut predicates = Vec::new();
+        for idx in 0..chain.len().saturating_sub(1) {
+            let fk_col = &chain[idx].1.from_col;
+            predicates.push(format!("t{idx}.{} = t{}.id", quote_ident(fk_col), idx + 1));
+        }
+        let last_idx = chain.len() - 1;
+        let last_fk = &chain[last_idx].1.from_col;
+        predicates.push(format!(
+            "t{last_idx}.{} = {root_pk_literal}",
+            quote_ident(last_fk)
+        ));
+
+        Some(format!(
+            "DELETE FROM {from}{using_clause} WHERE {}",
+            predicates.join(" AND ")
+        ))
+    }
+
+    fn load_collection_mapping_folders(
+        conf: &mongo2pg::util::ConfData,
+        db_name: &str,
+    ) -> Result<HashMap<String, Vec<CollectionMapping>>> {
+        let project_root = conf.base_dir.join(&conf.project_dir);
+        let collections_dir = resolve_collections_dir(&project_root, db_name);
+        let mut by_collection = HashMap::new();
+        for entry in std::fs::read_dir(&collections_dir)
+            .with_context(|| format!("Cannot read {}", collections_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let folder_name = entry.file_name().to_string_lossy().to_string();
+            let mut mappings = Vec::new();
+            for file in std::fs::read_dir(&path)
+                .with_context(|| format!("Cannot read {}", path.display()))?
+            {
+                let file = file?;
+                let file_path = file.path();
+                let Some(name) = file_path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                if !name.starts_with("mapping_") || !name.ends_with(".yaml") {
+                    continue;
+                }
+                let content = std::fs::read_to_string(&file_path)
+                    .with_context(|| format!("Failed to read {}", file_path.display()))?;
+                let mapping: CollectionMapping = serde_yaml::from_str(&content)
+                    .with_context(|| format!("Failed to parse {}", file_path.display()))?;
+                mappings.push(mapping);
+            }
+            if !mappings.is_empty() {
+                by_collection.insert(sanitize_name(&folder_name), mappings);
+            }
+        }
+        Ok(by_collection)
+    }
+
+    async fn apply_upsert_event(
+        pg_client: &tokio_postgres::Client,
+        payload_doc: &Value,
+        mappings: &[CollectionMapping],
+        fallback_schema: Option<&str>,
+        table_insert_execs: &mut HashMap<String, u64>,
+    ) -> Result<u64> {
+        let root_mapping = mappings
+            .iter()
+            .find(|mapping| is_root_mapping(mapping))
+            .ok_or_else(|| anyhow!("No root mapping (mongo_path: .) found"))?;
+        let root_table = qualified_table_name(root_mapping, fallback_schema);
+        let mut affected_rows = 0_u64;
+
+        let mut columns = Vec::new();
+        let mut values = Vec::new();
+        for column in &root_mapping.pg_mapping.columns {
+            let raw_value = payload_doc
+                .as_object()
+                .and_then(|obj| obj.get(&column.source_field));
+            let sql_type = column_sql_type(root_mapping, &column.target_field);
+            validate_varchar_value(
+                raw_value,
+                sql_type,
+                &column.source_field,
+                &column.target_field,
+                &root_table,
+            )?;
+            columns.push(quote_ident(&column.target_field));
+            values.push(sql_literal(raw_value, sql_type));
+        }
+
+        let root_pk = root_primary_key(root_mapping)
+            .ok_or_else(|| anyhow!("Root mapping has no primary key in ddl"))?;
+        let updates = root_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .filter(|column| column.target_field != root_pk)
+            .map(|column| {
+                format!(
+                    "{} = EXCLUDED.{}",
+                    quote_ident(&column.target_field),
+                    quote_ident(&column.target_field)
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let upsert_sql = if updates.is_empty() {
+            format!(
+                "INSERT INTO {} ({}) VALUES ({}) ON CONFLICT ({}) DO NOTHING",
+                root_table,
+                columns.join(", "),
+                values.join(", "),
+                quote_ident(&root_pk),
+            )
+        } else {
+            format!(
+                "INSERT INTO {} ({}) VALUES ({}) ON CONFLICT ({}) DO UPDATE SET {}",
+                root_table,
+                columns.join(", "),
+                values.join(", "),
+                quote_ident(&root_pk),
+                updates.join(", "),
+            )
+        };
+        affected_rows += pg_client.execute(upsert_sql.as_str(), &[]).await?;
+        *table_insert_execs.entry(root_table.clone()).or_insert(0) += 1;
+
+        let root_pk_source = root_source_field_for_pk(root_mapping, &root_pk)
+            .ok_or_else(|| anyhow!("Root mapping primary key not found in mapped columns"))?;
+        let root_pk_value = payload_doc
+            .as_object()
+            .and_then(|obj| obj.get(&root_pk_source))
+            .ok_or_else(|| anyhow!("Root payload missing {}", root_pk_source))?;
+
+        let root_pk_sql_type = column_sql_type(root_mapping, &root_pk);
+        let root_pk_literal = sql_literal(Some(root_pk_value), root_pk_sql_type);
+
+        let mut non_root_mappings = mappings
+            .iter()
+            .filter(|mapping| !is_root_mapping(mapping))
+            .collect::<Vec<_>>();
+        non_root_mappings.sort_by_key(|mapping| std::cmp::Reverse(mapping_depth(mapping)));
+        for mapping in non_root_mappings {
+            if let Some(delete_sql) = build_delete_sql_for_mapping(
+                mapping,
+                mappings,
+                &root_mapping.pg_mapping.table_name,
+                &root_pk_literal,
+                fallback_schema,
+            ) {
+                pg_client.execute(delete_sql.as_str(), &[]).await?;
+            }
+        }
+
+        let mut pending = vec![(root_mapping, payload_doc.clone(), root_pk_literal)];
+
+        while let Some((parent_mapping, parent_node, parent_pk_literal)) = pending.pop() {
+            let children =
+                direct_children_for_parent(mappings, &parent_mapping.pg_mapping.table_name);
+            for (child_mapping, fk) in children {
+                let child_table = qualified_table_name(child_mapping, fallback_schema);
+                let relative_segments =
+                    child_segments_relative_to_parent(child_mapping, parent_mapping);
+                let relative_refs = relative_segments
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                let child_nodes = values_at_path(&parent_node, &relative_refs);
+                let child_pk = mapping_pk_column(child_mapping)
+                    .ok_or_else(|| anyhow!("Mapping {} has no primary key", child_table))?;
+                let child_pk_sql_type = column_sql_type(child_mapping, &child_pk);
+
+                for node in child_nodes {
+                    let Value::Object(obj) = node else {
+                        continue;
+                    };
+
+                    let mut child_columns = vec![quote_ident(&fk.from_col)];
+                    let mut child_values = vec![parent_pk_literal.clone()];
+                    for mapped in &child_mapping.pg_mapping.columns {
+                        child_columns.push(quote_ident(&mapped.target_field));
+                        let val = obj.get(&mapped.source_field);
+                        let sql_type = column_sql_type(child_mapping, &mapped.target_field);
+                        validate_varchar_value(
+                            val,
+                            sql_type,
+                            &mapped.source_field,
+                            &mapped.target_field,
+                            &child_table,
+                        )?;
+                        child_values.push(sql_literal(val, sql_type));
+                    }
+
+                    let insert_sql = format!(
+                        "INSERT INTO {} ({}) VALUES ({}) RETURNING {}::text",
+                        child_table,
+                        child_columns.join(", "),
+                        child_values.join(", "),
+                        quote_ident(&child_pk)
+                    );
+                    let row = pg_client.query_one(insert_sql.as_str(), &[]).await?;
+                    let inserted_pk_text: String = row.try_get(0)?;
+
+                    affected_rows += 1;
+                    *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
+
+                    let inserted_pk_literal =
+                        cast_string_literal(&inserted_pk_text, child_pk_sql_type);
+                    pending.push((
+                        child_mapping,
+                        Value::Object(obj.clone()),
+                        inserted_pk_literal,
+                    ));
+                }
+            }
+        }
+
+        Ok(affected_rows)
+    }
+
+    async fn apply_delete_event(
+        pg_client: &tokio_postgres::Client,
+        before_doc: &Value,
+        mappings: &[CollectionMapping],
+        fallback_schema: Option<&str>,
+    ) -> Result<()> {
+        let root_mapping = mappings
+            .iter()
+            .find(|mapping| is_root_mapping(mapping))
+            .ok_or_else(|| anyhow!("No root mapping (mongo_path: .) found"))?;
+        let root_pk = root_primary_key(root_mapping)
+            .ok_or_else(|| anyhow!("Root mapping has no primary key in ddl"))?;
+        let root_pk_source = root_source_field_for_pk(root_mapping, &root_pk)
+            .ok_or_else(|| anyhow!("Root mapping primary key not found in mapped columns"))?;
+        let root_pk_value = before_doc
+            .as_object()
+            .and_then(|obj| obj.get(&root_pk_source))
+            .ok_or_else(|| anyhow!("Delete payload missing {}", root_pk_source))?;
+
+        let root_pk_sql_type = column_sql_type(root_mapping, &root_pk);
+        let root_pk_literal = sql_literal(Some(root_pk_value), root_pk_sql_type);
+
+        let mut non_root_mappings = mappings
+            .iter()
+            .filter(|mapping| !is_root_mapping(mapping))
+            .collect::<Vec<_>>();
+        non_root_mappings.sort_by_key(|mapping| std::cmp::Reverse(mapping_depth(mapping)));
+        for mapping in non_root_mappings {
+            if let Some(delete_sql) = build_delete_sql_for_mapping(
+                mapping,
+                mappings,
+                &root_mapping.pg_mapping.table_name,
+                &root_pk_literal,
+                fallback_schema,
+            ) {
+                pg_client.execute(delete_sql.as_str(), &[]).await?;
+            }
+        }
+
+        let root_table = qualified_table_name(root_mapping, fallback_schema);
+        let delete_root_sql = format!(
+            "DELETE FROM {} WHERE {} = {}",
+            root_table,
+            quote_ident(&root_pk),
+            root_pk_literal
+        );
+        pg_client.execute(delete_root_sql.as_str(), &[]).await?;
+        Ok(())
+    }
+
+    async fn bootstrap_pg_objects_for_kafka_import(
+        pg_client: &tokio_postgres::Client,
+        conf: &mongo2pg::util::ConfData,
+        db_name: &str,
+    ) -> Result<()> {
+        let project_root = conf.base_dir.join(&conf.project_dir);
+        let tables_root = project_root.join("schema").join("tables");
+        let tables_dir = if tables_root.join(db_name).is_dir() {
+            tables_root.join(db_name)
+        } else {
+            tables_root
+        };
+
+        if !tables_dir.is_dir() {
+            return Err(anyhow!(
+                "Cannot read SQL tables directory {}",
+                tables_dir.display()
+            ));
+        }
+
+        let mut sql_files: Vec<PathBuf> = std::fs::read_dir(&tables_dir)
+            .with_context(|| format!("Cannot read {}", tables_dir.display()))?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("sql"))
+            .collect();
+        sql_files.sort();
+
+        if sql_files.is_empty() {
+            return Err(anyhow!(
+                "No SQL files found in {}. Run to-pg first.",
+                tables_dir.display()
+            ));
+        }
+
+        for sql_path in &sql_files {
+            let sql = std::fs::read_to_string(sql_path)
+                .with_context(|| format!("Failed to read {}", sql_path.display()))?;
+            let executable_sql = strip_psql_preamble(&sql);
+            if executable_sql.trim().is_empty() {
+                continue;
+            }
+
+            let parsed_tables = parse_sql(&executable_sql);
+            let file_schema = extract_search_path(&executable_sql).or(conf.target_schema.clone());
+
+            let mut all_tables_exist = !parsed_tables.is_empty();
+            for table in &parsed_tables {
+                let qualified = match file_schema.as_deref() {
+                    Some(schema) => format!("{schema}.{}", table.name),
+                    None => table.name.clone(),
+                };
+                let row = pg_client
+                    .query_one("SELECT to_regclass($1)::text", &[&qualified])
+                    .await
+                    .with_context(|| format!("Failed to check existing table {}", qualified))?;
+                let exists: Option<String> = row.try_get(0).with_context(|| {
+                    format!(
+                        "Failed to read to_regclass result while checking existing table {}",
+                        qualified
+                    )
+                })?;
+                if exists.is_none() {
+                    all_tables_exist = false;
+                    break;
+                }
+            }
+
+            if all_tables_exist {
+                println!(
+                    "Skipping DDL from {} (objects already exist)",
+                    sql_path.display()
+                );
+                continue;
+            }
+
+            match pg_client.batch_execute(&executable_sql).await {
+                Ok(()) => {
+                    println!("Created PostgreSQL objects from {}", sql_path.display());
+                }
+                Err(err)
+                    if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_TABLE)
+                        || err.code()
+                            == Some(&tokio_postgres::error::SqlState::DUPLICATE_OBJECT)
+                        || err.code()
+                            == Some(&tokio_postgres::error::SqlState::DUPLICATE_SCHEMA) =>
+                {
+                    println!(
+                        "Skipping existing PostgreSQL objects from {} ({})",
+                        sql_path.display(),
+                        format_postgres_error(&err)
+                    );
+                }
+                Err(err) => {
+                    return Err(anyhow!(
+                        "Failed to execute {}\n{}",
+                        sql_path.display(),
+                        format_postgres_error(&err)
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn truncate_tables_for_snapshot(
+        pg_client: &tokio_postgres::Client,
+        mappings_by_collection: &HashMap<String, Vec<CollectionMapping>>,
+        fallback_schema: Option<&str>,
+    ) -> Result<usize> {
+        let mut qualified_tables = std::collections::HashSet::new();
+
+        for mappings in mappings_by_collection.values() {
+            for mapping in mappings {
+                let schema = mapping.pg_mapping.schema_name.trim();
+                let schema = if schema.is_empty() {
+                    fallback_schema
+                } else {
+                    Some(schema)
+                };
+                let qualified = match schema {
+                    Some(schema) => {
+                        format!(
+                            "{}.{}",
+                            quote_ident(schema),
+                            quote_ident(&mapping.pg_mapping.table_name)
+                        )
+                    }
+                    None => quote_ident(&mapping.pg_mapping.table_name),
+                };
+                qualified_tables.insert(qualified);
+            }
+        }
+
+        let mut tables = qualified_tables.into_iter().collect::<Vec<_>>();
+        tables.sort();
+
+        for qualified in &tables {
+            let sql = format!("TRUNCATE TABLE {qualified} CASCADE");
+            pg_client
+                .batch_execute(&sql)
+                .await
+                .with_context(|| format!("Failed to truncate table {qualified} for snapshot"))?;
+        }
+
+        Ok(tables.len())
+    }
+
+    let conf = read_conf(&args.config)?;
+    let kafka_conf = conf
+        .kafka
+        .clone()
+        .ok_or_else(|| anyhow!("Missing [kafka] section in config file"))?;
+    let namespace = conf
+        .namespace
+        .clone()
+        .ok_or_else(|| anyhow!("No NAMESPACE provided in config"))?;
+    let (namespace_db_name, _) = split_namespace_scope(&namespace);
+
+    let bootstrap_servers = kafka_conf
+        .bootstrap_servers
+        .clone()
+        .ok_or_else(|| anyhow!("kafka.bootstrap_servers is required"))?;
+    let group_id = kafka_conf
+        .group_id
+        .clone()
+        .unwrap_or_else(|| "mongo2pg-kafka-import".to_owned());
+    let configured_offset = kafka_conf
+        .offset
+        .clone()
+        .or_else(|| kafka_conf.auto_offset_reset.clone())
+        .unwrap_or_else(|| "earliest".to_owned());
+    let effective_offset = args
+        .offset
+        .clone()
+        .unwrap_or_else(|| configured_offset.clone());
+    let snapshot_mode = effective_offset == "0";
+
+    let effective_group_id = if snapshot_mode {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_secs();
+        format!("{group_id}-snapshot-{ts}")
+    } else {
+        group_id.clone()
+    };
+    let topics = if args.topics.is_empty() {
+        kafka_conf.topics.clone()
+    } else {
+        args.topics.clone()
+    };
+    if topics.is_empty() {
+        return Err(anyhow!(
+            "No Kafka topics configured. Set [kafka].topics or pass --topics"
+        ));
+    }
+
+    let target_uri = conf
+        .target_uri
+        .clone()
+        .ok_or_else(|| anyhow!("No TARGET_URI provided in config"))?;
+    let target_database_name = conf
+        .target_database_name
+        .clone()
+        .unwrap_or_else(|| namespace_db_name.to_owned());
+    let db_target_uri = pg_uri_with_database(&target_uri, &target_database_name);
+    let pg_client = connect_pg_client(&db_target_uri).await?;
+
+    bootstrap_pg_objects_for_kafka_import(&pg_client, &conf, namespace_db_name).await?;
+
+    let mappings_by_collection = load_collection_mapping_folders(&conf, namespace_db_name)?;
+
+    let configured_auto_offset_reset = configured_offset;
+    let auto_offset_reset = if snapshot_mode {
+        "earliest".to_owned()
+    } else {
+        effective_offset
+    };
+    let consumer: StreamConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &bootstrap_servers)
+        .set("group.id", &effective_group_id)
+        .set("enable.auto.commit", "true")
+        .set("auto.offset.reset", &auto_offset_reset)
+        .create()
+        .with_context(|| "Failed to create Kafka consumer")?;
+    let dlq_producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &bootstrap_servers)
+        .set("message.timeout.ms", "5000")
+        .create()
+        .with_context(|| "Failed to create Kafka DLQ producer")?;
+
+    let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
+    consumer
+        .subscribe(&topic_refs)
+        .with_context(|| format!("Failed to subscribe topics: {}", topics.join(", ")))?;
+
+    println!(
+        "Kafka import started. group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
+        effective_group_id,
+        topics.join(","),
+        target_database_name,
+        snapshot_mode,
+        auto_offset_reset
+    );
+
+    if snapshot_mode {
+        println!(
+            "Snapshot mode enabled (offset=0): truncating mapped PostgreSQL tables before consuming Kafka messages"
+        );
+        let truncated = truncate_tables_for_snapshot(
+            &pg_client,
+            &mappings_by_collection,
+            conf.target_schema.as_deref(),
+        )
+        .await?;
+        println!(
+            "Snapshot mode: truncated {} mapped PostgreSQL table(s) before consuming",
+            truncated
+        );
+    } else {
+        println!(
+            "Snapshot mode disabled: PostgreSQL tables are not truncated (offset={})",
+            auto_offset_reset
+        );
+    }
+
+    let http_client = reqwest::Client::builder().build()?;
+    let mut schema_cache: HashMap<u32, Schema> = HashMap::new();
+    let max_messages = args.max_messages.or(kafka_conf.max_messages);
+    let batch_log_messages = kafka_conf.batch_log_messages.unwrap_or(100).max(1);
+    let mut processed = 0_usize;
+    let mut polled = 0_usize;
+    let mut skipped_topic = 0_usize;
+    let mut skipped_db = 0_usize;
+    let mut skipped_mapping = 0_usize;
+    let mut skipped_no_payload = 0_usize;
+    let mut decode_failed = 0_usize;
+    let mut apply_failed = 0_usize;
+    let mut dlq_published = 0_usize;
+    let mut dlq_failed = 0_usize;
+    let mut snapshot_inserted_rows = 0_u64;
+    let mut table_insert_execs: HashMap<String, u64> = HashMap::new();
+
+    println!(
+        "Kafka import diagnostics enabled: fallback_auto_offset_reset={} (configured={}), used_only_when_no_valid_committed_offset=true, max_messages={}",
+        auto_offset_reset,
+        configured_auto_offset_reset,
+        max_messages
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_owned())
+    );
+    println!(
+        "Loaded mapping folders for {} collection(s)",
+        mappings_by_collection.len()
+    );
+
+    let mut stream = consumer.stream();
+    loop {
+        let next_item = if snapshot_mode {
+            match tokio::time::timeout(Duration::from_secs(10), stream.next()).await {
+                Ok(item) => item,
+                Err(_) => {
+                    println!(
+                        "Snapshot mode: idle timeout reached (10s without new messages), stopping."
+                    );
+                    break;
+                }
+            }
+        } else {
+            stream.next().await
+        };
+
+        let Some(message_result) = next_item else {
+            println!("Kafka stream ended by broker/consumer");
+            break;
+        };
+
+        polled += 1;
+        let message = match message_result {
+            Ok(msg) => msg,
+            Err(err) => {
+                eprintln!("warning: Kafka consume error: {err}");
+                continue;
+            }
+        };
+
+        let topic = message.topic();
+        let Some((db_name, collection_name)) =
+            parse_topic_db_collection(topic, kafka_conf.topic_prefix.as_deref())
+        else {
+            skipped_topic += 1;
+            continue;
+        };
+        if db_name != namespace_db_name {
+            skipped_db += 1;
+            continue;
+        }
+
+        let folder_name = sanitize_name(&collection_name);
+        let Some(mappings) = mappings_by_collection.get(&folder_name) else {
+            skipped_mapping += 1;
+            eprintln!(
+                "warning: no mapping folder for collection '{}' (expected '{}')",
+                collection_name, folder_name
+            );
+            continue;
+        };
+
+        let Some(bytes) = message.payload() else {
+            skipped_no_payload += 1;
+            continue;
+        };
+        let decoded = match decode_message_value(
+            bytes,
+            kafka_conf.schema_registry_url.as_deref(),
+            kafka_conf.schema_registry_username.as_deref(),
+            kafka_conf.schema_registry_password.as_deref(),
+            &http_client,
+            &mut schema_cache,
+        )
+        .await
+        {
+            Ok(value) => value,
+            Err(err) => {
+                decode_failed += 1;
+                eprintln!("warning: failed to decode message on topic {topic}: {err}");
+                continue;
+            }
+        };
+
+        let payload = decoded
+            .get("payload")
+            .and_then(|value| value.as_object())
+            .map(|obj| Value::Object(obj.clone()))
+            .unwrap_or(decoded);
+        let op = payload
+            .get("op")
+            .and_then(|value| value.as_str())
+            .unwrap_or("u");
+        let after = match debezium_document(payload.get("after")) {
+            Ok(value) => value,
+            Err(err) => {
+                decode_failed += 1;
+                eprintln!("warning: failed to parse Debezium 'after' for topic {topic}: {err:#}");
+                continue;
+            }
+        };
+        let before = match debezium_document(payload.get("before")) {
+            Ok(value) => value,
+            Err(err) => {
+                decode_failed += 1;
+                eprintln!("warning: failed to parse Debezium 'before' for topic {topic}: {err:#}");
+                continue;
+            }
+        };
+
+        let result = match op {
+            "d" => {
+                if let Some(before_doc) = before.as_ref() {
+                    apply_delete_event(
+                        &pg_client,
+                        before_doc,
+                        mappings,
+                        conf.target_schema.as_deref(),
+                    )
+                    .await
+                    .map(|_| 0_u64)
+                } else {
+                    Ok(0_u64)
+                }
+            }
+            _ => {
+                if let Some(after_doc) = after.as_ref() {
+                    apply_upsert_event(
+                        &pg_client,
+                        after_doc,
+                        mappings,
+                        conf.target_schema.as_deref(),
+                        &mut table_insert_execs,
+                    )
+                    .await
+                } else {
+                    Ok(0_u64)
+                }
+            }
+        };
+
+        let applied_rows = match result {
+            Ok(rows) => rows,
+            Err(err) => {
+                apply_failed += 1;
+                eprintln!(
+                    "warning: apply failed topic={} collection={} op={}: {:#}\n  hint: extend map_extended_json_literal() in src/bin/mongo2pg.rs to support this payload shape\n  hint: constraint errors include source_field and target_field in details",
+                    topic, collection_name, op, err
+                );
+
+                let key_bytes = message.key().map(|key| key.to_vec());
+                let payload_bytes = message.payload().map(|payload| payload.to_vec());
+                if let Some(payload) = payload_bytes.as_deref() {
+                    match publish_to_dlq(&dlq_producer, topic, key_bytes.as_deref(), payload).await
+                    {
+                        Ok(()) => {
+                            dlq_published += 1;
+                            eprintln!("warning: message copied to DLQ topic=dlq_{}", topic);
+                        }
+                        Err(dlq_err) => {
+                            dlq_failed += 1;
+                            eprintln!("warning: failed to copy message to DLQ: {dlq_err:#}");
+                        }
+                    }
+                } else {
+                    dlq_failed += 1;
+                    eprintln!("warning: failed to copy message to DLQ: message payload missing");
+                }
+
+                continue;
+            }
+        };
+
+        processed += 1;
+        if snapshot_mode {
+            snapshot_inserted_rows += applied_rows;
+        }
+        if processed <= 5 || processed % batch_log_messages == 0 {
+            println!(
+                "Kafka apply ok: processed={} topic={} collection={} op={} affected_rows={}",
+                processed, topic, collection_name, op, applied_rows
+            );
+        }
+
+        if polled % batch_log_messages == 0 {
+            println!(
+                "Kafka progress: polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
+                polled,
+                processed,
+                skipped_topic,
+                skipped_db,
+                skipped_mapping,
+                skipped_no_payload,
+                decode_failed,
+                apply_failed
+            );
+            println!(
+                "Kafka progress DLQ: dlq_published={}, dlq_failed={}",
+                dlq_published, dlq_failed
+            );
+            println!(
+                "Kafka progress tables: impacted_tables={}, insert_execs={}",
+                table_insert_execs.len(),
+                format_table_insert_exec_summary(&table_insert_execs)
+            );
+        }
+
+        if let Some(limit) = max_messages {
+            if processed >= limit {
+                println!("Reached --max-messages limit ({limit}), stopping.");
+                break;
+            }
+        }
+    }
+
+    println!(
+        "Kafka import finished. polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
+        polled,
+        processed,
+        skipped_topic,
+        skipped_db,
+        skipped_mapping,
+        skipped_no_payload,
+        decode_failed,
+        apply_failed
+    );
+    println!(
+        "Kafka import DLQ summary: dlq_published={}, dlq_failed={}",
+        dlq_published, dlq_failed
+    );
+    println!(
+        "Kafka import table summary: impacted_tables={}, insert_execs={}",
+        table_insert_execs.len(),
+        format_table_insert_exec_summary(&table_insert_execs)
+    );
+    if snapshot_mode {
+        println!(
+            "Snapshot summary: total affected rows applied to PostgreSQL={} (upserts + child inserts)",
+            snapshot_inserted_rows
+        );
+    }
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // `report` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
@@ -3456,19 +5006,6 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
             args.check_md5,
         )
         .await?;
-
-        if args.check_md5 {
-            let (_, only_collection) = split_namespace_scope(&namespace);
-            let collection = only_collection.ok_or_else(|| {
-                anyhow!("--check-md5 with --post-import requires a single collection namespace like <db>.<collection>")
-            })?;
-            run_check_md5(
-                collection.to_owned(),
-                Some(conf.to_path_buf()),
-                !args.noaggregate,
-            )
-            .await?;
-        }
 
         return Ok(());
     }
@@ -4594,10 +6131,7 @@ CREATE TABLE demo (
             .find(|(stem, _)| stem == "advices")
             .map(|(_, mapping)| mapping)
             .expect("advices mapping should exist");
-        assert_eq!(
-            advices_mapping.mongo_path.as_deref(),
-            Some(".advisors.advices")
-        );
+        assert_eq!(advices_mapping.mongo_path.as_deref(), Some(".advices"));
         assert!(advices_mapping.pg_mapping.ddl.is_some());
         let advice_columns = advices_mapping
             .pg_mapping
@@ -4616,7 +6150,7 @@ CREATE TABLE demo (
             .expect("earnings mapping should exist");
         assert_eq!(
             earnings_mapping.mongo_path.as_deref(),
-            Some(".advisors.advices.earnings")
+            Some(".advices.earnings")
         );
         let earnings_columns = earnings_mapping
             .pg_mapping
@@ -4875,8 +6409,9 @@ CREATE TABLE demo (
 
         assert_eq!(
             services_metadata.mongo_path.as_deref(),
-            Some(".projects.services.metadata")
+            Some(".services.metadata")
         );
+        assert_eq!(services_metadata.collection_name, "metadata");
     }
 
     #[test]
@@ -5236,7 +6771,6 @@ CREATE TABLE demo (
         InferArgs {
             mongo: UriArg { source_uri: None },
             namespace: None,
-            source_uri: None,
             number: Some(500),
             percent: None, // Set to None because it conflicts with `number`
             jsonb: false,
