@@ -1,0 +1,9 @@
+FROM quay.io/debezium/connect:3.5.1.Final AS debezium-connect
+
+FROM confluentinc/cp-kafka-connect:8.2.1
+
+USER root
+
+RUN mkdir -p /kafka/connect/debezium-connector-mongodb
+
+COPY --from=debezium-connect /kafka/connect/debezium-connector-mongodb/ /kafka/connect/debezium-connector-mongodb/
