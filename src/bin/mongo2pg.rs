@@ -14,7 +14,7 @@
 //! ```
 //! Converts a schema JSON file produced by `infer` into PostgreSQL DDL.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::pin::pin;
@@ -38,7 +38,7 @@ use mongo2pg::export::export_collection;
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
-    render_post_import_html, PostImportCollectionRow, PostImportMd5Column,
+    render_post_import_html, PostImportCollectionRow, PostImportCountDiffRow, PostImportMd5Column,
     PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode, PostImportTableRow,
     SYSTEM_DATABASES,
 };
@@ -845,6 +845,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     existing_colls.join(", ")
                 );
             }
+            let inferred_root_table_names = existing_colls
+                .iter()
+                .filter(|name| !name.starts_with("system."))
+                .filter(|name| should_infer_collection(name, &conf_include, &conf_exclude))
+                .map(|name| sanitize(name))
+                .collect::<HashSet<_>>();
             if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
                 eprintln!(
                     "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
@@ -862,6 +868,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 &conf_timestamp_fields,
                 &args,
                 None,
+                Some(&inferred_root_table_names),
                 Some((1, 1)),
                 !quiet_infer,
             )
@@ -893,6 +900,10 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .filter(|n| !n.starts_with("system."))
                 .filter(|n| should_infer_collection(n, &conf_include, &conf_exclude))
                 .collect();
+            let inferred_root_table_names = filtered_coll_names
+                .iter()
+                .map(|name| sanitize(name))
+                .collect::<HashSet<_>>();
             let total_collections = filtered_coll_names.len();
 
             let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
@@ -908,6 +919,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     &conf_timestamp_fields,
                     &args,
                     None,
+                    Some(&inferred_root_table_names),
                     Some((index + 1, total_collections)),
                     !quiet_infer,
                 )
@@ -1621,6 +1633,10 @@ async fn infer_all_databases(
     let mut current_collection = 0usize;
 
     for (db_name, coll_names) in &databases_with_collections {
+        let inferred_root_table_names = coll_names
+            .iter()
+            .map(|name| sanitize(name))
+            .collect::<HashSet<_>>();
         let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
 
         for coll_name in coll_names {
@@ -1637,6 +1653,7 @@ async fn infer_all_databases(
                 timestamp_fields,
                 args,
                 db_out_dir.as_deref(),
+                Some(&inferred_root_table_names),
                 Some((current_collection, total_collections)),
                 emit_stats,
             )
@@ -1679,6 +1696,7 @@ async fn infer_collection(
     timestamp_fields: &[String],
     args: &InferArgs,
     output_dir_override: Option<&Path>,
+    known_root_table_names: Option<&HashSet<String>>,
     progress: Option<(usize, usize)>,
     emit_stats: bool,
 ) -> Result<CollectionSchema> {
@@ -1830,6 +1848,7 @@ async fn infer_collection(
             output_name,
             target_schema,
             timestamp_fields,
+            known_root_table_names,
             &schema,
             &stats_lines,
             &infer_warnings,
@@ -3177,6 +3196,7 @@ fn write_collection_files(
     coll_name: &str,
     target_schema: Option<&str>,
     timestamp_fields: &[String],
+    known_root_table_names: Option<&HashSet<String>>,
     schema: &CollectionSchema,
     stats_lines: &[String],
     infer_warnings: &[InferWarningYaml],
@@ -3202,7 +3222,16 @@ fn write_collection_files(
     std::fs::write(&yaml_path, serde_yaml::to_string(&yaml_stats)?)
         .with_context(|| format!("Failed to write {}", yaml_path.display()))?;
 
-    let reserved_table_names = load_reserved_mapping_table_names(base, &dir)?;
+    let mut reserved_table_names = load_reserved_mapping_table_names(base, &dir)?;
+    if let Some(root_table_names) = known_root_table_names {
+        let current_root_table_name = sanitize(coll_name);
+        reserved_table_names.extend(
+            root_table_names
+                .iter()
+                .filter(|name| name.as_str() != current_root_table_name.as_str())
+                .cloned(),
+        );
+    }
 
     let mappings = build_collection_mappings_with_timestamp_fields(
         db_name,
@@ -3975,7 +4004,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         current
     }
 
-    fn find_value_in_nested_json_object<'a>(obj: &'a serde_json::Map<String, Value>, source_field: &str) -> Option<&'a Value> {
+    fn find_value_in_nested_json_object<'a>(
+        obj: &'a serde_json::Map<String, Value>,
+        source_field: &str,
+    ) -> Option<&'a Value> {
         if let Some(value) = obj.get(source_field) {
             return Some(value);
         }
@@ -4259,8 +4291,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
         fn unwrap_union_tagged_value(value: &Value) -> &Value {
             const UNION_TAGS: [&str; 12] = [
-                "null", "string", "boolean", "int", "long", "float", "double", "bytes",
-                "array", "map", "record", "enum",
+                "null", "string", "boolean", "int", "long", "float", "double", "bytes", "array",
+                "map", "record", "enum",
             ];
 
             let mut current = value;
@@ -4630,15 +4662,38 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
                 for node in child_nodes {
                     for obj in child_row_objects_for_mapping(node, child_mapping) {
-                        let mut child_columns = vec![quote_ident(&fk.from_col)];
-                        let mut child_values = vec![parent_pk_literal.clone()];
-                        for mapped in &child_mapping.pg_mapping.columns {
-                            child_columns.push(quote_ident(&mapped.target_field));
-                            let val = obj
-                                .get(&mapped.source_field)
-                                .or_else(|| {
+                        let mapped_values = child_mapping
+                            .pg_mapping
+                            .columns
+                            .iter()
+                            .map(|mapped| {
+                                let val = obj.get(&mapped.source_field).or_else(|| {
                                     find_value_in_nested_json_object(&obj, &mapped.source_field)
                                 });
+                                (mapped, val)
+                            })
+                            .collect::<Vec<_>>();
+
+                        let mut child_columns = vec![quote_ident(&fk.from_col)];
+                        let mut child_values = vec![parent_pk_literal.clone()];
+                        for (mapped, val) in mapped_values {
+                            child_columns.push(quote_ident(&mapped.target_field));
+                            if val.is_none() && !mapped.nullable {
+                                let available_keys =
+                                    obj.keys().take(32).cloned().collect::<Vec<_>>().join(", ");
+                                let node_preview =
+                                    serde_json::to_string(&Value::Object(obj.clone()))
+                                        .unwrap_or_else(|_| "<unserializable-node>".to_owned());
+                                return Err(anyhow!(
+                                    "missing required child mapped field: table={} source_field={} target_field={} mongo_path={} available_keys=[{}] node={}",
+                                    child_table,
+                                    mapped.source_field,
+                                    mapped.target_field,
+                                    child_mapping.mongo_path.as_deref().unwrap_or("."),
+                                    available_keys,
+                                    node_preview,
+                                ));
+                            }
                             let sql_type = column_sql_type(child_mapping, &mapped.target_field);
                             validate_varchar_value(
                                 val,
@@ -5134,8 +5189,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
         fn unwrap_union_tagged_value(value: &Value) -> &Value {
             const UNION_TAGS: [&str; 12] = [
-                "null", "string", "boolean", "int", "long", "float", "double", "bytes",
-                "array", "map", "record", "enum",
+                "null", "string", "boolean", "int", "long", "float", "double", "bytes", "array",
+                "map", "record", "enum",
             ];
 
             let mut current = value;
@@ -5788,6 +5843,92 @@ fn csv_line_at(contents: &str, line_number: usize) -> Option<&str> {
     }
 }
 
+fn resolve_root_table_name(
+    parsed_tables: &[mongo2pg::schema_diagram::Table],
+    coll_name: &str,
+) -> String {
+    let expected = sanitize_name(coll_name);
+
+    if let Some(table) = parsed_tables.iter().find(|table| {
+        let name = table.name.trim();
+        name.eq_ignore_ascii_case(&expected)
+            || name
+                .split('.')
+                .last()
+                .map(|leaf| leaf.eq_ignore_ascii_case(&expected))
+                .unwrap_or(false)
+    }) {
+        return table.name.clone();
+    }
+
+    parsed_tables
+        .first()
+        .map(|table| table.name.clone())
+        .unwrap_or_else(|| sanitize_name(coll_name))
+}
+
+fn resolve_post_import_table_row<'a>(
+    table_name: &str,
+    local_rows: &'a HashMap<String, PostImportTableRow>,
+    global_rows: &'a HashMap<String, PostImportTableRow>,
+) -> Option<&'a PostImportTableRow> {
+    local_rows
+        .get(table_name)
+        .or_else(|| global_rows.get(table_name))
+}
+
+fn is_hex_keyed_name(name: &str) -> bool {
+    name.len() >= 8 && name.chars().all(|ch| ch.is_ascii_hexdigit())
+}
+
+fn is_uuid_keyed_name(name: &str) -> bool {
+    let parts = name.split('-').collect::<Vec<_>>();
+    parts.len() == 5
+        && [8_usize, 4, 4, 4, 12]
+            .iter()
+            .zip(parts.iter())
+            .all(|(expected_len, part)| {
+                part.len() == *expected_len && part.chars().all(|ch| ch.is_ascii_hexdigit())
+            })
+}
+
+fn dynamic_map_value_fields(
+    fields: &IndexMap<String, FieldSchema>,
+) -> Option<&IndexMap<String, FieldSchema>> {
+    if fields.is_empty() {
+        return None;
+    }
+    if !fields
+        .keys()
+        .all(|name| is_hex_keyed_name(name) || is_uuid_keyed_name(name))
+    {
+        return None;
+    }
+
+    for field in fields.values() {
+        let non_null = field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+            .collect::<Vec<_>>();
+        if non_null.len() == 1 && non_null[0].0.as_str() == "Object" {
+            if let Some(value_fields) = non_null[0].1.object.as_ref() {
+                if !value_fields.is_empty() {
+                    return Some(value_fields);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn count_dynamic_map_entries(doc: &bson::Document) -> u64 {
+    doc.values()
+        .filter(|value| matches!(value, Bson::Document(entry) if !entry.is_empty()))
+        .count() as u64
+}
+
 fn child_row_objects_for_mapping(
     node: &Value,
     child_mapping: &CollectionMapping,
@@ -5813,6 +5954,11 @@ fn child_row_objects_for_mapping(
         return Vec::new();
     };
 
+    // Empty embedded object means no child rows.
+    if obj.is_empty() {
+        return Vec::new();
+    }
+
     let mapped_source_fields = child_mapping
         .pg_mapping
         .columns
@@ -5824,6 +5970,16 @@ fn child_row_objects_for_mapping(
         mapped_source_fields
             .iter()
             .any(|field| candidate.contains_key(*field))
+    };
+
+    let row_from_entry_value = |entry_value: &Value| -> Option<serde_json::Map<String, Value>> {
+        match entry_value {
+            Value::Object(entry_obj) => Some(entry_obj.clone()),
+            Value::String(raw) => serde_json::from_str::<Value>(raw)
+                .ok()
+                .and_then(|parsed| parsed.as_object().cloned()),
+            _ => None,
+        }
     };
 
     let expects_key_column = child_mapping
@@ -5839,10 +5995,47 @@ fn child_row_objects_for_mapping(
     // map expansion branch below.
     let likely_map_style_object = expects_key_column
         && !obj.contains_key("key")
-        && obj.values().all(|value| matches!(value, Value::Object(_) | Value::String(_)));
+        && obj
+            .values()
+            .all(|value| matches!(value, Value::Object(_) | Value::String(_)));
+
+    // Empty object means there is no child row to write.
+    if obj.is_empty() && !has_mapped_fields(obj) {
+        return Vec::new();
+    }
 
     if !has_mapped_fields(obj) && !likely_map_style_object {
-        for wrapper_key in ["items", "array", "values", "records", "value", "transactions"] {
+        // Map-like object without dedicated key column: expand all entry payloads
+        // only when each entry clearly resolves to mapped fields.
+        let mut map_rows = Vec::new();
+        let mut all_entries_mappable = true;
+        if !obj.is_empty() {
+            for entry_value in obj.values() {
+                if let Some(row) = row_from_entry_value(entry_value) {
+                    if has_mapped_fields(&row) {
+                        map_rows.push(row);
+                    } else {
+                        all_entries_mappable = false;
+                        break;
+                    }
+                } else {
+                    all_entries_mappable = false;
+                    break;
+                }
+            }
+            if all_entries_mappable && !map_rows.is_empty() {
+                return map_rows;
+            }
+        }
+
+        for wrapper_key in [
+            "items",
+            "array",
+            "values",
+            "records",
+            "value",
+            "transactions",
+        ] {
             if let Some(wrapped) = obj.get(wrapper_key) {
                 let extracted = child_row_objects_for_mapping(wrapped, child_mapping);
                 if !extracted.is_empty() {
@@ -5863,16 +6056,6 @@ fn child_row_objects_for_mapping(
             }
         }
     }
-
-    let row_from_entry_value = |entry_value: &Value| -> Option<serde_json::Map<String, Value>> {
-        match entry_value {
-            Value::Object(entry_obj) => Some(entry_obj.clone()),
-            Value::String(raw) => serde_json::from_str::<Value>(raw)
-                .ok()
-                .and_then(|parsed| parsed.as_object().cloned()),
-            _ => None,
-        }
-    };
 
     let key_from_row_or_entry = |row: &serde_json::Map<String, Value>, entry_key: &str| {
         row.values()
@@ -5899,14 +6082,12 @@ fn child_row_objects_for_mapping(
 
     // Map-style object branch: { "dynamic_key": { ...row... }, ... }
     // Expand into one row per entry; inject dynamic key only when mapping requires it.
-    if !obj.contains_key("key") {
+    if expects_key_column && !obj.contains_key("key") {
         let mut expanded = Vec::new();
         for (entry_key, entry_value) in obj {
             if let Some(mut row) = row_from_entry_value(entry_value) {
-                if expects_key_column {
-                    let key_value = key_from_row_or_entry(&row, entry_key);
-                    row.insert("key".to_owned(), Value::String(key_value));
-                }
+                let key_value = key_from_row_or_entry(&row, entry_key);
+                row.insert("key".to_owned(), Value::String(key_value));
                 expanded.push(row);
             }
         }
@@ -5982,6 +6163,7 @@ async fn build_post_import_rows(
     enum CountNodeKind {
         Root,
         Object { field_name: String },
+        MapObject { field_name: String },
         ArrayScalar { field_name: String },
         ArrayObject { field_name: String },
     }
@@ -5991,9 +6173,11 @@ async fn build_post_import_rows(
         name: String,
         is_array: bool,
         mongo_count: u64,
+        pg_table_key: Option<String>,
         pg_table_name: Option<String>,
         pg_row_count: Option<i64>,
         md5_summary: Option<PostImportMd5Summary>,
+        count_diff_rows: Vec<PostImportCountDiffRow>,
         kind: CountNodeKind,
         children: Vec<CountNode>,
     }
@@ -6023,6 +6207,7 @@ async fn build_post_import_rows(
         fields: &IndexMap<String, FieldSchema>,
         pg_schema: Option<&str>,
         table_counts: &HashMap<String, PostImportTableRow>,
+        global_table_counts: &HashMap<String, PostImportTableRow>,
         md5_summaries: &HashMap<String, PostImportMd5Summary>,
     ) -> Vec<CountNode> {
         let mut nodes = Vec::new();
@@ -6041,13 +6226,19 @@ async fn build_post_import_rows(
                     continue;
                 }
                 if let Some(sub_fields) = &type_schema.object {
+                    let child_fields = dynamic_map_value_fields(sub_fields).unwrap_or(sub_fields);
                     let table_name =
                         child_table_name(parent_table_name, &sanitize_pg_name(raw_name), pg_schema);
-                    let table_ref = table_counts.get(&table_name);
+                    let table_ref = resolve_post_import_table_row(
+                        &table_name,
+                        table_counts,
+                        global_table_counts,
+                    );
                     nodes.push(CountNode {
                         name: raw_name.to_string(),
                         is_array: false,
                         mongo_count: 0,
+                        pg_table_key: table_ref.map(|_| table_name.clone()),
                         pg_table_name: table_ref.and_then(|t| {
                             Some(match &t.schema_name {
                                 Some(schema) => format!("{}.{}", schema, t.table_name),
@@ -6056,14 +6247,22 @@ async fn build_post_import_rows(
                         }),
                         pg_row_count: table_ref.map(|t| t.row_count),
                         md5_summary: md5_summaries.get(&table_name).cloned(),
-                        kind: CountNodeKind::Object {
-                            field_name: raw_name.to_string(),
+                        count_diff_rows: Vec::new(),
+                        kind: if std::ptr::eq(child_fields, sub_fields) {
+                            CountNodeKind::Object {
+                                field_name: raw_name.to_string(),
+                            }
+                        } else {
+                            CountNodeKind::MapObject {
+                                field_name: raw_name.to_string(),
+                            }
                         },
                         children: build_field_nodes(
                             &table_name,
-                            sub_fields,
+                            child_fields,
                             pg_schema,
                             table_counts,
+                            global_table_counts,
                             md5_summaries,
                         ),
                     });
@@ -6076,7 +6275,11 @@ async fn build_post_import_rows(
                 if let Some(items_field) = &type_schema.array {
                     let table_name =
                         child_table_name(parent_table_name, &sanitize_pg_name(raw_name), pg_schema);
-                    let table_ref = table_counts.get(&table_name);
+                    let table_ref = resolve_post_import_table_row(
+                        &table_name,
+                        table_counts,
+                        global_table_counts,
+                    );
                     let object_type = items_field.types.get("Object");
                     let (kind, children) = if let Some(object_ts) = object_type {
                         (
@@ -6092,6 +6295,7 @@ async fn build_post_import_rows(
                                         sub_fields,
                                         pg_schema,
                                         table_counts,
+                                        global_table_counts,
                                         md5_summaries,
                                     )
                                 })
@@ -6109,6 +6313,7 @@ async fn build_post_import_rows(
                         name: raw_name.to_string(),
                         is_array: true,
                         mongo_count: 0,
+                        pg_table_key: table_ref.map(|_| table_name.clone()),
                         pg_table_name: table_ref.and_then(|t| {
                             Some(match &t.schema_name {
                                 Some(schema) => format!("{}.{}", schema, t.table_name),
@@ -6117,6 +6322,7 @@ async fn build_post_import_rows(
                         }),
                         pg_row_count: table_ref.map(|t| t.row_count),
                         md5_summary: md5_summaries.get(&table_name).cloned(),
+                        count_diff_rows: Vec::new(),
                         kind,
                         children,
                     });
@@ -6133,8 +6339,22 @@ async fn build_post_import_rows(
                 CountNodeKind::Root => {}
                 CountNodeKind::Object { field_name } => {
                     if let Some(Bson::Document(child_doc)) = doc.get(field_name) {
-                        node.mongo_count += 1;
-                        count_children(&mut node.children, child_doc);
+                        if !child_doc.is_empty() {
+                            node.mongo_count += 1;
+                            count_children(&mut node.children, child_doc);
+                        }
+                    }
+                }
+                CountNodeKind::MapObject { field_name } => {
+                    if let Some(Bson::Document(child_doc)) = doc.get(field_name) {
+                        node.mongo_count += count_dynamic_map_entries(child_doc);
+                        for value in child_doc.values() {
+                            if let Bson::Document(entry_doc) = value {
+                                if !entry_doc.is_empty() {
+                                    count_children(&mut node.children, entry_doc);
+                                }
+                            }
+                        }
                     }
                 }
                 CountNodeKind::ArrayScalar { field_name } => {
@@ -6149,8 +6369,10 @@ async fn build_post_import_rows(
                     if let Some(Bson::Array(items)) = doc.get(field_name) {
                         for item in items {
                             if let Bson::Document(child_doc) = item {
-                                node.mongo_count += 1;
-                                count_children(&mut node.children, child_doc);
+                                if !child_doc.is_empty() {
+                                    node.mongo_count += 1;
+                                    count_children(&mut node.children, child_doc);
+                                }
                             }
                         }
                     }
@@ -6167,11 +6389,37 @@ async fn build_post_import_rows(
             pg_table_name: node.pg_table_name,
             pg_row_count: node.pg_row_count,
             md5_summary: node.md5_summary,
+            count_diff_rows: node.count_diff_rows,
             children: node
                 .children
                 .into_iter()
                 .map(into_post_import_node)
                 .collect(),
+        }
+    }
+
+    fn collect_rowcount_mismatch_tables(node: &CountNode, out: &mut Vec<String>) {
+        if let (Some(table_name), Some(pg_rows)) = (&node.pg_table_key, node.pg_row_count) {
+            if pg_rows != node.mongo_count as i64 {
+                out.push(table_name.clone());
+            }
+        }
+        for child in &node.children {
+            collect_rowcount_mismatch_tables(child, out);
+        }
+    }
+
+    fn apply_count_diff_rows(
+        node: &mut CountNode,
+        rows_by_table: &HashMap<String, Vec<PostImportCountDiffRow>>,
+    ) {
+        if let Some(table_name) = &node.pg_table_key {
+            if let Some(rows) = rows_by_table.get(table_name) {
+                node.count_diff_rows = rows.clone();
+            }
+        }
+        for child in &mut node.children {
+            apply_count_diff_rows(child, rows_by_table);
         }
     }
 
@@ -6218,6 +6466,7 @@ async fn build_post_import_rows(
     });
 
     let total_collections = collection_names.len();
+    let mut global_table_rows: HashMap<String, PostImportTableRow> = HashMap::new();
     let mut rows = Vec::new();
     for (index, coll_name) in collection_names.into_iter().enumerate() {
         let document_count = mongo_db
@@ -6248,10 +6497,7 @@ async fn build_post_import_rows(
                 .with_context(|| format!("Failed to read {}", sql_path.display()))?;
             let schema_name = extract_search_path(&sql);
             let parsed_tables = parse_sql(&sql);
-            let root_table_name = parsed_tables
-                .first()
-                .map(|table| table.name.clone())
-                .unwrap_or_else(|| sanitize_pg_name(&coll_name));
+            let root_table_name = resolve_root_table_name(&parsed_tables, &coll_name);
             let mut table_rows = HashMap::new();
             for table in parsed_tables {
                 let qualified_name = match &schema_name {
@@ -6274,6 +6520,15 @@ async fn build_post_import_rows(
                         row_count,
                     },
                 );
+            }
+            for (name, row) in &table_rows {
+                global_table_rows
+                    .entry(name.clone())
+                    .or_insert_with(|| PostImportTableRow {
+                        schema_name: row.schema_name.clone(),
+                        table_name: row.table_name.clone(),
+                        row_count: row.row_count,
+                    });
             }
             let root_ref = table_rows.get(&root_table_name);
             let md5_summaries = if include_md5 {
@@ -6331,6 +6586,7 @@ async fn build_post_import_rows(
                 name: coll_name.clone(),
                 is_array: false,
                 mongo_count: document_count,
+                pg_table_key: root_ref.map(|_| root_table_name.clone()),
                 pg_table_name: root_ref.and_then(|t| {
                     Some(match &t.schema_name {
                         Some(schema) => format!("{}.{}", schema, t.table_name),
@@ -6339,12 +6595,14 @@ async fn build_post_import_rows(
                 }),
                 pg_row_count: root_ref.map(|t| t.row_count),
                 md5_summary: md5_summaries.get(&root_table_name).cloned(),
+                count_diff_rows: Vec::new(),
                 kind: CountNodeKind::Root,
                 children: build_field_nodes(
                     &root_table_name,
                     &schema.object,
                     schema_name.as_deref(),
                     &table_rows,
+                    &global_table_rows,
                     &md5_summaries,
                 ),
             };
@@ -6362,6 +6620,78 @@ async fn build_post_import_rows(
                 count_children(&mut root.children, &doc);
             }
 
+            let mut mismatch_tables = Vec::new();
+            collect_rowcount_mismatch_tables(&root, &mut mismatch_tables);
+            mismatch_tables.sort();
+            mismatch_tables.dedup();
+
+            if !mismatch_tables.is_empty() {
+                for table_name in &mismatch_tables {
+                    println!(
+                        "[{}/{}] Rowcount diff detected for {}.{} table {}: searching first 5 differences",
+                        index + 1,
+                        total_collections,
+                        db_name,
+                        coll_name,
+                        table_name,
+                    );
+                }
+
+                let mismatch_set = mismatch_tables.iter().cloned().collect::<HashSet<_>>();
+                let mut rows_by_table = HashMap::new();
+
+                if !md5_summaries.is_empty() {
+                    for (table_name, summary) in &md5_summaries {
+                        if !mismatch_set.contains(table_name) {
+                            continue;
+                        }
+                        rows_by_table.insert(
+                            table_name.clone(),
+                            summary
+                                .mismatches
+                                .iter()
+                                .map(|mismatch| PostImportCountDiffRow {
+                                    row_index: mismatch.row_index,
+                                    mongo_values: mismatch.mongo_values.clone(),
+                                    pg_values: mismatch.pg_values.clone(),
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                    }
+                } else {
+                    match compute_md5_summaries_for_collection(&coll_name, config_path).await {
+                        Ok(summaries) => {
+                            for summary in summaries {
+                                if !mismatch_set.contains(&summary.table_name) {
+                                    continue;
+                                }
+                                rows_by_table.insert(
+                                    summary.table_name,
+                                    summary
+                                        .summary
+                                        .mismatches
+                                        .into_iter()
+                                        .map(|mismatch| PostImportCountDiffRow {
+                                            row_index: mismatch.row_index,
+                                            mongo_values: mismatch.mongo_values,
+                                            pg_values: mismatch.pg_values,
+                                        })
+                                        .collect::<Vec<_>>(),
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!(
+                                "warning: failed to collect count differences for {}.{}: {}",
+                                db_name, coll_name, err
+                            );
+                        }
+                    }
+                }
+
+                apply_count_diff_rows(&mut root, &rows_by_table);
+            }
+
             into_post_import_node(root)
         } else {
             PostImportNode {
@@ -6371,6 +6701,7 @@ async fn build_post_import_rows(
                 pg_table_name: None,
                 pg_row_count: None,
                 md5_summary: None,
+                count_diff_rows: Vec::new(),
                 children: Vec::new(),
             }
         };
@@ -6389,14 +6720,17 @@ async fn build_post_import_rows(
 mod tests {
     use super::{
         apply_collection_property_filters, build_collection_mappings,
-        build_collection_mappings_with_timestamp_fields, collect_infer_type_warnings,
-        child_row_objects_for_mapping, collect_nullable_scalar_warnings,
-        render_ddl_from_mapping_tables, resolve_collections_dir, sanitize_name,
-        should_infer_collection, strip_psql_preamble,
+        build_collection_mappings_with_timestamp_fields, child_row_objects_for_mapping,
+        collect_infer_type_warnings, collect_nullable_scalar_warnings, count_dynamic_map_entries,
+        dynamic_map_value_fields, render_ddl_from_mapping_tables, resolve_collections_dir,
+        resolve_post_import_table_row, resolve_root_table_name, sanitize_name,
+        should_infer_collection, strip_psql_preamble, PostImportTableRow,
     };
     use bson::doc;
     use mongo2pg::analyzer::Analyzer;
+    use mongo2pg::schema_diagram::Table;
     use serde::Deserialize;
+    use std::collections::HashMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Debug, Deserialize)]
@@ -6490,7 +6824,7 @@ pg_mapping:
         assert!(rows.iter().any(|row| {
             row.get("key")
                 == Some(&serde_json::Value::String(
-                    "0df078f33aa74a2e9696e0520c1a828a".to_owned()
+                    "0df078f33aa74a2e9696e0520c1a828a".to_owned(),
                 ))
                 && row.get("tier") == Some(&serde_json::Value::String("Bronze".to_owned()))
                 && row.get("active") == Some(&serde_json::Value::Bool(true))
@@ -6498,7 +6832,7 @@ pg_mapping:
         assert!(rows.iter().any(|row| {
             row.get("key")
                 == Some(&serde_json::Value::String(
-                    "699456451cc24f028d2aa99d7534c219".to_owned()
+                    "699456451cc24f028d2aa99d7534c219".to_owned(),
                 ))
                 && row.get("tier") == Some(&serde_json::Value::String("Silver".to_owned()))
                 && row.get("active") == Some(&serde_json::Value::Bool(false))
@@ -6526,6 +6860,107 @@ pg_mapping:
             .collect();
 
         assert_eq!(kept, vec!["activity-feed", "security_logs"]);
+    }
+
+    #[test]
+    fn resolve_root_table_name_prefers_collection_match_when_not_first() {
+        let parsed_tables = vec![
+            Table {
+                name: "tier_and_details".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+            Table {
+                name: "accounts".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+        ];
+
+        let root = resolve_root_table_name(&parsed_tables, "accounts");
+        assert_eq!(root, "accounts");
+    }
+
+    #[test]
+    fn resolve_root_table_name_matches_schema_qualified_collection_table() {
+        let parsed_tables = vec![
+            Table {
+                name: "sample_analytics.accounts".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+            Table {
+                name: "sample_analytics.accounts_addresses".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+        ];
+
+        let root = resolve_root_table_name(&parsed_tables, "accounts");
+        assert_eq!(root, "sample_analytics.accounts");
+    }
+
+    #[test]
+    fn resolve_post_import_table_row_falls_back_to_global_rows() {
+        let local_rows = HashMap::new();
+        let mut global_rows = HashMap::new();
+        global_rows.insert(
+            "accounts".to_owned(),
+            PostImportTableRow {
+                schema_name: Some("sample_analytics".to_owned()),
+                table_name: "accounts".to_owned(),
+                row_count: 1746,
+            },
+        );
+
+        let row = resolve_post_import_table_row("accounts", &local_rows, &global_rows)
+            .expect("global table row should be found");
+        assert_eq!(row.table_name, "accounts");
+        assert_eq!(row.row_count, 1746);
+    }
+
+    #[test]
+    fn dynamic_map_value_fields_detects_uuid_keyed_map_shape() {
+        let docs = vec![doc! {
+            "_id": "customer-1",
+            "tier_and_details": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "bronze"
+                }
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let tier_and_details = schema
+            .object
+            .get("tier_and_details")
+            .expect("tier_and_details field should exist");
+        let obj = tier_and_details
+            .types
+            .get("Object")
+            .and_then(|ts| ts.object.as_ref())
+            .expect("tier_and_details object schema should exist");
+
+        let map_values = dynamic_map_value_fields(obj).expect("map value fields should exist");
+        assert!(map_values.contains_key("active"));
+        assert!(map_values.contains_key("tier"));
+    }
+
+    #[test]
+    fn count_dynamic_map_entries_ignores_empty_map_objects() {
+        let map_doc = doc! {
+            "0df078f33aa74a2e9696e0520c1a828a": { "tier": "bronze", "active": true },
+            "699456451cc24f028d2aa99d7534c219": { "tier": "silver", "active": false },
+            "empty": {},
+            "non_doc": "skip"
+        };
+
+        assert_eq!(count_dynamic_map_entries(&map_doc), 2);
     }
 
     #[test]
@@ -6752,6 +7187,77 @@ CREATE TABLE demo (
             .as_ref()
             .expect("team ddl should exist");
         assert_eq!(ddl.name, "team");
+    }
+
+    #[test]
+    fn build_collection_mappings_prefixes_map_table_when_collection_name_conflicts() {
+        let docs = vec![doc! {
+            "_id": "customer-1",
+            "accounts": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "gold"
+                }
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+        let reserved_table_names = std::collections::HashSet::from(["accounts".to_owned()]);
+
+        let mappings = build_collection_mappings_with_timestamp_fields(
+            "sample_analytics",
+            "customers",
+            Some("sample_analytics"),
+            &schema,
+            &[],
+            &reserved_table_names,
+        );
+
+        let accounts_mapping = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.mongo_path.as_deref() == Some(".accounts"))
+            .map(|(_, mapping)| mapping)
+            .expect("accounts child mapping should exist");
+
+        assert_eq!(accounts_mapping.pg_mapping.table_name, "customers_accounts");
+    }
+
+    #[test]
+    fn build_collection_mappings_keeps_map_table_name_when_no_conflict() {
+        let docs = vec![doc! {
+            "_id": "customer-1",
+            "accounts": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "gold"
+                }
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings_with_timestamp_fields(
+            "sample_analytics",
+            "customers",
+            Some("sample_analytics"),
+            &schema,
+            &[],
+            &std::collections::HashSet::new(),
+        );
+
+        let accounts_mapping = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.mongo_path.as_deref() == Some(".accounts"))
+            .map(|(_, mapping)| mapping)
+            .expect("accounts child mapping should exist");
+
+        assert_eq!(accounts_mapping.pg_mapping.table_name, "accounts");
     }
 
     #[test]

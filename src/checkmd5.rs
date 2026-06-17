@@ -682,6 +682,62 @@ fn build_mapping_source_paths(
 }
 
 fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Document> {
+    fn is_hex_keyed_name(name: &str) -> bool {
+        name.len() >= 8 && name.chars().all(|ch| ch.is_ascii_hexdigit())
+    }
+
+    fn is_uuid_keyed_name(name: &str) -> bool {
+        let parts = name.split('-').collect::<Vec<_>>();
+        parts.len() == 5
+            && [8_usize, 4, 4, 4, 12]
+                .iter()
+                .zip(parts.iter())
+                .all(|(expected_len, part)| {
+                    part.len() == *expected_len && part.chars().all(|ch| ch.is_ascii_hexdigit())
+                })
+    }
+
+    fn extract_map_entry_document(value: &Bson) -> Option<Document> {
+        match value {
+            Bson::Document(child_doc) if !child_doc.is_empty() => Some(child_doc.clone()),
+            Bson::String(raw) => serde_json::from_str::<serde_json::Value>(raw)
+                .ok()
+                .and_then(|parsed| bson::to_document(&parsed).ok())
+                .filter(|child_doc| !child_doc.is_empty()),
+            _ => None,
+        }
+    }
+
+    fn expand_dynamic_map_documents(
+        doc: &Document,
+        root_id: Option<&Bson>,
+    ) -> Option<Vec<Document>> {
+        if doc.is_empty() {
+            return Some(Vec::new());
+        }
+
+        let keys = doc.keys().collect::<Vec<_>>();
+        if !keys
+            .iter()
+            .all(|key| is_uuid_keyed_name(key) || is_hex_keyed_name(key))
+        {
+            return None;
+        }
+
+        let mut expanded = Vec::new();
+        for value in doc.values() {
+            let mut child_doc = extract_map_entry_document(value)?;
+            if !child_doc.contains_key("_id") {
+                if let Some(root_id) = root_id {
+                    child_doc.insert("_id", root_id.clone());
+                }
+            }
+            expanded.push(child_doc);
+        }
+
+        Some(expanded)
+    }
+
     fn walk(doc: &Document, source_path: &SourcePath, root_id: Option<&Bson>) -> Vec<Document> {
         if let Some(grouped_fields) = &source_path.grouped_fields {
             let grouped_docs = grouped_fields
@@ -691,6 +747,9 @@ fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Doc
                         .iter()
                         .filter_map(|item| match item {
                             Bson::Document(child_doc) => {
+                                if child_doc.is_empty() {
+                                    return None;
+                                }
                                 let mut cloned = child_doc.clone();
                                 cloned.insert("key", field_name.clone());
                                 if let Some(root_id) = root_id {
@@ -702,6 +761,9 @@ fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Doc
                         })
                         .collect::<Vec<_>>(),
                     Some(Bson::Document(child_doc)) => {
+                        if child_doc.is_empty() {
+                            return Vec::new();
+                        }
                         let mut cloned = child_doc.clone();
                         cloned.insert("key", field_name.clone());
                         if let Some(root_id) = root_id {
@@ -734,6 +796,12 @@ fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Doc
         }
 
         if source_path.path.is_empty() {
+            if let Some(expanded) = expand_dynamic_map_documents(doc, root_id) {
+                return expanded;
+            }
+            if doc.is_empty() {
+                return Vec::new();
+            }
             let mut cloned = doc.clone();
             if !cloned.contains_key("_id") {
                 if let Some(root_id) = root_id {
@@ -2008,6 +2076,28 @@ pg_mapping:
     }
 
     #[test]
+    fn extract_source_documents_skips_empty_nested_objects() {
+        let doc = doc! {
+            "_id": 1,
+            "tier_and_details": {}
+        };
+
+        let nested = extract_source_documents(
+            &doc,
+            &SourcePath {
+                path: vec!["tier_and_details".to_owned()],
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+        );
+
+        assert!(
+            nested.is_empty(),
+            "empty nested object must not be extracted for md5"
+        );
+    }
+
+    #[test]
     fn extract_source_documents_groups_root_array_siblings_with_key() {
         let doc = doc! {
             "_id": 42,
@@ -2027,6 +2117,61 @@ pg_mapping:
         assert_eq!(nested.len(), 2);
         assert_eq!(nested[0].get_str("key"), Ok("dev"));
         assert_eq!(nested[1].get_str("key"), Ok("prod"));
+    }
+
+    #[test]
+    fn extract_source_documents_grouped_root_skips_empty_objects() {
+        let doc = doc! {
+            "_id": 42,
+            "dev": [{}],
+            "prod": [{"provider": "atlas"}]
+        };
+
+        let nested = extract_source_documents(
+            &doc,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: Some(vec!["dev".to_owned(), "prod".to_owned()]),
+            },
+        );
+
+        assert_eq!(nested.len(), 1);
+        assert_eq!(nested[0].get_str("key"), Ok("prod"));
+    }
+
+    #[test]
+    fn extract_source_documents_expands_uuid_keyed_map_documents() {
+        let doc = doc! {
+            "_id": "customer-1",
+            "tier_and_details": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "bronze"
+                },
+                "699456451cc24f028d2aa99d7534c219": {
+                    "active": false,
+                    "tier": "silver"
+                }
+            }
+        };
+
+        let nested = extract_source_documents(
+            &doc,
+            &SourcePath {
+                path: vec!["tier_and_details".to_owned()],
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+        );
+
+        assert_eq!(nested.len(), 2);
+        assert!(nested
+            .iter()
+            .any(|row| row.get_bool("active") == Ok(true) && row.get_str("tier") == Ok("bronze")));
+        assert!(nested
+            .iter()
+            .any(|row| row.get_bool("active") == Ok(false) && row.get_str("tier") == Ok("silver")));
     }
 
     #[test]

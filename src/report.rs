@@ -182,6 +182,13 @@ pub struct PostImportMd5MismatchRow {
 }
 
 #[derive(Clone)]
+pub struct PostImportCountDiffRow {
+    pub row_index: usize,
+    pub mongo_values: Option<Vec<String>>,
+    pub pg_values: Option<Vec<String>>,
+}
+
+#[derive(Clone)]
 pub struct PostImportMd5Summary {
     pub mongo_md5: String,
     pub pg_md5: String,
@@ -196,6 +203,7 @@ pub struct PostImportNode {
     pub pg_table_name: Option<String>,
     pub pg_row_count: Option<i64>,
     pub md5_summary: Option<PostImportMd5Summary>,
+    pub count_diff_rows: Vec<PostImportCountDiffRow>,
     pub children: Vec<PostImportNode>,
 }
 
@@ -833,6 +841,38 @@ pub fn render_post_import_html(
     mongo_cluster: &str,
     pg_target: &str,
 ) -> String {
+    fn render_count_diff_detail(rows: &[PostImportCountDiffRow], delta: i64) -> String {
+        if rows.is_empty() {
+            return String::new();
+        }
+
+        let mismatch_rows = rows
+            .iter()
+            .map(|mismatch| {
+                let mongo_values = mismatch
+                    .mongo_values
+                    .as_ref()
+                    .map(|values| escape_html(&format!("[{}]", values.join(", "))))
+                    .unwrap_or_else(|| "missing row".to_owned());
+                let pg_values = mismatch
+                    .pg_values
+                    .as_ref()
+                    .map(|values| escape_html(&format!("[{}]", values.join(", "))))
+                    .unwrap_or_else(|| "missing row".to_owned());
+                format!(
+                    r#"<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td></tr>"#,
+                    mismatch.row_index, mongo_values, pg_values,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("");
+
+        format!(
+            r#"<details class="count-detail"><summary class="count-summary match-badge is-mismatch">delta {:+}</summary><div class="count-popover"><div class="count-mismatch-label">First 5 differences by mapped row values</div><table class="count-mismatch-table"><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{}</tbody></table></div></details>"#,
+            delta, mismatch_rows,
+        )
+    }
+
     fn render_md5_detail(md5_summary: &PostImportMd5Summary) -> String {
         let summary_label = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
             escape_html(&md5_summary.mongo_md5)
@@ -942,8 +982,12 @@ pub fn render_post_import_html(
                 row_count,
                 match mismatch {
                     Some(0) => "<span class=\"match-badge is-match\">match</span>".to_owned(),
-                    Some(delta) =>
-                        format!("<span class=\"match-badge is-mismatch\">delta {delta:+}</span>"),
+                    Some(delta) if !node.count_diff_rows.is_empty() => {
+                        render_count_diff_detail(&node.count_diff_rows, delta)
+                    }
+                    Some(delta) => {
+                        format!("<span class=\"match-badge is-mismatch\">delta {delta:+}</span>")
+                    }
                     None => String::new(),
                 },
                 if md5_detail.is_empty() {
@@ -1159,6 +1203,38 @@ pub fn render_post_import_html(
     }}
     .match-badge.is-match {{ background: #e8f7ef; color: #1e8449; }}
     .match-badge.is-mismatch {{ background: #fdecea; color: #c0392b; }}
+    .count-detail {{ display: inline-block; }}
+    .count-summary {{
+      cursor: pointer;
+      list-style: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      word-break: break-all;
+    }}
+    .count-summary::-webkit-details-marker {{ display: none; }}
+    .count-popover {{
+      margin-top: 0.35rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #a7f3d0;
+      background: white;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+      min-width: 22rem;
+      max-width: 36rem;
+      font-size: 0.8rem;
+      color: #134e4a;
+    }}
+    .count-mismatch-label {{ margin-top: 0.45rem; font-weight: 700; color: #115e59; }}
+    .count-mismatch-table {{ width: 100%; border-collapse: collapse; margin-top: 0.5rem; }}
+    .count-mismatch-table th,
+    .count-mismatch-table td {{
+      border: 1px solid #ccfbf1;
+      padding: 0.3rem 0.4rem;
+      text-align: left;
+      vertical-align: top;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+    }}
+    .count-mismatch-table th {{ background: #f0fdfa; color: #134e4a; font-weight: 700; }}
     .md5-label {{ color: #6b7c93; font-size: 0.74rem; font-weight: 700; text-transform: uppercase; }}
     .md5-detail {{ display: inline-block; }}
     .md5-summary {{
@@ -1443,8 +1519,8 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
 mod tests {
     use super::{
         render_html, render_post_import_html, CollectionRow, CollectionStatsYaml,
-        PostImportCollectionRow, PostImportMd5Column, PostImportMd5MismatchRow,
-        PostImportMd5Summary, PostImportNode,
+        PostImportCollectionRow, PostImportCountDiffRow, PostImportMd5Column,
+        PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode,
     };
     use crate::stats::{InferWarningMinorityYaml, InferWarningTypeYaml, InferWarningYaml};
 
@@ -1619,6 +1695,7 @@ mod tests {
                         }],
                         mismatches: Vec::new(),
                     }),
+                    count_diff_rows: Vec::new(),
                     children: Vec::new(),
                 },
             }],
@@ -1658,6 +1735,7 @@ mod tests {
                             pg_values: Some(vec!["\"12.5\"".to_owned()]),
                         }],
                     }),
+                    count_diff_rows: Vec::new(),
                     children: Vec::new(),
                 },
             }],
@@ -1670,6 +1748,37 @@ mod tests {
         assert!(html.contains("monthly_gain"));
         assert!(html.contains("12.5"));
         assert!(html.contains("\"12.5\""));
+    }
+
+    #[test]
+    fn render_post_import_html_shows_clickable_count_diff_details() {
+        let html = render_post_import_html(
+            &[PostImportCollectionRow {
+                name: "customers".to_owned(),
+                document_count: 3,
+                root: PostImportNode {
+                    name: "customers_accounts".to_owned(),
+                    is_array: false,
+                    mongo_count: 3,
+                    pg_table_name: Some("sample_analytics.customers_accounts".to_owned()),
+                    pg_row_count: Some(1),
+                    md5_summary: None,
+                    count_diff_rows: vec![PostImportCountDiffRow {
+                        row_index: 2,
+                        mongo_values: Some(vec!["\"acc-a\"".to_owned(), "true".to_owned()]),
+                        pg_values: None,
+                    }],
+                    children: Vec::new(),
+                },
+            }],
+            "sample_analytics.customers",
+            "mongo-host",
+            "pg-host",
+        );
+
+        assert!(html.contains("count (1)"));
+        assert!(html.contains("First 5 differences by mapped row values"));
+        assert!(html.contains("missing row"));
     }
 }
 
