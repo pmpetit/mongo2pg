@@ -245,6 +245,100 @@ fn is_textual_pg_type(data_type: Option<&str>) -> bool {
     )
 }
 
+fn mongo_source_is_string_only(
+    fields: &indexmap::IndexMap<String, FieldSchema>,
+    source_field: &str,
+) -> bool {
+    fn is_null_type_name(type_name: &str) -> bool {
+        matches!(type_name, "Null" | "Undefined")
+    }
+
+    let mut current_fields = fields;
+    let mut segments = source_field
+        .split('.')
+        .filter(|segment| !segment.is_empty())
+        .peekable();
+
+    while let Some(segment) = segments.next() {
+        let Some(field_schema) = current_fields.get(segment) else {
+            return false;
+        };
+
+        if segments.peek().is_none() {
+            let non_null_types = field_schema
+                .types
+                .keys()
+                .filter(|type_name| !is_null_type_name(type_name.as_str()))
+                .collect::<Vec<_>>();
+            return !non_null_types.is_empty()
+                && non_null_types
+                    .iter()
+                    .all(|type_name| type_name.as_str() == "String");
+        }
+
+        let next_fields = field_schema
+            .types
+            .iter()
+            .filter(|(type_name, _)| !is_null_type_name(type_name.as_str()))
+            .find_map(|(type_name, type_schema)| {
+                if type_name == "Object" {
+                    type_schema.object.as_ref()
+                } else if type_name == "Array" {
+                    type_schema
+                        .array
+                        .as_ref()
+                        .and_then(|items_field| items_field.types.get("Object"))
+                        .and_then(|object_schema| object_schema.object.as_ref())
+                } else {
+                    None
+                }
+            });
+
+        let Some(next_fields) = next_fields else {
+            return false;
+        };
+        current_fields = next_fields;
+    }
+
+    false
+}
+
+fn drop_incompatible_string_columns(
+    schema: &CollectionSchema,
+    source_path: &SourcePath,
+    mapping_yaml: &mut MappingYaml,
+) {
+    let Some(fields) = fields_for_source_path(schema, source_path) else {
+        return;
+    };
+
+    let ddl_type_by_target = mapping_yaml
+        .pg_mapping
+        .ddl
+        .as_ref()
+        .map(|ddl| {
+            ddl.columns
+                .iter()
+                .map(|column| (column.name.clone(), column.sql_type.clone()))
+                .collect::<std::collections::HashMap<_, _>>()
+        })
+        .unwrap_or_default();
+
+    mapping_yaml.pg_mapping.columns.retain(|column| {
+        let target_type = column.data_type.as_deref().or_else(|| {
+            ddl_type_by_target
+                .get(&column.target_field)
+                .map(String::as_str)
+        });
+        let target_is_textual = is_textual_pg_type(target_type);
+        if target_is_textual {
+            return true;
+        }
+
+        !mongo_source_is_string_only(&fields, &column.source_field)
+    });
+}
+
 #[cfg(test)]
 fn mongo_field_literal(doc: &Document, field: &str) -> String {
     mongo_field_literal_for_type(doc, field, None)
@@ -1041,6 +1135,7 @@ fn discover_mapping_targets_for_collection(
                 &source_path,
                 &mut mapping_yaml,
             );
+            drop_incompatible_string_columns(&schema, &source_path, &mut mapping_yaml);
             Ok(MappingTarget {
                 source_collection: collection.to_owned(),
                 mapping_path,
@@ -1069,6 +1164,14 @@ fn aggregate_md5_hexes(md5_hexes: impl IntoIterator<Item = String>) -> String {
     md5_hex_from_fragments(md5_hexes)
 }
 
+#[cfg(test)]
+fn mongo_sort_doc(source_fields: &[String]) -> Document {
+    source_fields
+        .iter()
+        .map(|field| (field.clone(), Bson::Int32(1)))
+        .collect()
+}
+
 fn pg_hash_record(row: &Row) -> HashRecord {
     let values = (0..row.len())
         .map(|index| normalize_json_literal(&row.get::<usize, String>(index)))
@@ -1081,13 +1184,6 @@ fn pg_hash_record(row: &Row) -> HashRecord {
 
 fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
-}
-
-fn mongo_sort_doc(source_fields: &[String]) -> Document {
-    source_fields
-        .iter()
-        .map(|field| (field.clone(), Bson::Int32(1)))
-        .collect()
 }
 
 fn pg_uri_with_database(uri: &str, database: &str) -> String {
@@ -1311,13 +1407,9 @@ async fn collect_hash_records_for_target(
         .database(&db_name)
         .collection::<bson::Document>(&target.source_collection);
 
-    let mut find_action = mongo_collection.find(doc! {});
-    if target.source_path.path.is_empty() {
-        find_action = find_action
-            .sort(mongo_sort_doc(&source_fields))
-            .allow_disk_use(true);
-    }
-    let mut cursor = find_action.await?;
+    // Do not sort on MongoDB side by all mapped fields: large mappings can exceed
+    // MongoDB compound-key limits (code 13103). We sort hash records locally below.
+    let mut cursor = mongo_collection.find(doc! {}).await?;
     let mut mongo_records = Vec::new();
     while let Some(doc) = cursor.try_next().await? {
         if target.source_path.path.is_empty() {

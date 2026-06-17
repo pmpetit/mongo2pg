@@ -36,6 +36,7 @@ pub struct KafkaConfData {
     pub offset: Option<String>,
     pub auto_offset_reset: Option<String>,
     pub max_messages: Option<usize>,
+    pub batch_log_messages: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,6 +102,7 @@ struct TomlKafkaSection {
     offset: Option<String>,
     auto_offset_reset: Option<String>,
     max_messages: Option<usize>,
+    batch_log_messages: Option<usize>,
 }
 
 pub fn read_conf(path: &Path) -> Result<ConfData> {
@@ -120,6 +122,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             offset: k.offset,
             auto_offset_reset: k.auto_offset_reset,
             max_messages: k.max_messages,
+            batch_log_messages: k.batch_log_messages,
         });
 
         Ok(ConfData {

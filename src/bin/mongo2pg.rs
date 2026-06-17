@@ -58,6 +58,7 @@ use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::message::Message;
+use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::ClientConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -3133,7 +3134,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
         .unwrap_or_else(|| "#namespace = my_db".to_owned());
     let conf_content = format!(
-        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
@@ -3614,6 +3615,26 @@ async fn run_import(args: ImportArgs) -> Result<()> {
 }
 
 async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
+    async fn publish_to_dlq(
+        producer: &FutureProducer,
+        source_topic: &str,
+        key: Option<&[u8]>,
+        payload: &[u8],
+    ) -> Result<()> {
+        let dlq_topic = format!("dlq_{source_topic}");
+        let mut record = FutureRecord::to(&dlq_topic).payload(payload);
+        if let Some(key) = key {
+            record = record.key(key);
+        }
+
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .map_err(|(err, _)| anyhow!("DLQ publish failed for topic {dlq_topic}: {err}"))?;
+
+        Ok(())
+    }
+
     #[derive(Deserialize)]
     struct SchemaRegistrySchemaResponse {
         schema: String,
@@ -3826,7 +3847,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     fn cast_string_literal(raw: &str, sql_type: Option<&str>) -> String {
         let escaped = escape_sql_string(raw);
         if let Some(sql_type) = sql_type {
-            format!("CAST('{escaped}' AS {sql_type})")
+            let normalized = match sql_type.trim().to_ascii_lowercase().as_str() {
+                "smallserial" | "serial2" => "SMALLINT",
+                "serial" | "serial4" => "INTEGER",
+                "bigserial" | "serial8" => "BIGINT",
+                _ => sql_type,
+            };
+            format!("CAST('{escaped}' AS {normalized})")
         } else {
             format!("'{escaped}'")
         }
@@ -4046,9 +4073,9 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         mapping.mongo_path.as_deref().unwrap_or(".").trim() == "."
     }
 
-    fn direct_children_for_root<'a>(
+    fn direct_children_for_parent<'a>(
         mappings: &'a [CollectionMapping],
-        root_table: &str,
+        parent_table: &str,
     ) -> Vec<(&'a CollectionMapping, &'a DdlForeignKeyMapping)> {
         mappings
             .iter()
@@ -4058,10 +4085,114 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 let fk = ddl
                     .foreign_keys
                     .iter()
-                    .find(|fk| fk.to_table == root_table && fk.to_col == "id")?;
+                    .find(|fk| fk.to_table == parent_table && fk.to_col == "id")?;
                 Some((mapping, fk))
             })
             .collect()
+    }
+
+    fn mapping_depth(mapping: &CollectionMapping) -> usize {
+        mongo_path_segments(mapping.mongo_path.as_deref()).len()
+    }
+
+    fn mapping_pk_column(mapping: &CollectionMapping) -> Option<String> {
+        mapping
+            .pg_mapping
+            .ddl
+            .as_ref()?
+            .columns
+            .iter()
+            .find(|column| column.primary_key)
+            .map(|column| column.name.clone())
+    }
+
+    fn child_segments_relative_to_parent(
+        child_mapping: &CollectionMapping,
+        parent_mapping: &CollectionMapping,
+    ) -> Vec<String> {
+        let child_segments = mongo_path_segments(child_mapping.mongo_path.as_deref())
+            .into_iter()
+            .map(|segment| segment.to_owned())
+            .collect::<Vec<_>>();
+        let parent_segments = mongo_path_segments(parent_mapping.mongo_path.as_deref())
+            .into_iter()
+            .map(|segment| segment.to_owned())
+            .collect::<Vec<_>>();
+
+        if child_segments.len() >= parent_segments.len()
+            && child_segments
+                .iter()
+                .take(parent_segments.len())
+                .eq(parent_segments.iter())
+        {
+            child_segments[parent_segments.len()..].to_vec()
+        } else {
+            child_segments
+        }
+    }
+
+    fn build_delete_sql_for_mapping(
+        mapping: &CollectionMapping,
+        mappings: &[CollectionMapping],
+        root_table_name: &str,
+        root_pk_literal: &str,
+        fallback_schema: Option<&str>,
+    ) -> Option<String> {
+        let mut chain: Vec<(&CollectionMapping, &DdlForeignKeyMapping)> = Vec::new();
+        let mut current = mapping;
+
+        while current.pg_mapping.table_name != root_table_name {
+            let ddl = current.pg_mapping.ddl.as_ref()?;
+            let fk = ddl.foreign_keys.iter().find(|fk| fk.to_col == "id")?;
+            chain.push((current, fk));
+            current = mappings
+                .iter()
+                .find(|candidate| candidate.pg_mapping.table_name == fk.to_table)?;
+        }
+
+        if chain.is_empty() {
+            return None;
+        }
+
+        let from = format!(
+            "{} AS t0",
+            qualified_table_name(chain[0].0, fallback_schema)
+        );
+        let using_clause = if chain.len() > 1 {
+            let using_tables = chain
+                .iter()
+                .enumerate()
+                .skip(1)
+                .map(|(idx, (table_mapping, _))| {
+                    format!(
+                        "{} AS t{}",
+                        qualified_table_name(table_mapping, fallback_schema),
+                        idx
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(" USING {using_tables}")
+        } else {
+            String::new()
+        };
+
+        let mut predicates = Vec::new();
+        for idx in 0..chain.len().saturating_sub(1) {
+            let fk_col = &chain[idx].1.from_col;
+            predicates.push(format!("t{idx}.{} = t{}.id", quote_ident(fk_col), idx + 1));
+        }
+        let last_idx = chain.len() - 1;
+        let last_fk = &chain[last_idx].1.from_col;
+        predicates.push(format!(
+            "t{last_idx}.{} = {root_pk_literal}",
+            quote_ident(last_fk)
+        ));
+
+        Some(format!(
+            "DELETE FROM {from}{using_clause} WHERE {}",
+            predicates.join(" AND ")
+        ))
     }
 
     fn load_collection_mapping_folders(
@@ -4181,48 +4312,86 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .and_then(|obj| obj.get(&root_pk_source))
             .ok_or_else(|| anyhow!("Root payload missing {}", root_pk_source))?;
 
-        for (child_mapping, fk) in
-            direct_children_for_root(mappings, &root_mapping.pg_mapping.table_name)
-        {
-            let child_table = qualified_table_name(child_mapping, fallback_schema);
-            let delete_sql = format!(
-                "DELETE FROM {} WHERE {} = {}",
-                child_table,
-                quote_ident(&fk.from_col),
-                sql_literal(Some(root_pk_value), None)
-            );
-            pg_client.execute(delete_sql.as_str(), &[]).await?;
+        let root_pk_sql_type = column_sql_type(root_mapping, &root_pk);
+        let root_pk_literal = sql_literal(Some(root_pk_value), root_pk_sql_type);
 
-            let path_segments = mongo_path_segments(child_mapping.mongo_path.as_deref());
-            let child_nodes = values_at_path(payload_doc, &path_segments);
-            for node in child_nodes {
-                let Value::Object(obj) = node else {
-                    continue;
-                };
+        let mut non_root_mappings = mappings
+            .iter()
+            .filter(|mapping| !is_root_mapping(mapping))
+            .collect::<Vec<_>>();
+        non_root_mappings.sort_by_key(|mapping| std::cmp::Reverse(mapping_depth(mapping)));
+        for mapping in non_root_mappings {
+            if let Some(delete_sql) = build_delete_sql_for_mapping(
+                mapping,
+                mappings,
+                &root_mapping.pg_mapping.table_name,
+                &root_pk_literal,
+                fallback_schema,
+            ) {
+                pg_client.execute(delete_sql.as_str(), &[]).await?;
+            }
+        }
 
-                let mut child_columns = vec![quote_ident(&fk.from_col)];
-                let mut child_values = vec![sql_literal(Some(root_pk_value), None)];
-                for mapped in &child_mapping.pg_mapping.columns {
-                    child_columns.push(quote_ident(&mapped.target_field));
-                    let val = obj.get(&mapped.source_field);
-                    let sql_type = column_sql_type(child_mapping, &mapped.target_field);
-                    validate_varchar_value(
-                        val,
-                        sql_type,
-                        &mapped.source_field,
-                        &mapped.target_field,
-                        &child_table,
-                    )?;
-                    child_values.push(sql_literal(val, sql_type));
+        let mut pending = vec![(root_mapping, payload_doc.clone(), root_pk_literal)];
+
+        while let Some((parent_mapping, parent_node, parent_pk_literal)) = pending.pop() {
+            let children =
+                direct_children_for_parent(mappings, &parent_mapping.pg_mapping.table_name);
+            for (child_mapping, fk) in children {
+                let child_table = qualified_table_name(child_mapping, fallback_schema);
+                let relative_segments =
+                    child_segments_relative_to_parent(child_mapping, parent_mapping);
+                let relative_refs = relative_segments
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                let child_nodes = values_at_path(&parent_node, &relative_refs);
+                let child_pk = mapping_pk_column(child_mapping)
+                    .ok_or_else(|| anyhow!("Mapping {} has no primary key", child_table))?;
+                let child_pk_sql_type = column_sql_type(child_mapping, &child_pk);
+
+                for node in child_nodes {
+                    let Value::Object(obj) = node else {
+                        continue;
+                    };
+
+                    let mut child_columns = vec![quote_ident(&fk.from_col)];
+                    let mut child_values = vec![parent_pk_literal.clone()];
+                    for mapped in &child_mapping.pg_mapping.columns {
+                        child_columns.push(quote_ident(&mapped.target_field));
+                        let val = obj.get(&mapped.source_field);
+                        let sql_type = column_sql_type(child_mapping, &mapped.target_field);
+                        validate_varchar_value(
+                            val,
+                            sql_type,
+                            &mapped.source_field,
+                            &mapped.target_field,
+                            &child_table,
+                        )?;
+                        child_values.push(sql_literal(val, sql_type));
+                    }
+
+                    let insert_sql = format!(
+                        "INSERT INTO {} ({}) VALUES ({}) RETURNING {}::text",
+                        child_table,
+                        child_columns.join(", "),
+                        child_values.join(", "),
+                        quote_ident(&child_pk)
+                    );
+                    let row = pg_client.query_one(insert_sql.as_str(), &[]).await?;
+                    let inserted_pk_text: String = row.try_get(0)?;
+
+                    affected_rows += 1;
+                    *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
+
+                    let inserted_pk_literal =
+                        cast_string_literal(&inserted_pk_text, child_pk_sql_type);
+                    pending.push((
+                        child_mapping,
+                        Value::Object(obj.clone()),
+                        inserted_pk_literal,
+                    ));
                 }
-                let insert_sql = format!(
-                    "INSERT INTO {} ({}) VALUES ({})",
-                    child_table,
-                    child_columns.join(", "),
-                    child_values.join(", ")
-                );
-                affected_rows += pg_client.execute(insert_sql.as_str(), &[]).await?;
-                *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
             }
         }
 
@@ -4248,17 +4417,24 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .and_then(|obj| obj.get(&root_pk_source))
             .ok_or_else(|| anyhow!("Delete payload missing {}", root_pk_source))?;
 
-        for (child_mapping, fk) in
-            direct_children_for_root(mappings, &root_mapping.pg_mapping.table_name)
-        {
-            let child_table = qualified_table_name(child_mapping, fallback_schema);
-            let delete_child_sql = format!(
-                "DELETE FROM {} WHERE {} = {}",
-                child_table,
-                quote_ident(&fk.from_col),
-                sql_literal(Some(root_pk_value), None)
-            );
-            pg_client.execute(delete_child_sql.as_str(), &[]).await?;
+        let root_pk_sql_type = column_sql_type(root_mapping, &root_pk);
+        let root_pk_literal = sql_literal(Some(root_pk_value), root_pk_sql_type);
+
+        let mut non_root_mappings = mappings
+            .iter()
+            .filter(|mapping| !is_root_mapping(mapping))
+            .collect::<Vec<_>>();
+        non_root_mappings.sort_by_key(|mapping| std::cmp::Reverse(mapping_depth(mapping)));
+        for mapping in non_root_mappings {
+            if let Some(delete_sql) = build_delete_sql_for_mapping(
+                mapping,
+                mappings,
+                &root_mapping.pg_mapping.table_name,
+                &root_pk_literal,
+                fallback_schema,
+            ) {
+                pg_client.execute(delete_sql.as_str(), &[]).await?;
+            }
         }
 
         let root_table = qualified_table_name(root_mapping, fallback_schema);
@@ -4266,7 +4442,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             "DELETE FROM {} WHERE {} = {}",
             root_table,
             quote_ident(&root_pk),
-            sql_literal(Some(root_pk_value), None)
+            root_pk_literal
         );
         pg_client.execute(delete_root_sql.as_str(), &[]).await?;
         Ok(())
@@ -4499,6 +4675,11 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .set("auto.offset.reset", &auto_offset_reset)
         .create()
         .with_context(|| "Failed to create Kafka consumer")?;
+    let dlq_producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &bootstrap_servers)
+        .set("message.timeout.ms", "5000")
+        .create()
+        .with_context(|| "Failed to create Kafka DLQ producer")?;
 
     let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
     consumer
@@ -4538,6 +4719,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let http_client = reqwest::Client::builder().build()?;
     let mut schema_cache: HashMap<u32, Schema> = HashMap::new();
     let max_messages = args.max_messages.or(kafka_conf.max_messages);
+    let batch_log_messages = kafka_conf.batch_log_messages.unwrap_or(100).max(1);
     let mut processed = 0_usize;
     let mut polled = 0_usize;
     let mut skipped_topic = 0_usize;
@@ -4546,6 +4728,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let mut skipped_no_payload = 0_usize;
     let mut decode_failed = 0_usize;
     let mut apply_failed = 0_usize;
+    let mut dlq_published = 0_usize;
+    let mut dlq_failed = 0_usize;
     let mut snapshot_inserted_rows = 0_u64;
     let mut table_insert_execs: HashMap<String, u64> = HashMap::new();
 
@@ -4701,6 +4885,26 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     "warning: apply failed topic={} collection={} op={}: {:#}\n  hint: extend map_extended_json_literal() in src/bin/mongo2pg.rs to support this payload shape\n  hint: constraint errors include source_field and target_field in details",
                     topic, collection_name, op, err
                 );
+
+                let key_bytes = message.key().map(|key| key.to_vec());
+                let payload_bytes = message.payload().map(|payload| payload.to_vec());
+                if let Some(payload) = payload_bytes.as_deref() {
+                    match publish_to_dlq(&dlq_producer, topic, key_bytes.as_deref(), payload).await
+                    {
+                        Ok(()) => {
+                            dlq_published += 1;
+                            eprintln!("warning: message copied to DLQ topic=dlq_{}", topic);
+                        }
+                        Err(dlq_err) => {
+                            dlq_failed += 1;
+                            eprintln!("warning: failed to copy message to DLQ: {dlq_err:#}");
+                        }
+                    }
+                } else {
+                    dlq_failed += 1;
+                    eprintln!("warning: failed to copy message to DLQ: message payload missing");
+                }
+
                 continue;
             }
         };
@@ -4709,14 +4913,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         if snapshot_mode {
             snapshot_inserted_rows += applied_rows;
         }
-        if processed <= 5 || processed % 100 == 0 {
+        if processed <= 5 || processed % batch_log_messages == 0 {
             println!(
                 "Kafka apply ok: processed={} topic={} collection={} op={} affected_rows={}",
                 processed, topic, collection_name, op, applied_rows
             );
         }
 
-        if polled % 100 == 0 {
+        if polled % batch_log_messages == 0 {
             println!(
                 "Kafka progress: polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
                 polled,
@@ -4727,6 +4931,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 skipped_no_payload,
                 decode_failed,
                 apply_failed
+            );
+            println!(
+                "Kafka progress DLQ: dlq_published={}, dlq_failed={}",
+                dlq_published, dlq_failed
             );
             println!(
                 "Kafka progress tables: impacted_tables={}, insert_execs={}",
@@ -4753,6 +4961,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         skipped_no_payload,
         decode_failed,
         apply_failed
+    );
+    println!(
+        "Kafka import DLQ summary: dlq_published={}, dlq_failed={}",
+        dlq_published, dlq_failed
     );
     println!(
         "Kafka import table summary: impacted_tables={}, insert_execs={}",
