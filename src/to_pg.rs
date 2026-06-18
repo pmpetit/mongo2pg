@@ -458,14 +458,26 @@ fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> 
 
 /// Prepend extension setup and optionally `CREATE SCHEMA` + `SET search_path` preamble.
 fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
-    let extension =
-        "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\nCREATE EXTENSION IF NOT EXISTS postgis;\n\n";
+    let mut preamble = String::new();
+
+    if ddl.contains("DEFAULT public.gen_random_uuid()") {
+        preamble.push_str("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n");
+    }
+
+    if ddl.to_ascii_lowercase().contains("geometry(") {
+        preamble.push_str("CREATE EXTENSION IF NOT EXISTS postgis;\n");
+    }
+
+    if !preamble.is_empty() {
+        preamble.push('\n');
+    }
+
     match pg_schema {
-        None => format!("{extension}{ddl}"),
+        None => format!("{preamble}{ddl}"),
         Some(schema) => {
             let s = sanitize(schema);
             format!(
-                "{extension}CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s}, public;\n\n{ddl}"
+                "{preamble}CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s}, public;\n\n{ddl}"
             )
         }
     }
@@ -844,6 +856,32 @@ fn handle_array_field(
     pg_schema: Option<&str>,
     timestamp_fields: &[String],
 ) {
+    fn is_generic_wrapper_name(name: &str) -> bool {
+        matches!(
+            name,
+            "metadata"
+                | "details"
+                | "detail"
+                | "data"
+                | "payload"
+                | "attributes"
+                | "attribute"
+                | "config"
+                | "configuration"
+                | "info"
+                | "value"
+        )
+    }
+
+    fn looks_like_entity_fields(fields: &IndexMap<String, FieldSchema>) -> bool {
+        fields.keys().any(|raw| {
+            matches!(
+                sanitize(raw).as_str(),
+                "id" | "_id" | "name" | "permalink" | "slug" | "code" | "key"
+            )
+        })
+    }
+
     fn passthrough_array_object_child<'a>(
         item_fields: &'a IndexMap<String, FieldSchema>,
     ) -> Option<(String, &'a IndexMap<String, FieldSchema>)> {
@@ -878,7 +916,11 @@ fn handle_array_field(
         }
 
         match (nested_name, nested_fields) {
-            (Some(name), Some(fields)) => Some((name, fields)),
+            (Some(name), Some(fields))
+                if !is_generic_wrapper_name(&name) && looks_like_entity_fields(fields) =>
+            {
+                Some((name, fields))
+            }
             _ => None,
         }
     }
@@ -1501,6 +1543,12 @@ fn collapse_passthrough_root(mut root: Table) -> Table {
         return root;
     }
 
+    // Only collapse when root is a true passthrough wrapper. If the root table
+    // has real non-PK columns, keep it; collapsing would drop source fields.
+    if root.columns.iter().any(|col| !col.primary_key) {
+        return root;
+    }
+
     let mut child = root.child_tables.remove(0);
     let synthetic_child_prefix = format!("{}_", root.name);
     if !child.name.starts_with(&synthetic_child_prefix) {
@@ -2014,7 +2062,6 @@ mod tests {
     fn test_single_child_root_is_collapsed_into_child_without_fk() {
         let docs = vec![doc! {
             "_id": bson::oid::ObjectId::new(),
-            "theaterId": 1000_i32,
             "venue": {
                 "details": {
                     "city": "Bloomington"
@@ -2030,9 +2077,29 @@ mod tests {
 
         assert!(!ddl.contains("CREATE TABLE theaters ("));
         assert!(ddl.contains("CREATE TABLE theaters_venue ("));
-        assert!(!ddl.contains("theaterid INTEGER NOT NULL"));
         assert!(!ddl.contains("theaters_id"));
         assert!(!ddl.contains("REFERENCES theaters (id)"));
+    }
+
+    #[test]
+    fn test_single_child_root_with_scalar_fields_is_not_collapsed() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "account_id": 42_i32,
+            "transactions": [{
+                "amount": 10_i32,
+                "symbol": "abc",
+            }]
+        }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "transactions", None);
+
+        assert!(ddl.contains("CREATE TABLE transactions ("));
+        assert!(ddl.contains("id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY"));
+        assert!(ddl.contains("account_id INTEGER NOT NULL"));
+        assert!(ddl.contains("CREATE TABLE transactions_transactions ("));
+        assert!(ddl.contains("transactions_id UUID NOT NULL"));
+        assert!(ddl.contains("FOREIGN KEY (transactions_id) REFERENCES transactions (id)"));
     }
 
     #[test]
@@ -2388,8 +2455,9 @@ mod tests {
         let ddl =
             schema_to_ddl_with_timestamp_fields(&schema, "projects", None, &["*_date".to_owned()]);
 
+        assert!(ddl.contains("CREATE TABLE projects ("));
         assert!(ddl.contains("CREATE TABLE providers ("));
-        assert!(ddl.contains("providers_id BIGINT NOT NULL"));
+        assert!(ddl.contains("projects_id VARCHAR(20) NOT NULL"));
         assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
         assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
         assert!(!ddl.contains("CREATE TABLE metadata ("));
@@ -2418,10 +2486,12 @@ mod tests {
 
         let ddl = schema_to_ddl(&schema, "companies", None);
 
-        assert!(ddl.contains("CREATE TABLE relationships ("));
-        assert!(ddl.contains("first_name VARCHAR(5) NOT NULL"));
-        assert!(ddl.contains("last_name VARCHAR(20) NOT NULL"));
-        assert!(ddl.contains("permalink VARCHAR(20) NOT NULL"));
+        assert!(ddl.contains("CREATE TABLE companies ("));
+        assert!(ddl.contains("companies_id UUID NOT NULL"));
+        assert!(ddl.contains("first_name "));
+        assert!(ddl.contains("last_name "));
+        assert!(ddl.contains("permalink "));
+        assert!(!ddl.contains("CREATE TABLE relationships ("));
         assert!(!ddl.contains("CREATE TABLE relationships_person ("));
     }
 
@@ -2504,5 +2574,21 @@ mod tests {
 
         assert!(ddl.contains("CREATE TABLE customers ("));
         assert!(ddl.contains("CREATE TABLE tier_and_details ("));
+    }
+
+    #[test]
+    fn transactions_fixture_generates_expected_tables() {
+        let json_str = std::fs::read_to_string("tests/fixtures/transactions.json")
+            .expect("Failed to read fixture");
+
+        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "transactions", None);
+
+        assert!(ddl.contains("CREATE TABLE transactions_transactions"));
     }
 }

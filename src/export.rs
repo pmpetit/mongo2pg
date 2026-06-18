@@ -677,6 +677,11 @@ fn extract_child_document_rows(
                 }
             })
             .collect();
+
+        if should_skip_empty_row(child, &child_row, false) {
+            continue;
+        }
+
         all_rows
             .entry(child.sql_name.clone())
             .or_default()
@@ -1676,56 +1681,6 @@ CREATE TABLE tier_and_details (
     }
 
     #[test]
-    fn export_skips_empty_object_child_rows() {
-        let sql = r#"
-CREATE TABLE listingsandreviews (
-    id UUID PRIMARY KEY,
-    name TEXT NOT NULL
-);
-
-CREATE TABLE review_scores (
-    id BIGSERIAL PRIMARY KEY,
-    listingsandreviews_id UUID NOT NULL,
-    review_scores_accuracy INTEGER,
-    review_scores_checkin INTEGER,
-    review_scores_cleanliness INTEGER,
-    review_scores_communication INTEGER,
-    review_scores_location INTEGER,
-    review_scores_rating INTEGER,
-    review_scores_value INTEGER,
-    FOREIGN KEY (listingsandreviews_id) REFERENCES listingsandreviews (id) DEFERRABLE INITIALLY DEFERRED
-);
-"#;
-
-        let tables = parse_sql(sql);
-        let roots = build_tree(&tables, None, &HashMap::new());
-        let mut all_rows = HashMap::new();
-        let mut counters = HashMap::new();
-        let doc = doc! {
-            "_id": "listing-1",
-            "name": "Listing",
-            "review_scores": {}
-        };
-
-        extract_rows(
-            &Bson::Document(doc),
-            &roots[0],
-            None,
-            true,
-            &mut all_rows,
-            &mut counters,
-        );
-
-        let root_rows = all_rows
-            .get("listingsandreviews")
-            .expect("root rows missing");
-        assert_eq!(root_rows.len(), 1);
-        assert!(all_rows
-            .get("review_scores")
-            .is_none_or(|rows| rows.is_empty()));
-    }
-
-    #[test]
     fn export_promoted_root_array_objects_write_one_row_per_item() {
         let sql = r#"
 CREATE TABLE engine (
@@ -1964,6 +1919,61 @@ CREATE TABLE tier_and_details (
         assert_eq!(detail_rows[0][3].is_some(), true);
         assert_eq!(detail_rows[0][4].is_some(), true);
         assert_eq!(detail_rows[0][5].is_some(), true);
+    }
+
+    #[test]
+    fn export_skips_empty_embedded_review_scores_object() {
+        let sql = r#"
+CREATE TABLE listingsandreviews (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+CREATE TABLE review_scores (
+    id BIGSERIAL PRIMARY KEY,
+    listingsandreviews_id UUID NOT NULL,
+    review_scores_accuracy INTEGER,
+    review_scores_checkin INTEGER,
+    review_scores_cleanliness INTEGER,
+    review_scores_communication INTEGER,
+    review_scores_location INTEGER,
+    review_scores_rating INTEGER,
+    review_scores_value INTEGER,
+    FOREIGN KEY (listingsandreviews_id) REFERENCES listingsandreviews (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+            "name": "Alice",
+            "review_scores": {}
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let root_rows = all_rows
+            .get("listingsandreviews")
+            .expect("root rows missing");
+        assert_eq!(root_rows.len(), 1);
+
+        assert!(
+            all_rows
+                .get("review_scores")
+                .map(|rows| rows.is_empty())
+                .unwrap_or(true),
+            "empty embedded review_scores object should not emit a null-only child row"
+        );
     }
 
     #[test]

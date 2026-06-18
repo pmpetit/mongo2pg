@@ -874,8 +874,22 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
             .as_deref()
             .or(config_target_schema.as_deref())
             .or(Some(table_name));
+        let mapping_tables =
+            load_mapping_ddl_tables(json_path.parent().unwrap_or(&collections_dir))?;
+
+        let force_schema_inference_for_objectid = mapping_tables.as_ref().is_some_and(|tables| {
+            should_regenerate_from_schema_when_objectid_pk(&schema, tables, table_name)
+        });
+
+        if force_schema_inference_for_objectid && !quiet {
+            eprintln!(
+                "warning: mapping DDL for '{}' uses surrogate BIGSERIAL id while source _id is ObjectId; using schema-inferred DDL to preserve UUID mapping",
+                table_name
+            );
+        }
+
         let ddl = if let Some(mapping_tables) =
-            load_mapping_ddl_tables(json_path.parent().unwrap_or(&collections_dir))?
+            mapping_tables.filter(|_| !force_schema_inference_for_objectid)
         {
             render_ddl_from_mapping_tables(&mapping_tables, target_schema)
         } else {
@@ -2324,14 +2338,10 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
         statements
     }
 
-    let mut ddl = String::new();
-
-    ddl.push_str(
-        "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\nCREATE EXTENSION IF NOT EXISTS postgis;\n\n",
-    );
+    let mut ddl_body = String::new();
 
     if let Some(schema) = schema_name {
-        ddl.push_str(&format!(
+        ddl_body.push_str(&format!(
             "CREATE SCHEMA IF NOT EXISTS {};\nSET search_path = {}, public;\n\n",
             quote_ident(schema),
             quote_ident(schema)
@@ -2339,7 +2349,7 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
     }
 
     for table in ordered_tables(tables) {
-        ddl.push_str(&format!("CREATE TABLE {} (\n", table.name));
+        ddl_body.push_str(&format!("CREATE TABLE {} (\n", table.name));
 
         let rendered_columns = table
             .columns
@@ -2385,15 +2395,31 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
             )
         }));
 
-        ddl.push_str(&lines.join(",\n"));
-        ddl.push_str("\n);\n\n");
+        ddl_body.push_str(&lines.join(",\n"));
+        ddl_body.push_str("\n);\n\n");
 
         let fk_indexes = fk_index_statements(table, schema_name);
         if !fk_indexes.is_empty() {
-            ddl.push_str(&fk_indexes.join("\n"));
-            ddl.push_str("\n\n");
+            ddl_body.push_str(&fk_indexes.join("\n"));
+            ddl_body.push_str("\n\n");
         }
     }
+
+    let needs_pgcrypto = ddl_body.contains("public.gen_random_uuid()");
+    let needs_postgis = ddl_body.to_ascii_lowercase().contains("geometry(");
+
+    let mut ddl = String::new();
+    if needs_pgcrypto {
+        ddl.push_str("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n");
+    }
+    if needs_postgis {
+        ddl.push_str("CREATE EXTENSION IF NOT EXISTS postgis;\n");
+    }
+    if needs_pgcrypto || needs_postgis {
+        ddl.push('\n');
+    }
+
+    ddl.push_str(&ddl_body);
 
     ddl.trim_end().to_owned() + "\n"
 }
@@ -2440,6 +2466,51 @@ fn load_mapping_ddl_tables(collection_dir: &Path) -> Result<Option<Vec<DdlTableM
     Ok(Some(tables))
 }
 
+fn schema_root_id_is_objectid(schema: &CollectionSchema) -> bool {
+    let Some(id_field) = schema.object.get("_id") else {
+        return false;
+    };
+
+    let non_null_types = id_field
+        .types
+        .iter()
+        .filter(|(type_name, _)| !matches!(type_name.as_str(), TYPE_NULL | TYPE_UNDEFINED))
+        .map(|(type_name, _)| type_name.as_str())
+        .collect::<Vec<_>>();
+
+    non_null_types.len() == 1 && non_null_types[0] == "ObjectId"
+}
+
+fn mapping_has_surrogate_bigserial_primary_id(tables: &[DdlTableMapping]) -> bool {
+    tables.iter().any(|table| {
+        table.columns.iter().any(|column| {
+            let sql_type = column.sql_type.trim().to_ascii_lowercase();
+            column.primary_key
+                && column.name == "id"
+                && (sql_type == "bigserial" || sql_type == "serial8")
+        })
+    })
+}
+
+fn mapping_has_flattened_parent_uuid_column(tables: &[DdlTableMapping], table_name: &str) -> bool {
+    let expected_parent_id = flattened_root_parent_id_column(table_name);
+    tables.iter().any(|table| {
+        table.columns.iter().any(|column| {
+            column.name == expected_parent_id && column.sql_type.eq_ignore_ascii_case("uuid")
+        })
+    })
+}
+
+fn should_regenerate_from_schema_when_objectid_pk(
+    schema: &CollectionSchema,
+    mapping_tables: &[DdlTableMapping],
+    table_name: &str,
+) -> bool {
+    schema_root_id_is_objectid(schema)
+        && mapping_has_surrogate_bigserial_primary_id(mapping_tables)
+        && !mapping_has_flattened_parent_uuid_column(mapping_tables, table_name)
+}
+
 #[cfg_attr(not(test), allow(dead_code))]
 fn build_collection_mappings(
     db_name: &str,
@@ -2465,6 +2536,66 @@ fn build_collection_mappings_with_timestamp_fields(
     timestamp_fields: &[String],
     reserved_table_names: &std::collections::HashSet<String>,
 ) -> Vec<(String, CollectionMapping)> {
+    fn collapse_repeated_table_name_segments(name: &str) -> String {
+        let mut collapsed: Vec<String> = Vec::new();
+        let mut previous: Option<&str> = None;
+        let mut run_len = 0_usize;
+
+        for segment in name.split('_') {
+            if segment.is_empty() {
+                continue;
+            }
+
+            if previous == Some(segment) {
+                run_len += 1;
+                if run_len <= 2 {
+                    collapsed.push(segment.to_owned());
+                }
+            } else {
+                previous = Some(segment);
+                run_len = 1;
+                collapsed.push(segment.to_owned());
+            }
+        }
+
+        if collapsed.is_empty() {
+            name.to_owned()
+        } else {
+            collapsed.join("_")
+        }
+    }
+
+    fn normalize_table_names(
+        tables: &mut [mongo2pg::schema_diagram::Table],
+        reserved_table_names: &std::collections::HashSet<String>,
+    ) {
+        let mut renamed = HashMap::new();
+        let mut used = reserved_table_names.clone();
+
+        for table in tables.iter() {
+            let base = collapse_repeated_table_name_segments(&table.name);
+            let mut candidate = base.clone();
+            let mut suffix = 2_usize;
+            while used.contains(&candidate) {
+                candidate = format!("{base}_{suffix}");
+                suffix += 1;
+            }
+            used.insert(candidate.clone());
+            renamed.insert(table.name.clone(), candidate);
+        }
+
+        for table in tables.iter_mut() {
+            if let Some(new_name) = renamed.get(&table.name) {
+                table.name = new_name.clone();
+            }
+            for foreign_key in &mut table.foreign_keys {
+                if let Some(new_name) = renamed.get(&foreign_key.to_table) {
+                    foreign_key.to_table = new_name.clone();
+                }
+            }
+        }
+    }
+
     fn is_uuid_like_key(name: &str) -> bool {
         let parts = name.split('-').collect::<Vec<_>>();
         name.len() == 36
@@ -3205,6 +3336,65 @@ fn build_collection_mappings_with_timestamp_fields(
                         resolved_child_table_names,
                     );
 
+                    if field_has_geo_merged_doc_shape(field) {
+                        if let Some(table) = tables_by_name.get(&child_table) {
+                            let foreign_key_columns = table
+                                .foreign_keys
+                                .iter()
+                                .map(|fk| fk.from_col.as_str())
+                                .collect::<Vec<_>>();
+                            let mut geo_merged_lookup_fields = IndexMap::new();
+                            geo_merged_lookup_fields.insert(raw_name.clone(), field.clone());
+                            let columns = table
+                                .columns
+                                .iter()
+                                .filter(|column| {
+                                    column.name != "id"
+                                        && foreign_key_columns.iter().all(|fk| *fk != column.name)
+                                })
+                                .filter_map(|column| {
+                                    find_source_field_for_column(
+                                        &geo_merged_lookup_fields,
+                                        &column.name,
+                                        true,
+                                    )
+                                    .map(|source_field| {
+                                        MappingColumn {
+                                            source_field,
+                                            target_field: column.name.clone(),
+                                            data_type: column.col_type.to_lowercase(),
+                                            nullable: !column.not_null,
+                                        }
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+
+                            if !columns.is_empty() {
+                                out.push((
+                                    child_table.clone(),
+                                    CollectionMapping {
+                                        collection_name: raw_name.clone(),
+                                        mongo_dbname: db_name.to_owned(),
+                                        mongo_path: mapping_mongo_path_for_segments(
+                                            root_collection_name,
+                                            mongo_path_segments,
+                                        ),
+                                        pg_mapping: PgMapping {
+                                            dbname: db_name.to_owned(),
+                                            schema_name: schema_name.to_owned(),
+                                            table_name: table.name.clone(),
+                                            columns,
+                                            ddl: Some(ddl_table_mapping_from_table(table)),
+                                            ddl_editing: default_ddl_editing_guidance(),
+                                        },
+                                    },
+                                ));
+                            }
+                        }
+
+                        continue;
+                    }
+
                     if let Some(value_fields) = map_document_value_fields(sub_fields) {
                         if let Some(table) = tables_by_name.get(&child_table) {
                             let foreign_key_columns = table
@@ -3401,6 +3591,7 @@ fn build_collection_mappings_with_timestamp_fields(
 
     let ddl = schema_to_ddl_with_timestamp_fields(schema, coll_name, None, timestamp_fields);
     let mut tables = parse_sql(&ddl);
+    normalize_table_names(&mut tables, &std::collections::HashSet::new());
     let Some(root_table_name) = tables.first().map(|table| table.name.clone()) else {
         return Vec::new();
     };
@@ -8567,6 +8758,142 @@ CREATE TABLE demo (
     }
 
     #[test]
+    fn build_collection_mappings_collapses_repeated_child_name_segments() {
+        let docs = vec![doc! {
+            "_id": "acct-1",
+            "transactions": [{
+                "transactions": [{
+                    "amount": 42_i32
+                }]
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings(
+            "sample_analytics",
+            "transactions",
+            Some("sample_analytics"),
+            &schema,
+        );
+
+        assert!(mappings.iter().all(|(_, mapping)| {
+            mapping.pg_mapping.table_name != "transactions_transactions_transactions"
+        }));
+        assert!(mappings
+            .iter()
+            .any(|(_, mapping)| mapping.pg_mapping.table_name == "transactions_transactions"));
+    }
+
+    #[test]
+    fn build_collection_mappings_keeps_unique_names_after_collapse() {
+        let docs = vec![doc! {
+            "_id": "acct-1",
+            "transactions": [{
+                "transactions": [{ "amount": 1_i32 }],
+                "fees": [{ "amount": 2_i32 }]
+            }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings(
+            "sample_analytics",
+            "transactions",
+            Some("sample_analytics"),
+            &schema,
+        );
+
+        let table_names = mappings
+            .iter()
+            .map(|(_, mapping)| mapping.pg_mapping.table_name.clone())
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(table_names.len(), mappings.len());
+    }
+
+    #[test]
+    fn should_regenerate_from_schema_when_objectid_pk_for_flattened_array_root() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "transactions": [{ "amount": 1_i32 }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mapping_tables = vec![super::DdlTableMapping {
+            name: "transactions_transactions_transactions".to_owned(),
+            columns: vec![
+                super::DdlColumnMapping {
+                    name: "id".to_owned(),
+                    sql_type: "BIGSERIAL".to_owned(),
+                    nullable: false,
+                    primary_key: true,
+                },
+                super::DdlColumnMapping {
+                    name: "amount".to_owned(),
+                    sql_type: "INTEGER".to_owned(),
+                    nullable: false,
+                    primary_key: false,
+                },
+            ],
+            foreign_keys: Vec::new(),
+        }];
+
+        assert!(super::should_regenerate_from_schema_when_objectid_pk(
+            &schema,
+            &mapping_tables,
+            "transactions",
+        ));
+    }
+
+    #[test]
+    fn should_not_regenerate_when_mapping_already_contains_parent_uuid_column() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "transactions": [{ "amount": 1_i32 }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mapping_tables = vec![super::DdlTableMapping {
+            name: "transactions_transactions_transactions".to_owned(),
+            columns: vec![
+                super::DdlColumnMapping {
+                    name: "id".to_owned(),
+                    sql_type: "BIGSERIAL".to_owned(),
+                    nullable: false,
+                    primary_key: true,
+                },
+                super::DdlColumnMapping {
+                    name: "transactions_id".to_owned(),
+                    sql_type: "UUID".to_owned(),
+                    nullable: false,
+                    primary_key: false,
+                },
+            ],
+            foreign_keys: Vec::new(),
+        }];
+
+        assert!(!super::should_regenerate_from_schema_when_objectid_pk(
+            &schema,
+            &mapping_tables,
+            "transactions",
+        ));
+    }
+
+    #[test]
     fn render_ddl_from_mapping_tables_uses_editable_mapping_metadata() {
         let sql = render_ddl_from_mapping_tables(
             &[super::DdlTableMapping {
@@ -8791,6 +9118,86 @@ CREATE TABLE demo (
         assert!(sql.contains(
             "CREATE INDEX IF NOT EXISTS \"idx_child_parent_a_parent_b\" ON \"child\" (\"parent_a\", \"parent_b\");"
         ));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_emits_only_pgcrypto_for_uuid_without_geometry() {
+        let sql = render_ddl_from_mapping_tables(
+            &[
+                super::DdlTableMapping {
+                    name: "transactions".to_owned(),
+                    columns: vec![
+                        super::DdlColumnMapping {
+                            name: "id".to_owned(),
+                            sql_type: "UUID DEFAULT public.gen_random_uuid()".to_owned(),
+                            nullable: false,
+                            primary_key: true,
+                        },
+                        super::DdlColumnMapping {
+                            name: "account_id".to_owned(),
+                            sql_type: "INTEGER".to_owned(),
+                            nullable: false,
+                            primary_key: false,
+                        },
+                    ],
+                    foreign_keys: Vec::new(),
+                },
+                super::DdlTableMapping {
+                    name: "transactions_transactions".to_owned(),
+                    columns: vec![
+                        super::DdlColumnMapping {
+                            name: "id".to_owned(),
+                            sql_type: "BIGSERIAL".to_owned(),
+                            nullable: false,
+                            primary_key: true,
+                        },
+                        super::DdlColumnMapping {
+                            name: "transactions_id".to_owned(),
+                            sql_type: "UUID".to_owned(),
+                            nullable: false,
+                            primary_key: false,
+                        },
+                    ],
+                    foreign_keys: vec![super::DdlForeignKeyMapping {
+                        from_col: "transactions_id".to_owned(),
+                        to_table: "transactions".to_owned(),
+                        to_col: "id".to_owned(),
+                    }],
+                },
+            ],
+            Some("sample_analytics"),
+        );
+
+        assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"));
+        assert!(!sql.contains("CREATE EXTENSION IF NOT EXISTS postgis;"));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_emits_postgis_when_geometry_present() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "venues".to_owned(),
+                columns: vec![
+                    super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "UUID DEFAULT public.gen_random_uuid()".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    super::DdlColumnMapping {
+                        name: "point".to_owned(),
+                        sql_type: "geometry(Point,4326)".to_owned(),
+                        nullable: false,
+                        primary_key: false,
+                    },
+                ],
+                foreign_keys: Vec::new(),
+            }],
+            Some("sample_analytics"),
+        );
+
+        assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"));
+        assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS postgis;"));
     }
 
     #[test]
@@ -9255,7 +9662,6 @@ CREATE TABLE demo (
             \connect "test_db"
 
             CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-            CREATE EXTENSION IF NOT EXISTS postgis;
 
             CREATE SCHEMA IF NOT EXISTS "employees";
             SET search_path = "employees", public;

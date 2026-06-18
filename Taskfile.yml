@@ -5,13 +5,13 @@ vars:
   RESULTS_DIR: results
   BIN: "{{.ROOT_DIR}}/target/debug/mongo2pg"
   DATABASES: >-
+    sample_analytics
     sample_airbnb
-    # sample_analytics
-    # sample_geospatial
-    # sample_mflix
-    # sample_supplies
-    # sample_training
-    # sample_weatherdata
+    sample_geospatial
+    sample_mflix
+    sample_supplies
+    sample_training
+    sample_weatherdata
 
 tasks:
   build:
@@ -81,14 +81,15 @@ tasks:
     deps: [build]
     vars:
       OUT: "{{.RESULTS_DIR}}"
+      DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
     cmds:
       - mkdir -p "{{.OUT}}"
       - |
-        for db in {{.DATABASES}}
+        for db in {{.DBS_TO_PROCESS}}
         do
           echo "🗑️  database $db"
           psql -U myuser -d mydb -h localhost -c "DROP DATABASE IF EXISTS $db"
-          echo "📁  init $db"
+          echo "📁 init $db"
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
           cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"

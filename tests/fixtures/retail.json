@@ -1,0 +1,22 @@
+{
+    "_id": ObjectId("63d8e5e4e895c82a48c6c5b7"),
+    "product_name": "Quantum Leap VR Headset",
+    "sku": "QL-VR-2024",
+    "price": 499.99,
+    "stock_quantity": NumberInt(150),
+    "is_active": true,
+    "launch_date": ISODate("2023-10-26T10:00:00Z"),
+    "tags": [
+        "gaming",
+        "vr",
+        "tech",
+        "new"
+    ],
+    "specs": {
+        "resolution": "4K per eye",
+        "refresh_rate_hz": 90,
+        "weight_kg": 0.5,
+        "has_audio": true
+    },
+    "discontinued_date": null
+}
