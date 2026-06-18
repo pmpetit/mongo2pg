@@ -2,4 +2,4 @@
 .vscode
 .task/
 site/
-results/
+results/*

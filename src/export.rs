@@ -772,6 +772,23 @@ fn map_document_entries<'a>(node: &TableNode, doc: &'a bson::Document) -> Vec<(&
         .collect()
 }
 
+fn row_has_payload(node: &TableNode, row: &[Option<String>]) -> bool {
+    node.columns.iter().enumerate().any(|(index, col)| {
+        if node.pk_cols.iter().any(|pk| pk == col)
+            || node.fk_col.as_ref().is_some_and(|fk| fk == col)
+            || col == "key"
+        {
+            return false;
+        }
+
+        row.get(index).and_then(|value| value.as_ref()).is_some()
+    })
+}
+
+fn should_skip_empty_row(node: &TableNode, row: &[Option<String>], is_root: bool) -> bool {
+    !is_root && node.children.is_empty() && !row_has_payload(node, row)
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Row extraction  (recursive, depth-first)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -872,6 +889,11 @@ fn extract_rows(
                                                     }
                                                 })
                                                 .collect();
+
+                                            if should_skip_empty_row(child, &child_row, false) {
+                                                continue;
+                                            }
+
                                             all_rows
                                                 .entry(child.sql_name.clone())
                                                 .or_default()
@@ -1063,6 +1085,10 @@ fn extract_rows(
                     })
                     .collect();
 
+                if should_skip_empty_row(node, &row, false) {
+                    continue;
+                }
+
                 all_rows.entry(node.sql_name.clone()).or_default().push(row);
 
                 for child in &node.children {
@@ -1176,6 +1202,10 @@ fn extract_rows(
             }
         })
         .collect();
+
+    if should_skip_empty_row(node, &row, is_root) {
+        return;
+    }
 
     all_rows.entry(node.sql_name.clone()).or_default().push(row);
 
@@ -1643,6 +1673,56 @@ CREATE TABLE tier_and_details (
         assert!(rows
             .iter()
             .any(|row| row[2].as_deref() == Some("699456451cc24f028d2aa99d7534c219")));
+    }
+
+    #[test]
+    fn export_skips_empty_object_child_rows() {
+        let sql = r#"
+CREATE TABLE listingsandreviews (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+CREATE TABLE review_scores (
+    id BIGSERIAL PRIMARY KEY,
+    listingsandreviews_id UUID NOT NULL,
+    review_scores_accuracy INTEGER,
+    review_scores_checkin INTEGER,
+    review_scores_cleanliness INTEGER,
+    review_scores_communication INTEGER,
+    review_scores_location INTEGER,
+    review_scores_rating INTEGER,
+    review_scores_value INTEGER,
+    FOREIGN KEY (listingsandreviews_id) REFERENCES listingsandreviews (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "listing-1",
+            "name": "Listing",
+            "review_scores": {}
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let root_rows = all_rows
+            .get("listingsandreviews")
+            .expect("root rows missing");
+        assert_eq!(root_rows.len(), 1);
+        assert!(all_rows
+            .get("review_scores")
+            .is_none_or(|rows| rows.is_empty()));
     }
 
     #[test]
