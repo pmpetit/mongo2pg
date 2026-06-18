@@ -1,6 +1,0 @@
-Documents in collection : 1564
-Documents sampled       : 1000
-Width (top-level / max)  : 3 / 3.0 (L1)
-Depth (max nesting)     : 1
-Branch (per level)      : L1:3.0
-Top-level types         : _id:ObjectId, location:Object, theaterId:Number

@@ -292,6 +292,98 @@ fn all_keys_are_uuids(map: &IndexMap<String, FieldSchema>) -> bool {
     !map.is_empty() && map.keys().all(|k| is_uuid_keyed_name(k))
 }
 
+fn is_geojson_point_field_schema(field: &FieldSchema) -> bool {
+    let non_null: Vec<(&str, &TypeSchema)> = field
+        .types
+        .iter()
+        .filter(|(t, _)| !is_null_type(t.as_str()))
+        .map(|(t, ts)| (t.as_str(), ts))
+        .collect();
+
+    if non_null.len() != 1 || non_null[0].0 != TYPE_OBJECT {
+        return false;
+    }
+
+    let Some(obj_fields) = non_null[0].1.object.as_ref() else {
+        return false;
+    };
+
+    let Some(type_field) = obj_fields.get("type") else {
+        return false;
+    };
+    let type_non_null: Vec<&str> = type_field
+        .types
+        .iter()
+        .filter(|(t, _)| !is_null_type(t.as_str()))
+        .map(|(t, _)| t.as_str())
+        .collect();
+    if !type_non_null.iter().any(|t| *t == TYPE_STRING) {
+        return false;
+    }
+
+    let Some(coords_field) = obj_fields.get("coordinates") else {
+        return false;
+    };
+    coords_field
+        .types
+        .iter()
+        .filter(|(t, _)| !is_null_type(t.as_str()))
+        .any(|(t, _)| t.as_str() == TYPE_ARRAY)
+}
+
+fn non_null_types(field: &FieldSchema) -> Vec<(&str, &TypeSchema)> {
+    field
+        .types
+        .iter()
+        .filter(|(t, _)| !is_null_type(t.as_str()))
+        .map(|(t, ts)| (t.as_str(), ts))
+        .collect()
+}
+
+fn geo_merged_doc_parts(
+    sub_fields: &IndexMap<String, FieldSchema>,
+) -> Option<(&IndexMap<String, FieldSchema>, String, bool)> {
+    let mut geo_field_name: Option<String> = None;
+    let mut geo_nullable = false;
+    let mut sibling_fields: Option<&IndexMap<String, FieldSchema>> = None;
+
+    for (name, field) in sub_fields {
+        let non_null = non_null_types(field);
+        if non_null.is_empty() {
+            continue;
+        }
+
+        if non_null.len() == 1
+            && non_null[0].0 == TYPE_OBJECT
+            && is_geojson_point_field_schema(field)
+        {
+            if geo_field_name.is_some() {
+                return None;
+            }
+            geo_nullable = non_null.len() < field.types.len() || field.probability < 1.0;
+            geo_field_name = Some(sanitize(name));
+            continue;
+        }
+
+        if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
+            if sibling_fields.is_some() {
+                return None;
+            }
+            sibling_fields = non_null[0].1.object.as_ref();
+            continue;
+        }
+
+        return None;
+    }
+
+    match (sibling_fields, geo_field_name) {
+        (Some(sibling), Some(geo_col)) if !sibling.is_empty() => {
+            Some((sibling, geo_col, geo_nullable))
+        }
+        _ => None,
+    }
+}
+
 /// For a map document (all sub-fields are UUID-keyed), try to find uniform inner
 /// document fields. Returns the first non-empty inner `IndexMap` found, or `None`
 /// if there is no uniform inner structure (caller should fall back to JSONB).
@@ -366,12 +458,15 @@ fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> 
 
 /// Prepend extension setup and optionally `CREATE SCHEMA` + `SET search_path` preamble.
 fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
-    let extension = "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n\n";
+    let extension =
+        "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\nCREATE EXTENSION IF NOT EXISTS postgis;\n\n";
     match pg_schema {
         None => format!("{extension}{ddl}"),
         Some(schema) => {
             let s = sanitize(schema);
-            format!("{extension}CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s};\n\n{ddl}")
+            format!(
+                "{extension}CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s}, public;\n\n{ddl}"
+            )
         }
     }
 }
@@ -428,7 +523,7 @@ fn add_child_table(
         child_fields,
         "",
         true,
-        false,
+        true,
         pg_schema,
         timestamp_fields,
     );
@@ -618,6 +713,70 @@ fn add_doc_table(
     parent.child_tables.push(child);
 }
 
+fn add_geo_merged_doc_table(
+    parent: &mut Table,
+    doc_field_col: &str,
+    sibling_fields: &IndexMap<String, FieldSchema>,
+    geo_field_col: &str,
+    geo_nullable: bool,
+    pg_schema: Option<&str>,
+    timestamp_fields: &[String],
+) {
+    let child_name = format!("{}_{}", parent.name, doc_field_col);
+    let parent_pks = find_pk_columns(parent);
+
+    let mut child = Table::new(child_name);
+    child.columns.push(Column {
+        name: "id".to_owned(),
+        pg_type: "BIGSERIAL".to_owned(),
+        nullable: false,
+        primary_key: true,
+    });
+
+    let mut parent_ref = Vec::new();
+    if parent_pks.len() == 1 {
+        let (pk_name, pk_type) = &parent_pks[0];
+        let fk_col = format!("{}_id", parent.name);
+        child.columns.push(Column {
+            name: fk_col.clone(),
+            pg_type: fk_scalar_type(pk_type).to_owned(),
+            nullable: false,
+            primary_key: false,
+        });
+        parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+    } else {
+        for (pk_name, pk_type) in &parent_pks {
+            let fk_col = format!("{}_{}", parent.name, pk_name);
+            child.columns.push(Column {
+                name: fk_col.clone(),
+                pg_type: fk_scalar_type(pk_type).to_owned(),
+                nullable: false,
+                primary_key: false,
+            });
+            parent_ref.push((fk_col, parent.name.clone(), pk_name.clone()));
+        }
+    }
+    child.parent_ref = Some(parent_ref);
+
+    process_fields(
+        &mut child,
+        sibling_fields,
+        "",
+        false,
+        false,
+        pg_schema,
+        timestamp_fields,
+    );
+    child.columns.push(Column {
+        name: geo_field_col.to_owned(),
+        pg_type: "geometry(Point,4326)".to_owned(),
+        nullable: geo_nullable,
+        primary_key: false,
+    });
+
+    parent.child_tables.push(child);
+}
+
 /// Create a child table for a MongoDB map document (dynamic hex-keyed sub-fields).
 /// Dynamic map keys are not materialized as dedicated SQL columns.
 fn add_map_table(
@@ -685,6 +844,45 @@ fn handle_array_field(
     pg_schema: Option<&str>,
     timestamp_fields: &[String],
 ) {
+    fn passthrough_array_object_child<'a>(
+        item_fields: &'a IndexMap<String, FieldSchema>,
+    ) -> Option<(String, &'a IndexMap<String, FieldSchema>)> {
+        let mut nested_name: Option<String> = None;
+        let mut nested_fields: Option<&IndexMap<String, FieldSchema>> = None;
+
+        for (raw_name, field) in item_fields {
+            let non_null: Vec<(&str, &TypeSchema)> = field
+                .types
+                .iter()
+                .filter(|(t, _)| !is_null_type(t.as_str()))
+                .map(|(t, ts)| (t.as_str(), ts))
+                .collect();
+
+            if non_null.is_empty() {
+                continue;
+            }
+
+            if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
+                let Some(obj_fields) = non_null[0].1.object.as_ref() else {
+                    return None;
+                };
+                if nested_name.is_some() {
+                    return None;
+                }
+                nested_name = Some(sanitize(raw_name));
+                nested_fields = Some(obj_fields);
+                continue;
+            }
+
+            return None;
+        }
+
+        match (nested_name, nested_fields) {
+            (Some(name), Some(fields)) => Some((name, fields)),
+            _ => None,
+        }
+    }
+
     let non_null_items: Vec<(&str, &TypeSchema)> = items_field
         .types
         .iter()
@@ -705,8 +903,20 @@ fn handle_array_field(
 
         // Array of documents → child table (one row per array element)
         if let Some(child_fields) = &doc_ts.object {
-            let cf = child_fields.clone();
-            add_child_table(table, col_name, &cf, pg_schema, timestamp_fields);
+            // Collapse wrappers like competitions[].competitor into a direct
+            // competitor child table linked to the real parent table.
+            if let Some((nested_name, nested_fields)) = passthrough_array_object_child(child_fields)
+            {
+                add_child_table(
+                    table,
+                    &nested_name,
+                    nested_fields,
+                    pg_schema,
+                    timestamp_fields,
+                );
+            } else {
+                add_child_table(table, col_name, child_fields, pg_schema, timestamp_fields);
+            }
         } else {
             // Object type but no inner fields schema
             table.columns.push(Column {
@@ -991,7 +1201,6 @@ pub fn process_fields(
         .iter()
         .flat_map(|group| group.members.iter().cloned())
         .collect::<HashSet<_>>();
-
     for (raw_name, field) in fields {
         if let Some(group) = grouped_representatives.get(raw_name) {
             add_grouped_root_child_table(
@@ -1044,6 +1253,16 @@ pub fn process_fields(
         if non_null.len() == 1 && non_null[0].0 == TYPE_OBJECT {
             let ts = non_null[0].1;
 
+            if is_geojson_point_field_schema(field) {
+                table.columns.push(Column {
+                    name: col_name,
+                    pg_type: "geometry(Point,4326)".to_owned(),
+                    nullable,
+                    primary_key: false,
+                });
+                continue;
+            }
+
             // --jsonb flag: emit a JSONB column instead of a child table
             if ts.as_jsonb {
                 table.columns.push(Column {
@@ -1092,6 +1311,21 @@ pub fn process_fields(
                     });
                 }
             } else if let Some(sub_fields) = &ts.object {
+                if let Some((sibling_fields, geo_col, geo_nullable)) =
+                    geo_merged_doc_parts(sub_fields)
+                {
+                    add_geo_merged_doc_table(
+                        table,
+                        &col_name,
+                        sibling_fields,
+                        &geo_col,
+                        geo_nullable,
+                        pg_schema,
+                        timestamp_fields,
+                    );
+                    continue;
+                }
+
                 if allow_inline_objects && can_inline_object_fields(sub_fields) {
                     let sibling_reserved = reserved_inline_sibling_names(
                         fields,
@@ -1262,6 +1496,67 @@ pub fn collect_tables(root: &Table) -> Vec<&Table> {
     result
 }
 
+fn collapse_passthrough_root(mut root: Table) -> Table {
+    if root.parent_ref.is_some() || root.child_tables.len() != 1 {
+        return root;
+    }
+
+    let mut child = root.child_tables.remove(0);
+    let synthetic_child_prefix = format!("{}_", root.name);
+    if !child.name.starts_with(&synthetic_child_prefix) {
+        root.child_tables.push(child);
+        return root;
+    }
+
+    let Some(refs) = child.parent_ref.clone() else {
+        root.child_tables.push(child);
+        return root;
+    };
+
+    if refs.is_empty() || refs.iter().any(|(_, ref_table, _)| ref_table != &root.name) {
+        root.child_tables.push(child);
+        return root;
+    }
+
+    let fk_cols = refs
+        .iter()
+        .map(|(fk_col, _, _)| fk_col.clone())
+        .collect::<HashSet<_>>();
+
+    let mut merged_columns = Vec::new();
+    let mut seen = HashSet::new();
+
+    for column in &child.columns {
+        if column.primary_key {
+            seen.insert(column.name.clone());
+            merged_columns.push(Column {
+                name: column.name.clone(),
+                pg_type: column.pg_type.clone(),
+                nullable: column.nullable,
+                primary_key: column.primary_key,
+            });
+        }
+    }
+
+    for column in &child.columns {
+        if column.primary_key || fk_cols.contains(&column.name) {
+            continue;
+        }
+        if seen.insert(column.name.clone()) {
+            merged_columns.push(Column {
+                name: column.name.clone(),
+                pg_type: column.pg_type.clone(),
+                nullable: column.nullable,
+                primary_key: false,
+            });
+        }
+    }
+
+    child.columns = merged_columns;
+    child.parent_ref = None;
+    child
+}
+
 fn render_column(col: &Column, inline_primary_key: bool) -> String {
     let rendered_pg_type = if col.pg_type.eq_ignore_ascii_case("VARCHAR(0)") {
         "TEXT"
@@ -1319,6 +1614,25 @@ fn render_table(table: &Table) -> String {
     }
     let body = defs.join(",\n");
     format!("CREATE TABLE {} (\n{}\n);", table.name, body)
+}
+
+fn render_fk_indexes(table: &Table) -> Vec<String> {
+    let Some(refs) = &table.parent_ref else {
+        return Vec::new();
+    };
+
+    let fk_cols: Vec<&str> = refs.iter().map(|(fk_col, _, _)| fk_col.as_str()).collect();
+    if fk_cols.is_empty() {
+        return Vec::new();
+    }
+
+    let index_name = format!("idx_{}_{}", table.name, fk_cols.join("_"));
+    vec![format!(
+        "CREATE INDEX IF NOT EXISTS {} ON {} ({});",
+        sanitize(&index_name),
+        table.name,
+        fk_cols.join(", ")
+    )]
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1387,7 +1701,11 @@ pub fn schema_to_ddl_with_timestamp_fields(
         let tables = collect_tables(&root);
         let ddl = tables
             .iter()
-            .map(|t| render_table(t))
+            .flat_map(|t| {
+                let mut stmts = vec![render_table(t)];
+                stmts.extend(render_fk_indexes(t));
+                stmts
+            })
             .collect::<Vec<_>>()
             .join("\n\n");
         return prepend_schema_preamble(ddl, pg_schema);
@@ -1443,7 +1761,11 @@ pub fn schema_to_ddl_with_timestamp_fields(
                 let tables = collect_tables(&root);
                 let ddl = tables
                     .iter()
-                    .map(|t| render_table(t))
+                    .flat_map(|t| {
+                        let mut stmts = vec![render_table(t)];
+                        stmts.extend(render_fk_indexes(t));
+                        stmts
+                    })
                     .collect::<Vec<_>>()
                     .join("\n\n");
                 return prepend_schema_preamble(ddl, pg_schema);
@@ -1462,13 +1784,18 @@ pub fn schema_to_ddl_with_timestamp_fields(
         timestamp_fields,
     );
 
+    let root = collapse_passthrough_root(root);
     let tables = collect_tables(&root);
 
     // Suppressed debug output: tables and columns count
 
     let ddl = tables
         .iter()
-        .map(|t| render_table(t))
+        .flat_map(|t| {
+            let mut stmts = vec![render_table(t)];
+            stmts.extend(render_fk_indexes(t));
+            stmts
+        })
         .collect::<Vec<_>>()
         .join("\n\n");
     prepend_schema_preamble(ddl, pg_schema)
@@ -1654,6 +1981,61 @@ mod tests {
     }
 
     #[test]
+    fn test_geojson_and_sibling_object_merge_without_location_field_name() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "theaterId": 1000_i32,
+            "venue": {
+                "details": {
+                    "street1": "340 W Market",
+                    "city": "Bloomington",
+                    "state": "MN",
+                    "zipcode": "55425"
+                },
+                "point": {
+                    "type": "Point",
+                    "coordinates": [-93.24565_f64, 44.85466_f64]
+                }
+            }
+        }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "theaters", None);
+
+        assert!(ddl.contains("CREATE TABLE theaters_venue ("));
+        assert!(ddl.contains("street1 "));
+        assert!(ddl.contains("city "));
+        assert!(ddl.contains("state "));
+        assert!(ddl.contains("zipcode "));
+        assert!(ddl.contains("point geometry(Point,4326) NOT NULL"));
+        assert!(!ddl.contains("CREATE TABLE theaters_venue_details ("));
+    }
+
+    #[test]
+    fn test_single_child_root_is_collapsed_into_child_without_fk() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "theaterId": 1000_i32,
+            "venue": {
+                "details": {
+                    "city": "Bloomington"
+                },
+                "point": {
+                    "type": "Point",
+                    "coordinates": [-93.24565_f64, 44.85466_f64]
+                }
+            }
+        }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "theaters", None);
+
+        assert!(!ddl.contains("CREATE TABLE theaters ("));
+        assert!(ddl.contains("CREATE TABLE theaters_venue ("));
+        assert!(!ddl.contains("theaterid INTEGER NOT NULL"));
+        assert!(!ddl.contains("theaters_id"));
+        assert!(!ddl.contains("REFERENCES theaters (id)"));
+    }
+
+    #[test]
     fn test_persisted_varchar_length_drives_ddl() {
         let docs = vec![
             doc! { "_id": 1_i32, "code": "abc" },
@@ -1773,6 +2155,10 @@ mod tests {
             "child table for addr missing"
         );
         assert!(ddl.contains("FOREIGN KEY"), "FK constraint missing");
+        assert!(
+            ddl.contains("CREATE INDEX IF NOT EXISTS idx_addr_orders_id ON addr (orders_id);"),
+            "FK index missing for child table"
+        );
     }
 
     #[test]
@@ -1873,6 +2259,28 @@ mod tests {
     }
 
     #[test]
+    fn test_array_passthrough_object_uses_inner_key_as_table_and_parent_fk() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "competitions": [{
+                "competitor": {
+                    "name": "Acme",
+                    "permalink": "acme"
+                }
+            }]
+        }];
+
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "companies", None);
+
+        assert!(ddl.contains("CREATE TABLE competitor ("));
+        assert!(!ddl.contains("CREATE TABLE competitions ("));
+        assert!(ddl.contains("companies_id UUID NOT NULL"));
+        assert!(ddl.contains("FOREIGN KEY (companies_id) REFERENCES companies (id)"));
+        assert!(!ddl.contains("competitions_id"));
+    }
+
+    #[test]
     fn test_reserved_word_prefixed() {
         let docs = vec![doc! { "_id": 1_i32, "order": "asc", "current_timestamp": 42_i32 }];
         let schema = analyze(&docs);
@@ -1957,7 +2365,7 @@ mod tests {
     }
 
     #[test]
-    fn restores_scalar_only_object_with_siblings_to_child_table() {
+    fn flattens_scalar_only_object_with_siblings_into_array_child_table() {
         let docs = vec![bson::doc! {
             "_id": "project-1",
             "environment": "T",
@@ -1981,10 +2389,40 @@ mod tests {
             schema_to_ddl_with_timestamp_fields(&schema, "projects", None, &["*_date".to_owned()]);
 
         assert!(ddl.contains("CREATE TABLE providers ("));
-        assert!(ddl.contains("CREATE TABLE metadata ("));
         assert!(ddl.contains("providers_id BIGINT NOT NULL"));
         assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
         assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
+        assert!(!ddl.contains("CREATE TABLE metadata ("));
+    }
+
+    #[test]
+    fn flattens_relationships_person_inside_relationships_array_table() {
+        let docs = vec![bson::doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "relationships": [{
+                "is_past": false,
+                "title": "CEO",
+                "person": {
+                    "first_name": "Ada",
+                    "last_name": "Lovelace",
+                    "permalink": "ada-lovelace"
+                }
+            }]
+        }];
+
+        let mut analyzer = crate::analyzer::Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "companies", None);
+
+        assert!(ddl.contains("CREATE TABLE relationships ("));
+        assert!(ddl.contains("first_name VARCHAR(5) NOT NULL"));
+        assert!(ddl.contains("last_name VARCHAR(20) NOT NULL"));
+        assert!(ddl.contains("permalink VARCHAR(20) NOT NULL"));
+        assert!(!ddl.contains("CREATE TABLE relationships_person ("));
     }
 
     #[test]

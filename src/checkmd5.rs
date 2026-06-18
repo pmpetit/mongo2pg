@@ -67,7 +67,9 @@ struct DdlForeignKeyYaml {
 #[derive(Debug, Clone)]
 pub struct Md5ColumnMapping {
     pub source_field: String,
+    pub source_type: Option<String>,
     pub target_field: String,
+    pub target_type: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -163,6 +165,54 @@ fn bson_to_comparable_json(value: &Bson) -> serde_json::Value {
 }
 
 fn canonicalize_json_value(value: &serde_json::Value) -> String {
+    fn canonicalize_json_object(map: &serde_json::Map<String, serde_json::Value>) -> String {
+        format!(
+            "{{{}}}",
+            map.iter()
+                .map(|(key, value)| format!(
+                    "{}: {}",
+                    serde_json::to_string(key)
+                        .expect("serializing canonical JSON object key should succeed"),
+                    canonicalize_json_value(value)
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+
+    fn canonical_geojson_geometry(value: &serde_json::Value) -> Option<serde_json::Value> {
+        let obj = value.as_object()?;
+        let geometry_type = obj.get("type")?.as_str()?;
+        let coordinates = obj.get("coordinates")?.clone();
+
+        // PostgreSQL geometry -> to_json may include CRS metadata and MongoDB
+        // GeoJSON may include extra properties (for example is_location_exact).
+        // For md5 comparison, keep only geometry identity fields.
+        if matches!(
+            geometry_type,
+            "Point"
+                | "LineString"
+                | "Polygon"
+                | "MultiPoint"
+                | "MultiLineString"
+                | "MultiPolygon"
+                | "GeometryCollection"
+        ) {
+            return Some(serde_json::json!({
+                "type": geometry_type,
+                "coordinates": coordinates,
+            }));
+        }
+
+        None
+    }
+
+    if let Some(geometry) = canonical_geojson_geometry(value) {
+        if let serde_json::Value::Object(map) = geometry {
+            return canonicalize_json_object(&map);
+        }
+    }
+
     match value {
         serde_json::Value::Null => "null".to_owned(),
         serde_json::Value::Bool(v) => v.to_string(),
@@ -207,18 +257,7 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        serde_json::Value::Object(map) => format!(
-            "{{{}}}",
-            map.iter()
-                .map(|(key, value)| format!(
-                    "{}: {}",
-                    serde_json::to_string(key)
-                        .expect("serializing canonical JSON object key should succeed"),
-                    canonicalize_json_value(value)
-                ))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        serde_json::Value::Object(map) => canonicalize_json_object(map),
     }
 }
 
@@ -1478,6 +1517,19 @@ async fn collect_hash_records_for_target(
     target: &MappingTarget,
     conf: &crate::util::ConfData,
 ) -> Result<(Vec<Md5ColumnMapping>, Vec<HashRecord>, Vec<HashRecord>)> {
+    let ddl_type_by_target = target
+        .mapping_yaml
+        .pg_mapping
+        .ddl
+        .as_ref()
+        .map(|ddl| {
+            ddl.columns
+                .iter()
+                .map(|column| (column.name.clone(), column.sql_type.clone()))
+                .collect::<std::collections::HashMap<_, _>>()
+        })
+        .unwrap_or_default();
+
     let source_fields: Vec<String> = target
         .mapping_yaml
         .pg_mapping
@@ -1506,7 +1558,12 @@ async fn collect_hash_records_for_target(
         .iter()
         .map(|column| Md5ColumnMapping {
             source_field: column.source_field.clone(),
+            source_type: column.data_type.clone(),
             target_field: column.target_field.clone(),
+            target_type: ddl_type_by_target
+                .get(&column.target_field)
+                .cloned()
+                .or_else(|| column.data_type.clone()),
         })
         .collect::<Vec<_>>();
     if source_fields.is_empty() {
@@ -1824,6 +1881,17 @@ pg_mapping:
     #[test]
     fn normalize_json_literal_preserves_json_strings() {
         assert_eq!(normalize_json_literal("\"647.0\""), "\"647.0\"");
+    }
+
+    #[test]
+    fn normalize_json_literal_canonicalizes_geojson_geometry_fields() {
+        let mongodb_geo = r#"{"type": "Point", "coordinates": [151.12236, -33.88839], "is_location_exact": false}"#;
+        let postgres_geo = r#"{"type": "Point", "crs": {"type": "name", "properties": {"name": "EPSG:4326"}}, "coordinates": [151.12236, -33.88839]}"#;
+
+        assert_eq!(
+            normalize_json_literal(mongodb_geo),
+            normalize_json_literal(postgres_geo)
+        );
     }
 
     #[test]

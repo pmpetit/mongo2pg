@@ -1,6 +1,0 @@
-Documents in collection : 4
-Documents sampled       : 4
-Width (top-level / max)  : 5 / 5.0 (L1)
-Depth (max nesting)     : 2
-Branch (per level)      : L1:5.0  L2:1.0
-Top-level types         : _id:ObjectId, createdAt:Date, invoiceId:ObjectId, items:Array, userId:ObjectId

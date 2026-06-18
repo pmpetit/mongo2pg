@@ -1,9 +1,0 @@
-Documents in collection : 4
-Documents sampled       : 4
-Width (top-level / max)  : 9 / 26.0 (L3)
-Depth (max nesting)     : 4
-Branch (per level)      : L1:9.0  L2:7.0  L3:26.0  L4:3.0
-Avg fields / doc        : 9.0000
-Distinct fields / avg    : 1.0000
-Migrability score       : 5.00
-Top-level types         : _id:ObjectId, createdAt:String, items:Array, metadata:Object, orderId:ObjectId, recommendations:Array, status:String, totalAmount:Number, userId:ObjectId

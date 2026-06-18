@@ -6,13 +6,12 @@ vars:
   BIN: "{{.ROOT_DIR}}/target/debug/mongo2pg"
   DATABASES: >-
     sample_airbnb
-    sample_analytics
-    sample_geospatial
-    sample_mflix
-    sample_supplies
-    sample_training
-    sample_weatherdata
-    retail
+    # sample_analytics
+    # sample_geospatial
+    # sample_mflix
+    # sample_supplies
+    # sample_training
+    # sample_weatherdata
 
 tasks:
   build:
@@ -76,3 +75,28 @@ tasks:
         echo "📐 infer {{.DB}}"
         "{{.BIN}}" infer --source-uri "{{.URI}}" -c "{{.OUT}}/{{.DB}}/config/{{.DB}}.toml" --jsonb --no-output 2>/dev/null
 
+  tests-all:
+    desc: Infer/export/Import for all sample databases
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "{{.RESULTS_DIR}}"
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - |
+        for db in {{.DATABASES}}
+        do
+          echo "🗑️  database $db"
+          psql -U myuser -d mydb -h localhost -c "DROP DATABASE IF EXISTS $db"
+          echo "📁  init $db"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
+          echo "⚙️  config $db"
+          cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
+          echo "📐 infer $db"
+          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output
+          echo "🍃 ➡️ 📄 export $db"
+          "{{.BIN}}" export -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db
+          echo "📄 ➡️ 🐘 import $db"
+          "{{.BIN}}" import -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db
+        done
+      - echo "👉 results in {{.OUT}}"

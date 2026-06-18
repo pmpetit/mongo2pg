@@ -1,6 +1,0 @@
-Documents in collection : 1746
-Documents sampled       : 1000
-Width (top-level / max)  : 4 / 4.0 (L1)
-Depth (max nesting)     : 2
-Branch (per level)      : L1:4.0  L2:1.0
-Top-level types         : _id:ObjectId, account_id:Number, limit:Number, products:Array

@@ -171,7 +171,9 @@ pub struct PostImportTableRow {
 #[derive(Clone)]
 pub struct PostImportMd5Column {
     pub source_field: String,
+    pub source_type: Option<String>,
     pub target_field: String,
+    pub target_type: Option<String>,
 }
 
 #[derive(Clone)]
@@ -887,9 +889,23 @@ pub fn render_post_import_html(
       .columns
       .iter()
       .map(|column| {
+        let source_label = column
+          .source_type
+          .as_deref()
+          .filter(|value| !value.trim().is_empty())
+          .map(|value| format!("mongodb ({})", escape_html(value)))
+          .unwrap_or_else(|| "mongodb".to_owned());
+        let target_label = column
+          .target_type
+          .as_deref()
+          .filter(|value| !value.trim().is_empty())
+          .map(|value| format!("pg ({})", escape_html(value)))
+          .unwrap_or_else(|| "pg".to_owned());
         format!(
-          r#"<li><span class="md5-source">{}</span><span class="md5-arrow"> -> </span><span class="md5-target">{}</span></li>"#,
+          r#"<li><span class="md5-source-label">{}</span>: <span class="md5-source">{}</span><span class="md5-arrow"> -> </span><span class="md5-target-label">{}</span>: <span class="md5-target">{}</span></li>"#,
+          source_label,
           escape_html(&column.source_field),
+          target_label,
           escape_html(&column.target_field),
         )
       })
@@ -1268,6 +1284,8 @@ pub fn render_post_import_html(
     .md5-columns-label {{ margin-top: 0.45rem; font-weight: 700; color: #1f3a5f; }}
     .md5-columns {{ margin: 0.35rem 0 0; padding-left: 1.2rem; }}
     .md5-columns li {{ margin: 0.15rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    .md5-source-label {{ color: #5b21b6; font-weight: 700; }}
+    .md5-target-label {{ color: #1d4ed8; font-weight: 700; }}
     .md5-source {{ color: #7c3aed; }}
     .md5-target {{ color: #2471a3; }}
     .md5-arrow {{ color: #7f8c8d; }}
@@ -1691,7 +1709,9 @@ mod tests {
                         pg_md5: "abc123".to_owned(),
                         columns: vec![PostImportMd5Column {
                             source_field: "last_update".to_owned(),
+                            source_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                             target_field: "last_update".to_owned(),
+                            target_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                         }],
                         mismatches: Vec::new(),
                     }),
@@ -1707,6 +1727,8 @@ mod tests {
         assert!(html.contains("<details class=\"md5-detail is-match\">"));
         assert!(html.contains("Columns involved"));
         assert!(html.contains("last_update"));
+        assert!(html.contains("mongodb (TIMESTAMP WITH TIME ZONE)"));
+        assert!(html.contains("pg (TIMESTAMP WITH TIME ZONE)"));
         assert!(html.contains("abc123"));
     }
 
@@ -1727,7 +1749,9 @@ mod tests {
                         pg_md5: "pg-md5".to_owned(),
                         columns: vec![PostImportMd5Column {
                             source_field: "monthly_gain".to_owned(),
+                            source_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                             target_field: "monthly_gain".to_owned(),
+                            target_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                         }],
                         mismatches: vec![PostImportMd5MismatchRow {
                             row_index: 1,
@@ -1776,7 +1800,7 @@ mod tests {
             "pg-host",
         );
 
-        assert!(html.contains("count (1)"));
+        assert!(html.contains("delta "));
         assert!(html.contains("First 5 differences by mapped row values"));
         assert!(html.contains("missing row"));
     }

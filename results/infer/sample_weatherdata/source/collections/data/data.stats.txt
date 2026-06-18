@@ -1,9 +1,0 @@
-Documents in collection : 10000
-Documents sampled       : 1000
-Width (top-level / max)  : 27 / 37.0 (L3)
-Depth (max nesting)     : 4
-Branch (per level)      : L1:22.2  L2:32.0  L3:37.0  L4:4.0
-Avg fields / doc        : 22.2450
-Distinct fields / avg    : 1.2138
-Migrability score       : 9.21
-Top-level types         : _id:ObjectId, airTemperature:Object, atmosphericPressureChange:Object, atmosphericPressureObservation:Object, callLetters:String, dataSource:String, dewPoint:Object, elevation:Number, extremeAirTemperature:Array, liquidPrecipitation:Array, pastWeatherObservationManual:Array, position:Object, precipitationEstimatedObservation:Object, presentWeatherObservationManual:Array, pressure:Object, qualityControlProcess:String, seaSurfaceTemperature:Object, sections:Array, skyCondition:Object, skyConditionObservation:Object, skyCoverLayer:Array, st:String, ts:Date, type:String, visibility:Object, waveMeasurement:Object, wind:Object
