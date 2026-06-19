@@ -670,7 +670,7 @@ pub fn is_pg_reserved(s: &str) -> bool {
 
 /// Convert a MongoDB field name to a valid, lowercase PostgreSQL identifier.
 /// Non-ASCII-alphanumeric characters are replaced with `_`. Names that start
-/// with a digit or clash with a PostgreSQL reserved word are prefixed with `_`.
+/// with a digit are prefixed with `_`.
 pub fn sanitize(name: &str) -> String {
     let s: String = name
         .to_lowercase()
@@ -683,7 +683,7 @@ pub fn sanitize(name: &str) -> String {
             }
         })
         .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+    if s.starts_with(|c: char| c.is_ascii_digit()) {
         format!("_{s}")
     } else {
         s

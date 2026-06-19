@@ -228,6 +228,99 @@ fn is_uuid_col_type(col_type: &str) -> bool {
     col_type.trim().to_ascii_uppercase().starts_with("UUID")
 }
 
+fn is_geometry_col_type(col_type: &str) -> bool {
+    col_type
+        .trim()
+        .to_ascii_lowercase()
+        .starts_with("geometry")
+}
+
+fn bson_number_to_f64(value: &Bson) -> Option<f64> {
+    match value {
+        Bson::Double(v) => Some(*v),
+        Bson::Int32(v) => Some(*v as f64),
+        Bson::Int64(v) => Some(*v as f64),
+        Bson::Decimal128(v) => v.to_string().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn geojson_point_coordinates_from_bson(value: &Bson) -> Option<(f64, f64)> {
+    match value {
+        Bson::String(raw) => {
+            let parsed: serde_json::Value = serde_json::from_str(raw).ok()?;
+            let obj = parsed.as_object()?;
+            let point_type = obj.get("type")?.as_str()?;
+            if !point_type.eq_ignore_ascii_case("point") {
+                return None;
+            }
+            let coords = obj.get("coordinates")?.as_array()?;
+            if coords.len() != 2 {
+                return None;
+            }
+            let lon = coords[0].as_f64()?;
+            let lat = coords[1].as_f64()?;
+            Some((lon, lat))
+        }
+        Bson::Document(doc) => {
+            let point_type = doc.get_str("type").ok()?;
+            if !point_type.eq_ignore_ascii_case("point") {
+                return None;
+            }
+            let coords = doc.get_array("coordinates").ok()?;
+            if coords.len() != 2 {
+                return None;
+            }
+            let lon = bson_number_to_f64(&coords[0])?;
+            let lat = bson_number_to_f64(&coords[1])?;
+            Some((lon, lat))
+        }
+        _ => None,
+    }
+}
+
+fn bson_to_geometry_ewkt(val: &Bson) -> Option<String> {
+    match val {
+        Bson::Null | Bson::Undefined => None,
+        Bson::String(text) => {
+            if let Some((lon, lat)) = geojson_point_coordinates_from_bson(val) {
+                return Some(format!("SRID=4326;POINT({lon} {lat})"));
+            }
+
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_owned())
+            }
+        }
+        Bson::Document(_) => geojson_point_coordinates_from_bson(val)
+            .map(|(lon, lat)| format!("SRID=4326;POINT({lon} {lat})")),
+        other => bson_to_string(other),
+    }
+}
+
+fn serialize_column_value(
+    jsonb_cols: &HashSet<String>,
+    timestamp_cols: &HashSet<String>,
+    uuid_cols: &HashSet<String>,
+    geometry_cols: &HashSet<String>,
+    col: &str,
+    value: &Bson,
+) -> Option<String> {
+    if jsonb_cols.contains(col) {
+        Some(serde_json::to_string(&bson_to_json_value(value)).unwrap_or_default())
+    } else if timestamp_cols.contains(col) {
+        bson_to_timestamp_string(value)
+    } else if uuid_cols.contains(col) {
+        bson_to_uuid_string(value)
+    } else if geometry_cols.contains(col) {
+        bson_to_geometry_ewkt(value)
+    } else {
+        bson_to_string(value)
+    }
+}
+
 /// Format a Unix-millisecond timestamp as a PostgreSQL-ingestible UTC datetime.
 fn format_millis(ms: i64) -> String {
     DateTime::<Utc>::from_timestamp_millis(ms)
@@ -251,6 +344,14 @@ fn csv_cell_text(cell: Option<&str>) -> String {
     match cell {
         Some(text) => csv_escape(text),
         None => String::new(),
+    }
+}
+
+fn unquote_sql_ident(ident: &str) -> String {
+    if ident.len() >= 2 && ident.starts_with('"') && ident.ends_with('"') {
+        ident[1..ident.len() - 1].replace("\"\"", "\"")
+    } else {
+        ident.to_owned()
     }
 }
 
@@ -308,6 +409,8 @@ struct TableNode {
     timestamp_cols: HashSet<String>,
     /// Columns whose SQL type is UUID and should receive ObjectId->UUID conversion.
     uuid_cols: HashSet<String>,
+    /// Columns whose SQL type is geometry and should be exported as EWKT text.
+    geometry_cols: HashSet<String>,
     /// For a promoted root array-of-objects table, the MongoDB array field to iterate.
     root_array_field: Option<String>,
     /// For a promoted root array-of-objects table, the root `_id` column stored on each row.
@@ -457,12 +560,19 @@ fn build_node(
         .columns
         .iter()
         .filter(|c| c.primary_key)
-        .map(|c| c.name.clone())
+        .map(|c| unquote_sql_ident(&c.name))
         .collect();
 
-    let fk_col = sql_t.foreign_keys.first().map(|fk| fk.from_col.clone());
+    let fk_col = sql_t
+        .foreign_keys
+        .first()
+        .map(|fk| unquote_sql_ident(&fk.from_col));
 
-    let columns: Vec<String> = sql_t.columns.iter().map(|c| c.name.clone()).collect();
+    let columns: Vec<String> = sql_t
+        .columns
+        .iter()
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
 
     // A scalar-array child has exactly: pk, fk, value  (3 columns total)
     let is_scalar_array =
@@ -472,19 +582,25 @@ fn build_node(
         .columns
         .iter()
         .filter(|c| c.col_type.eq_ignore_ascii_case("JSONB"))
-        .map(|c| c.name.clone())
+        .map(|c| unquote_sql_ident(&c.name))
         .collect();
     let timestamp_cols: HashSet<String> = sql_t
         .columns
         .iter()
         .filter(|c| is_timestamp_col_type(&c.col_type))
-        .map(|c| c.name.clone())
+        .map(|c| unquote_sql_ident(&c.name))
         .collect();
     let uuid_cols: HashSet<String> = sql_t
         .columns
         .iter()
         .filter(|c| is_uuid_col_type(&c.col_type))
-        .map(|c| c.name.clone())
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
+    let geometry_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| is_geometry_col_type(&c.col_type))
+        .map(|c| unquote_sql_ident(&c.name))
         .collect();
 
     let children: Vec<TableNode> = children_of
@@ -533,6 +649,7 @@ fn build_node(
         jsonb_cols,
         timestamp_cols,
         uuid_cols,
+        geometry_cols,
         root_array_field,
         root_parent_id_col,
         children,
@@ -620,7 +737,10 @@ fn extract_child_document_rows(
         })
         .peekable();
 
+    let has_map_key_column = child.columns.iter().any(|col| col == "key");
+
     let looks_like_map_document = child.fk_col.is_some()
+        && has_map_key_column
         && non_system_columns.peek().is_some()
         && !child_doc.is_empty()
         && child_doc
@@ -662,18 +782,16 @@ fn extract_child_document_rows(
                     Some(map_key.clone())
                 } else {
                     find_mongo_field(item_doc, col)
-                        .map(|v| {
-                            if child.jsonb_cols.contains(col) {
-                                Some(serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default())
-                            } else if child.timestamp_cols.contains(col) {
-                                bson_to_timestamp_string(v)
-                            } else if child.uuid_cols.contains(col) {
-                                bson_to_uuid_string(v)
-                            } else {
-                                bson_to_string(v)
-                            }
+                        .and_then(|v| {
+                            serialize_column_value(
+                                &child.jsonb_cols,
+                                &child.timestamp_cols,
+                                &child.uuid_cols,
+                                &child.geometry_cols,
+                                col,
+                                v,
+                            )
                         })
-                        .unwrap_or(None)
                 }
             })
             .collect();
@@ -706,11 +824,14 @@ fn extract_child_document_rows(
                                     } else if Some(col) == grandchild.fk_col.as_ref() {
                                         Some(child_id.clone())
                                     } else if col == "value" {
-                                        if grandchild.timestamp_cols.contains(col) {
-                                            bson_to_timestamp_string(item)
-                                        } else {
-                                            bson_to_string(item)
-                                        }
+                                        serialize_column_value(
+                                            &grandchild.jsonb_cols,
+                                            &grandchild.timestamp_cols,
+                                            &grandchild.uuid_cols,
+                                            &grandchild.geometry_cols,
+                                            col,
+                                            item,
+                                        )
                                     } else {
                                         None
                                     }
@@ -842,21 +963,16 @@ fn extract_rows(
                                     Some(grouped_field.clone())
                                 } else {
                                     find_mongo_field(item_doc, col)
-                                        .map(|v| {
-                                            if node.jsonb_cols.contains(col) {
-                                                Some(
-                                                    serde_json::to_string(&bson_to_json_value(v))
-                                                        .unwrap_or_default(),
-                                                )
-                                            } else if node.timestamp_cols.contains(col) {
-                                                bson_to_timestamp_string(v)
-                                            } else if node.uuid_cols.contains(col) {
-                                                bson_to_uuid_string(v)
-                                            } else {
-                                                bson_to_string(v)
-                                            }
+                                        .and_then(|v| {
+                                            serialize_column_value(
+                                                &node.jsonb_cols,
+                                                &node.timestamp_cols,
+                                                &node.uuid_cols,
+                                                &node.geometry_cols,
+                                                col,
+                                                v,
+                                            )
                                         })
-                                        .unwrap_or(None)
                                 }
                             })
                             .collect();
@@ -884,11 +1000,14 @@ fn extract_rows(
                                                     } else if Some(col) == child.fk_col.as_ref() {
                                                         Some(my_id.clone())
                                                     } else if col == "value" {
-                                                        if child.timestamp_cols.contains(col) {
-                                                            bson_to_timestamp_string(child_item)
-                                                        } else {
-                                                            bson_to_string(child_item)
-                                                        }
+                                                        serialize_column_value(
+                                                            &child.jsonb_cols,
+                                                            &child.timestamp_cols,
+                                                            &child.uuid_cols,
+                                                            &child.geometry_cols,
+                                                            col,
+                                                            child_item,
+                                                        )
                                                     } else {
                                                         None
                                                     }
@@ -963,21 +1082,16 @@ fn extract_rows(
                                 Some(parent_source_id.clone())
                             } else {
                                 find_mongo_field(item_doc, col)
-                                    .map(|v| {
-                                        if node.jsonb_cols.contains(col) {
-                                            Some(
-                                                serde_json::to_string(&bson_to_json_value(v))
-                                                    .unwrap_or_default(),
-                                            )
-                                        } else if node.timestamp_cols.contains(col) {
-                                            bson_to_timestamp_string(v)
-                                        } else if node.uuid_cols.contains(col) {
-                                            bson_to_uuid_string(v)
-                                        } else {
-                                            bson_to_string(v)
-                                        }
+                                    .and_then(|v| {
+                                        serialize_column_value(
+                                            &node.jsonb_cols,
+                                            &node.timestamp_cols,
+                                            &node.uuid_cols,
+                                            &node.geometry_cols,
+                                            col,
+                                            v,
+                                        )
                                     })
-                                    .unwrap_or(None)
                             }
                         })
                         .collect();
@@ -1004,11 +1118,14 @@ fn extract_rows(
                                                 } else if Some(col) == child.fk_col.as_ref() {
                                                     Some(my_id.clone())
                                                 } else if col == "value" {
-                                                    if child.timestamp_cols.contains(col) {
-                                                        bson_to_timestamp_string(child_item)
-                                                    } else {
-                                                        bson_to_string(child_item)
-                                                    }
+                                                    serialize_column_value(
+                                                        &child.jsonb_cols,
+                                                        &child.timestamp_cols,
+                                                        &child.uuid_cols,
+                                                        &child.geometry_cols,
+                                                        col,
+                                                        child_item,
+                                                    )
                                                 } else {
                                                     None
                                                 }
@@ -1071,21 +1188,16 @@ fn extract_rows(
                             Some(entry_key.to_owned())
                         } else {
                             find_mongo_field(entry_doc, col)
-                                .map(|v| {
-                                    if node.jsonb_cols.contains(col) {
-                                        Some(
-                                            serde_json::to_string(&bson_to_json_value(v))
-                                                .unwrap_or_default(),
-                                        )
-                                    } else if node.timestamp_cols.contains(col) {
-                                        bson_to_timestamp_string(v)
-                                    } else if node.uuid_cols.contains(col) {
-                                        bson_to_uuid_string(v)
-                                    } else {
-                                        bson_to_string(v)
-                                    }
+                                .and_then(|v| {
+                                    serialize_column_value(
+                                        &node.jsonb_cols,
+                                        &node.timestamp_cols,
+                                        &node.uuid_cols,
+                                        &node.geometry_cols,
+                                        col,
+                                        v,
+                                    )
                                 })
-                                .unwrap_or(None)
                         }
                     })
                     .collect();
@@ -1115,11 +1227,14 @@ fn extract_rows(
                                             } else if Some(col) == child.fk_col.as_ref() {
                                                 Some(child_id.clone())
                                             } else if col == "value" {
-                                                if child.timestamp_cols.contains(col) {
-                                                    bson_to_timestamp_string(item)
-                                                } else {
-                                                    bson_to_string(item)
-                                                }
+                                                serialize_column_value(
+                                                    &child.jsonb_cols,
+                                                    &child.timestamp_cols,
+                                                    &child.uuid_cols,
+                                                    &child.geometry_cols,
+                                                    col,
+                                                    item,
+                                                )
                                             } else {
                                                 None
                                             }
@@ -1192,18 +1307,16 @@ fn extract_rows(
                     find_mongo_field(doc, col)
                 };
                 lookup
-                    .map(|v| {
-                        if node.jsonb_cols.contains(col) {
-                            Some(serde_json::to_string(&bson_to_json_value(v)).unwrap_or_default())
-                        } else if node.timestamp_cols.contains(col) {
-                            bson_to_timestamp_string(v)
-                        } else if node.uuid_cols.contains(col) {
-                            bson_to_uuid_string(v)
-                        } else {
-                            bson_to_string(v)
-                        }
+                    .and_then(|v| {
+                        serialize_column_value(
+                            &node.jsonb_cols,
+                            &node.timestamp_cols,
+                            &node.uuid_cols,
+                            &node.geometry_cols,
+                            col,
+                            v,
+                        )
                     })
-                    .unwrap_or(None)
             }
         })
         .collect();
@@ -1242,23 +1355,16 @@ fn extract_rows(
                                         Some(grouped_field.clone())
                                     } else {
                                         find_mongo_field(item_doc, col)
-                                            .map(|v| {
-                                                if child.jsonb_cols.contains(col) {
-                                                    Some(
-                                                        serde_json::to_string(&bson_to_json_value(
-                                                            v,
-                                                        ))
-                                                        .unwrap_or_default(),
-                                                    )
-                                                } else if child.timestamp_cols.contains(col) {
-                                                    bson_to_timestamp_string(v)
-                                                } else if child.uuid_cols.contains(col) {
-                                                    bson_to_uuid_string(v)
-                                                } else {
-                                                    bson_to_string(v)
-                                                }
+                                            .and_then(|v| {
+                                                serialize_column_value(
+                                                    &child.jsonb_cols,
+                                                    &child.timestamp_cols,
+                                                    &child.uuid_cols,
+                                                    &child.geometry_cols,
+                                                    col,
+                                                    v,
+                                                )
                                             })
-                                            .unwrap_or(None)
                                     }
                                 })
                                 .collect();
@@ -1295,14 +1401,14 @@ fn extract_rows(
                                                             {
                                                                 Some(child_id.clone())
                                                             } else if col == "value" {
-                                                                if grandchild
-                                                                    .timestamp_cols
-                                                                    .contains(col)
-                                                                {
-                                                                    bson_to_timestamp_string(item)
-                                                                } else {
-                                                                    bson_to_string(item)
-                                                                }
+                                                                serialize_column_value(
+                                                                    &grandchild.jsonb_cols,
+                                                                    &grandchild.timestamp_cols,
+                                                                    &grandchild.uuid_cols,
+                                                                    &grandchild.geometry_cols,
+                                                                    col,
+                                                                    item,
+                                                                )
                                                             } else {
                                                                 None
                                                             }
@@ -1369,11 +1475,14 @@ fn extract_rows(
                                 } else if Some(col) == child.fk_col.as_ref() {
                                     Some(my_id.clone())
                                 } else if col == "value" {
-                                    if child.timestamp_cols.contains(col) {
-                                        bson_to_timestamp_string(item)
-                                    } else {
-                                        bson_to_string(item)
-                                    }
+                                    serialize_column_value(
+                                        &child.jsonb_cols,
+                                        &child.timestamp_cols,
+                                        &child.uuid_cols,
+                                        &child.geometry_cols,
+                                        col,
+                                        item,
+                                    )
                                 } else {
                                     None
                                 }
@@ -1493,7 +1602,11 @@ pub async fn export_collection(
         .with_context(|| format!("Cannot create {}", out_dir.display()))?;
 
     for sql_t in &sql_tables {
-        let columns: Vec<String> = sql_t.columns.iter().map(|c| c.name.clone()).collect();
+        // let columns: Vec<String> = sql_t
+        //     .columns
+        //     .iter()
+        //     .map(|c| unquote_sql_ident(&c.name))
+        //     .collect();
         let rows = all_rows.get(&sql_t.name).cloned().unwrap_or_default();
 
         let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
@@ -1502,7 +1615,8 @@ pub async fn export_collection(
         let mut gz = GzEncoder::new(file, Compression::default());
 
         // Header row
-        let header: Vec<String> = columns.iter().map(|c| csv_escape(c)).collect();
+        //let header: Vec<String> = columns.iter().map(|c| csv_escape(c)).collect();
+        let header: Vec<String> = sql_t.columns.iter().map(|c| if c.name.starts_with('"') && c.name.ends_with('"') { format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\"")) } else { csv_escape(&unquote_sql_ident(&c.name)) }).collect();
         writeln!(gz, "{}", header.join(","))
             .with_context(|| format!("Write error for {}", csv_path.display()))?;
 
@@ -1524,7 +1638,7 @@ pub async fn export_collection(
 mod tests {
     use super::{
         build_tree, build_tree_with_grouped_root, extract_rows, flattened_grouped_root_for_export,
-        flattened_root_for_export, grouped_root_table_sources,
+        flattened_root_for_export, grouped_root_table_sources, unquote_sql_ident,
     };
     use crate::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
@@ -1763,6 +1877,106 @@ CREATE TABLE scheduling_jobs (
         let rows = all_rows.get("scheduling_jobs").expect("root rows missing");
         assert_eq!(rows[0][0].as_deref(), Some("job-1"));
         assert_eq!(rows[0][1].as_deref(), Some("2022-04-20 15:28:25.273+00:00"));
+    }
+
+    #[test]
+    fn export_geometry_columns_write_ewkt_from_geojson_point() {
+        let sql = r#"
+CREATE TABLE places (
+    id TEXT PRIMARY KEY,
+    geo geometry(Point,4326) NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": "place-1",
+            "geo": {
+                "type": "Point",
+                "coordinates": [2.3522_f64, 48.8566_f64]
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("places").expect("root rows missing");
+        assert_eq!(rows[0][0].as_deref(), Some("place-1"));
+        assert_eq!(rows[0][1].as_deref(), Some("SRID=4326;POINT(2.3522 48.8566)"));
+    }
+
+    #[test]
+    fn export_embedded_location_with_address_and_geo_is_not_treated_as_map_document() {
+        let sql = r#"
+CREATE TABLE theaters (
+    id UUID PRIMARY KEY,
+    theaterid INTEGER NOT NULL
+);
+
+CREATE TABLE theaters_location (
+    id BIGSERIAL PRIMARY KEY,
+    theaters_id UUID NOT NULL,
+    city VARCHAR(20) NOT NULL,
+    state VARCHAR(2) NOT NULL,
+    street1 TEXT NOT NULL,
+    street2 VARCHAR(20),
+    zipcode VARCHAR(20) NOT NULL,
+    geo geometry(Point,4326) NOT NULL,
+    FOREIGN KEY (theaters_id) REFERENCES theaters (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("59a47286cfa9a3a73e51e72d").unwrap(),
+            "theaterId": 1001,
+            "location": {
+                "address": {
+                    "city": "California",
+                    "state": "MD",
+                    "street1": "45235 Worth Ave.",
+                    "zipcode": "20619"
+                },
+                "geo": {
+                    "type": "Point",
+                    "coordinates": [-76.512345_f64, 38.123456_f64]
+                }
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows
+            .get("theaters_location")
+            .expect("theaters_location rows missing");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][2].as_deref(), Some("California"));
+        assert_eq!(rows[0][3].as_deref(), Some("MD"));
+        assert_eq!(rows[0][4].as_deref(), Some("45235 Worth Ave."));
+        assert_eq!(rows[0][6].as_deref(), Some("20619"));
+        assert_eq!(
+            rows[0][7].as_deref(),
+            Some("SRID=4326;POINT(-76.512345 38.123456)")
+        );
     }
 
     #[test]
@@ -2228,5 +2442,42 @@ CREATE TABLE host (
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0][0].as_deref(), Some("10021707"));
         assert_eq!(rows[0][1].as_deref(), Some("{email,phone,reviews,kba}"));
+    }
+
+    #[test]
+    fn export_unquotes_reserved_identifier_columns() {
+        let sql = r#"
+CREATE TABLE accounts (
+    id UUID PRIMARY KEY,
+    "limit" INTEGER,
+    products TEXT[] NOT NULL
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("5ca4bbc7a2dd94ee5816238c").unwrap(),
+            "limit": 371138,
+            "products": ["Derivatives", "InvestmentStock"]
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        assert_eq!(unquote_sql_ident("\"limit\""), "limit");
+        assert!(roots[0].columns.iter().any(|column| column == "limit"));
+
+        let rows = all_rows.get("accounts").expect("accounts rows missing");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0][1].as_deref(), Some("371138"));
     }
 }

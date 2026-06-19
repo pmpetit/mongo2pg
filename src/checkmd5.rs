@@ -3,7 +3,7 @@ use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_pg_reserved, read_conf, scalar_type_family,
+    inline_object_leaf_fields_with_prefix, read_conf, scalar_type_family,
 };
 use anyhow::{anyhow, Context, Result};
 use bson::{doc, Bson, Document};
@@ -112,6 +112,15 @@ struct SourcePath {
 struct HashRecord {
     md5: String,
     values: Vec<String>,
+}
+
+fn comparable_md5_columns(columns: &[MappingColumnYaml]) -> Vec<&MappingColumnYaml> {
+    columns
+        .iter()
+        .filter(|column| {
+            !column.source_field.trim().is_empty() && !column.target_field.trim().is_empty()
+        })
+        .collect()
 }
 
 fn md5_hex_from_fragments<I, S>(fragments: I) -> String
@@ -516,7 +525,7 @@ fn sanitize_pg_name(name: &str) -> String {
             }
         })
         .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+    if s.starts_with(|c: char| c.is_ascii_digit()) {
         format!("_{s}")
     } else {
         s
@@ -1530,31 +1539,20 @@ async fn collect_hash_records_for_target(
         })
         .unwrap_or_default();
 
-    let source_fields: Vec<String> = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
+    let md5_columns = comparable_md5_columns(&target.mapping_yaml.pg_mapping.columns);
+    let source_fields: Vec<String> = md5_columns
         .iter()
         .map(|c| c.source_field.clone())
         .collect();
-    let typed_source_fields: Vec<(String, Option<String>)> = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
+    let typed_source_fields: Vec<(String, Option<String>)> = md5_columns
         .iter()
         .map(|c| (c.source_field.clone(), c.data_type.clone()))
         .collect();
-    let target_fields: Vec<String> = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
+    let target_fields: Vec<String> = md5_columns
         .iter()
         .map(|c| c.target_field.clone())
         .collect();
-    let columns = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
+    let columns = md5_columns
         .iter()
         .map(|column| Md5ColumnMapping {
             source_field: column.source_field.clone(),
@@ -1660,6 +1658,9 @@ pub async fn compute_md5_summaries_for_collection(
     let mut summaries = Vec::new();
 
     for target in targets {
+        if comparable_md5_columns(&target.mapping_yaml.pg_mapping.columns).is_empty() {
+            continue;
+        }
         let table_name = target.mapping_yaml.pg_mapping.table_name.clone();
         let (columns, mongo_records, pg_records) =
             collect_hash_records_for_target(&target, &conf).await?;
@@ -1694,6 +1695,9 @@ pub async fn run_check_md5(
     let total_tables = targets.len();
 
     for (index, target) in targets.iter().enumerate() {
+        if comparable_md5_columns(&target.mapping_yaml.pg_mapping.columns).is_empty() {
+            continue;
+        }
         if index > 0 {
             println!();
         }
@@ -1726,13 +1730,48 @@ pub async fn run_check_md5(
 mod tests {
     use super::{
         aggregate_md5_hexes, backfill_mapping_columns_from_schema, build_mapping_source_paths,
-        collect_mismatched_record_samples, drop_incompatible_columns, extract_source_documents,
-        format_record_values, md5_hex_from_fragments, mongo_field_literal,
+        collect_mismatched_record_samples, comparable_md5_columns, drop_incompatible_columns,
+        extract_source_documents, format_record_values, md5_hex_from_fragments, mongo_field_literal,
         mongo_field_literal_for_type, mongo_hash_record, mongo_sort_doc, normalize_json_literal,
         pg_select_query, HashRecord, MappingYaml, SourcePath,
     };
     use crate::analyzer::Analyzer;
     use bson::{doc, Bson};
+
+        #[test]
+        fn comparable_md5_columns_skips_blank_fields() {
+                let mapping_yaml: MappingYaml = serde_yaml::from_str(
+                        r#"
+pg_mapping:
+    table_name: weather
+    columns:
+        - { source_field: "", target_field: pressure }
+        - { source_field: pressure, target_field: "" }
+        - { source_field: pressure, target_field: pressure }
+"#,
+                )
+                .expect("mapping yaml should parse");
+
+                let columns = comparable_md5_columns(&mapping_yaml.pg_mapping.columns);
+                assert_eq!(columns.len(), 1);
+                assert_eq!(columns[0].source_field, "pressure");
+                assert_eq!(columns[0].target_field, "pressure");
+        }
+
+        #[test]
+        fn comparable_md5_columns_empty_when_no_source_target_pairs() {
+                let mapping_yaml: MappingYaml = serde_yaml::from_str(
+                        r#"
+pg_mapping:
+    table_name: weather
+    columns: []
+"#,
+                )
+                .expect("mapping yaml should parse");
+
+                let columns = comparable_md5_columns(&mapping_yaml.pg_mapping.columns);
+                assert!(columns.is_empty());
+        }
 
     #[test]
     fn backfill_mapping_columns_recovers_legacy_root_jsonb_mapping() {

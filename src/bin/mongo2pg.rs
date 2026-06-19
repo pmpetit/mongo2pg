@@ -404,6 +404,19 @@ struct KafkaImportArgs {
     /// project.project_dir in the config file before running.
     #[arg(long = "project-dir")]
     project_dir: Option<String>,
+
+    #[arg(long = "group-id")]
+    group_id: Option<String>,
+
+    #[arg(long = "topic-prefix")]
+    topic_prefix: Option<String>,
+
+    #[arg(long = "database-name")]
+    database_name: Option<String>,
+
+    #[arg(long = "schema-name")]
+    schema_name: Option<String>,    
+
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -589,6 +602,8 @@ struct ConfigOverrides {
     kafka_topics: Option<Vec<String>>,
     kafka_max_messages: Option<usize>,
     kafka_offset: Option<String>,
+    kafka_group_id: Option<String>,
+    kafka_topic_prefix: Option<String>,
 }
 
 fn ensure_toml_table<'a>(
@@ -624,7 +639,9 @@ fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> Resu
         || overrides.target_schema_name.is_some()
         || overrides.kafka_topics.is_some()
         || overrides.kafka_max_messages.is_some()
-        || overrides.kafka_offset.is_some();
+        || overrides.kafka_offset.is_some()
+        || overrides.kafka_group_id.is_some()
+        || overrides.kafka_topic_prefix.is_some();
 
     if !has_overrides {
         return Ok(());
@@ -673,6 +690,14 @@ fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> Resu
 
     {
         let kafka = ensure_toml_table(&mut doc, "kafka")?;
+
+        if let Some(v) = &overrides.kafka_group_id { 
+            kafka.insert("group_id".to_owned(), TomlValue::String(v.clone())); 
+        }
+        if let Some(v) = &overrides.kafka_topic_prefix { 
+            kafka.insert("topic_prefix".to_owned(), TomlValue::String(v.clone())); 
+        }
+
         if let Some(v) = &overrides.kafka_topics {
             kafka.insert(
                 "topics".to_owned(),
@@ -2202,10 +2227,19 @@ fn sanitize_pg_name(name: &str) -> String {
             }
         })
         .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+    if s.starts_with(|c: char| c.is_ascii_digit()) {
         format!("_{s}")
     } else {
         s
+    }
+}
+
+fn normalize_pg_identifier(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+        trimmed[1..trimmed.len() - 1].replace("\"\"", "\"")
+    } else {
+        trimmed.to_owned()
     }
 }
 
@@ -2249,6 +2283,14 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
             "TEXT"
         } else {
             sql_type
+        }
+    }
+
+    fn maybe_quote_ident(ident: &str) -> String {
+        if is_pg_reserved(ident) {
+            quote_ident(ident)
+        } else {
+            ident.to_owned()
         }
     }
 
@@ -2349,7 +2391,7 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
     }
 
     for table in ordered_tables(tables) {
-        ddl_body.push_str(&format!("CREATE TABLE {} (\n", table.name));
+        ddl_body.push_str(&format!("CREATE TABLE {} (\n", maybe_quote_ident(&table.name)));
 
         let rendered_columns = table
             .columns
@@ -2368,7 +2410,7 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
             .map(|column| {
                 let mut line = format!(
                     "    {} {}",
-                    column.name,
+                    maybe_quote_ident(&column.name),
                     rendered_sql_type(&column.sql_type)
                 );
                 if column.primary_key && column.sql_type.eq_ignore_ascii_case("uuid") {
@@ -2385,13 +2427,38 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
             .collect::<Vec<_>>();
 
         if primary_keys.len() > 1 {
-            lines.push(format!("    PRIMARY KEY ({})", primary_keys.join(", ")));
+            lines.push(format!(
+                "    PRIMARY KEY ({})",
+                primary_keys
+                    .iter()
+                    .map(|column| maybe_quote_ident(column))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
 
         lines.extend(table.foreign_keys.iter().map(|fk| {
+            let fk_from_cols = fk
+                .from_col
+                .split(',')
+                .map(str::trim)
+                .filter(|col| !col.is_empty())
+                .map(maybe_quote_ident)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let fk_to_cols = fk
+                .to_col
+                .split(',')
+                .map(str::trim)
+                .filter(|col| !col.is_empty())
+                .map(maybe_quote_ident)
+                .collect::<Vec<_>>()
+                .join(", ");
             format!(
                 "    FOREIGN KEY ({}) REFERENCES {} ({}) DEFERRABLE INITIALLY DEFERRED",
-                fk.from_col, fk.to_table, fk.to_col
+                fk_from_cols,
+                maybe_quote_ident(&fk.to_table),
+                fk_to_cols
             )
         }));
 
@@ -2460,6 +2527,22 @@ fn load_mapping_ddl_tables(collection_dir: &Path) -> Result<Option<Vec<DdlTableM
         };
         ddl.columns
             .retain(|column| !is_standalone_index_pseudo_column(column));
+
+        if mapping.pg_mapping.columns.is_empty() {
+            let fk_columns = ddl
+                .foreign_keys
+                .iter()
+                .flat_map(|fk| fk.from_col.split(','))
+                .map(str::trim)
+                .filter(|col| !col.is_empty())
+                .collect::<std::collections::HashSet<_>>();
+
+            for column in &mut ddl.columns {
+                if !column.primary_key && !fk_columns.contains(column.name.as_str()) {
+                    column.nullable = true;
+                }
+            }
+        }
         tables.push(ddl);
     }
 
@@ -2536,66 +2619,6 @@ fn build_collection_mappings_with_timestamp_fields(
     timestamp_fields: &[String],
     reserved_table_names: &std::collections::HashSet<String>,
 ) -> Vec<(String, CollectionMapping)> {
-    fn collapse_repeated_table_name_segments(name: &str) -> String {
-        let mut collapsed: Vec<String> = Vec::new();
-        let mut previous: Option<&str> = None;
-        let mut run_len = 0_usize;
-
-        for segment in name.split('_') {
-            if segment.is_empty() {
-                continue;
-            }
-
-            if previous == Some(segment) {
-                run_len += 1;
-                if run_len <= 2 {
-                    collapsed.push(segment.to_owned());
-                }
-            } else {
-                previous = Some(segment);
-                run_len = 1;
-                collapsed.push(segment.to_owned());
-            }
-        }
-
-        if collapsed.is_empty() {
-            name.to_owned()
-        } else {
-            collapsed.join("_")
-        }
-    }
-
-    fn normalize_table_names(
-        tables: &mut [mongo2pg::schema_diagram::Table],
-        reserved_table_names: &std::collections::HashSet<String>,
-    ) {
-        let mut renamed = HashMap::new();
-        let mut used = reserved_table_names.clone();
-
-        for table in tables.iter() {
-            let base = collapse_repeated_table_name_segments(&table.name);
-            let mut candidate = base.clone();
-            let mut suffix = 2_usize;
-            while used.contains(&candidate) {
-                candidate = format!("{base}_{suffix}");
-                suffix += 1;
-            }
-            used.insert(candidate.clone());
-            renamed.insert(table.name.clone(), candidate);
-        }
-
-        for table in tables.iter_mut() {
-            if let Some(new_name) = renamed.get(&table.name) {
-                table.name = new_name.clone();
-            }
-            for foreign_key in &mut table.foreign_keys {
-                if let Some(new_name) = renamed.get(&foreign_key.to_table) {
-                    foreign_key.to_table = new_name.clone();
-                }
-            }
-        }
-    }
-
     fn is_uuid_like_key(name: &str) -> bool {
         let parts = name.split('-').collect::<Vec<_>>();
         name.len() == 36
@@ -2668,6 +2691,23 @@ fn build_collection_mappings_with_timestamp_fields(
             .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
             .any(|(type_name, _)| type_name == "String");
         if !type_has_string {
+            return false;
+        }
+
+        let has_point_type_value = type_field
+            .types
+            .get("String")
+            .and_then(|type_schema| type_schema.values.as_ref())
+            .map(|values| {
+                values.iter().any(|value| {
+                    value
+                        .as_str()
+                        .map(|raw| raw.eq_ignore_ascii_case("point"))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+        if !has_point_type_value {
             return false;
         }
 
@@ -2754,40 +2794,10 @@ fn build_collection_mappings_with_timestamp_fields(
         parent_name: &str,
         field: &str,
         force_parent_prefix: bool,
-        reserved_table_names: &std::collections::HashSet<String>,
-        assigned_table_names: &std::collections::HashSet<String>,
+        _reserved_table_names: &std::collections::HashSet<String>,
+        _assigned_table_names: &std::collections::HashSet<String>,
     ) -> String {
-        let field = sanitize_pg_name(field);
-        let parent_segment = parent_name.rsplit('_').next().unwrap_or(parent_name);
-        let mut candidates = Vec::new();
-        for candidate in [
-            preferred_child_mapping_table_name(parent_name, &field, force_parent_prefix),
-            format!("{parent_segment}_{field}"),
-            format!("{parent_name}_{field}"),
-        ] {
-            if !candidates.iter().any(|existing| existing == &candidate) {
-                candidates.push(candidate);
-            }
-        }
-
-        for candidate in candidates {
-            if !reserved_table_names.contains(&candidate)
-                && !assigned_table_names.contains(&candidate)
-            {
-                return candidate;
-            }
-        }
-
-        let mut suffix = 2_usize;
-        loop {
-            let candidate = format!("{parent_name}_{field}_{suffix}");
-            if !reserved_table_names.contains(&candidate)
-                && !assigned_table_names.contains(&candidate)
-            {
-                return candidate;
-            }
-            suffix += 1;
-        }
+        preferred_child_mapping_table_name(parent_name, field, force_parent_prefix)
     }
 
     fn resolved_child_mapping_table_name(
@@ -3104,10 +3114,11 @@ fn build_collection_mappings_with_timestamp_fields(
             return Some("_id".to_owned());
         }
 
-        if let Some(raw_name) = fields
-            .keys()
-            .find(|raw_name| sanitize_pg_name(raw_name) == column_name)
-        {
+        if let Some(raw_name) = fields.keys().find(|raw_name| {
+            sanitize_pg_name(raw_name) == column_name
+                || normalize_pg_identifier(raw_name) == column_name
+                || raw_name.as_str() == column_name
+        }) {
             return Some(raw_name.clone());
         }
 
@@ -3117,10 +3128,11 @@ fn build_collection_mappings_with_timestamp_fields(
                 .and_then(|field| field.types.get("Object"))
                 .and_then(|type_schema| type_schema.object.as_ref())
             {
-                if let Some(raw_name) = id_object
-                    .keys()
-                    .find(|raw_name| sanitize_pg_name(raw_name) == column_name)
-                {
+                if let Some(raw_name) = id_object.keys().find(|raw_name| {
+                    sanitize_pg_name(raw_name) == column_name
+                        || normalize_pg_identifier(raw_name) == column_name
+                        || raw_name.as_str() == column_name
+                }) {
                     return Some(raw_name.clone());
                 }
             }
@@ -3149,14 +3161,15 @@ fn build_collection_mappings_with_timestamp_fields(
             .iter()
             .filter(|column| foreign_key_columns.iter().all(|fk| *fk != column.name))
             .filter_map(|column| {
-                if !is_root && column.name == "id" {
+                let target_field = normalize_pg_identifier(&column.name);
+                if !is_root && target_field == "id" {
                     return None;
                 }
 
-                let source_field = find_source_field_for_column(fields, &column.name, is_root)?;
+                let source_field = find_source_field_for_column(fields, &target_field, is_root)?;
                 Some(MappingColumn {
                     source_field,
-                    target_field: column.name.clone(),
+                    target_field,
                     data_type: column.col_type.to_lowercase(),
                     nullable: !column.not_null,
                 })
@@ -3178,6 +3191,18 @@ fn build_collection_mappings_with_timestamp_fields(
         resolved_child_table_names: &HashMap<String, String>,
         out: &mut Vec<(String, CollectionMapping)>,
     ) {
+        fn table_has_child_references(
+            table_name: &str,
+            tables_by_name: &HashMap<String, mongo2pg::schema_diagram::Table>,
+        ) -> bool {
+            tables_by_name.values().any(|candidate| {
+                candidate
+                    .foreign_keys
+                    .iter()
+                    .any(|fk| fk.to_table == table_name)
+            })
+        }
+
         let grouped_root_fields = if is_root {
             grouped_root_array_object_fields(fields)
         } else {
@@ -3195,7 +3220,7 @@ fn build_collection_mappings_with_timestamp_fields(
         if emit_current {
             if let Some(table) = tables_by_name.get(table_name) {
                 let columns = build_mapping_columns(table, fields, is_root);
-                if !columns.is_empty() {
+                if !columns.is_empty() || table_has_child_references(&table.name, tables_by_name) {
                     let mapping_collection_name = mongo_path_segments
                         .last()
                         .cloned()
@@ -3244,23 +3269,24 @@ fn build_collection_mappings_with_timestamp_fields(
                                 && foreign_key_columns.iter().all(|fk| *fk != column.name)
                         })
                         .filter_map(|column| {
-                            if column.name == "key" {
+                            let target_field = normalize_pg_identifier(&column.name);
+                            if target_field == "key" {
                                 Some(MappingColumn {
                                     source_field: "key".to_owned(),
-                                    target_field: column.name.clone(),
+                                    target_field,
                                     data_type: column.col_type.to_lowercase(),
                                     nullable: !column.not_null,
                                 })
                             } else {
                                 find_source_field_for_column(
                                     &group.child_fields,
-                                    &column.name,
+                                    &target_field,
                                     false,
                                 )
                                 .map(|source_field| {
                                     MappingColumn {
                                         source_field,
-                                        target_field: column.name.clone(),
+                                        target_field,
                                         data_type: column.col_type.to_lowercase(),
                                         nullable: !column.not_null,
                                     }
@@ -3268,7 +3294,7 @@ fn build_collection_mappings_with_timestamp_fields(
                             }
                         })
                         .collect::<Vec<_>>();
-                    if !columns.is_empty() {
+                    if !columns.is_empty() || table_has_child_references(&table.name, tables_by_name) {
                         let mut child_mongo_path_segments = mongo_path_segments.to_vec();
                         child_mongo_path_segments.push(raw_name.clone());
                         out.push((
@@ -3353,15 +3379,16 @@ fn build_collection_mappings_with_timestamp_fields(
                                         && foreign_key_columns.iter().all(|fk| *fk != column.name)
                                 })
                                 .filter_map(|column| {
+                                    let target_field = normalize_pg_identifier(&column.name);
                                     find_source_field_for_column(
                                         &geo_merged_lookup_fields,
-                                        &column.name,
+                                        &target_field,
                                         true,
                                     )
                                     .map(|source_field| {
                                         MappingColumn {
                                             source_field,
-                                            target_field: column.name.clone(),
+                                            target_field,
                                             data_type: column.col_type.to_lowercase(),
                                             nullable: !column.not_null,
                                         }
@@ -3369,7 +3396,9 @@ fn build_collection_mappings_with_timestamp_fields(
                                 })
                                 .collect::<Vec<_>>();
 
-                            if !columns.is_empty() {
+                            if !columns.is_empty()
+                                || table_has_child_references(&table.name, tables_by_name)
+                            {
                                 out.push((
                                     child_table.clone(),
                                     CollectionMapping {
@@ -3410,23 +3439,24 @@ fn build_collection_mappings_with_timestamp_fields(
                                         && foreign_key_columns.iter().all(|fk| *fk != column.name)
                                 })
                                 .filter_map(|column| {
-                                    if column.name == "key" {
+                                    let target_field = normalize_pg_identifier(&column.name);
+                                    if target_field == "key" {
                                         Some(MappingColumn {
                                             source_field: "key".to_owned(),
-                                            target_field: column.name.clone(),
+                                            target_field,
                                             data_type: column.col_type.to_lowercase(),
                                             nullable: !column.not_null,
                                         })
                                     } else {
                                         find_source_field_for_column(
                                             value_fields,
-                                            &column.name,
+                                            &target_field,
                                             false,
                                         )
                                         .map(
                                             |source_field| MappingColumn {
                                                 source_field,
-                                                target_field: column.name.clone(),
+                                                target_field,
                                                 data_type: column.col_type.to_lowercase(),
                                                 nullable: !column.not_null,
                                             },
@@ -3435,7 +3465,9 @@ fn build_collection_mappings_with_timestamp_fields(
                                 })
                                 .collect::<Vec<_>>();
 
-                            if !columns.is_empty() {
+                            if !columns.is_empty()
+                                || table_has_child_references(&table.name, tables_by_name)
+                            {
                                 let mut child_mongo_path_segments = mongo_path_segments.to_vec();
                                 child_mongo_path_segments.push(raw_name.clone());
                                 out.push((
@@ -3554,12 +3586,14 @@ fn build_collection_mappings_with_timestamp_fields(
                                 })
                                 .map(|column| MappingColumn {
                                     source_field: raw_name.clone(),
-                                    target_field: column.name.clone(),
+                                    target_field: normalize_pg_identifier(&column.name),
                                     data_type: column.col_type.to_lowercase(),
                                     nullable: !column.not_null,
                                 })
                                 .collect::<Vec<_>>();
-                            if !columns.is_empty() {
+                            if !columns.is_empty()
+                                || table_has_child_references(&table.name, tables_by_name)
+                            {
                                 let mut child_mongo_path_segments = mongo_path_segments.to_vec();
                                 child_mongo_path_segments.push(raw_name.clone());
                                 out.push((
@@ -3591,7 +3625,6 @@ fn build_collection_mappings_with_timestamp_fields(
 
     let ddl = schema_to_ddl_with_timestamp_fields(schema, coll_name, None, timestamp_fields);
     let mut tables = parse_sql(&ddl);
-    normalize_table_names(&mut tables, &std::collections::HashSet::new());
     let Some(root_table_name) = tables.first().map(|table| table.name.clone()) else {
         return Vec::new();
     };
@@ -3670,23 +3703,24 @@ fn build_collection_mappings_with_timestamp_fields(
             .columns
             .iter()
             .filter_map(|column| {
-                if column.name == "id" {
+                let target_field = normalize_pg_identifier(&column.name);
+                if target_field == "id" {
                     return None;
                 }
-                let source_field = if column.name == parent_id_col {
+                let source_field = if target_field == parent_id_col {
                     Some("_id".to_owned())
-                } else if column.name == "key" {
+                } else if target_field == "key" {
                     Some("key".to_owned())
                 } else {
                     group
                         .child_fields
                         .keys()
-                        .find(|raw_name| sanitize(raw_name) == column.name)
+                        .find(|raw_name| sanitize(raw_name) == target_field)
                         .cloned()
                 }?;
                 Some(MappingColumn {
                     source_field,
-                    target_field: column.name.clone(),
+                    target_field,
                     data_type: column.col_type.to_lowercase(),
                     nullable: !column.not_null,
                 })
@@ -3747,17 +3781,18 @@ fn build_collection_mappings_with_timestamp_fields(
             .columns
             .iter()
             .filter_map(|column| {
-                if column.name == "id" {
+                let target_field = normalize_pg_identifier(&column.name);
+                if target_field == "id" {
                     return None;
                 }
-                let source_field = if column.name == parent_id_col {
+                let source_field = if target_field == parent_id_col {
                     Some("_id".to_owned())
                 } else {
-                    find_source_field_for_column(item_fields, &column.name, false)
+                    find_source_field_for_column(item_fields, &target_field, false)
                 }?;
                 Some(MappingColumn {
                     source_field,
-                    target_field: column.name.clone(),
+                    target_field,
                     data_type: column.col_type.to_lowercase(),
                     nullable: !column.not_null,
                 })
@@ -4283,8 +4318,9 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         return Err(anyhow!("No SQL files found in {}", tables_dir.display()));
     }
 
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     let mut allowed_table_names: HashSet<String> = HashSet::new();
+    let mut table_columns_by_name: HashMap<String, Vec<String>> = HashMap::new();
 
     for sql_path in &sql_files {
         let sql = std::fs::read_to_string(sql_path)
@@ -4294,7 +4330,11 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             continue;
         }
         for table in parse_sql(&executable_sql) {
-            allowed_table_names.insert(table.name);
+            allowed_table_names.insert(table.name.clone());
+            table_columns_by_name.insert(
+                table.name,
+                table.columns.into_iter().map(|column| column.name).collect(),
+            );
         }
         match pg_client.batch_execute(&executable_sql).await {
             Ok(()) => {}
@@ -4417,10 +4457,19 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             .and_then(|stem| stem.to_str())
             .and_then(|stem| stem.strip_suffix(".csv"))
             .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
+        let table_columns = table_columns_by_name
+            .get(table)
+            .ok_or_else(|| anyhow!("No DDL column metadata found for table {table}"))?;
+        let copy_columns = table_columns
+            .iter()
+            .map(|column| quote_ident(&column.trim_matches('"').replace("\"\"", "\"")))
+            .collect::<Vec<_>>()
+            .join(", ");
         let copy_sql = format!(
-            "COPY {}.{} FROM STDIN WITH (FORMAT csv, HEADER true)",
+            "COPY {}.{} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)",
             quote_ident(schema),
-            quote_ident(table)
+            quote_ident(table),
+            copy_columns,
         );
         let file = std::fs::File::open(csv_path)
             .with_context(|| format!("Failed to open {}", csv_path.display()))?;
@@ -5247,13 +5296,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     fn column_sql_type<'a>(mapping: &'a CollectionMapping, target_field: &str) -> Option<&'a str> {
+        let normalized_target = normalize_pg_identifier(target_field);
         mapping
             .pg_mapping
             .ddl
             .as_ref()?
             .columns
             .iter()
-            .find(|column| column.name == target_field)
+            .find(|column| normalize_pg_identifier(&column.name) == normalized_target)
             .map(|column| column.sql_type.as_str())
     }
 
@@ -5282,7 +5332,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .columns
             .iter()
             .find(|column| column.primary_key)
-            .map(|column| column.name.clone())
+            .map(|column| normalize_pg_identifier(&column.name))
     }
 
     fn root_source_field_for_pk(mapping: &CollectionMapping, pk: &str) -> Option<String> {
@@ -5290,7 +5340,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .pg_mapping
             .columns
             .iter()
-            .find(|column| column.target_field == pk)
+            .find(|column| normalize_pg_identifier(&column.target_field) == normalize_pg_identifier(pk))
             .map(|column| column.source_field.clone())
     }
 
@@ -5328,7 +5378,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .columns
             .iter()
             .find(|column| column.primary_key)
-            .map(|column| column.name.clone())
+            .map(|column| normalize_pg_identifier(&column.name))
     }
 
     fn child_segments_relative_to_parent(
@@ -5478,17 +5528,19 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let root_table = qualified_table_name(root_mapping, fallback_schema);
         let mut affected_rows = 0_u64;
 
+        let mut mapped_target_fields = std::collections::HashSet::new();
         let mut columns = Vec::new();
         let mut values = Vec::new();
         for column in &root_mapping.pg_mapping.columns {
+            let normalized_target_field = normalize_pg_identifier(&column.target_field);
             let raw_value =
                 resolve_source_field_value(payload_doc, payload_obj, &column.source_field);
-            let sql_type = column_sql_type(root_mapping, &column.target_field);
+            let sql_type = column_sql_type(root_mapping, &normalized_target_field);
             let (resolved_value, effective_source_field) = resolve_value_with_numeric_id_fallback(
                 payload_obj,
                 root_mapping,
                 &column.source_field,
-                &column.target_field,
+                &normalized_target_field,
                 sql_type,
                 raw_value,
             );
@@ -5496,39 +5548,85 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 resolved_value,
                 column.nullable,
                 &effective_source_field,
-                &column.target_field,
+                &normalized_target_field,
                 &root_table,
             )?;
             validate_extended_json_compatibility(
                 resolved_value,
                 sql_type,
                 &effective_source_field,
-                &column.target_field,
+                &normalized_target_field,
                 &root_table,
             )?;
             validate_varchar_value(
                 resolved_value,
                 sql_type,
                 &effective_source_field,
-                &column.target_field,
+                &normalized_target_field,
                 &root_table,
             )?;
-            columns.push(quote_ident(&column.target_field));
+            mapped_target_fields.insert(normalized_target_field.clone());
+            columns.push(quote_ident(&normalized_target_field));
             values.push(sql_literal(resolved_value, sql_type));
+        }
+
+        if let Some(ddl) = root_mapping.pg_mapping.ddl.as_ref() {
+            for ddl_column in &ddl.columns {
+                let target_field = normalize_pg_identifier(&ddl_column.name);
+                if mapped_target_fields.contains(&target_field) || target_field == "id" {
+                    continue;
+                }
+
+                let resolved_value = resolve_source_field_value(payload_doc, payload_obj, &target_field);
+                if resolved_value.is_none() {
+                    continue;
+                }
+
+                validate_required_mapped_value(
+                    resolved_value,
+                    ddl_column.nullable,
+                    &target_field,
+                    &target_field,
+                    &root_table,
+                )?;
+                validate_extended_json_compatibility(
+                    resolved_value,
+                    Some(&ddl_column.sql_type),
+                    &target_field,
+                    &target_field,
+                    &root_table,
+                )?;
+                validate_varchar_value(
+                    resolved_value,
+                    Some(&ddl_column.sql_type),
+                    &target_field,
+                    &target_field,
+                    &root_table,
+                )?;
+
+                mapped_target_fields.insert(target_field.clone());
+                columns.push(quote_ident(&target_field));
+                values.push(sql_literal(resolved_value, Some(&ddl_column.sql_type)));
+            }
         }
 
         let root_pk = root_primary_key(root_mapping)
             .ok_or_else(|| anyhow!("Root mapping has no primary key in ddl"))?;
-        let updates = root_mapping
-            .pg_mapping
-            .columns
+        let mut update_targets = columns
             .iter()
-            .filter(|column| column.target_field != root_pk)
-            .map(|column| {
+            .map(|column| normalize_pg_identifier(column))
+            .filter(|target_field| target_field != &root_pk)
+            .collect::<Vec<_>>();
+        update_targets.sort();
+        update_targets.dedup();
+
+        let updates = update_targets
+            .into_iter()
+            .map(|target_field| {
                 format!(
                     "{} = EXCLUDED.{}",
-                    quote_ident(&column.target_field),
-                    quote_ident(&column.target_field)
+                    quote_ident(&target_field),
+                    quote_ident(&target_field)
                 )
             })
             .collect::<Vec<_>>();
@@ -5929,6 +6027,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             kafka_topics: (!args.topics.is_empty()).then(|| args.topics.clone()),
             kafka_max_messages: args.max_messages,
             kafka_offset: args.offset.clone(),
+            kafka_group_id: args.group_id.clone(),
+            kafka_topic_prefix: args.topic_prefix.clone(),
+            target_database_name: args.database_name.clone(),
+            target_schema_name: args.schema_name.clone(),
             ..ConfigOverrides::default()
         },
     )?;
@@ -6750,15 +6852,6 @@ fn sanitize_name(name: &str) -> String {
 
 fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
-}
-
-fn normalize_pg_identifier(name: &str) -> String {
-    let trimmed = name.trim();
-    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
-        trimmed[1..trimmed.len() - 1].replace("\"\"", "\"")
-    } else {
-        trimmed.to_owned()
-    }
 }
 
 fn split_namespace_scope(namespace: &str) -> (&str, Option<&str>) {
@@ -8305,6 +8398,52 @@ CREATE TABLE demo (
     }
 
     #[test]
+    fn build_collection_mappings_keeps_container_parent_table_for_nested_entities_children() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "text": "tweet",
+            "entities": {
+                "hashtags": [{ "text": "rust", "indices": [0_i32, 4_i32] }],
+                "urls": [{ "url": "https://example.com", "indices": [5_i32, 10_i32] }],
+                "user_mentions": [{
+                    "name": "Ada",
+                    "screen_name": "ada",
+                    "indices": [11_i32, 14_i32]
+                }]
+            }
+        }];
+
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("sample_training", "tweets", None, &schema);
+
+        let entities_mapping = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.mongo_path.as_deref() == Some(".entities"))
+            .map(|(_, mapping)| mapping)
+            .expect("entities mapping should exist");
+
+        assert_eq!(entities_mapping.pg_mapping.table_name, "entities");
+        assert!(entities_mapping.pg_mapping.ddl.is_some());
+
+        let ddl = entities_mapping
+            .pg_mapping
+            .ddl
+            .as_ref()
+            .expect("entities ddl should exist");
+        assert!(ddl.columns.iter().any(|column| column.name == "id"));
+        assert!(
+            ddl.foreign_keys
+                .iter()
+                .any(|fk| fk.to_table == "tweets" && fk.to_col == "id")
+        );
+    }
+
+    #[test]
     fn build_collection_mappings_keeps_prefix_when_short_name_is_reserved_elsewhere() {
         let docs = vec![doc! {
             "_id": "project-1",
@@ -8355,7 +8494,7 @@ CREATE TABLE demo (
     }
 
     #[test]
-    fn build_collection_mappings_prefixes_map_table_when_collection_name_conflicts() {
+    fn build_collection_mappings_keeps_map_table_name_with_reserved_names() {
         let docs = vec![doc! {
             "_id": "customer-1",
             "accounts": {
@@ -8387,7 +8526,7 @@ CREATE TABLE demo (
             .map(|(_, mapping)| mapping)
             .expect("accounts child mapping should exist");
 
-        assert_eq!(accounts_mapping.pg_mapping.table_name, "customers_accounts");
+        assert_eq!(accounts_mapping.pg_mapping.table_name, "accounts");
     }
 
     #[test]
@@ -8713,6 +8852,38 @@ CREATE TABLE demo (
     }
 
     #[test]
+    fn build_collection_mappings_keeps_reserved_root_field_names() {
+        let docs = vec![doc! {
+            "_id": "account-1",
+            "account_id": 7_i32,
+            "limit": 10000_i32,
+            "products": ["brokerage", "savings"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings =
+            build_collection_mappings("sample_analytics", "accounts", Some("sample_analytics"), &schema);
+        let root_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "accounts")
+            .map(|(_, mapping)| mapping)
+            .expect("accounts root mapping should exist");
+
+        let columns = root_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(columns.contains(&("limit", "limit")));
+    }
+
+    #[test]
     fn build_collection_mappings_forces_configured_timestamp_fields() {
         let docs = vec![
             doc! { "_id": 1_i32, "last_update": 1650468505_i64 },
@@ -8755,66 +8926,6 @@ CREATE TABLE demo (
             .iter()
             .any(|column| column.name == "last_update"
                 && column.sql_type == "TIMESTAMP WITH TIME ZONE"));
-    }
-
-    #[test]
-    fn build_collection_mappings_collapses_repeated_child_name_segments() {
-        let docs = vec![doc! {
-            "_id": "acct-1",
-            "transactions": [{
-                "transactions": [{
-                    "amount": 42_i32
-                }]
-            }]
-        }];
-        let mut analyzer = Analyzer::new(true);
-        for doc in &docs {
-            analyzer.process_document(doc);
-        }
-        let schema = analyzer.finish();
-
-        let mappings = build_collection_mappings(
-            "sample_analytics",
-            "transactions",
-            Some("sample_analytics"),
-            &schema,
-        );
-
-        assert!(mappings.iter().all(|(_, mapping)| {
-            mapping.pg_mapping.table_name != "transactions_transactions_transactions"
-        }));
-        assert!(mappings
-            .iter()
-            .any(|(_, mapping)| mapping.pg_mapping.table_name == "transactions_transactions"));
-    }
-
-    #[test]
-    fn build_collection_mappings_keeps_unique_names_after_collapse() {
-        let docs = vec![doc! {
-            "_id": "acct-1",
-            "transactions": [{
-                "transactions": [{ "amount": 1_i32 }],
-                "fees": [{ "amount": 2_i32 }]
-            }]
-        }];
-        let mut analyzer = Analyzer::new(true);
-        for doc in &docs {
-            analyzer.process_document(doc);
-        }
-        let schema = analyzer.finish();
-
-        let mappings = build_collection_mappings(
-            "sample_analytics",
-            "transactions",
-            Some("sample_analytics"),
-            &schema,
-        );
-
-        let table_names = mappings
-            .iter()
-            .map(|(_, mapping)| mapping.pg_mapping.table_name.clone())
-            .collect::<std::collections::HashSet<_>>();
-        assert_eq!(table_names.len(), mappings.len());
     }
 
     #[test]
@@ -9198,6 +9309,74 @@ CREATE TABLE demo (
 
         assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"));
         assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS postgis;"));
+    }
+
+    #[test]
+    fn load_mapping_ddl_tables_relaxes_non_key_not_null_when_mapping_columns_empty() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let mapping_dir = std::env::temp_dir().join(format!("mongo2pg-mapping-ddl-test-{unique}"));
+        std::fs::create_dir_all(&mapping_dir).expect("mapping dir should be created");
+
+        let mapping_yaml = r#"
+collection_name: investments
+mongo_dbname: sample_training
+mongo_path: .investments
+pg_mapping:
+  dbname: sample_training
+  schema_name: sample_training
+  table_name: investments
+  columns: []
+  ddl:
+    name: investments
+    columns:
+      - name: id
+        sql_type: BIGSERIAL
+        nullable: false
+        primary_key: true
+      - name: funding_rounds_id
+        sql_type: BIGINT
+        nullable: false
+        primary_key: false
+      - name: company_name
+        sql_type: TEXT
+        nullable: false
+        primary_key: false
+    foreign_keys:
+      - from_col: funding_rounds_id
+        to_table: funding_rounds
+        to_col: id
+"#;
+
+        let mapping_path = mapping_dir.join("mapping_investments.yaml");
+        std::fs::write(&mapping_path, mapping_yaml).expect("mapping file should be written");
+
+        let tables = super::load_mapping_ddl_tables(&mapping_dir)
+            .expect("mapping load should succeed")
+            .expect("ddl tables should be present");
+
+        let investments = tables
+            .iter()
+            .find(|table| table.name == "investments")
+            .expect("investments ddl should be loaded");
+
+        let company_name = investments
+            .columns
+            .iter()
+            .find(|column| column.name == "company_name")
+            .expect("company_name should be present");
+        assert!(company_name.nullable);
+
+        let funding_rounds_id = investments
+            .columns
+            .iter()
+            .find(|column| column.name == "funding_rounds_id")
+            .expect("funding_rounds_id should be present");
+        assert!(!funding_rounds_id.nullable);
+
+        std::fs::remove_dir_all(&mapping_dir).expect("temp mapping dir should be removed");
     }
 
     #[test]

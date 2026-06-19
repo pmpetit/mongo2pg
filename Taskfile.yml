@@ -101,3 +101,28 @@ tasks:
           "{{.BIN}}" import -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db
         done
       - echo "👉 results in {{.OUT}}"
+
+  tests-kafka-all:
+    desc: kafka-import for all sample databases
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "{{.RESULTS_DIR}}"
+      DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - |
+        for db in {{.DBS_TO_PROCESS}}
+        do
+          echo "🗑️  database $db"
+          psql -U myuser -d mydb -h localhost -c "DROP DATABASE IF EXISTS $db"
+          echo "📁 init $db"
+          "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
+          echo "⚙️  config $db"
+          cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
+          echo "📐 infer $db"
+          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output        
+          echo "🗄️ ➔ 🔍 ➔ 🪵 ➔ 🐘 kafka import $db"
+          "{{.BIN}}" kafka-import -c "{{.OUT}}/$db/config/$db.toml" --group-id "$db-group" --topic-prefix "mongo2pg.$db" --project-dir $db --database-name $db --schema-name $db
+        done
+      - echo "👉 results in {{.OUT}}"

@@ -30,7 +30,8 @@ use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_null_type, matches_timestamp_field, sanitize,
+    inline_object_leaf_fields_with_prefix, is_null_type, is_pg_reserved,
+    matches_timestamp_field, sanitize,
     scalar_type_family,
 };
 
@@ -64,6 +65,14 @@ fn fk_scalar_type(pg_type: &str) -> &str {
         "SERIAL" => "INTEGER",
         "BIGSERIAL" => "BIGINT",
         _ => pg_type,
+    }
+}
+
+fn maybe_quote_ident(ident: &str) -> String {
+    if is_pg_reserved(ident) {
+        format!("\"{}\"", ident.replace('"', "\"\""))
+    } else {
+        ident.to_owned()
     }
 }
 
@@ -318,6 +327,23 @@ fn is_geojson_point_field_schema(field: &FieldSchema) -> bool {
         .map(|(t, _)| t.as_str())
         .collect();
     if !type_non_null.iter().any(|t| *t == TYPE_STRING) {
+        return false;
+    }
+
+    let has_point_type_value = type_field
+        .types
+        .get(TYPE_STRING)
+        .and_then(|type_schema| type_schema.values.as_ref())
+        .map(|values| {
+            values.iter().any(|value| {
+                value
+                    .as_str()
+                    .map(|raw| raw.eq_ignore_ascii_case("point"))
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false);
+    if !has_point_type_value {
         return false;
     }
 
@@ -1625,7 +1651,11 @@ fn render_column(col: &Column, inline_primary_key: bool) -> String {
     };
     format!(
         "    {}{} {}{}{}",
-        col.name, "", rendered_pg_type, default_clause, constraint
+        maybe_quote_ident(&col.name),
+        "",
+        rendered_pg_type,
+        default_clause,
+        constraint
     )
     .trim_end()
     .to_owned()
@@ -1644,7 +1674,14 @@ fn render_table(table: &Table) -> String {
         .map(|col| render_column(col, pk_columns.len() == 1))
         .collect();
     if pk_columns.len() > 1 {
-        defs.push(format!("    PRIMARY KEY ({})", pk_columns.join(", ")));
+        defs.push(format!(
+            "    PRIMARY KEY ({})",
+            pk_columns
+                .iter()
+                .map(|col| maybe_quote_ident(col))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
     }
     if let Some(refs) = &table.parent_ref {
         let fk_cols: Vec<&str> = refs.iter().map(|(fk_col, _, _)| fk_col.as_str()).collect();
@@ -1655,13 +1692,21 @@ fn render_table(table: &Table) -> String {
             .collect();
         defs.push(format!(
             "    FOREIGN KEY ({}) REFERENCES {} ({}) DEFERRABLE INITIALLY DEFERRED",
-            fk_cols.join(", "),
-            ref_table,
-            ref_cols.join(", ")
+            fk_cols
+                .iter()
+                .map(|col| maybe_quote_ident(col))
+                .collect::<Vec<_>>()
+                .join(", "),
+            maybe_quote_ident(ref_table),
+            ref_cols
+                .iter()
+                .map(|col| maybe_quote_ident(col))
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
     let body = defs.join(",\n");
-    format!("CREATE TABLE {} (\n{}\n);", table.name, body)
+    format!("CREATE TABLE {} (\n{}\n);", maybe_quote_ident(&table.name), body)
 }
 
 fn render_fk_indexes(table: &Table) -> Vec<String> {
@@ -1677,9 +1722,13 @@ fn render_fk_indexes(table: &Table) -> Vec<String> {
     let index_name = format!("idx_{}_{}", table.name, fk_cols.join("_"));
     vec![format!(
         "CREATE INDEX IF NOT EXISTS {} ON {} ({});",
-        sanitize(&index_name),
-        table.name,
-        fk_cols.join(", ")
+        maybe_quote_ident(&sanitize(&index_name)),
+        maybe_quote_ident(&table.name),
+        fk_cols
+            .iter()
+            .map(|col| maybe_quote_ident(col))
+            .collect::<Vec<_>>()
+            .join(", ")
     )]
 }
 
@@ -2348,18 +2397,34 @@ mod tests {
     }
 
     #[test]
-    fn test_reserved_word_prefixed() {
+    fn test_reserved_words_keep_original_name() {
         let docs = vec![doc! { "_id": 1_i32, "order": "asc", "current_timestamp": 42_i32 }];
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "t", None);
-        assert!(
-            ddl.contains("_order"),
-            "reserved word 'order' should be prefixed with _"
-        );
-        assert!(
-            ddl.contains("_current_timestamp"),
-            "reserved word 'current_timestamp' should be prefixed with _"
-        );
+        assert!(ddl.contains("\"order\" "));
+        assert!(ddl.contains("\"current_timestamp\" "));
+        assert!(!ddl.contains("_order "));
+        assert!(!ddl.contains("_current_timestamp "));
+    }
+
+    #[test]
+    fn test_geojson_polygon_is_not_inferred_as_point_geometry() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "place": {
+                "bounding_box": {
+                    "type": "Polygon",
+                    "coordinates": [[[-85.95_f64, 42.52_f64], [-85.93_f64, 42.52_f64], [-85.93_f64, 42.54_f64], [-85.95_f64, 42.54_f64], [-85.95_f64, 42.52_f64]]]
+                },
+                "country": "US",
+                "name": "Allegan"
+            }
+        }];
+
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl(&schema, "tweets", None);
+
+        assert!(!ddl.contains("bounding_box geometry(Point,4326)"));
     }
 
     #[test]
@@ -2367,7 +2432,7 @@ mod tests {
         assert_eq!(sanitize("myField"), "myfield");
         assert_eq!(sanitize("my-field"), "my_field");
         assert_eq!(sanitize("123abc"), "_123abc");
-        assert_eq!(sanitize("order"), "_order");
+        assert_eq!(sanitize("order"), "order");
         assert_eq!(sanitize("_id"), "_id");
     }
 
