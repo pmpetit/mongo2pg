@@ -4868,6 +4868,56 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         }
     }
 
+    fn sql_type_expects_temporal(sql_type: Option<&str>) -> bool {
+        let Some(normalized) = normalized_sql_type(sql_type) else {
+            return false;
+        };
+        let lower = normalized.trim().to_ascii_lowercase();
+        lower.starts_with("timestamp") || lower == "date" || lower.starts_with("time")
+    }
+
+    fn cast_epoch_seconds_literal(seconds_expr: &str, sql_type: Option<&str>) -> String {
+        if let Some(target_type) = normalized_sql_type(sql_type) {
+            format!("CAST(to_timestamp({seconds_expr}) AS {target_type})")
+        } else {
+            format!("to_timestamp({seconds_expr})")
+        }
+    }
+
+    fn temporal_literal_from_epoch_i64(value: i64, sql_type: Option<&str>) -> String {
+        let seconds_expr = if value.unsigned_abs() >= 100_000_000_000 {
+            format!("{value}::double precision / 1000.0")
+        } else {
+            format!("{value}::double precision")
+        };
+        cast_epoch_seconds_literal(&seconds_expr, sql_type)
+    }
+
+    fn temporal_literal_from_epoch_u64(value: u64, sql_type: Option<&str>) -> String {
+        let seconds_expr = if value >= 100_000_000_000 {
+            format!("{value}::double precision / 1000.0")
+        } else {
+            format!("{value}::double precision")
+        };
+        cast_epoch_seconds_literal(&seconds_expr, sql_type)
+    }
+
+    fn temporal_literal_from_epoch_f64(value: f64, sql_type: Option<&str>) -> String {
+        let seconds_expr = if value.abs() >= 100_000_000_000.0 {
+            format!("{value} / 1000.0")
+        } else {
+            value.to_string()
+        };
+        cast_epoch_seconds_literal(&seconds_expr, sql_type)
+    }
+
+    fn temporal_literal_from_number(raw: &serde_json::Number, sql_type: Option<&str>) -> Option<String> {
+        raw.as_i64()
+            .map(|v| temporal_literal_from_epoch_i64(v, sql_type))
+            .or_else(|| raw.as_u64().map(|v| temporal_literal_from_epoch_u64(v, sql_type)))
+            .or_else(|| raw.as_f64().map(|v| temporal_literal_from_epoch_f64(v, sql_type)))
+    }
+
     fn geojson_point_coordinates(value: &Value) -> Option<(f64, f64)> {
         match value {
             Value::String(raw) => serde_json::from_str::<Value>(raw)
@@ -4893,7 +4943,24 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     // Map Debezium/Mongo Extended JSON wrappers to PostgreSQL SQL literals.
     // Keep this centralized so adding new wrappers is easy.
     fn map_extended_json_literal(value: &Value, sql_type: Option<&str>) -> Option<String> {
+        if sql_type_expects_temporal(sql_type) {
+            if let Value::Number(raw) = value {
+                return temporal_literal_from_number(raw, sql_type);
+            }
+        }
+
         let obj = value.as_object()?;
+
+        if sql_type_expects_temporal(sql_type) {
+            if let Some(Value::Number(raw)) = obj.get("long").or_else(|| obj.get("int")).or_else(|| obj.get("double")) {
+                return temporal_literal_from_number(raw, sql_type);
+            }
+            if let Some(Value::String(raw)) = obj.get("string") {
+                if let Ok(number) = raw.parse::<f64>() {
+                    return Some(temporal_literal_from_epoch_f64(number, sql_type));
+                }
+            }
+        }
 
         let normalized = normalized_sql_type(sql_type);
 
@@ -4922,23 +4989,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         if let Some(date_value) = obj.get("$date") {
             return match date_value {
                 Value::String(raw) => Some(cast_string_literal(raw, sql_type)),
-                Value::Number(raw) => raw
-                    .as_i64()
-                    .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
-                    .or_else(|| {
-                        raw.as_u64()
-                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
-                    })
-                    .or_else(|| {
-                        raw.as_f64()
-                            .map(|ms| format!("to_timestamp({ms} / 1000.0)"))
-                    }),
+                Value::Number(raw) => temporal_literal_from_number(raw, sql_type),
                 Value::Object(inner) => {
                     if let Some(Value::String(ms_raw)) = inner.get("$numberLong") {
-                        ms_raw
-                            .parse::<i64>()
-                            .ok()
-                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                        ms_raw.parse::<i64>().ok().map(|ms| temporal_literal_from_epoch_i64(ms, sql_type))
                     } else {
                         None
                     }
@@ -5093,7 +5147,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     "FALSE".to_owned()
                 }
             }
-            Value::Number(v) => v.to_string(),
+            Value::Number(v) => map_extended_json_literal(value, sql_type).unwrap_or_else(|| v.to_string()),
             Value::String(v) => {
                 let normalized = normalized_sql_type(sql_type);
                 if normalized
@@ -5248,6 +5302,54 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         find_value_in_nested_json_object(payload_obj, source_field)
     }
 
+    fn resolve_source_field_value_from_map<'a>(
+        payload_obj: &'a serde_json::Map<String, Value>,
+        source_field: &str,
+    ) -> Option<&'a Value> {
+        fn value_at_segments<'a>(
+            current: &'a serde_json::Map<String, Value>,
+            segments: &[&str],
+        ) -> Option<&'a Value> {
+            let (head, tail) = segments.split_first()?;
+            let value = current.get(*head)?;
+            if tail.is_empty() {
+                return Some(value);
+            }
+            match value {
+                Value::Object(child) => value_at_segments(child, tail),
+                _ => None,
+            }
+        }
+
+        if let Some(value) = payload_obj.get(source_field) {
+            return Some(value);
+        }
+
+        if source_field.contains('.') {
+            let segments = source_field.split('.').collect::<Vec<_>>();
+            if let Some(value) = value_at_segments(payload_obj, &segments) {
+                return Some(value);
+            }
+
+            // Child rows can be flattened from nested objects (for example
+            // atmosphericCondition.quality -> { value, quality }).
+            // If full dotted path is absent, try progressively shorter suffixes.
+            for idx in 1..segments.len() {
+                let suffix = &segments[idx..];
+                if let Some(value) = value_at_segments(payload_obj, suffix) {
+                    return Some(value);
+                }
+                if suffix.len() == 1 {
+                    if let Some(value) = payload_obj.get(suffix[0]) {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+
+        find_value_in_nested_json_object(payload_obj, source_field)
+    }
+
     fn debezium_document(value: Option<&Value>) -> Result<Option<Value>> {
         let Some(value) = value else {
             return Ok(None);
@@ -5346,6 +5448,51 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
     fn is_root_mapping(mapping: &CollectionMapping) -> bool {
         mapping.mongo_path.as_deref().unwrap_or(".").trim() == "."
+    }
+
+    fn infer_error_target_field(err: &tokio_postgres::Error) -> Option<String> {
+        if let Some(column) = err.as_db_error().and_then(|db_err| db_err.column()) {
+            return Some(normalize_pg_identifier(column));
+        }
+
+        let message = err
+            .as_db_error()
+            .map(|db_err| db_err.message())
+            .unwrap_or_default();
+        let marker = "column \"";
+        let start = message.find(marker)? + marker.len();
+        let end = message[start..].find('"')?;
+        Some(normalize_pg_identifier(&message[start..start + end]))
+    }
+
+    fn source_field_for_target(mapping: &CollectionMapping, target_field: &str) -> String {
+        mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .find(|column| normalize_pg_identifier(&column.target_field) == normalize_pg_identifier(target_field))
+            .map(|column| column.source_field.clone())
+            .unwrap_or_else(|| target_field.to_owned())
+    }
+
+    fn annotate_apply_db_error(
+        err: tokio_postgres::Error,
+        mapping: &CollectionMapping,
+        table_name: &str,
+    ) -> anyhow::Error {
+        let formatted = format_postgres_error(&err);
+        if let Some(target_field) = infer_error_target_field(&err) {
+            let source_field = source_field_for_target(mapping, &target_field);
+            anyhow!(
+                "db error: {}\nDETAIL: source_field={} target_field={} table={}",
+                formatted,
+                source_field,
+                target_field,
+                table_name
+            )
+        } else {
+            anyhow!("db error: {}", formatted)
+        }
     }
 
     fn direct_children_for_parent<'a>(
@@ -5649,7 +5796,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 updates.join(", "),
             )
         };
-        affected_rows += pg_client.execute(upsert_sql.as_str(), &[]).await?;
+        affected_rows += pg_client
+            .execute(upsert_sql.as_str(), &[])
+            .await
+            .map_err(|err| annotate_apply_db_error(err, root_mapping, &root_table))?;
         *table_insert_execs.entry(root_table.clone()).or_insert(0) += 1;
 
         let root_pk_source = root_source_field_for_pk(root_mapping, &root_pk)
@@ -5716,9 +5866,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             .columns
                             .iter()
                             .map(|mapped| {
-                                let val = obj.get(&mapped.source_field).or_else(|| {
-                                    find_value_in_nested_json_object(&obj, &mapped.source_field)
-                                });
+                                let val = resolve_source_field_value_from_map(&obj, &mapped.source_field);
                                 (mapped, val)
                             })
                             .collect::<Vec<_>>();
@@ -5768,7 +5916,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             child_values.join(", "),
                             quote_ident(&child_pk)
                         );
-                        let row = pg_client.query_one(insert_sql.as_str(), &[]).await?;
+                        let row = pg_client
+                            .query_one(insert_sql.as_str(), &[])
+                            .await
+                            .map_err(|err| annotate_apply_db_error(err, child_mapping, &child_table))?;
                         let inserted_pk_text: String = row.try_get(0)?;
 
                         affected_rows += 1;

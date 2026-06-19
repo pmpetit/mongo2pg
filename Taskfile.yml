@@ -126,3 +126,20 @@ tasks:
           "{{.BIN}}" kafka-import -c "{{.OUT}}/$db/config/$db.toml" --group-id "$db-group" --topic-prefix "mongo2pg.$db" --project-dir $db --database-name $db --schema-name $db
         done
       - echo "👉 results in {{.OUT}}"
+
+  report-kafka-all:
+    desc: report --post-import for all sample databases
+    silent: true
+    deps: [build]
+    vars:
+      OUT: "{{.RESULTS_DIR}}"
+      DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - |
+        for db in {{.DBS_TO_PROCESS}}
+        do
+          echo "📈 report --post-import $db"
+          "{{.BIN}}" report --post-import -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db
+        done
+      - echo "👉 results in {{.OUT}}"      
