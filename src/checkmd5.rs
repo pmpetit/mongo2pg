@@ -11,7 +11,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use futures::TryStreamExt;
 use postgres_native_tls::MakeTlsConnector;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tokio_postgres::{Client, Row};
 
@@ -1482,25 +1482,74 @@ fn collect_mismatched_record_samples(
     pg_records: &[HashRecord],
     limit: usize,
 ) -> Vec<Md5MismatchRow> {
-    let total = mongo_records.len().max(pg_records.len());
-    let mut mismatches = Vec::new();
+    let mut mongo_counts: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
+    let mut pg_counts: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
 
-    for index in 0..total {
-        let mongo_record = mongo_records.get(index);
-        let pg_record = pg_records.get(index);
-        let hashes_match = mongo_record.map(|record| record.md5.as_str())
-            == pg_record.map(|record| record.md5.as_str());
-        if hashes_match {
-            continue;
+    for record in mongo_records {
+        *mongo_counts
+            .entry((record.md5.clone(), record.values.clone()))
+            .or_insert(0) += 1;
+    }
+    for record in pg_records {
+        *pg_counts
+            .entry((record.md5.clone(), record.values.clone()))
+            .or_insert(0) += 1;
+    }
+
+    let mut mongo_only = Vec::new();
+    let mut pg_only = Vec::new();
+
+    for (key, mongo_count) in &mongo_counts {
+        let pg_count = pg_counts.get(key).copied().unwrap_or(0);
+        if *mongo_count > pg_count {
+            for _ in 0..(*mongo_count - pg_count) {
+                mongo_only.push(key.1.clone());
+            }
         }
+    }
 
+    for (key, pg_count) in &pg_counts {
+        let mongo_count = mongo_counts.get(key).copied().unwrap_or(0);
+        if *pg_count > mongo_count {
+            for _ in 0..(*pg_count - mongo_count) {
+                pg_only.push(key.1.clone());
+            }
+        }
+    }
+
+    let mut mismatches = Vec::new();
+    let pair_count = mongo_only.len().min(pg_only.len());
+
+    for index in 0..pair_count {
         mismatches.push(Md5MismatchRow {
-            row_index: index + 1,
-            mongo_values: mongo_record.map(|record| record.values.clone()),
-            pg_values: pg_record.map(|record| record.values.clone()),
+            row_index: mismatches.len() + 1,
+            mongo_values: Some(mongo_only[index].clone()),
+            pg_values: Some(pg_only[index].clone()),
         });
         if mismatches.len() == limit {
-            break;
+            return mismatches;
+        }
+    }
+
+    for values in mongo_only.into_iter().skip(pair_count) {
+        mismatches.push(Md5MismatchRow {
+            row_index: mismatches.len() + 1,
+            mongo_values: Some(values),
+            pg_values: None,
+        });
+        if mismatches.len() == limit {
+            return mismatches;
+        }
+    }
+
+    for values in pg_only.into_iter().skip(pair_count) {
+        mismatches.push(Md5MismatchRow {
+            row_index: mismatches.len() + 1,
+            mongo_values: None,
+            pg_values: Some(values),
+        });
+        if mismatches.len() == limit {
+            return mismatches;
         }
     }
 

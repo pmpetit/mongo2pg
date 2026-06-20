@@ -2212,7 +2212,32 @@ struct CollectionMapping {
     mongo_dbname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mongo_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    traversal: Option<TraversalPlan>,
     pg_mapping: PgMapping,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TraversalMode {
+    Root,
+    Object,
+    ArrayObject,
+    ArrayScalar,
+    MapObject,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TraversalPlan {
+    mode: TraversalMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_table: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_field: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fk_column: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_column: Option<String>,
 }
 
 fn sanitize_pg_name(name: &str) -> String {
@@ -3234,6 +3259,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                 root_collection_name,
                                 mongo_path_segments,
                             ),
+                            traversal: None,
                             pg_mapping: PgMapping {
                                 dbname: db_name.to_owned(),
                                 schema_name: schema_name.to_owned(),
@@ -3306,6 +3332,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                     root_collection_name,
                                     &child_mongo_path_segments,
                                 ),
+                                traversal: None,
                                 pg_mapping: PgMapping {
                                     dbname: db_name.to_owned(),
                                     schema_name: schema_name.to_owned(),
@@ -3408,6 +3435,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                             root_collection_name,
                                             mongo_path_segments,
                                         ),
+                                        traversal: None,
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
                                             schema_name: schema_name.to_owned(),
@@ -3479,6 +3507,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                             root_collection_name,
                                             &child_mongo_path_segments,
                                         ),
+                                        traversal: None,
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
                                             schema_name: schema_name.to_owned(),
@@ -3605,6 +3634,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                             root_collection_name,
                                             &child_mongo_path_segments,
                                         ),
+                                        traversal: None,
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
                                             schema_name: schema_name.to_owned(),
@@ -3734,6 +3764,7 @@ fn build_collection_mappings_with_timestamp_fields(
                 collection_name: coll_name.to_owned(),
                 mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
+                traversal: None,
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -3806,6 +3837,7 @@ fn build_collection_mappings_with_timestamp_fields(
                 collection_name: coll_name.to_owned(),
                 mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
+                traversal: None,
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -3889,6 +3921,74 @@ fn load_reserved_mapping_table_names(
     Ok(reserved)
 }
 
+fn infer_traversal_plan(mapping: &CollectionMapping) -> TraversalPlan {
+    let fk = mapping
+        .pg_mapping
+        .ddl
+        .as_ref()
+        .and_then(|ddl| ddl.foreign_keys.first());
+
+    let parent_table = fk.map(|foreign_key| foreign_key.to_table.clone());
+    let fk_column = fk.map(|foreign_key| normalize_pg_identifier(&foreign_key.from_col));
+    let key_column = mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .find(|column| column.target_field == "key")
+        .map(|column| column.target_field.clone());
+
+    let non_structural_targets = mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .filter(|column| column.target_field != "id")
+        .filter(|column| {
+            fk_column
+                .as_ref()
+                .is_none_or(|fk_name| column.target_field != *fk_name)
+        })
+        .filter(|column| column.target_field != "key")
+        .map(|column| column.target_field.as_str())
+        .collect::<Vec<_>>();
+
+    let source_field_from_path = mapping
+        .mongo_path
+        .as_deref()
+        .and_then(|path| {
+            if path == "." || path.trim().is_empty() {
+                None
+            } else {
+                path.rsplit('.').next().map(str::to_owned)
+            }
+        });
+
+    let mode = if mapping.mongo_path.as_deref() == Some(".") {
+        TraversalMode::Root
+    } else if non_structural_targets.len() == 1 && non_structural_targets[0] == "value" {
+        TraversalMode::ArrayScalar
+    } else if key_column.is_some() {
+        TraversalMode::MapObject
+    } else {
+        TraversalMode::Object
+    };
+
+    TraversalPlan {
+        mode,
+        parent_table,
+        source_field: source_field_from_path,
+        fk_column,
+        key_column,
+    }
+}
+
+fn enrich_mappings_with_traversal(mappings: &mut [(String, CollectionMapping)]) {
+    for (_, mapping) in mappings.iter_mut() {
+        if mapping.traversal.is_none() {
+            mapping.traversal = Some(infer_traversal_plan(mapping));
+        }
+    }
+}
+
 /// Write `<dir>/<name>/<name>.json`, `<dir>/<name>/<name>.stats.txt`, `<dir>/<name>/<name>.stats.yaml`, and one `mapping_<table>.yaml` per generated table.
 fn write_collection_files(
     base: &Path,
@@ -3933,7 +4033,7 @@ fn write_collection_files(
         );
     }
 
-    let mappings = build_collection_mappings_with_timestamp_fields(
+    let mut mappings = build_collection_mappings_with_timestamp_fields(
         db_name,
         coll_name,
         target_schema,
@@ -3941,6 +4041,7 @@ fn write_collection_files(
         timestamp_fields,
         &reserved_table_names,
     );
+    enrich_mappings_with_traversal(&mut mappings);
     let expected_mapping_files = mappings
         .iter()
         .map(|(file_stem, _)| format!("mapping_{}.yaml", file_stem))

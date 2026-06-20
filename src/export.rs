@@ -20,13 +20,12 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::TryStreamExt;
 use mongodb::Client;
+use serde::Deserialize;
 
-use crate::analyzer::CollectionSchema;
 use crate::schema_diagram::{parse_sql, Table as SqlTable};
 
 use crate::util::{
-    flatten_grouped_root_array_object_fields, flatten_root_array_object_field,
-    flattened_root_parent_id_column, grouped_root_array_object_fields, objectid_hex_to_uuid,
+    objectid_hex_to_uuid,
     sanitize,
 };
 
@@ -427,6 +426,7 @@ fn build_tree(
     build_tree_with_grouped_root(sql_tables, flattened_root, None, grouped_root_sources)
 }
 
+#[cfg(test)]
 fn build_tree_with_grouped_root(
     sql_tables: &[SqlTable],
     flattened_root: Option<(String, String)>,
@@ -436,7 +436,6 @@ fn build_tree_with_grouped_root(
     let names: std::collections::HashSet<&str> =
         sql_tables.iter().map(|t| t.name.as_str()).collect();
 
-    // Map each child table to its parent (first FK that points to a table in this file)
     let mut parent_of: HashMap<&str, &str> = HashMap::new();
     for t in sql_tables {
         for fk in &t.foreign_keys {
@@ -447,7 +446,6 @@ fn build_tree_with_grouped_root(
         }
     }
 
-    // Invert: parent → children
     let mut children_of: HashMap<&str, Vec<&SqlTable>> = HashMap::new();
     for t in sql_tables {
         if let Some(&par) = parent_of.get(t.name.as_str()) {
@@ -455,12 +453,127 @@ fn build_tree_with_grouped_root(
         }
     }
 
-    // Root = no parent
+    fn build_node_legacy(
+        sql_t: &SqlTable,
+        parent_name: Option<&str>,
+        children_of: &HashMap<&str, Vec<&SqlTable>>,
+        flattened_root: Option<(String, String)>,
+        flattened_grouped_root: Option<(Vec<String>, String)>,
+        grouped_root_sources: &HashMap<String, Vec<String>>,
+    ) -> TableNode {
+        let mongo_field = match parent_name {
+            Some(p) => sql_t
+                .name
+                .strip_prefix(&format!("{p}_"))
+                .unwrap_or(&sql_t.name)
+                .to_owned(),
+            None => String::new(),
+        };
+
+        let pk_cols: Vec<String> = sql_t
+            .columns
+            .iter()
+            .filter(|c| c.primary_key)
+            .map(|c| unquote_sql_ident(&c.name))
+            .collect();
+
+        let fk_col = sql_t
+            .foreign_keys
+            .first()
+            .map(|fk| unquote_sql_ident(&fk.from_col));
+
+        let columns: Vec<String> = sql_t
+            .columns
+            .iter()
+            .map(|c| unquote_sql_ident(&c.name))
+            .collect();
+
+        let is_scalar_array =
+            fk_col.is_some() && columns.len() == 3 && columns.iter().any(|c| c == "value");
+
+        let jsonb_cols: HashSet<String> = sql_t
+            .columns
+            .iter()
+            .filter(|c| c.col_type.eq_ignore_ascii_case("JSONB"))
+            .map(|c| unquote_sql_ident(&c.name))
+            .collect();
+        let timestamp_cols: HashSet<String> = sql_t
+            .columns
+            .iter()
+            .filter(|c| is_timestamp_col_type(&c.col_type))
+            .map(|c| unquote_sql_ident(&c.name))
+            .collect();
+        let uuid_cols: HashSet<String> = sql_t
+            .columns
+            .iter()
+            .filter(|c| is_uuid_col_type(&c.col_type))
+            .map(|c| unquote_sql_ident(&c.name))
+            .collect();
+        let geometry_cols: HashSet<String> = sql_t
+            .columns
+            .iter()
+            .filter(|c| is_geometry_col_type(&c.col_type))
+            .map(|c| unquote_sql_ident(&c.name))
+            .collect();
+
+        let children: Vec<TableNode> = children_of
+            .get(sql_t.name.as_str())
+            .map(|cs| {
+                cs.iter()
+                    .map(|child_sql| {
+                        build_node_legacy(
+                            child_sql,
+                            Some(&sql_t.name),
+                            children_of,
+                            None,
+                            None,
+                            grouped_root_sources,
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let (root_array_field, root_parent_id_col, root_grouped_fields) = if parent_name.is_none() {
+            if let Some((field_name, parent_id_col)) = flattened_root {
+                (Some(field_name), Some(parent_id_col), None)
+            } else if let Some((grouped_fields, parent_id_col)) = flattened_grouped_root {
+                (None, Some(parent_id_col), Some(grouped_fields))
+            } else {
+                (None, None, None)
+            }
+        } else {
+            (None, None, None)
+        };
+        let grouped_root_fields = if parent_name.is_some() {
+            grouped_root_sources.get(&sql_t.name).cloned()
+        } else {
+            root_grouped_fields
+        };
+
+        TableNode {
+            sql_name: sql_t.name.clone(),
+            columns,
+            pk_cols,
+            fk_col,
+            mongo_field,
+            grouped_root_fields,
+            is_scalar_array,
+            jsonb_cols,
+            timestamp_cols,
+            uuid_cols,
+            geometry_cols,
+            root_array_field,
+            root_parent_id_col,
+            children,
+        }
+    }
+
     sql_tables
         .iter()
         .filter(|t| !parent_of.contains_key(t.name.as_str()))
         .map(|r| {
-            build_node(
+            build_node_legacy(
                 r,
                 None,
                 &children_of,
@@ -472,59 +585,31 @@ fn build_tree_with_grouped_root(
         .collect()
 }
 
+#[cfg(test)]
 fn grouped_root_table_sources(
-    schema: &CollectionSchema,
+    schema: &crate::analyzer::CollectionSchema,
     coll_name: &str,
 ) -> HashMap<String, Vec<String>> {
-    grouped_root_array_object_fields(&schema.object)
+    crate::util::grouped_root_array_object_fields(&schema.object)
         .into_iter()
         .map(|group| {
             (
-                format!(
-                    "{}_{}",
-                    sanitize(coll_name),
-                    sanitize(&group.representative)
-                ),
+                format!("{}_{}", sanitize(coll_name), sanitize(&group.representative)),
                 group.members,
             )
         })
         .collect()
 }
 
-fn flattened_root_for_export(
-    sql_tables: &[SqlTable],
-    schema: &CollectionSchema,
-    coll_name: &str,
-) -> Option<(String, String)> {
-    let (field_name, _) = flatten_root_array_object_field(schema)?;
-    let sanitized_field = sanitize(field_name);
-    let root_keeps_jsonb_column = sql_tables.iter().any(|table| {
-        table.foreign_keys.is_empty()
-            && table.columns.iter().any(|column| {
-                column.name == sanitized_field && column.col_type.eq_ignore_ascii_case("JSONB")
-            })
-    });
-
-    if root_keeps_jsonb_column {
-        None
-    } else {
-        Some((
-            field_name.to_owned(),
-            flattened_root_parent_id_column(coll_name),
-        ))
-    }
-}
-
+#[cfg(test)]
 fn flattened_grouped_root_for_export(
     sql_tables: &[SqlTable],
-    schema: &CollectionSchema,
+    schema: &crate::analyzer::CollectionSchema,
     coll_name: &str,
 ) -> Option<(Vec<String>, String)> {
-    let group = flatten_grouped_root_array_object_fields(schema)?;
-    let parent_id_col = flattened_root_parent_id_column(coll_name);
-    let root_table = sql_tables
-        .iter()
-        .find(|table| table.foreign_keys.is_empty())?;
+    let group = crate::util::flatten_grouped_root_array_object_fields(schema)?;
+    let parent_id_col = crate::util::flattened_root_parent_id_column(coll_name);
+    let root_table = sql_tables.iter().find(|table| table.foreign_keys.is_empty())?;
 
     if root_table
         .columns
@@ -535,124 +620,6 @@ fn flattened_grouped_root_for_export(
         Some((group.members, parent_id_col))
     } else {
         None
-    }
-}
-
-fn build_node(
-    sql_t: &SqlTable,
-    parent_name: Option<&str>,
-    children_of: &HashMap<&str, Vec<&SqlTable>>,
-    flattened_root: Option<(String, String)>,
-    flattened_grouped_root: Option<(Vec<String>, String)>,
-    grouped_root_sources: &HashMap<String, Vec<String>>,
-) -> TableNode {
-    // The MongoDB field name is the suffix after stripping "<parent>_" from the table name.
-    let mongo_field = match parent_name {
-        Some(p) => sql_t
-            .name
-            .strip_prefix(&format!("{p}_"))
-            .unwrap_or(&sql_t.name)
-            .to_owned(),
-        None => String::new(),
-    };
-
-    let pk_cols: Vec<String> = sql_t
-        .columns
-        .iter()
-        .filter(|c| c.primary_key)
-        .map(|c| unquote_sql_ident(&c.name))
-        .collect();
-
-    let fk_col = sql_t
-        .foreign_keys
-        .first()
-        .map(|fk| unquote_sql_ident(&fk.from_col));
-
-    let columns: Vec<String> = sql_t
-        .columns
-        .iter()
-        .map(|c| unquote_sql_ident(&c.name))
-        .collect();
-
-    // A scalar-array child has exactly: pk, fk, value  (3 columns total)
-    let is_scalar_array =
-        fk_col.is_some() && columns.len() == 3 && columns.iter().any(|c| c == "value");
-
-    let jsonb_cols: HashSet<String> = sql_t
-        .columns
-        .iter()
-        .filter(|c| c.col_type.eq_ignore_ascii_case("JSONB"))
-        .map(|c| unquote_sql_ident(&c.name))
-        .collect();
-    let timestamp_cols: HashSet<String> = sql_t
-        .columns
-        .iter()
-        .filter(|c| is_timestamp_col_type(&c.col_type))
-        .map(|c| unquote_sql_ident(&c.name))
-        .collect();
-    let uuid_cols: HashSet<String> = sql_t
-        .columns
-        .iter()
-        .filter(|c| is_uuid_col_type(&c.col_type))
-        .map(|c| unquote_sql_ident(&c.name))
-        .collect();
-    let geometry_cols: HashSet<String> = sql_t
-        .columns
-        .iter()
-        .filter(|c| is_geometry_col_type(&c.col_type))
-        .map(|c| unquote_sql_ident(&c.name))
-        .collect();
-
-    let children: Vec<TableNode> = children_of
-        .get(sql_t.name.as_str())
-        .map(|cs| {
-            cs.iter()
-                .map(|child_sql| {
-                    build_node(
-                        child_sql,
-                        Some(&sql_t.name),
-                        children_of,
-                        None,
-                        None,
-                        grouped_root_sources,
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let (root_array_field, root_parent_id_col, root_grouped_fields) = if parent_name.is_none() {
-        if let Some((field_name, parent_id_col)) = flattened_root {
-            (Some(field_name), Some(parent_id_col), None)
-        } else if let Some((grouped_fields, parent_id_col)) = flattened_grouped_root {
-            (None, Some(parent_id_col), Some(grouped_fields))
-        } else {
-            (None, None, None)
-        }
-    } else {
-        (None, None, None)
-    };
-    let grouped_root_fields = if parent_name.is_some() {
-        grouped_root_sources.get(&sql_t.name).cloned()
-    } else {
-        root_grouped_fields
-    };
-
-    TableNode {
-        sql_name: sql_t.name.clone(),
-        columns,
-        pk_cols,
-        fk_col,
-        mongo_field,
-        grouped_root_fields,
-        is_scalar_array,
-        jsonb_cols,
-        timestamp_cols,
-        uuid_cols,
-        geometry_cols,
-        root_array_field,
-        root_parent_id_col,
-        children,
     }
 }
 
@@ -708,11 +675,339 @@ fn find_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bs
     None
 }
 
-fn find_root_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bson> {
-    find_mongo_field(doc, sql_col).or_else(|| {
+#[derive(Debug, Clone, Deserialize)]
+struct ExportMappingYaml {
+    #[serde(default)]
+    traversal: Option<ExportTraversalPlan>,
+    pg_mapping: ExportPgMappingYaml,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ExportTraversalMode {
+    Root,
+    Object,
+    ArrayObject,
+    ArrayScalar,
+    MapObject,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ExportTraversalPlan {
+    mode: ExportTraversalMode,
+    #[serde(default)]
+    parent_table: Option<String>,
+    #[serde(default)]
+    source_field: Option<String>,
+    #[serde(default)]
+    fk_column: Option<String>,
+    // #[serde(default)]
+    // key_column: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ExportPgMappingYaml {
+    table_name: String,
+    #[serde(default)]
+    columns: Vec<ExportMappingColumnYaml>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ExportMappingColumnYaml {
+    source_field: String,
+    target_field: String,
+}
+
+#[derive(Debug, Clone)]
+struct ExportTablePlan {
+    traversal: ExportTraversalPlan,
+    target_to_source: HashMap<String, String>,
+}
+
+fn load_export_table_plans(
+    collections_dir: &Path,
+    safe_name: &str,
+) -> HashMap<String, ExportTablePlan> {
+    let mappings_dir = collections_dir.join(safe_name);
+    let mut plans = HashMap::new();
+
+    let Ok(entries) = std::fs::read_dir(&mappings_dir) else {
+        return plans;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !file_name.starts_with("mapping_") || !file_name.ends_with(".yaml") {
+            continue;
+        }
+
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(mapping) = serde_yaml::from_str::<ExportMappingYaml>(&content) else {
+            continue;
+        };
+        let Some(traversal) = mapping.traversal else {
+            continue;
+        };
+
+        let target_to_source = mapping
+            .pg_mapping
+            .columns
+            .into_iter()
+            .filter(|column| {
+                !column.target_field.trim().is_empty() && !column.source_field.trim().is_empty()
+            })
+            .map(|column| (sanitize(&column.target_field), column.source_field))
+            .collect::<HashMap<_, _>>();
+
+        plans.insert(
+            sanitize(&mapping.pg_mapping.table_name),
+            ExportTablePlan {
+                traversal,
+                target_to_source,
+            },
+        );
+    }
+
+    plans
+}
+
+fn build_node_from_plan(
+    sql_t: &SqlTable,
+    parent_key: Option<&str>,
+    children_of: &HashMap<String, Vec<String>>,
+    sql_by_key: &HashMap<String, &SqlTable>,
+    plans: &HashMap<String, ExportTablePlan>,
+) -> Option<TableNode> {
+    let table_key = sanitize(&sql_t.name);
+    let plan = plans.get(&table_key)?;
+
+    let pk_cols: Vec<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| c.primary_key)
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
+
+    let fk_col = sql_t
+        .foreign_keys
+        .first()
+        .map(|fk| unquote_sql_ident(&fk.from_col));
+
+    let columns: Vec<String> = sql_t
+        .columns
+        .iter()
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
+
+    let is_scalar_array = matches!(plan.traversal.mode, ExportTraversalMode::ArrayScalar);
+
+    let jsonb_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| c.col_type.eq_ignore_ascii_case("JSONB"))
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
+    let timestamp_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| is_timestamp_col_type(&c.col_type))
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
+    let uuid_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| is_uuid_col_type(&c.col_type))
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
+    let geometry_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| is_geometry_col_type(&c.col_type))
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
+
+    let children = children_of
+        .get(&table_key)
+        .map(|keys| {
+            keys.iter()
+                .filter_map(|key| {
+                    sql_by_key.get(key).and_then(|child_sql| {
+                        build_node_from_plan(child_sql, Some(&table_key), children_of, sql_by_key, plans)
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let mongo_field = if parent_key.is_none() {
+        String::new()
+    } else {
+        plan.traversal
+            .source_field
+            .clone()
+            .unwrap_or_else(|| {
+                parent_key
+                    .and_then(|parent| {
+                        sql_t
+                            .name
+                            .strip_prefix(&format!("{parent}_"))
+                            .map(str::to_owned)
+                    })
+                    .unwrap_or_else(|| sql_t.name.clone())
+            })
+    };
+
+    let (root_array_field, root_parent_id_col) = if parent_key.is_none()
+        && matches!(plan.traversal.mode, ExportTraversalMode::ArrayObject)
+    {
+        (
+            plan.traversal.source_field.clone(),
+            plan.traversal.fk_column.clone().map(|name| sanitize(&name)),
+        )
+    } else {
+        (None, None)
+    };
+
+    Some(TableNode {
+        sql_name: sql_t.name.clone(),
+        columns,
+        pk_cols,
+        fk_col,
+        mongo_field,
+        grouped_root_fields: None,
+        is_scalar_array,
+        jsonb_cols,
+        timestamp_cols,
+        uuid_cols,
+        geometry_cols,
+        root_array_field,
+        root_parent_id_col,
+        children,
+    })
+}
+
+fn build_tree_from_mapping_plan(
+    sql_tables: &[SqlTable],
+    plans: &HashMap<String, ExportTablePlan>,
+) -> Option<(Vec<TableNode>, HashMap<String, String>)> {
+    if sql_tables.is_empty() || plans.is_empty() {
+        return None;
+    }
+
+    if !sql_tables
+        .iter()
+        .all(|table| plans.contains_key(&sanitize(&table.name)))
+    {
+        return None;
+    }
+
+    let mut children_of: HashMap<String, Vec<String>> = HashMap::new();
+    let mut roots = Vec::new();
+
+    for table in sql_tables {
+        let table_key = sanitize(&table.name);
+        let Some(plan) = plans.get(&table_key) else {
+            return None;
+        };
+        let parent = plan
+            .traversal
+            .parent_table
+            .as_ref()
+            .map(|name| sanitize(name));
+
+        if let Some(parent_key) = parent {
+            children_of
+                .entry(parent_key)
+                .or_default()
+                .push(table_key.clone());
+        } else {
+            roots.push(table_key);
+        }
+    }
+
+    let sql_by_key = sql_tables
+        .iter()
+        .map(|table| (sanitize(&table.name), table))
+        .collect::<HashMap<_, _>>();
+
+    let root_nodes = roots
+        .iter()
+        .filter_map(|root_key| {
+            sql_by_key
+                .get(root_key)
+                .and_then(|sql_t| build_node_from_plan(sql_t, None, &children_of, &sql_by_key, plans))
+        })
+        .collect::<Vec<_>>();
+
+    if root_nodes.is_empty() {
+        return None;
+    }
+
+    let root_target_to_source = roots
+        .first()
+        .and_then(|root_key| plans.get(root_key))
+        .map(|plan| plan.target_to_source.clone())
+        .unwrap_or_default();
+
+    Some((root_nodes, root_target_to_source))
+}
+
+fn find_field_by_segment<'a>(doc: &'a bson::Document, segment: &str) -> Option<&'a Bson> {
+    if let Some(value) = doc.get(segment) {
+        return Some(value);
+    }
+
+    let wanted = sanitize(segment);
+    doc.iter().find_map(|(key, value)| {
+        if sanitize(key) == wanted {
+            Some(value)
+        } else {
+            None
+        }
+    })
+}
+
+fn find_mongo_field_by_source_path<'a>(
+    doc: &'a bson::Document,
+    source_field: &str,
+) -> Option<&'a Bson> {
+    if source_field.trim().is_empty() {
+        return None;
+    }
+
+    let mut segments = source_field.split('.');
+    let first = segments.next()?;
+    let mut current = find_field_by_segment(doc, first)?;
+
+    for segment in segments {
+        let Bson::Document(child_doc) = current else {
+            return None;
+        };
+        current = find_field_by_segment(child_doc, segment)?;
+    }
+
+    Some(current)
+}
+
+fn find_root_mongo_field_mapped<'a>(
+    doc: &'a bson::Document,
+    target_col: &str,
+    root_target_to_source: &HashMap<String, String>,
+) -> Option<&'a Bson> {
+    let source_field = root_target_to_source
+        .get(target_col)
+        .map(String::as_str)
+        .unwrap_or(target_col);
+
+    find_mongo_field_by_source_path(doc, source_field).or_else(|| {
         doc.get_document("_id")
             .ok()
-            .and_then(|id_doc| find_mongo_field(id_doc, sql_col))
+            .and_then(|id_doc| find_mongo_field_by_source_path(id_doc, source_field))
     })
 }
 
@@ -811,7 +1106,9 @@ fn extract_child_document_rows(
                     if grandchild.is_scalar_array {
                         for item in arr {
                             let grandchild_id = {
-                                let c = counters.entry(grandchild.sql_name.clone()).or_insert(0);
+                                let c = counters
+                                    .entry(grandchild.sql_name.clone())
+                                    .or_insert(0);
                                 *c += 1;
                                 c.to_string()
                             };
@@ -819,9 +1116,15 @@ fn extract_child_document_rows(
                                 .columns
                                 .iter()
                                 .map(|col| {
-                                    if grandchild.pk_cols.iter().any(|pk| pk == col) {
+                                    if grandchild
+                                        .pk_cols
+                                        .iter()
+                                        .any(|pk| pk == col)
+                                    {
                                         Some(grandchild_id.clone())
-                                    } else if Some(col) == grandchild.fk_col.as_ref() {
+                                    } else if Some(col)
+                                        == grandchild.fk_col.as_ref()
+                                    {
                                         Some(child_id.clone())
                                     } else if col == "value" {
                                         serialize_column_value(
@@ -927,6 +1230,27 @@ fn extract_rows(
     all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
     counters: &mut HashMap<String, u64>,
 ) {
+    let root_target_to_source = HashMap::new();
+    extract_rows_with_mapping(
+        val,
+        node,
+        parent_id,
+        is_root,
+        all_rows,
+        counters,
+        &root_target_to_source,
+    );
+}
+
+fn extract_rows_with_mapping(
+    val: &Bson,
+    node: &TableNode,
+    parent_id: Option<&str>,
+    is_root: bool,
+    all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
+    counters: &mut HashMap<String, u64>,
+    root_target_to_source: &HashMap<String, String>,
+) {
     let doc = match val {
         Bson::Document(d) => d,
         _ => return,
@@ -997,7 +1321,9 @@ fn extract_rows(
                                                 .map(|col| {
                                                     if child.pk_cols.iter().any(|pk| pk == col) {
                                                         Some(child_id.clone())
-                                                    } else if Some(col) == child.fk_col.as_ref() {
+                                                    } else if Some(col)
+                                                        == child.fk_col.as_ref()
+                                                    {
                                                         Some(my_id.clone())
                                                     } else if col == "value" {
                                                         serialize_column_value(
@@ -1013,11 +1339,6 @@ fn extract_rows(
                                                     }
                                                 })
                                                 .collect();
-
-                                            if should_skip_empty_row(child, &child_row, false) {
-                                                continue;
-                                            }
-
                                             all_rows
                                                 .entry(child.sql_name.clone())
                                                 .or_default()
@@ -1104,8 +1425,9 @@ fn extract_rows(
                                 if child.is_scalar_array {
                                     for child_item in arr {
                                         let child_id = {
-                                            let c =
-                                                counters.entry(child.sql_name.clone()).or_insert(0);
+                                            let c = counters
+                                                .entry(child.sql_name.clone())
+                                                .or_insert(0);
                                             *c += 1;
                                             c.to_string()
                                         };
@@ -1115,7 +1437,9 @@ fn extract_rows(
                                             .map(|col| {
                                                 if child.pk_cols.iter().any(|pk| pk == col) {
                                                     Some(child_id.clone())
-                                                } else if Some(col) == child.fk_col.as_ref() {
+                                                } else if Some(col)
+                                                    == child.fk_col.as_ref()
+                                                {
                                                     Some(my_id.clone())
                                                 } else if col == "value" {
                                                     serialize_column_value(
@@ -1214,7 +1538,9 @@ fn extract_rows(
                             if child.is_scalar_array {
                                 for item in arr {
                                     let grandchild_id = {
-                                        let c = counters.entry(child.sql_name.clone()).or_insert(0);
+                                        let c = counters
+                                            .entry(child.sql_name.clone())
+                                            .or_insert(0);
                                         *c += 1;
                                         c.to_string()
                                     };
@@ -1224,7 +1550,9 @@ fn extract_rows(
                                         .map(|col| {
                                             if child.pk_cols.iter().any(|pk| pk == col) {
                                                 Some(grandchild_id.clone())
-                                            } else if Some(col) == child.fk_col.as_ref() {
+                                            } else if Some(col)
+                                                == child.fk_col.as_ref()
+                                            {
                                                 Some(child_id.clone())
                                             } else if col == "value" {
                                                 serialize_column_value(
@@ -1302,7 +1630,7 @@ fn extract_rows(
                 Some(parent_id.unwrap_or("").to_owned())
             } else {
                 let lookup = if is_root {
-                    find_root_mongo_field(doc, col)
+                    find_root_mongo_field_mapped(doc, col, root_target_to_source)
                 } else {
                     find_mongo_field(doc, col)
                 };
@@ -1556,27 +1884,15 @@ pub async fn export_collection(
     }
 
     let safe_name = coll_name.replace('/', "_");
-    let schema_path = collections_dir
-        .join(&safe_name)
-        .join(format!("{safe_name}.json"));
-    let (flattened_root, flattened_grouped_root, grouped_root_sources) =
-        std::fs::read_to_string(&schema_path)
-            .ok()
-            .and_then(|content| serde_json::from_str::<CollectionSchema>(&content).ok())
-            .map(|schema| {
-                (
-                    flattened_root_for_export(&sql_tables, &schema, coll_name),
-                    flattened_grouped_root_for_export(&sql_tables, &schema, coll_name),
-                    grouped_root_table_sources(&schema, coll_name),
-                )
-            })
-            .unwrap_or_else(|| (None, None, HashMap::new()));
-    let roots = build_tree_with_grouped_root(
-        &sql_tables,
-        flattened_root,
-        flattened_grouped_root,
-        &grouped_root_sources,
-    );
+    let plans = load_export_table_plans(collections_dir, &safe_name);
+
+    let (roots, root_target_to_source) = build_tree_from_mapping_plan(&sql_tables, &plans)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "No complete traversal mapping plan found for collection '{}'. Regenerate mapping_*.yaml with traversal metadata before export.",
+                coll_name
+            )
+        })?;
 
     // Query MongoDB using the original collection name.
     let db = client.database(db_name);
@@ -1588,11 +1904,18 @@ pub async fn export_collection(
 
     let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
-
     while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
         let bson_val = Bson::Document(doc);
         for root in &roots {
-            extract_rows(&bson_val, root, None, true, &mut all_rows, &mut counters);
+            extract_rows_with_mapping(
+                &bson_val,
+                root,
+                None,
+                true,
+                &mut all_rows,
+                &mut counters,
+                &root_target_to_source,
+            );
         }
     }
 
@@ -1638,7 +1961,7 @@ pub async fn export_collection(
 mod tests {
     use super::{
         build_tree, build_tree_with_grouped_root, extract_rows, flattened_grouped_root_for_export,
-        flattened_root_for_export, grouped_root_table_sources, unquote_sql_ident,
+        grouped_root_table_sources, unquote_sql_ident,
     };
     use crate::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
@@ -2354,14 +2677,8 @@ CREATE TABLE engine (
         });
         let mut schema = analyzer.finish();
         schema.mark_objects_as_jsonb();
+        let roots = build_tree(&tables, None, &HashMap::new());
 
-        let flattened_root = flattened_root_for_export(&tables, &schema, "engine");
-        assert!(
-            flattened_root.is_none(),
-            "jsonb root array should not be promoted into one row per item"
-        );
-
-        let roots = build_tree(&tables, flattened_root, &HashMap::new());
         let mut all_rows = HashMap::new();
         let mut counters = HashMap::new();
         let doc = doc! {
@@ -2420,13 +2737,7 @@ CREATE TABLE host (
             ]
         };
         analyzer.process_document(&doc);
-        let schema = analyzer.finish();
-        let flattened_root = flattened_root_for_export(&tables, &schema, "engine");
-        assert!(
-            flattened_root.is_none(),
-            "jsonb root array should not be promoted into one row per item"
-        );
-        let roots = build_tree(&tables, flattened_root, &HashMap::new());
+        let roots = build_tree(&tables, None, &HashMap::new());
         let mut all_rows = HashMap::new();
         let mut counters = HashMap::new();
         extract_rows(
