@@ -66,6 +66,7 @@ exclude = []
 [target]
 uri = "postgres://postgres:x@localhost:5432/postgres?sslmode=require"
 database_name = "sample_airbnb"
+# schema_name = "shared_schema"
 ```
 
 ---

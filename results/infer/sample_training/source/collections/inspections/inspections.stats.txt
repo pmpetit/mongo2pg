@@ -1,9 +1,0 @@
-Documents in collection : 80047
-Documents sampled       : 1000
-Width (top-level / max)  : 8 / 8.0 (L1)
-Depth (max nesting)     : 2
-Branch (per level)      : L1:8.0  L2:4.0
-Avg fields / doc        : 8.0000
-Distinct fields / avg    : 1.0000
-Migrability score       : 2.00
-Top-level types         : _id:ObjectId, address:Object, business_name:String, certificate_number:Number, date:String, id:String, result:String, sector:String

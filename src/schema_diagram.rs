@@ -69,7 +69,9 @@ pub fn parse_sql(sql: &str) -> Vec<Table> {
             Some(p) => p,
             None => continue,
         };
-        let close = match chunk.rfind(");") {
+        // End at first CREATE TABLE terminator; later `);` may belong to
+        // standalone statements like CREATE INDEX.
+        let close = match chunk.find(");") {
             Some(c) => c,
             None => continue,
         };
@@ -83,6 +85,10 @@ pub fn parse_sql(sql: &str) -> Vec<Table> {
         for raw_line in body.lines() {
             let line = raw_line.trim().trim_end_matches(',').trim();
             if line.is_empty() {
+                continue;
+            }
+
+            if line.to_uppercase().starts_with("CREATE INDEX ") {
                 continue;
             }
 
@@ -235,6 +241,39 @@ CREATE TABLE child (
             .expect("parent_id foreign key should exist");
         assert_eq!(fk.to_table, "parent");
         assert_eq!(fk.to_col, "id");
+    }
+
+    #[test]
+    fn parse_sql_ignores_create_index_after_table() {
+        let sql = r#"
+CREATE TABLE parent (
+    id TEXT PRIMARY KEY
+);
+
+CREATE TABLE child (
+    id BIGSERIAL PRIMARY KEY,
+    parent_id TEXT NOT NULL,
+    FOREIGN KEY (parent_id) REFERENCES parent (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE INDEX IF NOT EXISTS idx_child_parent_id ON child (parent_id);
+"#;
+
+        let tables = parse_sql(sql);
+        let child = tables
+            .iter()
+            .find(|table| table.name == "child")
+            .expect("child table should exist");
+
+        assert!(
+            child
+                .columns
+                .iter()
+                .all(|column| !column.name.eq_ignore_ascii_case("create")),
+            "CREATE INDEX line must not be parsed as table column"
+        );
+        assert_eq!(child.foreign_keys.len(), 1);
+        assert_eq!(child.foreign_keys[0].from_col, "parent_id");
     }
 }
 

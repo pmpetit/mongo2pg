@@ -125,6 +125,35 @@ fn test_nested_object_schema() {
 }
 
 #[test]
+fn test_empty_object_is_not_counted_as_field_presence() {
+    let docs = vec![
+        doc! { "_id": 1, "tier_and_details": {} },
+        doc! { "_id": 2, "tier_and_details": {} },
+        doc! { "_id": 3, "tier_and_details": { "active": true, "tier": "gold" } },
+    ];
+    let schema = analyze_docs(&docs);
+
+    let field = schema
+        .object
+        .get("tier_and_details")
+        .expect("tier_and_details missing");
+    assert!(
+        (field.probability - (1.0 / 3.0)).abs() < 1e-9,
+        "expected tier_and_details probability=1/3, got {}",
+        field.probability
+    );
+
+    let obj_type = field
+        .types
+        .get("Object")
+        .expect("Object type should be present");
+    assert_eq!(
+        obj_type.sampled, 1,
+        "empty objects must not be counted as sampled object rows"
+    );
+}
+
+#[test]
 fn test_array_type() {
     let docs = vec![doc! { "_id": 1, "tags": ["rust", "mongodb"] }];
     let schema = analyze_docs(&docs);
@@ -428,11 +457,10 @@ fn test_build_mongo_mermaid_output() {
 /// `{directory_name}.sql` (original case), so the file is never found and the
 /// report shows 0 tables instead of the real count.
 #[test]
-fn test_camelcase_collection_table_count_matches_report() {
+fn test_schema_to_ddl_and_collect_rows_table_count_match_for_camel_case() {
     use mongo2pg::report::collect_rows;
     use mongo2pg::to_pg::schema_to_ddl;
-    use std::fs;
-    use std::path::PathBuf;
+    use std::{fs, path::PathBuf};
 
     // Schema with a nested object → produces a root table + one child table.
     let docs = vec![doc! {

@@ -1,6 +1,0 @@
-Documents in collection : 29470
-Documents sampled       : 1000
-Width (top-level / max)  : 6 / 6.0 (L1)
-Depth (max nesting)     : 1
-Branch (per level)      : L1:6.0
-Top-level types         : _id:ObjectId, city:String, loc:Object, pop:Number, state:String, zip:String

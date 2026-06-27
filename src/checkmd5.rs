@@ -3,16 +3,17 @@ use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_pg_reserved, read_conf,
+    inline_object_leaf_fields_with_prefix, read_conf, scalar_type_family,
 };
 use anyhow::{anyhow, Context, Result};
 use bson::{doc, Bson, Document};
 use chrono::{DateTime, SecondsFormat, Utc};
 use futures::TryStreamExt;
 use postgres_native_tls::MakeTlsConnector;
-use serde::Deserialize;
-use std::collections::HashMap;
+use serde::{Deserialize,Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tokio_postgres::{Client, Row};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -67,7 +68,9 @@ struct DdlForeignKeyYaml {
 #[derive(Debug, Clone)]
 pub struct Md5ColumnMapping {
     pub source_field: String,
+    pub source_type: Option<String>,
     pub target_field: String,
+    pub target_type: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +113,411 @@ struct SourcePath {
 struct HashRecord {
     md5: String,
     values: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CollectionChecksumResult {
+    mongo_md5: String,
+    pg_md5: String,
+    matches: bool,
+    /// Populate when `matches` is false
+    mismatches: Option<MismatchDelta>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MismatchDelta {
+    mongo_only: Vec<RowSnapshot>,
+    pg_only: Vec<RowSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RowSnapshot {
+    md5: String,
+    delta: Vec<String>, // The string representations from your values array
+}
+
+fn build_row_deltas(
+    mongo_vals: Option<&[String]>,
+    pg_vals: Option<&[String]>,
+    target_fields: &[String],
+) -> (Vec<String>, Vec<String>) {
+    let (mongo_values, pg_values) = match (mongo_vals, pg_vals) {
+        (None, Some(pv)) => {
+            return (
+                vec![format!("Row missing in MongoDB")],
+                vec![format!("Row exists only in PostgreSQL: {:?}", pv)],
+            );
+        }
+        (Some(mv), None) => {
+            return (
+                vec![format!("Row exists only in MongoDB: {:?}", mv)],
+                vec![format!("Row missing in PostgreSQL")],
+            );
+        }
+        (Some(mv), Some(pv)) => (mv, pv),
+        (None, None) => return (vec![], vec![]),
+    };
+
+    let mut mongo_deltas = Vec::new();
+    let mut pg_deltas = Vec::new();
+    let max_len = std::cmp::max(mongo_values.len(), pg_values.len());
+
+    for i in 0..max_len {
+        let m_raw = mongo_values.get(i).map(String::as_str).unwrap_or("");
+        let p_raw = pg_values.get(i).map(String::as_str).unwrap_or("");
+        let col = target_fields.get(i).map(String::as_str).unwrap_or("?");
+
+        let m_clean = m_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
+        let p_clean = p_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
+
+        if m_clean == p_clean {
+            continue;
+        }
+
+        let (m_preview, p_preview) = {
+            let mc: Vec<char> = m_clean.chars().collect();
+            let pc: Vec<char> = p_clean.chars().collect();
+            let mut start = 0;
+            while start < mc.len() && start < pc.len() && mc[start] == pc[start] {
+                start += 1;
+            }
+            let mut em = mc.len();
+            let mut ep = pc.len();
+            while em > start && ep > start && mc[em - 1] == pc[ep - 1] {
+                em -= 1;
+                ep -= 1;
+            }
+            let md: String = mc[start..em].iter().collect();
+            let pd: String = pc[start..ep].iter().collect();
+            let m_hi = format!(
+                "{}{}{}",
+                mc[0..start].iter().collect::<String>(),
+                if md.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", md) },
+                mc[em..].iter().collect::<String>()
+            );
+            let p_hi = format!(
+                "{}{}{}",
+                pc[0..start].iter().collect::<String>(),
+                if pd.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", pd) },
+                pc[ep..].iter().collect::<String>()
+            );
+            (m_hi, p_hi)
+        };
+
+        mongo_deltas.push(format!(
+            "Col '{}'\n     Original: {}\n     Diff:     {}",
+            col, m_raw, m_preview
+        ));
+        pg_deltas.push(format!(
+            "Col '{}'\n     Original: {}\n     Diff:     {}",
+            col, p_raw, p_preview
+        ));
+    }
+
+    if mongo_deltas.is_empty() {
+        mongo_deltas.push(format!("No column-level delta found"));
+        pg_deltas.push(format!("No column-level delta found"));
+    }
+
+    (mongo_deltas, pg_deltas)
+}
+
+/// Orchestrates the process using temporary tables to sort and calculate the aggregate checksums.
+async fn compute_collection_checksums_via_temp_tables(
+    pg_client: &Client,
+    mongo_cursor: &mut mongodb::Cursor<bson::Document>,
+    source_fields: &[(String, Option<String>)], // Typed MongoDB source fields
+    source_path: &SourcePath,
+    schema_name: Option<&str>,
+    table_name: &str,
+    target_fields: &[String],
+) -> Result<CollectionChecksumResult> {
+    let suffix = sanitize_pg_name(table_name);
+    let temp_mongo_table = format!("temp_mongo_hashes_{suffix}");
+    let temp_pg_table = format!("temp_pg_hashes_{suffix}");
+
+    let temp_mongo_ident = quote_ident(&temp_mongo_table);
+    let temp_pg_ident = quote_ident(&temp_pg_table);
+ 
+    // --- STEP 1: Initialize temporary tables ---
+    // Using ON COMMIT PRESERVE ROWS so they last for the lifetime of our session/connection
+    pg_client
+        .execute(
+            &format!(
+                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) on commit preserve rows",
+                temp_mongo_ident
+            ),
+            &[],
+        )
+        .await
+        .context("Failed to create temporary table for MongoDB hashes")?;
+
+    pg_client
+        .execute(
+            &format!(
+                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) on commit preserve rows",
+                temp_pg_ident
+            ),
+            &[],
+        )
+        .await
+        .context("Failed to create temporary table for Postgres hashes")?;
+    // Prepare insert statements for maximum speed
+
+
+    let insert_mongo_stmt = pg_client
+        .prepare(&format!(
+            "INSERT INTO {} (md5, values) VALUES ($1, $2)",
+            temp_mongo_ident
+        ))
+        .await?;
+    let insert_pg_stmt = pg_client
+        .prepare(&format!(
+            "INSERT INTO {} (md5, values) VALUES ($1, $2)",
+            temp_pg_ident
+        ))
+        .await?;
+
+    // --- STEP 2: Stream Mongo data, calculate MD5 row-by-row, and save to temp table ---
+    println!("🔄 [Collection: {}] Starting MongoDB streaming...", table_name);
+    let mut mongo_row_count: usize = 0;
+    let mongo_log_every: usize = 10000;
+    while let Some(doc) = mongo_cursor.try_next().await? {
+        if source_path.path.is_empty()
+            && source_path.scalar_array_field.is_none()
+            && source_path.grouped_fields.is_none()
+        {
+            // Calculate the individual record hash as it arrives
+            let record = mongo_hash_record_for_columns(&doc, source_fields);
+            let record_values = mongo_hash_values_pipe_for_columns(&doc, source_fields);
+
+            // Push the single md5 row directly into the database scratchpad
+            pg_client
+                .execute(&insert_mongo_stmt, &[&record.md5, &record_values])
+                .await?;
+            mongo_row_count += 1;
+            if mongo_row_count % mongo_log_every == 0 {
+                println!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
+            }
+            continue;
+        }
+        for mut source_doc in extract_source_documents(&doc, source_path) {
+            if source_fields.iter().any(|(field, _)| field == "_id")
+                && !source_doc.contains_key("_id")
+            {
+                if let Some(root_id) = doc.get("_id") {
+                    source_doc.insert("_id", root_id.clone());
+                }
+            }
+
+            let record = mongo_hash_record_for_columns(&source_doc, source_fields);
+            let record_values = mongo_hash_values_pipe_for_columns(&source_doc, source_fields);
+            // Prefer the nested doc's own _id; fall back to the parent root _id.
+            pg_client
+                .execute(&insert_mongo_stmt, &[&record.md5, &record_values])
+                .await?;
+            mongo_row_count += 1;
+            if mongo_row_count % mongo_log_every == 0 {
+                println!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
+            }
+        }
+    }
+    println!(
+        "✅ [Collection: {}] MongoDB streaming complete. Docs: {}",
+        table_name, mongo_row_count
+    );
+
+    // --- STEP 3: Stream target Postgres data (unordered), calculate MD5, and save to temp table ---
+    println!("🔄 [Collection: {}] Starting PostgreSQL streaming...", table_name);
+    let pg_order_field = source_fields
+        .iter()
+        .zip(target_fields.iter())
+        .find_map(|((source_field, _), target_field)| {
+            if source_field == "_id" {
+                Some(target_field.as_str())
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            target_fields
+                .iter()
+                .find(|field| field.eq_ignore_ascii_case("id"))
+                .map(String::as_str)
+        })
+        .or_else(|| target_fields.first().map(String::as_str));
+    let pg_order_field_index =
+        pg_order_field.and_then(|field| target_fields.iter().position(|candidate| candidate == field));
+    let select_sql = pg_select_query_unordered(schema_name, table_name, target_fields, pg_order_field);
+    let _pg_stream_started_at = Instant::now();
+    let pg_stream = pg_client
+        .query_raw(
+            &select_sql,
+            std::iter::empty::<&(dyn tokio_postgres::types::ToSql + Sync)>(),
+        )
+        .await?;
+    futures::pin_mut!(pg_stream);
+
+    let mut pg_row_count = 0;
+    let mut pg_hash_rows: Vec<(String, String, Option<String>)> = Vec::new();
+    while let Some(row) = pg_stream.try_next().await? {
+        // Transform columns into normalized representations and calculate row MD5
+        let record = pg_hash_record(&row);
+        let record_values = pg_hash_values_pipe(&row, target_fields);
+        let row_id = pg_order_field_index.and_then(|index| {
+            record_values.split('|').nth(index).map(String::from)
+        });
+        pg_hash_rows.push((record.md5, record_values, row_id));
+        pg_row_count += 1;
+        if pg_row_count % mongo_log_every == 0 {
+            println!("  ↳ 📥 Processed {} PostgreSQL rows from {}...", pg_row_count, table_name);
+        }
+    }
+
+    // Insert after stream completion to avoid blocking on same connection while portal is active.
+    for (md5, values, _) in &pg_hash_rows {
+        pg_client.execute(&insert_pg_stmt, &[md5, values]).await?;
+    }
+    println!(
+        "✅ [Collection: {}] PostgreSQL streaming complete. Rows: {} duration {:?}",
+        table_name, pg_row_count, _pg_stream_started_at.elapsed()
+    );
+
+    // 3. Complete internal sorted aggregation calculations using string_agg entirely inside PG
+    let mongo_agg_row = pg_client
+        .query_one(
+            &format!(
+                "SELECT COALESCE(md5(string_agg(md5, '' ORDER BY md5)), md5('')) FROM {}",
+                temp_mongo_ident
+            ),
+            &[],
+        )
+        .await?;
+    let final_mongo_md5: String = mongo_agg_row.get(0);
+
+    let pg_agg_row = pg_client
+        .query_one(
+            &format!(
+                "SELECT COALESCE(md5(string_agg(md5, '' ORDER BY md5)), md5('')) FROM {}",
+                temp_pg_ident
+            ),
+            &[],
+        )
+        .await?;
+    let final_pg_md5: String = pg_agg_row.get(0);
+
+    let matches = final_mongo_md5 == final_pg_md5;
+    let mut mismatches = None;
+
+    // --- STEP 5: If datasets diverge, find first 5 rows that differ, matched by id ---
+    if !matches {
+        // Three cases joined by id:
+        //   1. Same id, different hash -> data was modified
+        //   2. id in Mongo only        -> row missing from PostgreSQL
+        //   3. id in PG only           -> row missing from MongoDB
+        let diff_query = format!(
+            "WITH m_ord AS (
+                SELECT md5, values, ROW_NUMBER() OVER (ORDER BY values) AS rn
+                FROM {mongo}
+             ),
+             p_ord AS (
+                SELECT md5, values, ROW_NUMBER() OVER (ORDER BY values) AS rn
+                FROM {pg}
+             )
+             SELECT
+                m_ord.md5  AS mongo_md5,
+                p_ord.md5  AS pg_md5,
+                m_ord.values AS mongo_vals,
+                p_ord.values AS pg_vals
+             FROM m_ord
+             FULL OUTER JOIN p_ord ON m_ord.rn = p_ord.rn
+             WHERE m_ord.md5 IS DISTINCT FROM p_ord.md5
+                OR m_ord.values IS DISTINCT FROM p_ord.values
+             ORDER BY COALESCE(m_ord.rn, p_ord.rn)
+             LIMIT 5",
+            mongo = temp_mongo_ident,
+            pg = temp_pg_ident,
+        );
+
+        let diff_rows = pg_client.query(&diff_query, &[]).await?;
+        let mut mongo_only = Vec::new();
+        let mut pg_only = Vec::new();
+
+        for row in diff_rows {
+            let m_md5: Option<String> = row.get("mongo_md5");
+            let p_md5: Option<String> = row.get("pg_md5");
+            let mongo_vals: Option<String> = row.get("mongo_vals");
+            let pg_vals: Option<String> = row.get("pg_vals");
+
+            let mongo_split: Option<Vec<String>> =
+                mongo_vals.as_ref().map(|s| s.split('|').map(String::from).collect());
+            let pg_split: Option<Vec<String>> =
+                pg_vals.as_ref().map(|s| s.split('|').map(String::from).collect());
+
+            let (mongo_deltas, pg_deltas) = build_row_deltas(
+                mongo_split.as_deref(),
+                pg_split.as_deref(),
+                target_fields,
+            );
+
+            mongo_only.push(RowSnapshot { md5: m_md5.unwrap_or_default(), delta: mongo_deltas });
+            pg_only.push(RowSnapshot { md5: p_md5.unwrap_or_default(), delta: pg_deltas });
+        }
+
+        mismatches = Some(MismatchDelta { mongo_only, pg_only });
+    }
+    // --- STEP 5: Clean up scratchpad tables explicitly ---
+    pg_client
+        .execute(&format!("DROP TABLE {}", temp_mongo_ident), &[])
+        .await?;
+    pg_client
+        .execute(&format!("DROP TABLE {}", temp_pg_ident), &[])
+        .await?;
+
+    Ok(CollectionChecksumResult {
+        mongo_md5: final_mongo_md5,
+        pg_md5: final_pg_md5,
+        matches,
+        mismatches,
+    })
+}
+
+fn pg_select_query_unordered(
+    schema_name: Option<&str>,
+    table_name: &str,
+    target_fields: &[String],
+    order_by_field: Option<&str>,
+) -> String {
+    let select_list = target_fields
+        .iter()
+        .map(|field| {
+            let quoted = quote_ident(field);
+            format!("COALESCE(to_json({quoted})::text, 'null') AS {quoted}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let qualified_table = match schema_name {
+        Some(schema_name) => format!("{}.{}", quote_ident(schema_name), quote_ident(table_name)),
+        None => quote_ident(table_name),
+    };
+
+    match order_by_field {
+        Some(field) => format!(
+            "SELECT {select_list} FROM {qualified_table} ORDER BY {}",
+            quote_ident(field)
+        ),
+        None => format!("SELECT {select_list} FROM {qualified_table}"),
+    }
+}
+
+fn comparable_md5_columns(columns: &[MappingColumnYaml]) -> Vec<&MappingColumnYaml> {
+    columns
+        .iter()
+        .filter(|column| {
+            !column.source_field.trim().is_empty() && !column.target_field.trim().is_empty()
+        })
+        .collect()
 }
 
 fn md5_hex_from_fragments<I, S>(fragments: I) -> String
@@ -163,6 +571,54 @@ fn bson_to_comparable_json(value: &Bson) -> serde_json::Value {
 }
 
 fn canonicalize_json_value(value: &serde_json::Value) -> String {
+    fn canonicalize_json_object(map: &serde_json::Map<String, serde_json::Value>) -> String {
+        format!(
+            "{{{}}}",
+            map.iter()
+                .map(|(key, value)| format!(
+                    "{}: {}",
+                    serde_json::to_string(key)
+                        .expect("serializing canonical JSON object key should succeed"),
+                    canonicalize_json_value(value)
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+
+    fn canonical_geojson_geometry(value: &serde_json::Value) -> Option<serde_json::Value> {
+        let obj = value.as_object()?;
+        let geometry_type = obj.get("type")?.as_str()?;
+        let coordinates = obj.get("coordinates")?.clone();
+
+        // PostgreSQL geometry -> to_json may include CRS metadata and MongoDB
+        // GeoJSON may include extra properties (for example is_location_exact).
+        // For md5 comparison, keep only geometry identity fields.
+        if matches!(
+            geometry_type,
+            "Point"
+                | "LineString"
+                | "Polygon"
+                | "MultiPoint"
+                | "MultiLineString"
+                | "MultiPolygon"
+                | "GeometryCollection"
+        ) {
+            return Some(serde_json::json!({
+                "type": geometry_type,
+                "coordinates": coordinates,
+            }));
+        }
+
+        None
+    }
+
+    if let Some(geometry) = canonical_geojson_geometry(value) {
+        if let serde_json::Value::Object(map) = geometry {
+            return canonicalize_json_object(&map);
+        }
+    }
+
     match value {
         serde_json::Value::Null => "null".to_owned(),
         serde_json::Value::Bool(v) => v.to_string(),
@@ -183,19 +639,22 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
         }
         serde_json::Value::String(v) => {
             {
-                // Attempt to parse the string as a standard UTC DateTime.
-                // This will succeed for both "...Z" and "...+00:00" formats.
+                // Attempt to parse as RFC3339 / ISO8601 (e.g. "2024-01-15T00:00:00Z").
                 if let Ok(dt) = v.parse::<DateTime<Utc>>() {
-                    {
-                        // If it's a date, normalize it to the canonical "Z" format (Zulu time).
-                        let normalized_ts = dt.to_rfc3339_opts(SecondsFormat::Secs, true);
-                        // Return it as a new JSON string literal, e.g., "\"2024-01-15T00:00:00Z\"".
-                        return serde_json::to_string(&normalized_ts)
-                            .expect("serializing normalized timestamp should succeed");
-                    }
+                    let normalized_ts = dt.to_rfc3339_opts(SecondsFormat::Secs, true);
+                    return serde_json::to_string(&normalized_ts)
+                        .expect("serializing normalized timestamp should succeed");
                 }
 
-                // If it's not a timestamp, treat it as a regular string, just like before.
+                // Fallback: MongoDB may store dates as "Fri Apr 03 11:15:02 UTC 2009".
+                if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(v, "%a %b %d %H:%M:%S UTC %Y") {
+                    let dt = naive.and_utc();
+                    let normalized_ts = dt.to_rfc3339_opts(SecondsFormat::Secs, true);
+                    return serde_json::to_string(&normalized_ts)
+                        .expect("serializing normalized timestamp should succeed");
+                }
+
+                // Not a timestamp — treat as a regular string.
                 serde_json::to_string(v).expect("serializing canonical JSON string should succeed")
             }
         }
@@ -207,18 +666,7 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        serde_json::Value::Object(map) => format!(
-            "{{{}}}",
-            map.iter()
-                .map(|(key, value)| format!(
-                    "{}: {}",
-                    serde_json::to_string(key)
-                        .expect("serializing canonical JSON object key should succeed"),
-                    canonicalize_json_value(value)
-                ))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        serde_json::Value::Object(map) => canonicalize_json_object(map),
     }
 }
 
@@ -245,10 +693,10 @@ fn is_textual_pg_type(data_type: Option<&str>) -> bool {
     )
 }
 
-fn mongo_source_is_string_only(
+fn mongo_source_scalar_families(
     fields: &indexmap::IndexMap<String, FieldSchema>,
     source_field: &str,
-) -> bool {
+) -> HashSet<String> {
     fn is_null_type_name(type_name: &str) -> bool {
         matches!(type_name, "Null" | "Undefined")
     }
@@ -261,19 +709,17 @@ fn mongo_source_is_string_only(
 
     while let Some(segment) = segments.next() {
         let Some(field_schema) = current_fields.get(segment) else {
-            return false;
+            return HashSet::new();
         };
 
         if segments.peek().is_none() {
-            let non_null_types = field_schema
+            return field_schema
                 .types
                 .keys()
                 .filter(|type_name| !is_null_type_name(type_name.as_str()))
-                .collect::<Vec<_>>();
-            return !non_null_types.is_empty()
-                && non_null_types
-                    .iter()
-                    .all(|type_name| type_name.as_str() == "String");
+                .filter_map(|type_name| scalar_type_family(type_name.as_str()))
+                .map(|family| family.to_owned())
+                .collect::<HashSet<_>>();
         }
 
         let next_fields = field_schema
@@ -295,15 +741,73 @@ fn mongo_source_is_string_only(
             });
 
         let Some(next_fields) = next_fields else {
-            return false;
+            return HashSet::new();
         };
         current_fields = next_fields;
     }
 
-    false
+    HashSet::new()
 }
 
-fn drop_incompatible_string_columns(
+fn target_type_family(data_type: Option<&str>) -> Option<&'static str> {
+    let raw = data_type?.trim().to_ascii_lowercase();
+    let mut cut = raw.len();
+    for marker in [
+        " default ",
+        " primary key",
+        " not null",
+        " null",
+        " references ",
+        " check ",
+        " unique",
+    ] {
+        if let Some(idx) = raw.find(marker) {
+            cut = cut.min(idx);
+        }
+    }
+    let raw = raw[..cut].trim().to_owned();
+
+    if matches!(
+        raw.as_str(),
+        "text" | "varchar" | "character varying" | "char" | "character" | "bpchar" | "citext"
+    ) || raw.starts_with("varchar(")
+        || raw.starts_with("character varying(")
+    {
+        return Some("string");
+    }
+
+    if raw == "uuid" {
+        return Some("uuid");
+    }
+
+    if raw.contains("timestamp") || raw == "date" || raw.starts_with("time") {
+        return Some("datetime");
+    }
+
+    if matches!(
+        raw.as_str(),
+        "smallint"
+            | "integer"
+            | "bigint"
+            | "real"
+            | "double precision"
+            | "numeric"
+            | "decimal"
+            | "serial"
+            | "bigserial"
+    ) {
+        return Some("numeric");
+    }
+
+    if raw == "boolean" {
+        return Some("boolean");
+    }
+
+    None
+}
+
+
+fn drop_incompatible_columns(
     schema: &CollectionSchema,
     source_path: &SourcePath,
     mapping_yaml: &mut MappingYaml,
@@ -330,19 +834,19 @@ fn drop_incompatible_string_columns(
                 .get(&column.target_field)
                 .map(String::as_str)
         });
-        let target_is_textual = is_textual_pg_type(target_type);
-        if target_is_textual {
+        let Some(target_family) = target_type_family(target_type) else {
+            return true;
+        };
+
+        let source_families = mongo_source_scalar_families(&fields, &column.source_field);
+        if source_families.is_empty() {
             return true;
         }
 
-        !mongo_source_is_string_only(&fields, &column.source_field)
+        source_families.contains(target_family)
     });
 }
 
-#[cfg(test)]
-fn mongo_field_literal(doc: &Document, field: &str) -> String {
-    mongo_field_literal_for_type(doc, field, None)
-}
 
 fn mongo_field_literal_for_type(
     doc: &Document,
@@ -382,13 +886,32 @@ fn mongo_field_literal_for_type(
     }
 }
 
-#[cfg(test)]
-fn mongo_hash_record(doc: &Document, source_fields: &[String]) -> HashRecord {
-    let typed_source_fields = source_fields
+
+fn pg_hash_values_pipe(row: &Row, target_fields: &[String]) -> String {
+    target_fields
         .iter()
-        .map(|field| (field.clone(), None))
-        .collect::<Vec<_>>();
-    mongo_hash_record_for_columns(doc, &typed_source_fields)
+        .enumerate()
+        .map(|(index, _)| {
+            let val: Option<String> = row.get(index);
+            // SQL NULL → "null" matches MongoDB Bson::Null serialization
+            normalize_json_literal(val.as_deref().unwrap_or("null"))
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+
+fn mongo_hash_values_pipe_for_columns(
+    doc: &Document,
+    source_fields: &[(String, Option<String>)],
+) -> String {
+    source_fields
+        .iter()
+        .map(|(field, target_data_type)| {
+            mongo_field_literal_for_type(doc, field, target_data_type.as_deref())
+        })
+        .collect::<Vec<_>>()
+        .join("|")
 }
 
 fn mongo_hash_record_for_columns(
@@ -418,7 +941,7 @@ fn sanitize_pg_name(name: &str) -> String {
             }
         })
         .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+    if s.starts_with(|c: char| c.is_ascii_digit()) {
         format!("_{s}")
     } else {
         s
@@ -623,6 +1146,62 @@ fn build_mapping_source_paths(
 }
 
 fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Document> {
+    fn is_hex_keyed_name(name: &str) -> bool {
+        name.len() >= 8 && name.chars().all(|ch| ch.is_ascii_hexdigit())
+    }
+
+    fn is_uuid_keyed_name(name: &str) -> bool {
+        let parts = name.split('-').collect::<Vec<_>>();
+        parts.len() == 5
+            && [8_usize, 4, 4, 4, 12]
+                .iter()
+                .zip(parts.iter())
+                .all(|(expected_len, part)| {
+                    part.len() == *expected_len && part.chars().all(|ch| ch.is_ascii_hexdigit())
+                })
+    }
+
+    fn extract_map_entry_document(value: &Bson) -> Option<Document> {
+        match value {
+            Bson::Document(child_doc) if !child_doc.is_empty() => Some(child_doc.clone()),
+            Bson::String(raw) => serde_json::from_str::<serde_json::Value>(raw)
+                .ok()
+                .and_then(|parsed| bson::to_document(&parsed).ok())
+                .filter(|child_doc| !child_doc.is_empty()),
+            _ => None,
+        }
+    }
+
+    fn expand_dynamic_map_documents(
+        doc: &Document,
+        root_id: Option<&Bson>,
+    ) -> Option<Vec<Document>> {
+        if doc.is_empty() {
+            return Some(Vec::new());
+        }
+
+        let keys = doc.keys().collect::<Vec<_>>();
+        if !keys
+            .iter()
+            .all(|key| is_uuid_keyed_name(key) || is_hex_keyed_name(key))
+        {
+            return None;
+        }
+
+        let mut expanded = Vec::new();
+        for value in doc.values() {
+            let mut child_doc = extract_map_entry_document(value)?;
+            if !child_doc.contains_key("_id") {
+                if let Some(root_id) = root_id {
+                    child_doc.insert("_id", root_id.clone());
+                }
+            }
+            expanded.push(child_doc);
+        }
+
+        Some(expanded)
+    }
+
     fn walk(doc: &Document, source_path: &SourcePath, root_id: Option<&Bson>) -> Vec<Document> {
         if let Some(grouped_fields) = &source_path.grouped_fields {
             let grouped_docs = grouped_fields
@@ -632,6 +1211,9 @@ fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Doc
                         .iter()
                         .filter_map(|item| match item {
                             Bson::Document(child_doc) => {
+                                if child_doc.is_empty() {
+                                    return None;
+                                }
                                 let mut cloned = child_doc.clone();
                                 cloned.insert("key", field_name.clone());
                                 if let Some(root_id) = root_id {
@@ -643,6 +1225,9 @@ fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Doc
                         })
                         .collect::<Vec<_>>(),
                     Some(Bson::Document(child_doc)) => {
+                        if child_doc.is_empty() {
+                            return Vec::new();
+                        }
                         let mut cloned = child_doc.clone();
                         cloned.insert("key", field_name.clone());
                         if let Some(root_id) = root_id {
@@ -675,6 +1260,12 @@ fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Doc
         }
 
         if source_path.path.is_empty() {
+            if let Some(expanded) = expand_dynamic_map_documents(doc, root_id) {
+                return expanded;
+            }
+            if doc.is_empty() {
+                return Vec::new();
+            }
             let mut cloned = doc.clone();
             if !cloned.contains_key("_id") {
                 if let Some(root_id) = root_id {
@@ -729,13 +1320,13 @@ fn extract_source_documents(doc: &Document, source_path: &SourcePath) -> Vec<Doc
     walk(doc, source_path, doc.get("_id"))
 }
 
-fn sort_hash_records(records: &mut [HashRecord]) {
-    records.sort_by(|left, right| {
-        left.values
-            .cmp(&right.values)
-            .then(left.md5.cmp(&right.md5))
-    });
-}
+// fn sort_hash_records(records: &mut [HashRecord]) {
+//     records.sort_by(|left, right| {
+//         left.values
+//             .cmp(&right.values)
+//             .then(left.md5.cmp(&right.md5))
+//     });
+// }
 
 fn read_mapping_yaml(path: &Path) -> Result<MappingYaml> {
     let file = std::fs::File::open(path)
@@ -1135,7 +1726,7 @@ fn discover_mapping_targets_for_collection(
                 &source_path,
                 &mut mapping_yaml,
             );
-            drop_incompatible_string_columns(&schema, &source_path, &mut mapping_yaml);
+            drop_incompatible_columns(&schema, &source_path, &mut mapping_yaml);
             Ok(MappingTarget {
                 source_collection: collection.to_owned(),
                 mapping_path,
@@ -1160,17 +1751,11 @@ fn discover_mapping_targets_for_collection(
     Ok(targets)
 }
 
-fn aggregate_md5_hexes(md5_hexes: impl IntoIterator<Item = String>) -> String {
-    md5_hex_from_fragments(md5_hexes)
-}
+// fn aggregate_md5_hexes(md5_hexes: impl IntoIterator<Item = String>) -> String {
+//     md5_hex_from_fragments(md5_hexes)
+// }
 
-#[cfg(test)]
-fn mongo_sort_doc(source_fields: &[String]) -> Document {
-    source_fields
-        .iter()
-        .map(|field| (field.clone(), Bson::Int32(1)))
-        .collect()
-}
+
 
 fn pg_hash_record(row: &Row) -> HashRecord {
     let values = (0..row.len())
@@ -1236,236 +1821,150 @@ async fn connect_pg_client(target_uri: &str) -> Result<Client> {
     Ok(pg_client)
 }
 
-fn pg_select_query(
-    schema_name: Option<&str>,
-    table_name: &str,
-    target_fields: &[String],
-) -> String {
-    let select_list = target_fields
-        .iter()
-        .map(|field| {
-            let quoted = quote_ident(field);
-            format!("COALESCE(to_json({quoted})::text, 'null') AS {quoted}")
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    let qualified_table = match schema_name {
-        Some(schema_name) => format!("{}.{}", quote_ident(schema_name), quote_ident(table_name)),
-        None => quote_ident(table_name),
-    };
-    let order_by = (1..=target_fields.len())
-        .map(|index| index.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
+// fn pg_select_query(
+//     schema_name: Option<&str>,
+//     table_name: &str,
+//     target_fields: &[String],
+// ) -> String {
+//     let select_list = target_fields
+//         .iter()
+//         .map(|field| {
+//             let quoted = quote_ident(field);
+//             format!("COALESCE(to_json({quoted})::text, 'null') AS {quoted}")
+//         })
+//         .collect::<Vec<_>>()
+//         .join(", ");
+//     let qualified_table = match schema_name {
+//         Some(schema_name) => format!("{}.{}", quote_ident(schema_name), quote_ident(table_name)),
+//         None => quote_ident(table_name),
+//     };
+//     let order_by = (1..=target_fields.len())
+//         .map(|index| index.to_string())
+//         .collect::<Vec<_>>()
+//         .join(", ");
 
-    format!("SELECT {select_list} FROM {qualified_table} ORDER BY {order_by}",)
-}
+//     format!("SELECT {select_list} FROM {qualified_table} ORDER BY {order_by}",)
+// }
 
-fn format_record_values(values: &[String]) -> String {
-    format!("[{}]", values.join(", "))
-}
+// fn format_record_values(values: &[String]) -> String {
+//     format!("[{}]", values.join(", "))
+// }
 
-fn print_hash_output(label: &str, records: &[HashRecord], aggregate: bool) {
-    if aggregate {
-        println!(
-            "{label}: {}",
-            aggregate_md5_hexes(records.iter().map(|record| record.md5.clone()))
-        );
-    } else {
-        println!("{label}:");
-        for record in records {
-            println!("{}", record.md5);
-        }
-    }
-}
+// fn print_hash_output(label: &str, records: &[HashRecord], aggregate: bool) {
+//     if aggregate {
+//         println!(
+//             "{label}: {}",
+//             aggregate_md5_hexes(records.iter().map(|record| record.md5.clone()))
+//         );
+//     } else {
+//         println!("{label}:");
+//         for record in records {
+//             println!("{}", record.md5);
+//         }
+//     }
+// }
 
-fn print_mismatched_records(mongo_records: &[HashRecord], pg_records: &[HashRecord]) {
-    for mismatch in collect_mismatched_record_samples(mongo_records, pg_records, usize::MAX) {
-        println!("Mismatch at row {}:", mismatch.row_index);
-        match &mismatch.mongo_values {
-            Some(values) => {
-                println!("  MongoDB md5: {}", md5_hex_from_fragments(values.iter()));
-                println!("  MongoDB values: {}", format_record_values(values));
-            }
-            None => println!("  MongoDB: missing row"),
-        }
-        match &mismatch.pg_values {
-            Some(values) => {
-                println!(
-                    "  PostgreSQL md5: {}",
-                    md5_hex_from_fragments(values.iter())
-                );
-                println!("  PostgreSQL values: {}", format_record_values(values));
-            }
-            None => println!("  PostgreSQL: missing row"),
-        }
-    }
-}
+// fn print_mismatched_records(mongo_records: &[HashRecord], pg_records: &[HashRecord]) {
+//     for mismatch in collect_mismatched_record_samples(mongo_records, pg_records, usize::MAX) {
+//         println!("Mismatch at row {}:", mismatch.row_index);
+//         match &mismatch.mongo_values {
+//             Some(values) => {
+//                 println!("  MongoDB md5: {}", md5_hex_from_fragments(values.iter()));
+//                 println!("  MongoDB values: {}", format_record_values(values));
+//             }
+//             None => println!("  MongoDB: missing row"),
+//         }
+//         match &mismatch.pg_values {
+//             Some(values) => {
+//                 println!(
+//                     "  PostgreSQL md5: {}",
+//                     md5_hex_from_fragments(values.iter())
+//                 );
+//                 println!("  PostgreSQL values: {}", format_record_values(values));
+//             }
+//             None => println!("  PostgreSQL: missing row"),
+//         }
+//     }
+// }
 
-fn collect_mismatched_record_samples(
-    mongo_records: &[HashRecord],
-    pg_records: &[HashRecord],
-    limit: usize,
-) -> Vec<Md5MismatchRow> {
-    let total = mongo_records.len().max(pg_records.len());
-    let mut mismatches = Vec::new();
+// fn collect_mismatched_record_samples(
+//     mongo_records: &[HashRecord],
+//     pg_records: &[HashRecord],
+//     limit: usize,
+// ) -> Vec<Md5MismatchRow> {
+//     let mut mongo_counts: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
+//     let mut pg_counts: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
 
-    for index in 0..total {
-        let mongo_record = mongo_records.get(index);
-        let pg_record = pg_records.get(index);
-        let hashes_match = mongo_record.map(|record| record.md5.as_str())
-            == pg_record.map(|record| record.md5.as_str());
-        if hashes_match {
-            continue;
-        }
+//     for record in mongo_records {
+//         *mongo_counts
+//             .entry((record.md5.clone(), record.values.clone()))
+//             .or_insert(0) += 1;
+//     }
+//     for record in pg_records {
+//         *pg_counts
+//             .entry((record.md5.clone(), record.values.clone()))
+//             .or_insert(0) += 1;
+//     }
 
-        mismatches.push(Md5MismatchRow {
-            row_index: index + 1,
-            mongo_values: mongo_record.map(|record| record.values.clone()),
-            pg_values: pg_record.map(|record| record.values.clone()),
-        });
-        if mismatches.len() == limit {
-            break;
-        }
-    }
+//     let mut mongo_only = Vec::new();
+//     let mut pg_only = Vec::new();
 
-    mismatches
-}
+//     for (key, mongo_count) in &mongo_counts {
+//         let pg_count = pg_counts.get(key).copied().unwrap_or(0);
+//         if *mongo_count > pg_count {
+//             for _ in 0..(*mongo_count - pg_count) {
+//                 mongo_only.push(key.1.clone());
+//             }
+//         }
+//     }
 
-fn build_md5_summary(
-    columns: Vec<Md5ColumnMapping>,
-    mongo_records: Vec<HashRecord>,
-    pg_records: Vec<HashRecord>,
-) -> Md5Summary {
-    let mismatches = collect_mismatched_record_samples(&mongo_records, &pg_records, 5);
+//     for (key, pg_count) in &pg_counts {
+//         let mongo_count = mongo_counts.get(key).copied().unwrap_or(0);
+//         if *pg_count > mongo_count {
+//             for _ in 0..(*pg_count - mongo_count) {
+//                 pg_only.push(key.1.clone());
+//             }
+//         }
+//     }
 
-    Md5Summary {
-        mongo_md5: aggregate_md5_hexes(mongo_records.into_iter().map(|record| record.md5)),
-        pg_md5: aggregate_md5_hexes(pg_records.into_iter().map(|record| record.md5)),
-        columns,
-        mismatches,
-    }
-}
+//     let mut mismatches = Vec::new();
+//     let pair_count = mongo_only.len().min(pg_only.len());
 
-async fn collect_hash_records_for_target(
-    target: &MappingTarget,
-    conf: &crate::util::ConfData,
-) -> Result<(Vec<Md5ColumnMapping>, Vec<HashRecord>, Vec<HashRecord>)> {
-    let source_fields: Vec<String> = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
-        .iter()
-        .map(|c| c.source_field.clone())
-        .collect();
-    let typed_source_fields: Vec<(String, Option<String>)> = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
-        .iter()
-        .map(|c| (c.source_field.clone(), c.data_type.clone()))
-        .collect();
-    let target_fields: Vec<String> = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
-        .iter()
-        .map(|c| c.target_field.clone())
-        .collect();
-    let columns = target
-        .mapping_yaml
-        .pg_mapping
-        .columns
-        .iter()
-        .map(|column| Md5ColumnMapping {
-            source_field: column.source_field.clone(),
-            target_field: column.target_field.clone(),
-        })
-        .collect::<Vec<_>>();
-    if source_fields.is_empty() {
-        return Err(anyhow!(
-            "No source fields found in mapping YAML: {}",
-            target.mapping_path.display()
-        ));
-    }
+//     for index in 0..pair_count {
+//         mismatches.push(Md5MismatchRow {
+//             row_index: mismatches.len() + 1,
+//             mongo_values: Some(mongo_only[index].clone()),
+//             pg_values: Some(pg_only[index].clone()),
+//         });
+//         if mismatches.len() == limit {
+//             return mismatches;
+//         }
+//     }
 
-    if target_fields.is_empty() {
-        return Err(anyhow!(
-            "No target fields found in mapping YAML: {}",
-            target.mapping_path.display()
-        ));
-    }
+//     for values in mongo_only.into_iter().skip(pair_count) {
+//         mismatches.push(Md5MismatchRow {
+//             row_index: mismatches.len() + 1,
+//             mongo_values: Some(values),
+//             pg_values: None,
+//         });
+//         if mismatches.len() == limit {
+//             return mismatches;
+//         }
+//     }
 
-    let mongo_uri = conf
-        .source_uri
-        .as_ref()
-        .ok_or_else(|| anyhow!("SOURCE_URI not found in config"))?;
-    let (db_name, _) = collection_paths_from_conf(conf)?;
-    let client_options = mongodb::options::ClientOptions::parse(mongo_uri).await?;
-    let client = mongodb::Client::with_options(client_options)?;
-    let mongo_collection = client
-        .database(&db_name)
-        .collection::<bson::Document>(&target.source_collection);
+//     for values in pg_only.into_iter().skip(pair_count) {
+//         mismatches.push(Md5MismatchRow {
+//             row_index: mismatches.len() + 1,
+//             mongo_values: None,
+//             pg_values: Some(values),
+//         });
+//         if mismatches.len() == limit {
+//             return mismatches;
+//         }
+//     }
 
-    // Do not sort on MongoDB side by all mapped fields: large mappings can exceed
-    // MongoDB compound-key limits (code 13103). We sort hash records locally below.
-    let mut cursor = mongo_collection.find(doc! {}).await?;
-    let mut mongo_records = Vec::new();
-    while let Some(doc) = cursor.try_next().await? {
-        if target.source_path.path.is_empty() {
-            mongo_records.push(mongo_hash_record_for_columns(&doc, &typed_source_fields));
-        } else {
-            mongo_records.extend(
-                extract_source_documents(&doc, &target.source_path)
-                    .into_iter()
-                    .map(|mut source_doc| {
-                        if source_fields.iter().any(|field| field == "_id")
-                            && !source_doc.contains_key("_id")
-                        {
-                            if let Some(root_id) = doc.get("_id") {
-                                source_doc.insert("_id", root_id.clone());
-                            }
-                        }
-                        source_doc
-                    })
-                    .map(|source_doc| {
-                        mongo_hash_record_for_columns(&source_doc, &typed_source_fields)
-                    }),
-            );
-        }
-    }
-    sort_hash_records(&mut mongo_records);
-
-    let target_uri = conf
-        .target_uri
-        .as_ref()
-        .ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
-    let target_database_name = conf
-        .target_database_name
-        .as_deref()
-        .or(target.mapping_yaml.pg_mapping.dbname.as_deref())
-        .or(target.mapping_yaml.mongo_dbname.as_deref())
-        .ok_or_else(|| anyhow!("TARGET_DATABASE_NAME not found in config or mapping"))?;
-    let schema_name =
-        conf.target_schema
-            .as_deref()
-            .or(target.mapping_yaml.pg_mapping.schema_name.as_deref());
-    let pg_uri = pg_uri_with_database(target_uri, target_database_name);
-    let pg_client = connect_pg_client(&pg_uri).await?;
-    let select_query = pg_select_query(
-        schema_name,
-        &target.mapping_yaml.pg_mapping.table_name,
-        &target_fields,
-    );
-    let pg_rows = pg_client
-        .query(&select_query, &[])
-        .await
-        .with_context(|| format!("Failed to fetch PostgreSQL rows with query: {select_query}"))?;
-    let mut pg_records = pg_rows.iter().map(pg_hash_record).collect::<Vec<_>>();
-    sort_hash_records(&mut pg_records);
-
-    Ok((columns, mongo_records, pg_records))
-}
+//     mismatches
+// }
 
 pub async fn compute_md5_summaries_for_collection(
     collection: &str,
@@ -1473,82 +1972,188 @@ pub async fn compute_md5_summaries_for_collection(
 ) -> Result<Vec<Md5TableSummary>> {
     let conf = read_conf(config_path)?;
     let targets = discover_mapping_targets_for_collection(collection, &conf)?;
+    let mongo_uri = conf
+        .source_uri
+        .as_ref()
+        .ok_or_else(|| anyhow!("SOURCE_URI not found in config"))?;
+    let (db_name, _) = collection_paths_from_conf(&conf)?;
+    let client_options = mongodb::options::ClientOptions::parse(mongo_uri).await?;
+    let mongo_client = mongodb::Client::with_options(client_options)?;
     let mut summaries = Vec::new();
 
     for target in targets {
+        let ddl_type_by_target = target
+            .mapping_yaml
+            .pg_mapping
+            .ddl
+            .as_ref()
+            .map(|ddl| {
+                ddl.columns
+                    .iter()
+                    .map(|column| (column.name.clone(), column.sql_type.clone()))
+                    .collect::<std::collections::HashMap<_, _>>()
+            })
+            .unwrap_or_default();
+
+        let md5_columns = comparable_md5_columns(&target.mapping_yaml.pg_mapping.columns);
+        if md5_columns.is_empty() {
+            continue;
+        }
+
+        let typed_source_fields: Vec<(String, Option<String>)> = md5_columns
+            .iter()
+            .map(|c| (c.source_field.clone(), c.data_type.clone()))
+            .collect();
+        let target_fields: Vec<String> = md5_columns.iter().map(|c| c.target_field.clone()).collect();
+        let columns = md5_columns
+            .iter()
+            .map(|column| Md5ColumnMapping {
+                source_field: column.source_field.clone(),
+                source_type: column.data_type.clone(),
+                target_field: column.target_field.clone(),
+                target_type: ddl_type_by_target
+                    .get(&column.target_field)
+                    .cloned()
+                    .or_else(|| column.data_type.clone()),
+            })
+            .collect::<Vec<_>>();
+
+        if target_fields.is_empty() {
+            return Err(anyhow!(
+                "No target fields found in mapping YAML: {}",
+                target.mapping_path.display()
+            ));
+        }
+
+        let mongo_collection = mongo_client
+            .database(&db_name)
+            .collection::<bson::Document>(&target.source_collection);
+        let mut mongo_cursor = mongo_collection.find(doc! {}).sort(doc! { "_id": 1 }).await?;
+
+        let target_uri = conf
+            .target_uri
+            .as_ref()
+            .ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
+        let target_database_name = conf
+            .target_database_name
+            .as_deref()
+            .or(target.mapping_yaml.pg_mapping.dbname.as_deref())
+            .or(target.mapping_yaml.mongo_dbname.as_deref())
+            .ok_or_else(|| anyhow!("TARGET_DATABASE_NAME not found in config or mapping"))?;
+        let schema_name = conf
+            .target_schema
+            .as_deref()
+            .or(target.mapping_yaml.pg_mapping.schema_name.as_deref());
+        let pg_uri = pg_uri_with_database(target_uri, target_database_name);
+        let pg_client = connect_pg_client(&pg_uri).await?;
+
         let table_name = target.mapping_yaml.pg_mapping.table_name.clone();
-        let (columns, mongo_records, pg_records) =
-            collect_hash_records_for_target(&target, &conf).await?;
+        let result = compute_collection_checksums_via_temp_tables(
+            &pg_client,
+            &mut mongo_cursor,
+            &typed_source_fields,
+            &target.source_path,
+            schema_name,
+            &table_name,
+            &target_fields,
+        )
+        .await?;
+
+        let mismatches = if let Some(mismatch_delta) = result.mismatches {
+            mismatch_delta
+                .mongo_only
+                .iter()
+                .enumerate()
+                .map(|(idx, m_row)| Md5MismatchRow {
+                    row_index: idx + 1,
+                    mongo_values: Some(m_row.delta.clone()),
+                    pg_values: mismatch_delta.pg_only.get(idx).map(|row| row.delta.clone()),
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
         summaries.push(Md5TableSummary {
             table_name,
-            summary: build_md5_summary(columns, mongo_records, pg_records),
+            summary: Md5Summary {
+                mongo_md5: result.mongo_md5,
+                pg_md5: result.pg_md5,
+                columns,
+                mismatches,
+            },
         });
     }
 
     Ok(summaries)
 }
 
-pub async fn compute_md5_summary(collection: &str, config_path: &Path) -> Result<Md5Summary> {
-    compute_md5_summaries_for_collection(collection, config_path)
-        .await?
-        .into_iter()
-        .find(|summary| summary.table_name == sanitize_pg_name(collection))
-        .map(|summary| summary.summary)
-        .ok_or_else(|| anyhow!("No root mapping summary found for collection {collection}"))
-}
-
-pub async fn run_check_md5(
-    collection: String,
-    config: Option<PathBuf>,
-    aggregate: bool,
-) -> Result<()> {
-    let config_path = config
-        .as_ref()
-        .ok_or_else(|| anyhow!("-c <config> is required"))?;
-    let conf = read_conf(config_path)?;
-    let targets = discover_mapping_targets_for_collection(&collection, &conf)?;
-    let total_tables = targets.len();
-
-    for (index, target) in targets.iter().enumerate() {
-        if index > 0 {
-            println!();
-        }
-        let source_path = if target.source_path.path.is_empty() {
-            collection.as_str().to_owned()
-        } else {
-            format!("{}.{}", collection, target.source_path.path.join("."))
-        };
-        println!(
-            "[{}/{}] Table {}",
-            index + 1,
-            total_tables,
-            target.mapping_yaml.pg_mapping.table_name
-        );
-        if !target.source_path.path.is_empty() {
-            println!("  MongoDB path: {source_path}");
-        }
-        let (_, mongo_records, pg_records) = collect_hash_records_for_target(target, &conf).await?;
-        print_hash_output("MongoDB", &mongo_records, aggregate);
-        print_hash_output("PostgreSQL", &pg_records, aggregate);
-        if !aggregate {
-            print_mismatched_records(&mongo_records, &pg_records);
-        }
-    }
-
-    Ok(())
-}
 
 #[cfg(test)]
 mod tests {
+
+
+    fn mongo_field_literal(doc: &Document, field: &str) -> String {
+        mongo_field_literal_for_type(doc, field, None)
+    }
+
+    fn mongo_hash_record(doc: &Document, source_fields: &[String]) -> HashRecord {
+        let typed_source_fields = source_fields
+            .iter()
+            .map(|field| (field.clone(), None))
+            .collect::<Vec<_>>();
+        mongo_hash_record_for_columns(doc, &typed_source_fields)
+    }
+    fn mongo_sort_doc(source_fields: &[String]) -> Document {
+        source_fields
+            .iter()
+            .map(|field| (field.clone(), Bson::Int32(1)))
+            .collect()
+    }
     use super::{
-        aggregate_md5_hexes, backfill_mapping_columns_from_schema, build_mapping_source_paths,
-        collect_mismatched_record_samples, extract_source_documents, format_record_values,
-        md5_hex_from_fragments, mongo_field_literal, mongo_field_literal_for_type,
-        mongo_hash_record, mongo_sort_doc, normalize_json_literal, pg_select_query, HashRecord,
-        MappingYaml, SourcePath,
+        backfill_mapping_columns_from_schema, build_mapping_source_paths,
+        comparable_md5_columns, drop_incompatible_columns,
+        extract_source_documents, md5_hex_from_fragments,
+        mongo_field_literal_for_type,
+        normalize_json_literal, HashRecord, MappingYaml, SourcePath,
     };
     use crate::analyzer::Analyzer;
     use bson::{doc, Bson};
+
+    #[test]
+    fn comparable_md5_columns_skips_blank_fields() {
+        let mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+    table_name: weather
+    columns:
+        - { source_field: "", target_field: pressure }
+        - { source_field: pressure, target_field: "" }
+        - { source_field: pressure, target_field: pressure }
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        let columns = comparable_md5_columns(&mapping_yaml.pg_mapping.columns);
+        assert_eq!(columns.len(), 1);
+        assert_eq!(columns[0].source_field, "pressure");
+        assert_eq!(columns[0].target_field, "pressure");
+    }
+
+    #[test]
+    fn comparable_md5_columns_empty_when_no_source_target_pairs() {
+        let mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+    table_name: weather
+    columns: []
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        let columns = comparable_md5_columns(&mapping_yaml.pg_mapping.columns);
+        assert!(columns.is_empty());
+    }
 
     #[test]
     fn backfill_mapping_columns_recovers_legacy_root_jsonb_mapping() {
@@ -1700,6 +2305,17 @@ pg_mapping:
     }
 
     #[test]
+    fn normalize_json_literal_canonicalizes_geojson_geometry_fields() {
+        let mongodb_geo = r#"{"type": "Point", "coordinates": [151.12236, -33.88839], "is_location_exact": false}"#;
+        let postgres_geo = r#"{"type": "Point", "crs": {"type": "name", "properties": {"name": "EPSG:4326"}}, "coordinates": [151.12236, -33.88839]}"#;
+
+        assert_eq!(
+            normalize_json_literal(mongodb_geo),
+            normalize_json_literal(postgres_geo)
+        );
+    }
+
+    #[test]
     fn mongo_field_literal_coerces_numeric_values_for_text_targets() {
         let doc = doc! { "monthly_gain": 0 };
 
@@ -1724,24 +2340,6 @@ pg_mapping:
     }
 
     #[test]
-    fn aggregate_md5_combines_document_hashes_into_one_value() {
-        let aggregate = aggregate_md5_hexes(vec![
-            "aaaabbbbccccdddd".repeat(2),
-            "1111222233334444".repeat(2),
-        ]);
-
-        assert_eq!(
-            aggregate,
-            format!(
-                "{:x}",
-                md5::compute(
-                    "aaaabbbbccccddddaaaabbbbccccdddd11112222333344441111222233334444".as_bytes()
-                )
-            )
-        );
-    }
-
-    #[test]
     fn md5_from_fragments_concatenates_in_order() {
         let digest = md5_hex_from_fragments(["\"alice\"", "42", "null"]);
 
@@ -1751,13 +2349,6 @@ pg_mapping:
         );
     }
 
-    #[test]
-    fn format_record_values_joins_values_in_brackets() {
-        assert_eq!(
-            format_record_values(&["\"alice\"".to_owned(), "42".to_owned(), "null".to_owned()]),
-            "[\"alice\", 42, null]"
-        );
-    }
 
     #[test]
     fn mongo_sort_doc_uses_all_source_fields_in_order() {
@@ -1775,24 +2366,6 @@ pg_mapping:
                 ("last_update".to_owned(), Bson::Int32(1)),
                 ("region".to_owned(), Bson::Int32(1)),
             ]
-        );
-    }
-
-    #[test]
-    fn pg_select_query_orders_by_all_selected_columns() {
-        let query = pg_select_query(
-            Some("dbapi"),
-            "scheduling_jobs",
-            &[
-                "id".to_owned(),
-                "last_update".to_owned(),
-                "region".to_owned(),
-            ],
-        );
-
-        assert!(
-            query.contains("ORDER BY 1, 2, 3"),
-            "query should order by all selected columns in order"
         );
     }
 
@@ -1949,6 +2522,28 @@ pg_mapping:
     }
 
     #[test]
+    fn extract_source_documents_skips_empty_nested_objects() {
+        let doc = doc! {
+            "_id": 1,
+            "tier_and_details": {}
+        };
+
+        let nested = extract_source_documents(
+            &doc,
+            &SourcePath {
+                path: vec!["tier_and_details".to_owned()],
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+        );
+
+        assert!(
+            nested.is_empty(),
+            "empty nested object must not be extracted for md5"
+        );
+    }
+
+    #[test]
     fn extract_source_documents_groups_root_array_siblings_with_key() {
         let doc = doc! {
             "_id": 42,
@@ -1971,6 +2566,61 @@ pg_mapping:
     }
 
     #[test]
+    fn extract_source_documents_grouped_root_skips_empty_objects() {
+        let doc = doc! {
+            "_id": 42,
+            "dev": [{}],
+            "prod": [{"provider": "atlas"}]
+        };
+
+        let nested = extract_source_documents(
+            &doc,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: Some(vec!["dev".to_owned(), "prod".to_owned()]),
+            },
+        );
+
+        assert_eq!(nested.len(), 1);
+        assert_eq!(nested[0].get_str("key"), Ok("prod"));
+    }
+
+    #[test]
+    fn extract_source_documents_expands_uuid_keyed_map_documents() {
+        let doc = doc! {
+            "_id": "customer-1",
+            "tier_and_details": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "bronze"
+                },
+                "699456451cc24f028d2aa99d7534c219": {
+                    "active": false,
+                    "tier": "silver"
+                }
+            }
+        };
+
+        let nested = extract_source_documents(
+            &doc,
+            &SourcePath {
+                path: vec!["tier_and_details".to_owned()],
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+        );
+
+        assert_eq!(nested.len(), 2);
+        assert!(nested
+            .iter()
+            .any(|row| row.get_bool("active") == Ok(true) && row.get_str("tier") == Ok("bronze")));
+        assert!(nested
+            .iter()
+            .any(|row| row.get_bool("active") == Ok(false) && row.get_str("tier") == Ok("silver")));
+    }
+
+    #[test]
     fn mongo_field_literal_supports_dotted_paths_for_inlined_objects() {
         let doc = doc! {
             "metadata": {
@@ -1985,34 +2635,149 @@ pg_mapping:
     }
 
     #[test]
-    fn collect_mismatched_record_samples_limits_to_first_five_rows() {
-        let mongo_records = (0..7)
-            .map(|index| HashRecord {
-                md5: format!("mongo-{index}"),
-                values: vec![format!("m{index}")],
-            })
-            .collect::<Vec<_>>();
-        let pg_records = (0..7)
-            .map(|index| HashRecord {
-                md5: format!("pg-{index}"),
-                values: vec![format!("p{index}")],
-            })
-            .collect::<Vec<_>>();
+    fn drop_incompatible_columns_skips_objectid_to_uuid() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "status": "ok"
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
 
-        let mismatches = collect_mismatched_record_samples(&mongo_records, &pg_records, 5);
+        let mut mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: accounts
+  columns:
+    - { source_field: _id, target_field: id, data_type: UUID }
+    - { source_field: status, target_field: status, data_type: TEXT }
+  ddl:
+    columns:
+      - { name: id, sql_type: UUID }
+      - { name: status, sql_type: TEXT }
+    foreign_keys: []
+"#,
+        )
+        .expect("mapping yaml should parse");
 
-        assert_eq!(mismatches.len(), 5);
-        assert_eq!(mismatches[0].row_index, 1);
-        assert_eq!(mismatches[4].row_index, 5);
-        assert_eq!(
-            mismatches[0].mongo_values.as_deref(),
-            Some(&["m0".to_owned()][..])
+        drop_incompatible_columns(
+            &schema,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            &mut mapping_yaml,
         );
-        assert_eq!(
-            mismatches[0].pg_values.as_deref(),
-            Some(&["p0".to_owned()][..])
-        );
+
+        let remaining_targets = mapping_yaml
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(!remaining_targets.contains(&"id"));
+        assert!(remaining_targets.contains(&"status"));
     }
+
+    #[test]
+    fn drop_incompatible_columns_skips_string_to_datetime() {
+        let docs = vec![doc! {
+            "status": "ok",
+            "monthly_gain": "0"
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mut mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: advisors
+  columns:
+    - { source_field: status, target_field: status, data_type: TEXT }
+    - { source_field: monthly_gain, target_field: monthly_gain, data_type: "TIMESTAMP WITH TIME ZONE" }
+  ddl:
+    columns:
+      - { name: status, sql_type: TEXT }
+      - { name: monthly_gain, sql_type: "TIMESTAMP WITH TIME ZONE" }
+    foreign_keys: []
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        drop_incompatible_columns(
+            &schema,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            &mut mapping_yaml,
+        );
+
+        let remaining_targets = mapping_yaml
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(remaining_targets.contains(&"status"));
+        assert!(!remaining_targets.contains(&"monthly_gain"));
+    }
+
+    #[test]
+    fn drop_incompatible_columns_skips_objectid_to_uuid_when_uuid_from_ddl_with_default() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "status": "ok"
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mut mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: accounts
+  columns:
+    - { source_field: _id, target_field: id }
+    - { source_field: status, target_field: status }
+  ddl:
+    columns:
+      - { name: id, sql_type: "UUID DEFAULT public.gen_random_uuid() PRIMARY KEY" }
+      - { name: status, sql_type: TEXT }
+    foreign_keys: []
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        drop_incompatible_columns(
+            &schema,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            &mut mapping_yaml,
+        );
+
+        let remaining_targets = mapping_yaml
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| column.target_field.as_str())
+            .collect::<Vec<_>>();
+        assert!(!remaining_targets.contains(&"id"));
+        assert!(remaining_targets.contains(&"status"));
+    }
+
 
     use crate::checkmd5::bson_to_comparable_json;
     use chrono::{TimeZone, Utc};
@@ -2042,4 +2807,230 @@ pg_mapping:
         // The test will pass if they are equal, and fail otherwise.
         assert_eq!(result, expected_json);
     }
+
+    use crate::checkmd5::{pg_select_query_unordered, read_mapping_yaml};
+    use std::path::PathBuf;
+    #[test]
+    fn test_pg_select_query_unordered_for_mapping_address() {
+        // 1. Arrange: Locate and parse the mapping_address.yaml fixture
+        let fixture_path = PathBuf::from("tests/fixtures/mapping_address.yaml");
+
+        let mapping_yaml = read_mapping_yaml(&fixture_path)
+            .expect("Failed to read mapping_address.yaml fixture file");
+
+        let schema_name = mapping_yaml.pg_mapping.schema_name.as_deref(); // Expecting Some("sample_airbnb")
+        let table_name = &mapping_yaml.pg_mapping.table_name; // Expecting "address"
+
+        // Collect target fields from the parsed columns in the exact order specified
+        let target_fields: Vec<String> = mapping_yaml
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|col| col.target_field.clone())
+            .collect();
+
+        // Ensure we loaded the expected columns from mapping_address.yaml
+        assert_eq!(
+            target_fields,
+            vec![
+                "country".to_string(),
+                "country_code".to_string(),
+                "government_area".to_string(),
+                "location".to_string(),
+                "market".to_string(),
+                "street".to_string(),
+                "suburb".to_string()
+            ]
+        );
+
+        // 2. Act: Generate the SQL select query using your function
+        let generated_sql = pg_select_query_unordered(schema_name, table_name, &target_fields, None);
+
+        //println!("Generated SQL: {}", generated_sql);
+
+        // 3. Assert: Verify the generated SQL matches the exact expected string format
+        let expected_sql = concat!(
+            "SELECT ",
+            "COALESCE(to_json(\"country\")::text, 'null') AS \"country\", ",
+            "COALESCE(to_json(\"country_code\")::text, 'null') AS \"country_code\", ",
+            "COALESCE(to_json(\"government_area\")::text, 'null') AS \"government_area\", ",
+            "COALESCE(to_json(\"location\")::text, 'null') AS \"location\", ",
+            "COALESCE(to_json(\"market\")::text, 'null') AS \"market\", ",
+            "COALESCE(to_json(\"street\")::text, 'null') AS \"street\", ",
+            "COALESCE(to_json(\"suburb\")::text, 'null') AS \"suburb\" ",
+            "FROM \"sample_airbnb\".\"address\""
+        );
+        //println!("Expected SQL: {}", expected_sql);
+        assert_eq!(generated_sql, expected_sql);
+    }
+
+    use super::*;
+    use crate::checkmd5::compute_collection_checksums_via_temp_tables;
+    mod common {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/mod.rs"));
+    }
+    use common::TestHarness;
+    #[tokio::test]
+    async fn test_compute_collection_checksums_via_temp_tables_with_containers(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // 1. Setup isolated test environment/containers
+        let harness = TestHarness::new(
+            "tests/fixtures/listingsandreviews.json",
+            "tests/fixtures/listingsandreviews.sql",
+            "tests/fixtures/mapping_listingsandreviews.yaml",
+        )
+        .await?;
+
+        // 2. Specify fields to test deterministically
+        let source_fields = vec![
+            ("access".to_string(), Some("text".to_string())),
+            ("accommodates".to_string(), Some("integer".to_string())),
+            ("amenities".to_string(), Some("text[]".to_string())),
+            ("property_type".to_string(), Some("text".to_string())),
+            ("room_type".to_string(), Some("varchar(20)".to_string())),
+            ("summary".to_string(), Some("text".to_string())),
+        ];
+        let target_fields = vec![
+            "access".to_string(),
+            "accommodates".to_string(),
+            "amenities".to_string(),
+            "property_type".to_string(),
+            "room_type".to_string(),
+            "summary".to_string(),
+        ];
+
+        // 3. Act: Run the verification engine
+        let result = compute_collection_checksums_via_temp_tables(
+            &harness.pg_client,
+            &mut harness.get_mongo_cursor().await?,
+            &source_fields,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            harness.schema_name.as_deref(),
+            &harness.table_name,
+            &target_fields,
+        )
+        .await?;
+
+        if !result.matches {
+            if let Some(mismatches) = result.mismatches {
+                println!("\n=== DATA MISMATCH DETECTED ===");
+                println!("Global Mongo MD5 Checksum: {}", result.mongo_md5);
+                println!("Global Postgres MD5 Checksum: {}", result.pg_md5);
+                
+                println!("\nFirst 5 Rows Only in MongoDB:");
+                for row in mismatches.mongo_only {
+                    println!("  - Row MD5: {}", row.md5);
+                    println!("    Values Snapshot: {:?}", row.delta);
+                }
+
+                println!("\nFirst 5 Rows Only in PostgreSQL:");
+                for row in mismatches.pg_only {
+                    println!("  - Row MD5: {}", row.md5);
+                    println!("    Values Snapshot: {:?}", row.delta);
+                }
+                println!("===============================\n");
+            }
+        }
+
+        assert!(
+            result.matches, 
+            "The computed aggregate dataset signatures from MongoDB and PostgreSQL tables must match exactly!"
+        );
+        assert!(!result.mongo_md5.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_compute_collection_checksums_via_temp_tables_with_containers_nok(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // 1. Setup isolated test environment/containers
+        let harness = TestHarness::new(
+            "tests/fixtures/listingsandreviews.json",
+            "tests/fixtures/listingsandreviews.sql",
+            "tests/fixtures/mapping_listingsandreviews.yaml",
+        )
+        .await?;
+
+        // --- INTENTIONAL FAILURE INJECTION ---
+        // Alter a single field in Postgres to cause a hash mismatch with Mongo.
+        // We change the 'room_type' to simulate a validation or padding bug.
+        let qualified_table = match &harness.schema_name {
+            Some(schema) => format!("\"{}\".\"{}\"", schema, harness.table_name),
+            None => format!("\"{}\"", harness.table_name),
+        };
+        harness.pg_client
+            .execute(
+                &format!("UPDATE {} SET room_type = 'Entire home/apt-2bis' WHERE id = 10009999;", qualified_table),
+                &[]
+            )
+            .await?;        
+
+        // 2. Specify fields to test deterministically
+        let source_fields = vec![
+            ("access".to_string(), Some("text".to_string())),
+            ("accommodates".to_string(), Some("integer".to_string())),
+            ("amenities".to_string(), Some("text[]".to_string())),
+            ("property_type".to_string(), Some("text".to_string())),
+            ("room_type".to_string(), Some("varchar(20)".to_string())),
+            ("summary".to_string(), Some("text".to_string())),
+        ];
+        let target_fields = vec![
+            "access".to_string(),
+            "accommodates".to_string(),
+            "amenities".to_string(),
+            "property_type".to_string(),
+            "room_type".to_string(),
+            "summary".to_string(),
+        ];
+
+        // 3. Act: Run the verification engine
+        let result = compute_collection_checksums_via_temp_tables(
+            &harness.pg_client,
+            &mut harness.get_mongo_cursor().await?,
+            &source_fields,
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            harness.schema_name.as_deref(),
+            &harness.table_name,
+            &target_fields,
+        )
+        .await?;
+
+        if !result.matches {
+            if let Some(mismatches) = result.mismatches {
+                println!("\n=== DATA MISMATCH DETECTED ===");
+                println!("Global Mongo MD5 Checksum: {}", result.mongo_md5);
+                println!("Global Postgres MD5 Checksum: {}", result.pg_md5);
+                
+                println!("\nFirst 5 Rows Only in MongoDB:");
+                for row in mismatches.mongo_only {
+                    println!("  - Row MD5: {}", row.md5);
+                    println!("    Values Snapshot: {:?}", row.delta);
+                }
+
+                println!("\nFirst 5 Rows Only in PostgreSQL:");
+                for row in mismatches.pg_only {
+                    println!("  - Row MD5: {}", row.md5);
+                    println!("    Values Snapshot: {:?}", row.delta);
+                }
+                println!("===============================\n");
+            }
+        }
+
+        assert!(
+            !result.matches, 
+            "The computed aggregate dataset signatures from MongoDB and PostgreSQL tables must not match !"
+        );
+        assert!(!result.mongo_md5.is_empty());
+
+        Ok(())
+    }    
 }

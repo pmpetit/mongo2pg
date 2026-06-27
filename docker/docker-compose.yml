@@ -1,7 +1,7 @@
 services:
   # --- POSTGRESQL ---
   postgres:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.4-alpine
     container_name: postgres_db
     environment:
       POSTGRES_USER: myuser
@@ -94,11 +94,11 @@ services:
         done
         echo ' MongoDB primary is UP!'
 
-        # Check if data is already seeded
-        if mongosh 'mongodb://user:pass@mongodb:27017/admin?authSource=admin' --quiet --eval 'db.getSiblingDB("sample_airbnb").getCollectionNames().length > 0' | grep -qx 'true'; then
-          echo 'MongoDB sample datasets already loaded, skipping seed'
-          exit 0
-        fi
+        # # Check if data is already seeded
+        # if mongosh 'mongodb://user:pass@mongodb:27017/admin?authSource=admin' --quiet --eval 'db.getSiblingDB("${MONGO_DBNAME}").getCollectionNames().length > 0' | grep -qx 'true'; then
+        #   echo 'MongoDB sample datasets already loaded, skipping seed'
+        #   exit 0
+        # fi
 
         # Install dependencies and run the seeding script
         echo 'Seeding MongoDB with sample data...'
@@ -215,13 +215,12 @@ services:
         echo "Kafka Connect is up. Creating Debezium MongoDB connector..."
         curl -fsS -X PUT \
           -H 'Content-Type: application/json' \
-          http://kafkaconnect:8083/connectors/sample-airbnb-mongodb/config \
+          http://kafkaconnect:8083/connectors/mongodb2pg/config \
           -d '{
             "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
             "tasks.max": "1",
             "mongodb.connection.string": "mongodb://user:pass@mongodb:27017/?replicaSet=rs0&authSource=admin",
-            "topic.prefix": "mongo2pg_sample_airbnb",
-            "database.include.list": "sample_airbnb",
+            "topic.prefix": "mongo2pg",
             "snapshot.mode": "initial"
           }'
         echo "\nConnector created successfully."

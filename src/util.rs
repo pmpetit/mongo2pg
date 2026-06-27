@@ -86,7 +86,7 @@ pub fn default_timestamp_fields() -> Vec<String> {
 struct TomlTargetSection {
     uri: Option<String>,
     database_name: Option<String>,
-    schema: Option<String>,
+    schema_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -132,7 +132,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             source_uri: source.uri,
             target_uri: target.uri,
             target_database_name: target.database_name,
-            target_schema: target.schema,
+            target_schema: target.schema_name,
             namespace: source.namespace,
             number: source.number,
             percent: source.percent,
@@ -670,7 +670,7 @@ pub fn is_pg_reserved(s: &str) -> bool {
 
 /// Convert a MongoDB field name to a valid, lowercase PostgreSQL identifier.
 /// Non-ASCII-alphanumeric characters are replaced with `_`. Names that start
-/// with a digit or clash with a PostgreSQL reserved word are prefixed with `_`.
+/// with a digit are prefixed with `_`.
 pub fn sanitize(name: &str) -> String {
     let s: String = name
         .to_lowercase()
@@ -683,7 +683,7 @@ pub fn sanitize(name: &str) -> String {
             }
         })
         .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+    if s.starts_with(|c: char| c.is_ascii_digit()) {
         format!("_{s}")
     } else {
         s
@@ -767,9 +767,33 @@ pub fn scalar_type_family(type_name: &str) -> Option<&'static str> {
     }
 }
 
+/// Convert a MongoDB ObjectId hex string (24 hex chars) to a deterministic UUID string.
+///
+/// ObjectId is 12 bytes while UUID is 16 bytes, so we left-pad with four zero bytes.
+/// This keeps conversion deterministic and preserves the original ObjectId bytes.
+pub fn objectid_hex_to_uuid(hex: &str) -> Option<String> {
+    let raw = hex.trim();
+    if raw.len() != 24 || !raw.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    let expanded = format!("00000000{}", raw.to_ascii_lowercase());
+    Some(format!(
+        "{}-{}-{}-{}-{}",
+        &expanded[0..8],
+        &expanded[8..12],
+        &expanded[12..16],
+        &expanded[16..20],
+        &expanded[20..32]
+    ))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{property_filter_entries_for_collection, read_conf, should_infer_collection};
+    use super::{
+        objectid_hex_to_uuid, property_filter_entries_for_collection, read_conf,
+        should_infer_collection,
+    };
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -832,6 +856,18 @@ timestamp_field = ["updated_at"]
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn objectid_hex_to_uuid_converts_valid_hex() {
+        let uuid = objectid_hex_to_uuid("5ca4bbc7a2dd94ee5816238c").expect("should convert");
+        assert_eq!(uuid, "00000000-5ca4-bbc7-a2dd-94ee5816238c");
+    }
+
+    #[test]
+    fn objectid_hex_to_uuid_rejects_invalid_values() {
+        assert!(objectid_hex_to_uuid("5ca4bbc7a2dd94ee581623").is_none());
+        assert!(objectid_hex_to_uuid("zzzzbbc7a2dd94ee5816238c").is_none());
     }
 
     #[test]

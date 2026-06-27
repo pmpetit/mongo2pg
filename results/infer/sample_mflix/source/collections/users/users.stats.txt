@@ -1,9 +1,0 @@
-Documents in collection : 185
-Documents sampled       : 185
-Width (top-level / max)  : 5 / 4.0 (L1)
-Depth (max nesting)     : 1
-Branch (per level)      : L1:4.0
-Avg fields / doc        : 4.0054
-Distinct fields / avg    : 1.2483
-Migrability score       : 1.75
-Top-level types         : _id:ObjectId, email:String, name:String, password:String, preferences:Object

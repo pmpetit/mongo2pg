@@ -171,11 +171,20 @@ pub struct PostImportTableRow {
 #[derive(Clone)]
 pub struct PostImportMd5Column {
     pub source_field: String,
+    pub source_type: Option<String>,
     pub target_field: String,
+    pub target_type: Option<String>,
 }
 
 #[derive(Clone)]
 pub struct PostImportMd5MismatchRow {
+    pub row_index: usize,
+    pub mongo_values: Option<Vec<String>>,
+    pub pg_values: Option<Vec<String>>,
+}
+
+#[derive(Clone)]
+pub struct PostImportCountDiffRow {
     pub row_index: usize,
     pub mongo_values: Option<Vec<String>>,
     pub pg_values: Option<Vec<String>>,
@@ -196,6 +205,7 @@ pub struct PostImportNode {
     pub pg_table_name: Option<String>,
     pub pg_row_count: Option<i64>,
     pub md5_summary: Option<PostImportMd5Summary>,
+    pub count_diff_rows: Vec<PostImportCountDiffRow>,
     pub children: Vec<PostImportNode>,
 }
 
@@ -833,7 +843,39 @@ pub fn render_post_import_html(
     mongo_cluster: &str,
     pg_target: &str,
 ) -> String {
-    fn render_md5_detail(md5_summary: &PostImportMd5Summary) -> String {
+    fn render_count_diff_detail(rows: &[PostImportCountDiffRow], delta: i64) -> String {
+        if rows.is_empty() {
+            return String::new();
+        }
+
+        let mismatch_rows = rows
+            .iter()
+            .map(|mismatch| {
+                let mongo_values = mismatch
+                    .mongo_values
+                    .as_ref()
+                    .map(|values| escape_html(&format!("[{}]", values.join(", "))))
+                    .unwrap_or_else(|| "missing row".to_owned());
+                let pg_values = mismatch
+                    .pg_values
+                    .as_ref()
+                    .map(|values| escape_html(&format!("[{}]", values.join(", "))))
+                    .unwrap_or_else(|| "missing row".to_owned());
+                format!(
+                    r#"<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td></tr>"#,
+                    mismatch.row_index, mongo_values, pg_values,
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("");
+
+        format!(
+            r#"<details class="count-detail"><summary class="count-summary match-badge is-mismatch">delta {:+}</summary><div class="count-popover"><div class="count-mismatch-label">First 5 differences by mapped row values</div><table class="count-mismatch-table"><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{}</tbody></table></div></details>"#,
+            delta, mismatch_rows,
+        )
+    }
+
+    fn render_md5_detail(md5_summary: &PostImportMd5Summary, detail_id: &str) -> String {
         let summary_label = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
             escape_html(&md5_summary.mongo_md5)
         } else {
@@ -847,9 +889,23 @@ pub fn render_post_import_html(
       .columns
       .iter()
       .map(|column| {
+        let source_label = column
+          .source_type
+          .as_deref()
+          .filter(|value| !value.trim().is_empty())
+          .map(|value| format!("mongodb ({})", escape_html(value)))
+          .unwrap_or_else(|| "mongodb".to_owned());
+        let target_label = column
+          .target_type
+          .as_deref()
+          .filter(|value| !value.trim().is_empty())
+          .map(|value| format!("pg ({})", escape_html(value)))
+          .unwrap_or_else(|| "pg".to_owned());
         format!(
-          r#"<li><span class="md5-source">{}</span><span class="md5-arrow"> -> </span><span class="md5-target">{}</span></li>"#,
+          r#"<li><span class="md5-source-label">{}</span>: <span class="md5-source">{}</span><span class="md5-arrow"> -> </span><span class="md5-target-label">{}</span>: <span class="md5-target">{}</span></li>"#,
+          source_label,
           escape_html(&column.source_field),
+          target_label,
           escape_html(&column.target_field),
         )
       })
@@ -877,12 +933,15 @@ pub fn render_post_import_html(
             .collect::<Vec<_>>()
             .join("");
         let mismatch_detail = if md5_summary.mismatches.is_empty() {
-            String::new()
+          String::new()
         } else {
-            format!(
-                r#"<div class="md5-mismatch-label">First 5 non-corresponding rows</div><table class="md5-mismatch-table"><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{}</tbody></table>"#,
-                mismatch_rows,
-            )
+          format!(
+            r#"<button type="button" class="md5-open-window" onclick="openMd5DiffWindow('{detail_id}')">Open diff in new page</button><template id="{detail_id}"><!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mongo2pg md5 mismatch</title><style>body{{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;padding:1.25rem;background:#f8fafc;color:#1f2937}}h1{{margin:.2rem 0 .5rem;font-size:1.1rem}}.meta{{margin:0 0 1rem;font-size:.9rem;color:#475569}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{border:1px solid #cbd5e1;padding:.45rem .5rem;vertical-align:top;text-align:left;font-size:.85rem;line-height:1.35}}th{{background:#e2e8f0;color:#0f172a}}code{{white-space:pre-wrap;word-break:break-word}}</style></head><body><h1>First 5 non-corresponding rows</h1><p class="meta"><strong>MongoDB:</strong> {mongo_md5}<br><strong>PostgreSQL:</strong> {pg_md5}</p><table><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{mismatch_rows}</tbody></table></body></html></template>"#,
+            detail_id = detail_id,
+            mongo_md5 = escape_html(&md5_summary.mongo_md5),
+            pg_md5 = escape_html(&md5_summary.pg_md5),
+            mismatch_rows = mismatch_rows,
+          )
         };
         let state_class = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
             "is-match"
@@ -930,10 +989,11 @@ pub fn render_post_import_html(
         let mismatch = node
             .pg_row_count
             .map(|pg_rows| pg_rows - node.mongo_count as i64);
+        let md5_detail_id = format!("md5-diff-{node_id}");
         let md5_detail = node
             .md5_summary
             .as_ref()
-            .map(render_md5_detail)
+          .map(|summary| render_md5_detail(summary, &md5_detail_id))
             .unwrap_or_default();
         let pg_cell = match (&node.pg_table_name, node.pg_row_count) {
             (Some(table_name), Some(row_count)) => format!(
@@ -942,8 +1002,12 @@ pub fn render_post_import_html(
                 row_count,
                 match mismatch {
                     Some(0) => "<span class=\"match-badge is-match\">match</span>".to_owned(),
-                    Some(delta) =>
-                        format!("<span class=\"match-badge is-mismatch\">delta {delta:+}</span>"),
+                    Some(delta) if !node.count_diff_rows.is_empty() => {
+                        render_count_diff_detail(&node.count_diff_rows, delta)
+                    }
+                    Some(delta) => {
+                        format!("<span class=\"match-badge is-mismatch\">delta {delta:+}</span>")
+                    }
                     None => String::new(),
                 },
                 if md5_detail.is_empty() {
@@ -1159,6 +1223,38 @@ pub fn render_post_import_html(
     }}
     .match-badge.is-match {{ background: #e8f7ef; color: #1e8449; }}
     .match-badge.is-mismatch {{ background: #fdecea; color: #c0392b; }}
+    .count-detail {{ display: inline-block; }}
+    .count-summary {{
+      cursor: pointer;
+      list-style: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      word-break: break-all;
+    }}
+    .count-summary::-webkit-details-marker {{ display: none; }}
+    .count-popover {{
+      margin-top: 0.35rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #a7f3d0;
+      background: white;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+      min-width: 22rem;
+      max-width: 36rem;
+      font-size: 0.8rem;
+      color: #134e4a;
+    }}
+    .count-mismatch-label {{ margin-top: 0.45rem; font-weight: 700; color: #115e59; }}
+    .count-mismatch-table {{ width: 100%; border-collapse: collapse; margin-top: 0.5rem; }}
+    .count-mismatch-table th,
+    .count-mismatch-table td {{
+      border: 1px solid #ccfbf1;
+      padding: 0.3rem 0.4rem;
+      text-align: left;
+      vertical-align: top;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+    }}
+    .count-mismatch-table th {{ background: #f0fdfa; color: #134e4a; font-weight: 700; }}
     .md5-label {{ color: #6b7c93; font-size: 0.74rem; font-weight: 700; text-transform: uppercase; }}
     .md5-detail {{ display: inline-block; }}
     .md5-summary {{
@@ -1192,9 +1288,22 @@ pub fn render_post_import_html(
     .md5-columns-label {{ margin-top: 0.45rem; font-weight: 700; color: #1f3a5f; }}
     .md5-columns {{ margin: 0.35rem 0 0; padding-left: 1.2rem; }}
     .md5-columns li {{ margin: 0.15rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    .md5-source-label {{ color: #5b21b6; font-weight: 700; }}
+    .md5-target-label {{ color: #1d4ed8; font-weight: 700; }}
     .md5-source {{ color: #7c3aed; }}
     .md5-target {{ color: #2471a3; }}
     .md5-arrow {{ color: #7f8c8d; }}
+    .md5-open-window {{
+      margin-top: 0.5rem;
+      border: 1px solid #93c5fd;
+      border-radius: 6px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.22rem 0.55rem;
+      cursor: pointer;
+    }}
     .pg-empty {{ color: #95a5a6; font-style: italic; }}
     .tree-children {{ display: block; }}
     footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
@@ -1225,6 +1334,16 @@ pub fn render_post_import_html(
       row.style.display = open ? 'none' : '';
       if (open) {{ icon.classList.remove('open'); }}
       else      {{ icon.classList.add('open'); }}
+    }}
+
+    function openMd5DiffWindow(templateId) {{
+      var tpl = document.getElementById(templateId);
+      if (!tpl) return;
+      var popup = window.open('', '_blank');
+      if (!popup) return;
+      popup.document.open();
+      popup.document.write(tpl.innerHTML);
+      popup.document.close();
     }}
   </script>
 </body>
@@ -1443,8 +1562,8 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
 mod tests {
     use super::{
         render_html, render_post_import_html, CollectionRow, CollectionStatsYaml,
-        PostImportCollectionRow, PostImportMd5Column, PostImportMd5MismatchRow,
-        PostImportMd5Summary, PostImportNode,
+        PostImportCollectionRow, PostImportCountDiffRow, PostImportMd5Column,
+        PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode,
     };
     use crate::stats::{InferWarningMinorityYaml, InferWarningTypeYaml, InferWarningYaml};
 
@@ -1615,10 +1734,13 @@ mod tests {
                         pg_md5: "abc123".to_owned(),
                         columns: vec![PostImportMd5Column {
                             source_field: "last_update".to_owned(),
+                            source_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                             target_field: "last_update".to_owned(),
+                            target_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                         }],
                         mismatches: Vec::new(),
                     }),
+                    count_diff_rows: Vec::new(),
                     children: Vec::new(),
                 },
             }],
@@ -1630,6 +1752,8 @@ mod tests {
         assert!(html.contains("<details class=\"md5-detail is-match\">"));
         assert!(html.contains("Columns involved"));
         assert!(html.contains("last_update"));
+        assert!(html.contains("mongodb (TIMESTAMP WITH TIME ZONE)"));
+        assert!(html.contains("pg (TIMESTAMP WITH TIME ZONE)"));
         assert!(html.contains("abc123"));
     }
 
@@ -1650,7 +1774,9 @@ mod tests {
                         pg_md5: "pg-md5".to_owned(),
                         columns: vec![PostImportMd5Column {
                             source_field: "monthly_gain".to_owned(),
+                            source_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                             target_field: "monthly_gain".to_owned(),
+                            target_type: Some("TIMESTAMP WITH TIME ZONE".to_owned()),
                         }],
                         mismatches: vec![PostImportMd5MismatchRow {
                             row_index: 1,
@@ -1658,6 +1784,7 @@ mod tests {
                             pg_values: Some(vec!["\"12.5\"".to_owned()]),
                         }],
                     }),
+                    count_diff_rows: Vec::new(),
                     children: Vec::new(),
                 },
             }],
@@ -1670,6 +1797,37 @@ mod tests {
         assert!(html.contains("monthly_gain"));
         assert!(html.contains("12.5"));
         assert!(html.contains("\"12.5\""));
+    }
+
+    #[test]
+    fn render_post_import_html_shows_clickable_count_diff_details() {
+        let html = render_post_import_html(
+            &[PostImportCollectionRow {
+                name: "customers".to_owned(),
+                document_count: 3,
+                root: PostImportNode {
+                    name: "customers_accounts".to_owned(),
+                    is_array: false,
+                    mongo_count: 3,
+                    pg_table_name: Some("sample_analytics.customers_accounts".to_owned()),
+                    pg_row_count: Some(1),
+                    md5_summary: None,
+                    count_diff_rows: vec![PostImportCountDiffRow {
+                        row_index: 2,
+                        mongo_values: Some(vec!["\"acc-a\"".to_owned(), "true".to_owned()]),
+                        pg_values: None,
+                    }],
+                    children: Vec::new(),
+                },
+            }],
+            "sample_analytics.customers",
+            "mongo-host",
+            "pg-host",
+        );
+
+        assert!(html.contains("delta "));
+        assert!(html.contains("First 5 differences by mapped row values"));
+        assert!(html.contains("missing row"));
     }
 }
 

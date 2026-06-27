@@ -1,6 +1,0 @@
-Documents in collection : 80047
-Documents sampled       : 1000
-Width (top-level / max)  : 8 / 8.0 (L1)
-Depth (max nesting)     : 1
-Branch (per level)      : L1:8.0
-Top-level types         : _id:ObjectId, address:Object, business_name:String, certificate_number:Number, date:String, id:String, result:String, sector:String

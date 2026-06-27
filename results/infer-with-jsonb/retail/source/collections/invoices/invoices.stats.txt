@@ -1,6 +1,0 @@
-Documents in collection : 4
-Documents sampled       : 4
-Width (top-level / max)  : 9 / 9.0 (L1)
-Depth (max nesting)     : 2
-Branch (per level)      : L1:9.0  L2:2.0
-Top-level types         : _id:ObjectId, createdAt:String, items:Array, metadata:Object, orderId:ObjectId, recommendations:Array, status:String, totalAmount:Number, userId:ObjectId

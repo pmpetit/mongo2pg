@@ -798,6 +798,7 @@ namespace = "mydb"
 [target]
 uri = "postgres://.../postgres?sslmode=require"
 database_name = "mydb"
+# schema_name = "shared_schema"
 ```
 
 It then:

@@ -14,7 +14,7 @@
 //! ```
 //! Converts a schema JSON file produced by `infer` into PostgreSQL DDL.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::pin::pin;
@@ -32,13 +32,12 @@ use mongo2pg::analyzer::{
     Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
 use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
-#[cfg(test)]
-use mongo2pg::checkmd5::run_check_md5;
+// use mongo2pg::checkmd5::run_check_md5;
 use mongo2pg::export::export_collection;
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
-    render_post_import_html, PostImportCollectionRow, PostImportMd5Column,
+    render_post_import_html, PostImportCollectionRow, PostImportCountDiffRow, PostImportMd5Column,
     PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode, PostImportTableRow,
     SYSTEM_DATABASES,
 };
@@ -51,8 +50,9 @@ use mongo2pg::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_pg_reserved, property_filter_entries_for_collection,
-    read_conf, sanitize, scalar_type_family, should_infer_collection,
+    inline_object_leaf_fields_with_prefix, is_pg_reserved, objectid_hex_to_uuid,
+    property_filter_entries_for_collection, read_conf, sanitize, scalar_type_family,
+    should_infer_collection,
 };
 use mongodb::{options::ClientOptions, Client};
 use postgres_native_tls::MakeTlsConnector;
@@ -63,6 +63,7 @@ use rdkafka::ClientConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strsim::jaro_winkler;
+use toml::{map::Map as TomlMap, Value as TomlValue};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Shared args
@@ -152,6 +153,21 @@ struct InferArgs {
     #[arg(long = "no-output", hide = true, action = clap::ArgAction::SetTrue)]
     no_output: bool,
 
+    /// PostgreSQL target database name. When -c is provided, this overwrites
+    /// target.database_name in the config file before running.
+    #[arg(long = "database-name")]
+    database_name: Option<String>,
+
+    /// PostgreSQL target schema name. When -c is provided, this overwrites
+    /// target.schema_name in the config file before running.
+    #[arg(long = "schema-name")]
+    schema_name: Option<String>,
+
+    /// Project directory name. When -c is provided, this overwrites
+    /// project.project_dir in the config file before running.
+    #[arg(long = "project-dir")]
+    project_dir: Option<String>,
+
     /// Write <name>.json and <name>.stats.txt into <output_dir>/<name>/ for each collection
     #[arg(short = 'o', long = "output-dir", conflicts_with = "config")]
     output_dir: Option<PathBuf>,
@@ -181,8 +197,13 @@ struct ToPgArgs {
     /// PostgreSQL schema name: strips `{schema}_` prefix from child table names and
     /// prepends `CREATE SCHEMA IF NOT EXISTS` + `SET search_path` to the output.
     /// When omitted, each collection is deployed into its own PostgreSQL schema.
-    #[arg(long = "schema")]
+    #[arg(long = "schema", visible_alias = "schema-name")]
     schema: Option<String>,
+
+    /// Project directory name. When -c is provided, this overwrites
+    /// project.project_dir in the config file before running.
+    #[arg(long = "project-dir")]
+    project_dir: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -229,6 +250,11 @@ struct ReportArgs {
     /// Database / namespace label shown in the report header
     #[arg(short = 'n', long = "namespace", default_value = "")]
     namespace: String,
+
+    /// Project directory name. When -c is provided, this overwrites
+    /// project.project_dir in the config file before running.
+    #[arg(long = "project-dir")]
+    project_dir: Option<String>,
 
     /// Connect to MongoDB and PostgreSQL and write a post-import validation report.
     #[arg(long = "post-import", action = clap::ArgAction::SetTrue)]
@@ -290,6 +316,21 @@ struct ExportArgs {
     /// via NAMESPACE in the config file. This overrides the namespace in the config file if provided.
     #[arg(long = "namespace")]
     namespace: Option<String>,
+
+    /// PostgreSQL target database name. When -c is provided, this overwrites
+    /// target.database_name in the config file before running.
+    #[arg(long = "database-name")]
+    database_name: Option<String>,
+
+    /// PostgreSQL target schema name. When -c is provided, this overwrites
+    /// target.schema_name in the config file before running.
+    #[arg(long = "schema-name")]
+    schema_name: Option<String>,
+
+    /// Project directory name. When -c is provided, this overwrites
+    /// project.project_dir in the config file before running.
+    #[arg(long = "project-dir")]
+    project_dir: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -305,6 +346,21 @@ struct ImportArgs {
     /// This overrides the namespace in the config file if provided.
     #[arg(long = "namespace")]
     namespace: Option<String>,
+
+    /// PostgreSQL target database name. When -c is provided, this overwrites
+    /// target.database_name in the config file before running.
+    #[arg(long = "database-name")]
+    database_name: Option<String>,
+
+    /// PostgreSQL target schema name. When -c is provided, this overwrites
+    /// target.schema_name in the config file before running.
+    #[arg(long = "schema-name")]
+    schema_name: Option<String>,
+
+    /// Project directory name. When -c is provided, this overwrites
+    /// project.project_dir in the config file before running.
+    #[arg(long = "project-dir")]
+    project_dir: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -342,6 +398,23 @@ struct KafkaImportArgs {
     /// Overrides [kafka].offset and [kafka].auto_offset_reset.
     #[arg(long = "offset", value_parser = ["latest", "earliest", "0"])]
     offset: Option<String>,
+
+    /// Project directory name. When -c is provided, this overwrites
+    /// project.project_dir in the config file before running.
+    #[arg(long = "project-dir")]
+    project_dir: Option<String>,
+
+    #[arg(long = "group-id")]
+    group_id: Option<String>,
+
+    #[arg(long = "topic-prefix")]
+    topic_prefix: Option<String>,
+
+    #[arg(long = "database-name")]
+    database_name: Option<String>,
+
+    #[arg(long = "schema-name")]
+    schema_name: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -514,6 +587,138 @@ fn validate_target_uri(uri: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Default)]
+struct ConfigOverrides {
+    project_dir: Option<String>,
+    source_uri: Option<String>,
+    namespace: Option<String>,
+    number: Option<u64>,
+    percent: Option<f64>,
+    jsonb: Option<bool>,
+    target_database_name: Option<String>,
+    target_schema_name: Option<String>,
+    kafka_topics: Option<Vec<String>>,
+    kafka_max_messages: Option<usize>,
+    kafka_offset: Option<String>,
+    kafka_group_id: Option<String>,
+    kafka_topic_prefix: Option<String>,
+}
+
+fn ensure_toml_table<'a>(
+    doc: &'a mut TomlValue,
+    key: &str,
+) -> Result<&'a mut TomlMap<String, TomlValue>> {
+    if !doc.is_table() {
+        *doc = TomlValue::Table(TomlMap::new());
+    }
+
+    let table = doc
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Config root is not a TOML table"))?;
+
+    if !table.contains_key(key) || !table.get(key).is_some_and(TomlValue::is_table) {
+        table.insert(key.to_owned(), TomlValue::Table(TomlMap::new()));
+    }
+
+    table
+        .get_mut(key)
+        .and_then(TomlValue::as_table_mut)
+        .ok_or_else(|| anyhow!("Failed to access TOML section [{key}]"))
+}
+
+fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> Result<()> {
+    let has_overrides = overrides.source_uri.is_some()
+        || overrides.project_dir.is_some()
+        || overrides.namespace.is_some()
+        || overrides.number.is_some()
+        || overrides.percent.is_some()
+        || overrides.jsonb.is_some()
+        || overrides.target_database_name.is_some()
+        || overrides.target_schema_name.is_some()
+        || overrides.kafka_topics.is_some()
+        || overrides.kafka_max_messages.is_some()
+        || overrides.kafka_offset.is_some()
+        || overrides.kafka_group_id.is_some()
+        || overrides.kafka_topic_prefix.is_some();
+
+    if !has_overrides {
+        return Ok(());
+    }
+
+    let raw = std::fs::read_to_string(conf_path)
+        .with_context(|| format!("Failed to read config file {}", conf_path.display()))?;
+    let mut doc: TomlValue = toml::from_str(&raw)
+        .with_context(|| format!("Failed to parse TOML config {}", conf_path.display()))?;
+
+    {
+        let project = ensure_toml_table(&mut doc, "project")?;
+        if let Some(v) = &overrides.project_dir {
+            project.insert("project_dir".to_owned(), TomlValue::String(v.clone()));
+        }
+    }
+
+    {
+        let source = ensure_toml_table(&mut doc, "source")?;
+        if let Some(v) = &overrides.source_uri {
+            source.insert("uri".to_owned(), TomlValue::String(v.clone()));
+        }
+        if let Some(v) = &overrides.namespace {
+            source.insert("namespace".to_owned(), TomlValue::String(v.clone()));
+        }
+        if let Some(v) = overrides.number {
+            source.insert("number".to_owned(), TomlValue::Integer(v as i64));
+        }
+        if let Some(v) = overrides.percent {
+            source.insert("percent".to_owned(), TomlValue::Float(v));
+        }
+        if let Some(v) = overrides.jsonb {
+            source.insert("jsonb".to_owned(), TomlValue::Boolean(v));
+        }
+    }
+
+    {
+        let target = ensure_toml_table(&mut doc, "target")?;
+        if let Some(v) = &overrides.target_database_name {
+            target.insert("database_name".to_owned(), TomlValue::String(v.clone()));
+        }
+        if let Some(v) = &overrides.target_schema_name {
+            target.insert("schema_name".to_owned(), TomlValue::String(v.clone()));
+        }
+    }
+
+    {
+        let kafka = ensure_toml_table(&mut doc, "kafka")?;
+
+        if let Some(v) = &overrides.kafka_group_id {
+            kafka.insert("group_id".to_owned(), TomlValue::String(v.clone()));
+        }
+        if let Some(v) = &overrides.kafka_topic_prefix {
+            kafka.insert("topic_prefix".to_owned(), TomlValue::String(v.clone()));
+        }
+
+        if let Some(v) = &overrides.kafka_topics {
+            kafka.insert(
+                "topics".to_owned(),
+                TomlValue::Array(v.iter().cloned().map(TomlValue::String).collect()),
+            );
+        }
+        if let Some(v) = overrides.kafka_max_messages {
+            kafka.insert("max_messages".to_owned(), TomlValue::Integer(v as i64));
+        }
+        if let Some(v) = &overrides.kafka_offset {
+            kafka.insert("offset".to_owned(), TomlValue::String(v.clone()));
+            kafka.insert("auto_offset_reset".to_owned(), TomlValue::String(v.clone()));
+        }
+    }
+
+    let updated = toml::to_string_pretty(&doc)
+        .with_context(|| format!("Failed to render TOML config {}", conf_path.display()))?;
+    std::fs::write(conf_path, updated)
+        .with_context(|| format!("Failed to write config file {}", conf_path.display()))?;
+
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // `to-pg` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
@@ -527,6 +732,17 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
                 format!("CREATE DATABASE {quoted_name};\n\\connect {quoted_name}\n\n{ddl}")
             }
         }
+    }
+
+    if let Some(conf) = args.config.as_deref() {
+        apply_config_overrides(
+            conf,
+            &ConfigOverrides {
+                project_dir: args.project_dir.clone(),
+                target_schema_name: args.schema.clone(),
+                ..ConfigOverrides::default()
+            },
+        )?;
     }
 
     // Resolve collections source dir and SQL output dir
@@ -681,8 +897,22 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
             .as_deref()
             .or(config_target_schema.as_deref())
             .or(Some(table_name));
+        let mapping_tables =
+            load_mapping_ddl_tables(json_path.parent().unwrap_or(&collections_dir))?;
+
+        let force_schema_inference_for_objectid = mapping_tables.as_ref().is_some_and(|tables| {
+            should_regenerate_from_schema_when_objectid_pk(&schema, tables, table_name)
+        });
+
+        if force_schema_inference_for_objectid && !quiet {
+            eprintln!(
+                "warning: mapping DDL for '{}' uses surrogate BIGSERIAL id while source _id is ObjectId; using schema-inferred DDL to preserve UUID mapping",
+                table_name
+            );
+        }
+
         let ddl = if let Some(mapping_tables) =
-            load_mapping_ddl_tables(json_path.parent().unwrap_or(&collections_dir))?
+            mapping_tables.filter(|_| !force_schema_inference_for_objectid)
         {
             render_ddl_from_mapping_tables(&mapping_tables, target_schema)
         } else {
@@ -725,6 +955,23 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
+    if let Some(conf) = args.config.as_deref() {
+        apply_config_overrides(
+            conf,
+            &ConfigOverrides {
+                project_dir: args.project_dir.clone(),
+                source_uri: args.mongo.source_uri.clone(),
+                namespace: args.namespace.clone(),
+                number: args.number,
+                percent: args.percent,
+                jsonb: args.jsonb.then_some(true),
+                target_database_name: args.database_name.clone(),
+                target_schema_name: args.schema_name.clone(),
+                ..ConfigOverrides::default()
+            },
+        )?;
+    }
+
     let chained_config = args.config.clone();
     let chained_output_dir = args.output_dir.clone();
     let quiet_infer = chained_config.is_some();
@@ -844,6 +1091,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     existing_colls.join(", ")
                 );
             }
+            let inferred_root_table_names = existing_colls
+                .iter()
+                .filter(|name| !name.starts_with("system."))
+                .filter(|name| should_infer_collection(name, &conf_include, &conf_exclude))
+                .map(|name| sanitize(name))
+                .collect::<HashSet<_>>();
             if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
                 eprintln!(
                     "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
@@ -861,6 +1114,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 &conf_timestamp_fields,
                 &args,
                 None,
+                Some(&inferred_root_table_names),
                 Some((1, 1)),
                 !quiet_infer,
             )
@@ -892,6 +1146,10 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .filter(|n| !n.starts_with("system."))
                 .filter(|n| should_infer_collection(n, &conf_include, &conf_exclude))
                 .collect();
+            let inferred_root_table_names = filtered_coll_names
+                .iter()
+                .map(|name| sanitize(name))
+                .collect::<HashSet<_>>();
             let total_collections = filtered_coll_names.len();
 
             let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
@@ -907,6 +1165,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     &conf_timestamp_fields,
                     &args,
                     None,
+                    Some(&inferred_root_table_names),
                     Some((index + 1, total_collections)),
                     !quiet_infer,
                 )
@@ -932,6 +1191,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 config: Some(conf.clone()),
                 output_dir: None,
                 schema: None,
+                project_dir: None,
             },
             true,
         )?;
@@ -942,6 +1202,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 collections_dir: None,
                 output: None,
                 namespace: String::new(),
+                project_dir: None,
                 post_import: false,
                 check_md5: true,
                 noaggregate: false,
@@ -1620,6 +1881,10 @@ async fn infer_all_databases(
     let mut current_collection = 0usize;
 
     for (db_name, coll_names) in &databases_with_collections {
+        let inferred_root_table_names = coll_names
+            .iter()
+            .map(|name| sanitize(name))
+            .collect::<HashSet<_>>();
         let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
 
         for coll_name in coll_names {
@@ -1636,6 +1901,7 @@ async fn infer_all_databases(
                 timestamp_fields,
                 args,
                 db_out_dir.as_deref(),
+                Some(&inferred_root_table_names),
                 Some((current_collection, total_collections)),
                 emit_stats,
             )
@@ -1678,6 +1944,7 @@ async fn infer_collection(
     timestamp_fields: &[String],
     args: &InferArgs,
     output_dir_override: Option<&Path>,
+    known_root_table_names: Option<&HashSet<String>>,
     progress: Option<(usize, usize)>,
     emit_stats: bool,
 ) -> Result<CollectionSchema> {
@@ -1829,6 +2096,7 @@ async fn infer_collection(
             output_name,
             target_schema,
             timestamp_fields,
+            known_root_table_names,
             &schema,
             &stats_lines,
             &infer_warnings,
@@ -1942,7 +2210,32 @@ struct CollectionMapping {
     mongo_dbname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     mongo_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    traversal: Option<TraversalPlan>,
     pg_mapping: PgMapping,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TraversalMode {
+    Root,
+    Object,
+    ArrayObject,
+    ArrayScalar,
+    MapObject,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TraversalPlan {
+    mode: TraversalMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent_table: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_field: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fk_column: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key_column: Option<String>,
 }
 
 fn sanitize_pg_name(name: &str) -> String {
@@ -1957,10 +2250,19 @@ fn sanitize_pg_name(name: &str) -> String {
             }
         })
         .collect();
-    if s.starts_with(|c: char| c.is_ascii_digit()) || is_pg_reserved(&s) {
+    if s.starts_with(|c: char| c.is_ascii_digit()) {
         format!("_{s}")
     } else {
         s
+    }
+}
+
+fn normalize_pg_identifier(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+        trimmed[1..trimmed.len() - 1].replace("\"\"", "\"")
+    } else {
+        trimmed.to_owned()
     }
 }
 
@@ -1990,11 +2292,28 @@ fn ddl_table_mapping_from_table(table: &mongo2pg::schema_diagram::Table) -> DdlT
 }
 
 fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Option<&str>) -> String {
+    fn is_standalone_index_pseudo_column(column: &DdlColumnMapping) -> bool {
+        column.name.eq_ignore_ascii_case("create")
+            && column
+                .sql_type
+                .trim_start()
+                .to_ascii_uppercase()
+                .starts_with("INDEX IF NOT EXISTS")
+    }
+
     fn rendered_sql_type(sql_type: &str) -> &str {
         if sql_type.eq_ignore_ascii_case("VARCHAR(0)") {
             "TEXT"
         } else {
             sql_type
+        }
+    }
+
+    fn maybe_quote_ident(ident: &str) -> String {
+        if is_pg_reserved(ident) {
+            quote_ident(ident)
+        } else {
+            ident.to_owned()
         }
     }
 
@@ -2039,35 +2358,90 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
         ordered
     }
 
-    let mut ddl = String::new();
+    fn fk_columns(from_col: &str) -> Vec<String> {
+        from_col
+            .split(',')
+            .map(str::trim)
+            .filter(|col| !col.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
+    fn fk_index_statements(table: &DdlTableMapping, schema_name: Option<&str>) -> Vec<String> {
+        let mut seen = std::collections::HashSet::new();
+        let mut statements = Vec::new();
+
+        for fk in &table.foreign_keys {
+            let cols = fk_columns(&fk.from_col);
+            if cols.is_empty() {
+                continue;
+            }
+            let dedupe_key = cols.join("\0");
+            if !seen.insert(dedupe_key) {
+                continue;
+            }
+
+            let index_name = format!("idx_{}_{}", table.name, cols.join("_"));
+            let qualified_table = match schema_name {
+                Some(schema) => format!("{}.{}", quote_ident(schema), quote_ident(&table.name)),
+                None => quote_ident(&table.name),
+            };
+            let quoted_cols = cols
+                .iter()
+                .map(|col| quote_ident(col))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            statements.push(format!(
+                "CREATE INDEX IF NOT EXISTS {} ON {} ({});",
+                quote_ident(&index_name),
+                qualified_table,
+                quoted_cols
+            ));
+        }
+
+        statements
+    }
+
+    let mut ddl_body = String::new();
 
     if let Some(schema) = schema_name {
-        ddl.push_str(&format!(
-            "CREATE SCHEMA IF NOT EXISTS {};\nSET search_path = {};\n\n",
+        ddl_body.push_str(&format!(
+            "CREATE SCHEMA IF NOT EXISTS {};\nSET search_path = {}, public;\n\n",
             quote_ident(schema),
             quote_ident(schema)
         ));
     }
 
     for table in ordered_tables(tables) {
-        ddl.push_str(&format!("CREATE TABLE {} (\n", table.name));
+        ddl_body.push_str(&format!(
+            "CREATE TABLE {} (\n",
+            maybe_quote_ident(&table.name)
+        ));
 
-        let primary_keys = table
+        let rendered_columns = table
             .columns
+            .iter()
+            .filter(|column| !is_standalone_index_pseudo_column(column))
+            .collect::<Vec<_>>();
+
+        let primary_keys = rendered_columns
             .iter()
             .filter(|column| column.primary_key)
             .map(|column| column.name.clone())
             .collect::<Vec<_>>();
 
-        let mut lines = table
-            .columns
+        let mut lines = rendered_columns
             .iter()
             .map(|column| {
                 let mut line = format!(
                     "    {} {}",
-                    column.name,
+                    maybe_quote_ident(&column.name),
                     rendered_sql_type(&column.sql_type)
                 );
+                if column.primary_key && column.sql_type.eq_ignore_ascii_case("uuid") {
+                    line.push_str(" DEFAULT public.gen_random_uuid()");
+                }
                 if primary_keys.len() == 1 && column.primary_key {
                     line.push_str(" PRIMARY KEY");
                 }
@@ -2079,24 +2453,80 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
             .collect::<Vec<_>>();
 
         if primary_keys.len() > 1 {
-            lines.push(format!("    PRIMARY KEY ({})", primary_keys.join(", ")));
+            lines.push(format!(
+                "    PRIMARY KEY ({})",
+                primary_keys
+                    .iter()
+                    .map(|column| maybe_quote_ident(column))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
 
         lines.extend(table.foreign_keys.iter().map(|fk| {
+            let fk_from_cols = fk
+                .from_col
+                .split(',')
+                .map(str::trim)
+                .filter(|col| !col.is_empty())
+                .map(maybe_quote_ident)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let fk_to_cols = fk
+                .to_col
+                .split(',')
+                .map(str::trim)
+                .filter(|col| !col.is_empty())
+                .map(maybe_quote_ident)
+                .collect::<Vec<_>>()
+                .join(", ");
             format!(
                 "    FOREIGN KEY ({}) REFERENCES {} ({}) DEFERRABLE INITIALLY DEFERRED",
-                fk.from_col, fk.to_table, fk.to_col
+                fk_from_cols,
+                maybe_quote_ident(&fk.to_table),
+                fk_to_cols
             )
         }));
 
-        ddl.push_str(&lines.join(",\n"));
-        ddl.push_str("\n);\n\n");
+        ddl_body.push_str(&lines.join(",\n"));
+        ddl_body.push_str("\n);\n\n");
+
+        let fk_indexes = fk_index_statements(table, schema_name);
+        if !fk_indexes.is_empty() {
+            ddl_body.push_str(&fk_indexes.join("\n"));
+            ddl_body.push_str("\n\n");
+        }
     }
+
+    let needs_pgcrypto = ddl_body.contains("public.gen_random_uuid()");
+    let needs_postgis = ddl_body.to_ascii_lowercase().contains("geometry(");
+
+    let mut ddl = String::new();
+    if needs_pgcrypto {
+        ddl.push_str("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n");
+    }
+    if needs_postgis {
+        ddl.push_str("CREATE EXTENSION IF NOT EXISTS postgis;\n");
+    }
+    if needs_pgcrypto || needs_postgis {
+        ddl.push('\n');
+    }
+
+    ddl.push_str(&ddl_body);
 
     ddl.trim_end().to_owned() + "\n"
 }
 
 fn load_mapping_ddl_tables(collection_dir: &Path) -> Result<Option<Vec<DdlTableMapping>>> {
+    fn is_standalone_index_pseudo_column(column: &DdlColumnMapping) -> bool {
+        column.name.eq_ignore_ascii_case("create")
+            && column
+                .sql_type
+                .trim_start()
+                .to_ascii_uppercase()
+                .starts_with("INDEX IF NOT EXISTS")
+    }
+
     let mut mapping_paths = std::fs::read_dir(collection_dir)
         .with_context(|| format!("Cannot read {}", collection_dir.display()))?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -2118,13 +2548,76 @@ fn load_mapping_ddl_tables(collection_dir: &Path) -> Result<Option<Vec<DdlTableM
             .with_context(|| format!("Failed to read {}", path.display()))?;
         let mapping: CollectionMapping = serde_yaml::from_str(&content)
             .with_context(|| format!("Failed to parse {}", path.display()))?;
-        let Some(ddl) = mapping.pg_mapping.ddl else {
+        let Some(mut ddl) = mapping.pg_mapping.ddl else {
             return Ok(None);
         };
+        ddl.columns
+            .retain(|column| !is_standalone_index_pseudo_column(column));
+
+        if mapping.pg_mapping.columns.is_empty() {
+            let fk_columns = ddl
+                .foreign_keys
+                .iter()
+                .flat_map(|fk| fk.from_col.split(','))
+                .map(str::trim)
+                .filter(|col| !col.is_empty())
+                .collect::<std::collections::HashSet<_>>();
+
+            for column in &mut ddl.columns {
+                if !column.primary_key && !fk_columns.contains(column.name.as_str()) {
+                    column.nullable = true;
+                }
+            }
+        }
         tables.push(ddl);
     }
 
     Ok(Some(tables))
+}
+
+fn schema_root_id_is_objectid(schema: &CollectionSchema) -> bool {
+    let Some(id_field) = schema.object.get("_id") else {
+        return false;
+    };
+
+    let non_null_types = id_field
+        .types
+        .iter()
+        .filter(|(type_name, _)| !matches!(type_name.as_str(), TYPE_NULL | TYPE_UNDEFINED))
+        .map(|(type_name, _)| type_name.as_str())
+        .collect::<Vec<_>>();
+
+    non_null_types.len() == 1 && non_null_types[0] == "ObjectId"
+}
+
+fn mapping_has_surrogate_bigserial_primary_id(tables: &[DdlTableMapping]) -> bool {
+    tables.iter().any(|table| {
+        table.columns.iter().any(|column| {
+            let sql_type = column.sql_type.trim().to_ascii_lowercase();
+            column.primary_key
+                && column.name == "id"
+                && (sql_type == "bigserial" || sql_type == "serial8")
+        })
+    })
+}
+
+fn mapping_has_flattened_parent_uuid_column(tables: &[DdlTableMapping], table_name: &str) -> bool {
+    let expected_parent_id = flattened_root_parent_id_column(table_name);
+    tables.iter().any(|table| {
+        table.columns.iter().any(|column| {
+            column.name == expected_parent_id && column.sql_type.eq_ignore_ascii_case("uuid")
+        })
+    })
+}
+
+fn should_regenerate_from_schema_when_objectid_pk(
+    schema: &CollectionSchema,
+    mapping_tables: &[DdlTableMapping],
+    table_name: &str,
+) -> bool {
+    schema_root_id_is_objectid(schema)
+        && mapping_has_surrogate_bigserial_primary_id(mapping_tables)
+        && !mapping_has_flattened_parent_uuid_column(mapping_tables, table_name)
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -2152,8 +2645,164 @@ fn build_collection_mappings_with_timestamp_fields(
     timestamp_fields: &[String],
     reserved_table_names: &std::collections::HashSet<String>,
 ) -> Vec<(String, CollectionMapping)> {
-    fn preferred_child_mapping_table_name(parent_name: &str, field: &str) -> String {
+    fn is_uuid_like_key(name: &str) -> bool {
+        let parts = name.split('-').collect::<Vec<_>>();
+        name.len() == 36
+            && parts.len() == 5
+            && parts[0].len() == 8
+            && parts[1].len() == 4
+            && parts[2].len() == 4
+            && parts[3].len() == 4
+            && parts[4].len() == 12
+            && parts
+                .iter()
+                .all(|part| part.chars().all(|ch| ch.is_ascii_hexdigit()))
+    }
+
+    fn map_document_value_fields<'a>(
+        sub_fields: &'a IndexMap<String, FieldSchema>,
+    ) -> Option<&'a IndexMap<String, FieldSchema>> {
+        if sub_fields.is_empty()
+            || !sub_fields.keys().all(|key| {
+                !key.is_empty()
+                    && key.chars().all(|ch| ch.is_ascii_hexdigit())
+                    && (key.len() >= 8 || is_uuid_like_key(key))
+            })
+        {
+            return None;
+        }
+
+        for field in sub_fields.values() {
+            let non_null = field
+                .types
+                .iter()
+                .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                .collect::<Vec<_>>();
+            if non_null.len() == 1
+                && non_null[0].0.as_str() == "Object"
+                && non_null[0]
+                    .1
+                    .object
+                    .as_ref()
+                    .is_some_and(|obj| !obj.is_empty())
+            {
+                return non_null[0].1.object.as_ref();
+            }
+        }
+
+        None
+    }
+
+    fn is_geojson_point_field(field: &FieldSchema) -> bool {
+        let non_null: Vec<(&str, &TypeSchema)> = field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+            .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+            .collect();
+        if non_null.len() != 1 || non_null[0].0 != "Object" {
+            return false;
+        }
+
+        let Some(obj_fields) = non_null[0].1.object.as_ref() else {
+            return false;
+        };
+
+        let Some(type_field) = obj_fields.get("type") else {
+            return false;
+        };
+        let type_has_string = type_field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+            .any(|(type_name, _)| type_name == "String");
+        if !type_has_string {
+            return false;
+        }
+
+        let has_point_type_value = type_field
+            .types
+            .get("String")
+            .and_then(|type_schema| type_schema.values.as_ref())
+            .map(|values| {
+                values.iter().any(|value| {
+                    value
+                        .as_str()
+                        .map(|raw| raw.eq_ignore_ascii_case("point"))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false);
+        if !has_point_type_value {
+            return false;
+        }
+
+        let Some(coords_field) = obj_fields.get("coordinates") else {
+            return false;
+        };
+        coords_field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+            .any(|(type_name, _)| type_name == "Array")
+    }
+
+    fn field_has_geo_merged_doc_shape(field: &FieldSchema) -> bool {
+        let non_null: Vec<(&str, &TypeSchema)> = field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+            .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+            .collect();
+        if non_null.len() != 1 || non_null[0].0 != "Object" {
+            return false;
+        }
+
+        let Some(sub_fields) = non_null[0].1.object.as_ref() else {
+            return false;
+        };
+
+        let mut geo_count = 0_usize;
+        let mut sibling_object_count = 0_usize;
+        for sub_field in sub_fields.values() {
+            let sub_non_null: Vec<(&str, &TypeSchema)> = sub_field
+                .types
+                .iter()
+                .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                .map(|(type_name, type_schema)| (type_name.as_str(), type_schema))
+                .collect();
+            if sub_non_null.is_empty() {
+                continue;
+            }
+
+            if sub_non_null.len() == 1
+                && sub_non_null[0].0 == "Object"
+                && is_geojson_point_field(sub_field)
+            {
+                geo_count += 1;
+                continue;
+            }
+
+            if sub_non_null.len() == 1 && sub_non_null[0].0 == "Object" {
+                sibling_object_count += 1;
+                continue;
+            }
+
+            return false;
+        }
+
+        geo_count == 1 && sibling_object_count == 1
+    }
+
+    fn preferred_child_mapping_table_name(
+        parent_name: &str,
+        field: &str,
+        force_parent_prefix: bool,
+    ) -> String {
         let field = sanitize_pg_name(field);
+        if force_parent_prefix {
+            return format!("{parent_name}_{field}");
+        }
         let ancestor_segments = parent_name.split('_').collect::<Vec<_>>();
         if ancestor_segments.iter().any(|segment| *segment == field) {
             let parent_segment = ancestor_segments.last().copied().unwrap_or(parent_name);
@@ -2170,36 +2819,36 @@ fn build_collection_mappings_with_timestamp_fields(
     fn unique_child_mapping_table_name(
         parent_name: &str,
         field: &str,
+        force_parent_prefix: bool,
         reserved_table_names: &std::collections::HashSet<String>,
         assigned_table_names: &std::collections::HashSet<String>,
     ) -> String {
-        let field = sanitize_pg_name(field);
-        let parent_segment = parent_name.rsplit('_').next().unwrap_or(parent_name);
-        let mut candidates = Vec::new();
-        for candidate in [
-            preferred_child_mapping_table_name(parent_name, &field),
-            format!("{parent_segment}_{field}"),
-            format!("{parent_name}_{field}"),
-        ] {
-            if !candidates.iter().any(|existing| existing == &candidate) {
-                candidates.push(candidate);
-            }
+        let base = preferred_child_mapping_table_name(parent_name, field, force_parent_prefix);
+        let is_taken = |name: &str| {
+            reserved_table_names.contains(name) || assigned_table_names.contains(name)
+        };
+
+        if !is_taken(&base) {
+            return base;
         }
 
-        for candidate in candidates {
-            if !reserved_table_names.contains(&candidate)
-                && !assigned_table_names.contains(&candidate)
-            {
+        let parent_segments = parent_name
+            .split('_')
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>();
+
+        for depth in 1..=parent_segments.len() {
+            let prefix = parent_segments[parent_segments.len() - depth..].join("_");
+            let candidate = format!("{prefix}_{base}");
+            if !is_taken(&candidate) {
                 return candidate;
             }
         }
 
-        let mut suffix = 2_usize;
+        let mut suffix = 2usize;
         loop {
-            let candidate = format!("{parent_name}_{field}_{suffix}");
-            if !reserved_table_names.contains(&candidate)
-                && !assigned_table_names.contains(&candidate)
-            {
+            let candidate = format!("{parent_name}_{base}_{suffix}");
+            if !is_taken(&candidate) {
                 return candidate;
             }
             suffix += 1;
@@ -2214,7 +2863,7 @@ fn build_collection_mappings_with_timestamp_fields(
         resolved_child_table_names
             .get(&child_name_lookup_key(parent_name, field))
             .cloned()
-            .unwrap_or_else(|| preferred_child_mapping_table_name(parent_name, field))
+            .unwrap_or_else(|| preferred_child_mapping_table_name(parent_name, field, false))
     }
 
     fn collect_resolved_child_table_names(
@@ -2243,10 +2892,12 @@ fn build_collection_mappings_with_timestamp_fields(
 
         for (raw_name, field) in fields {
             if let Some(group) = grouped_representatives.get(raw_name) {
-                let old_child = preferred_child_mapping_table_name(old_parent_name, raw_name);
+                let old_child =
+                    preferred_child_mapping_table_name(old_parent_name, raw_name, false);
                 let new_child = unique_child_mapping_table_name(
                     new_parent_name,
                     raw_name,
+                    false,
                     reserved_table_names,
                     assigned_table_names,
                 );
@@ -2298,10 +2949,16 @@ fn build_collection_mappings_with_timestamp_fields(
             };
 
             if child_fields.is_some() || (non_null.len() == 1 && non_null[0].0 == "Array") {
-                let old_child = preferred_child_mapping_table_name(old_parent_name, raw_name);
+                let force_parent_prefix = field_has_geo_merged_doc_shape(field);
+                let old_child = preferred_child_mapping_table_name(
+                    old_parent_name,
+                    raw_name,
+                    force_parent_prefix,
+                );
                 let new_child = unique_child_mapping_table_name(
                     new_parent_name,
                     raw_name,
+                    force_parent_prefix,
                     reserved_table_names,
                     assigned_table_names,
                 );
@@ -2333,6 +2990,88 @@ fn build_collection_mappings_with_timestamp_fields(
         column_name: &str,
         is_root: bool,
     ) -> Option<String> {
+        fn find_geo_merged_source_field(
+            fields: &IndexMap<String, FieldSchema>,
+            column_name: &str,
+        ) -> Option<String> {
+            for (raw_name, field) in fields {
+                let non_null = field
+                    .types
+                    .iter()
+                    .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+                    .collect::<Vec<_>>();
+                if non_null.len() != 1 || non_null[0].0.as_str() != "Object" {
+                    continue;
+                }
+                let Some(sub_fields) = non_null[0].1.object.as_ref() else {
+                    continue;
+                };
+
+                let mut geo_field_name: Option<&str> = None;
+                let mut sibling_obj_name: Option<&str> = None;
+                let mut sibling_obj_fields: Option<&IndexMap<String, FieldSchema>> = None;
+                let mut valid = true;
+
+                for (sub_name, sub_field) in sub_fields {
+                    let sub_non_null = sub_field
+                        .types
+                        .iter()
+                        .filter(|(type_name, _)| {
+                            !matches!(type_name.as_str(), "Null" | "Undefined")
+                        })
+                        .collect::<Vec<_>>();
+                    if sub_non_null.is_empty() {
+                        continue;
+                    }
+                    if sub_non_null.len() != 1 || sub_non_null[0].0.as_str() != "Object" {
+                        valid = false;
+                        break;
+                    }
+
+                    if is_geojson_point_field(sub_field) {
+                        if geo_field_name.is_some() {
+                            valid = false;
+                            break;
+                        }
+                        geo_field_name = Some(sub_name.as_str());
+                    } else {
+                        if sibling_obj_name.is_some() {
+                            valid = false;
+                            break;
+                        }
+                        sibling_obj_name = Some(sub_name.as_str());
+                        sibling_obj_fields = sub_non_null[0].1.object.as_ref();
+                    }
+                }
+
+                if !valid {
+                    continue;
+                }
+
+                if let Some(geo_name) = geo_field_name {
+                    if sanitize_pg_name(geo_name) == column_name {
+                        return Some(format!("{raw_name}.{geo_name}"));
+                    }
+                }
+
+                let (Some(sibling_name), Some(sibling_fields)) =
+                    (sibling_obj_name, sibling_obj_fields)
+                else {
+                    continue;
+                };
+
+                for (path, _) in inline_object_leaf_fields_with_prefix(sibling_fields, &[]) {
+                    if let Some(last) = path.last() {
+                        if sanitize_pg_name(last) == column_name {
+                            return Some(format!("{raw_name}.{sibling_name}.{}", path.join(".")));
+                        }
+                    }
+                }
+            }
+
+            None
+        }
+
         fn reserved_inline_sibling_names(
             fields: &IndexMap<String, FieldSchema>,
             current_raw_name: &str,
@@ -2430,10 +3169,11 @@ fn build_collection_mappings_with_timestamp_fields(
             return Some("_id".to_owned());
         }
 
-        if let Some(raw_name) = fields
-            .keys()
-            .find(|raw_name| sanitize_pg_name(raw_name) == column_name)
-        {
+        if let Some(raw_name) = fields.keys().find(|raw_name| {
+            sanitize_pg_name(raw_name) == column_name
+                || normalize_pg_identifier(raw_name) == column_name
+                || raw_name.as_str() == column_name
+        }) {
             return Some(raw_name.clone());
         }
 
@@ -2443,12 +3183,17 @@ fn build_collection_mappings_with_timestamp_fields(
                 .and_then(|field| field.types.get("Object"))
                 .and_then(|type_schema| type_schema.object.as_ref())
             {
-                if let Some(raw_name) = id_object
-                    .keys()
-                    .find(|raw_name| sanitize_pg_name(raw_name) == column_name)
-                {
+                if let Some(raw_name) = id_object.keys().find(|raw_name| {
+                    sanitize_pg_name(raw_name) == column_name
+                        || normalize_pg_identifier(raw_name) == column_name
+                        || raw_name.as_str() == column_name
+                }) {
                     return Some(raw_name.clone());
                 }
+            }
+
+            if let Some(source_field) = find_geo_merged_source_field(fields, column_name) {
+                return Some(source_field);
             }
         }
 
@@ -2471,14 +3216,15 @@ fn build_collection_mappings_with_timestamp_fields(
             .iter()
             .filter(|column| foreign_key_columns.iter().all(|fk| *fk != column.name))
             .filter_map(|column| {
-                if !is_root && column.name == "id" {
+                let target_field = normalize_pg_identifier(&column.name);
+                if !is_root && target_field == "id" {
                     return None;
                 }
 
-                let source_field = find_source_field_for_column(fields, &column.name, is_root)?;
+                let source_field = find_source_field_for_column(fields, &target_field, is_root)?;
                 Some(MappingColumn {
                     source_field,
-                    target_field: column.name.clone(),
+                    target_field,
                     data_type: column.col_type.to_lowercase(),
                     nullable: !column.not_null,
                 })
@@ -2500,6 +3246,18 @@ fn build_collection_mappings_with_timestamp_fields(
         resolved_child_table_names: &HashMap<String, String>,
         out: &mut Vec<(String, CollectionMapping)>,
     ) {
+        fn table_has_child_references(
+            table_name: &str,
+            tables_by_name: &HashMap<String, mongo2pg::schema_diagram::Table>,
+        ) -> bool {
+            tables_by_name.values().any(|candidate| {
+                candidate
+                    .foreign_keys
+                    .iter()
+                    .any(|fk| fk.to_table == table_name)
+            })
+        }
+
         let grouped_root_fields = if is_root {
             grouped_root_array_object_fields(fields)
         } else {
@@ -2517,7 +3275,7 @@ fn build_collection_mappings_with_timestamp_fields(
         if emit_current {
             if let Some(table) = tables_by_name.get(table_name) {
                 let columns = build_mapping_columns(table, fields, is_root);
-                if !columns.is_empty() {
+                if !columns.is_empty() || table_has_child_references(&table.name, tables_by_name) {
                     let mapping_collection_name = mongo_path_segments
                         .last()
                         .cloned()
@@ -2531,6 +3289,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                 root_collection_name,
                                 mongo_path_segments,
                             ),
+                            traversal: None,
                             pg_mapping: PgMapping {
                                 dbname: db_name.to_owned(),
                                 schema_name: schema_name.to_owned(),
@@ -2566,23 +3325,24 @@ fn build_collection_mappings_with_timestamp_fields(
                                 && foreign_key_columns.iter().all(|fk| *fk != column.name)
                         })
                         .filter_map(|column| {
-                            if column.name == "key" {
+                            let target_field = normalize_pg_identifier(&column.name);
+                            if target_field == "key" {
                                 Some(MappingColumn {
                                     source_field: "key".to_owned(),
-                                    target_field: column.name.clone(),
+                                    target_field,
                                     data_type: column.col_type.to_lowercase(),
                                     nullable: !column.not_null,
                                 })
                             } else {
                                 find_source_field_for_column(
                                     &group.child_fields,
-                                    &column.name,
+                                    &target_field,
                                     false,
                                 )
                                 .map(|source_field| {
                                     MappingColumn {
                                         source_field,
-                                        target_field: column.name.clone(),
+                                        target_field,
                                         data_type: column.col_type.to_lowercase(),
                                         nullable: !column.not_null,
                                     }
@@ -2590,7 +3350,9 @@ fn build_collection_mappings_with_timestamp_fields(
                             }
                         })
                         .collect::<Vec<_>>();
-                    if !columns.is_empty() {
+                    if !columns.is_empty()
+                        || table_has_child_references(&table.name, tables_by_name)
+                    {
                         let mut child_mongo_path_segments = mongo_path_segments.to_vec();
                         child_mongo_path_segments.push(raw_name.clone());
                         out.push((
@@ -2602,6 +3364,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                     root_collection_name,
                                     &child_mongo_path_segments,
                                 ),
+                                traversal: None,
                                 pg_mapping: PgMapping {
                                     dbname: db_name.to_owned(),
                                     schema_name: schema_name.to_owned(),
@@ -2657,6 +3420,160 @@ fn build_collection_mappings_with_timestamp_fields(
                         raw_name,
                         resolved_child_table_names,
                     );
+
+                    if field_has_geo_merged_doc_shape(field) {
+                        if let Some(table) = tables_by_name.get(&child_table) {
+                            let foreign_key_columns = table
+                                .foreign_keys
+                                .iter()
+                                .map(|fk| fk.from_col.as_str())
+                                .collect::<Vec<_>>();
+                            let mut geo_merged_lookup_fields = IndexMap::new();
+                            geo_merged_lookup_fields.insert(raw_name.clone(), field.clone());
+                            let columns = table
+                                .columns
+                                .iter()
+                                .filter(|column| {
+                                    column.name != "id"
+                                        && foreign_key_columns.iter().all(|fk| *fk != column.name)
+                                })
+                                .filter_map(|column| {
+                                    let target_field = normalize_pg_identifier(&column.name);
+                                    find_source_field_for_column(
+                                        &geo_merged_lookup_fields,
+                                        &target_field,
+                                        true,
+                                    )
+                                    .map(|source_field| {
+                                        MappingColumn {
+                                            source_field,
+                                            target_field,
+                                            data_type: column.col_type.to_lowercase(),
+                                            nullable: !column.not_null,
+                                        }
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+
+                            if !columns.is_empty()
+                                || table_has_child_references(&table.name, tables_by_name)
+                            {
+                                out.push((
+                                    child_table.clone(),
+                                    CollectionMapping {
+                                        collection_name: raw_name.clone(),
+                                        mongo_dbname: db_name.to_owned(),
+                                        mongo_path: mapping_mongo_path_for_segments(
+                                            root_collection_name,
+                                            mongo_path_segments,
+                                        ),
+                                        traversal: None,
+                                        pg_mapping: PgMapping {
+                                            dbname: db_name.to_owned(),
+                                            schema_name: schema_name.to_owned(),
+                                            table_name: table.name.clone(),
+                                            columns,
+                                            ddl: Some(ddl_table_mapping_from_table(table)),
+                                            ddl_editing: default_ddl_editing_guidance(),
+                                        },
+                                    },
+                                ));
+                            }
+                        }
+
+                        continue;
+                    }
+
+                    if let Some(value_fields) = map_document_value_fields(sub_fields) {
+                        if let Some(table) = tables_by_name.get(&child_table) {
+                            let foreign_key_columns = table
+                                .foreign_keys
+                                .iter()
+                                .map(|fk| fk.from_col.as_str())
+                                .collect::<Vec<_>>();
+                            let columns = table
+                                .columns
+                                .iter()
+                                .filter(|column| {
+                                    column.name != "id"
+                                        && foreign_key_columns.iter().all(|fk| *fk != column.name)
+                                })
+                                .filter_map(|column| {
+                                    let target_field = normalize_pg_identifier(&column.name);
+                                    if target_field == "key" {
+                                        Some(MappingColumn {
+                                            source_field: "key".to_owned(),
+                                            target_field,
+                                            data_type: column.col_type.to_lowercase(),
+                                            nullable: !column.not_null,
+                                        })
+                                    } else {
+                                        find_source_field_for_column(
+                                            value_fields,
+                                            &target_field,
+                                            false,
+                                        )
+                                        .map(
+                                            |source_field| MappingColumn {
+                                                source_field,
+                                                target_field,
+                                                data_type: column.col_type.to_lowercase(),
+                                                nullable: !column.not_null,
+                                            },
+                                        )
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+
+                            if !columns.is_empty()
+                                || table_has_child_references(&table.name, tables_by_name)
+                            {
+                                let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                                child_mongo_path_segments.push(raw_name.clone());
+                                out.push((
+                                    child_table.clone(),
+                                    CollectionMapping {
+                                        collection_name: raw_name.clone(),
+                                        mongo_dbname: db_name.to_owned(),
+                                        mongo_path: mapping_mongo_path_for_segments(
+                                            root_collection_name,
+                                            &child_mongo_path_segments,
+                                        ),
+                                        traversal: None,
+                                        pg_mapping: PgMapping {
+                                            dbname: db_name.to_owned(),
+                                            schema_name: schema_name.to_owned(),
+                                            table_name: table.name.clone(),
+                                            columns,
+                                            ddl: Some(ddl_table_mapping_from_table(table)),
+                                            ddl_editing: default_ddl_editing_guidance(),
+                                        },
+                                    },
+                                ));
+                            }
+                        }
+
+                        collect_table_mappings(
+                            db_name,
+                            root_collection_name,
+                            schema_name,
+                            &child_table,
+                            &child_table,
+                            &{
+                                let mut child_mongo_path_segments = mongo_path_segments.to_vec();
+                                child_mongo_path_segments.push(raw_name.clone());
+                                child_mongo_path_segments
+                            },
+                            value_fields,
+                            false,
+                            false,
+                            tables_by_name,
+                            resolved_child_table_names,
+                            out,
+                        );
+                        continue;
+                    }
+
                     collect_table_mappings(
                         db_name,
                         root_collection_name,
@@ -2730,12 +3647,14 @@ fn build_collection_mappings_with_timestamp_fields(
                                 })
                                 .map(|column| MappingColumn {
                                     source_field: raw_name.clone(),
-                                    target_field: column.name.clone(),
+                                    target_field: normalize_pg_identifier(&column.name),
                                     data_type: column.col_type.to_lowercase(),
                                     nullable: !column.not_null,
                                 })
                                 .collect::<Vec<_>>();
-                            if !columns.is_empty() {
+                            if !columns.is_empty()
+                                || table_has_child_references(&table.name, tables_by_name)
+                            {
                                 let mut child_mongo_path_segments = mongo_path_segments.to_vec();
                                 child_mongo_path_segments.push(raw_name.clone());
                                 out.push((
@@ -2747,6 +3666,7 @@ fn build_collection_mappings_with_timestamp_fields(
                                             root_collection_name,
                                             &child_mongo_path_segments,
                                         ),
+                                        traversal: None,
                                         pg_mapping: PgMapping {
                                             dbname: db_name.to_owned(),
                                             schema_name: schema_name.to_owned(),
@@ -2845,23 +3765,24 @@ fn build_collection_mappings_with_timestamp_fields(
             .columns
             .iter()
             .filter_map(|column| {
-                if column.name == "id" {
+                let target_field = normalize_pg_identifier(&column.name);
+                if target_field == "id" {
                     return None;
                 }
-                let source_field = if column.name == parent_id_col {
+                let source_field = if target_field == parent_id_col {
                     Some("_id".to_owned())
-                } else if column.name == "key" {
+                } else if target_field == "key" {
                     Some("key".to_owned())
                 } else {
                     group
                         .child_fields
                         .keys()
-                        .find(|raw_name| sanitize(raw_name) == column.name)
+                        .find(|raw_name| sanitize(raw_name) == target_field)
                         .cloned()
                 }?;
                 Some(MappingColumn {
                     source_field,
-                    target_field: column.name.clone(),
+                    target_field,
                     data_type: column.col_type.to_lowercase(),
                     nullable: !column.not_null,
                 })
@@ -2875,6 +3796,7 @@ fn build_collection_mappings_with_timestamp_fields(
                 collection_name: coll_name.to_owned(),
                 mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
+                traversal: None,
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -2922,17 +3844,18 @@ fn build_collection_mappings_with_timestamp_fields(
             .columns
             .iter()
             .filter_map(|column| {
-                if column.name == "id" {
+                let target_field = normalize_pg_identifier(&column.name);
+                if target_field == "id" {
                     return None;
                 }
-                let source_field = if column.name == parent_id_col {
+                let source_field = if target_field == parent_id_col {
                     Some("_id".to_owned())
                 } else {
-                    find_source_field_for_column(item_fields, &column.name, false)
+                    find_source_field_for_column(item_fields, &target_field, false)
                 }?;
                 Some(MappingColumn {
                     source_field,
-                    target_field: column.name.clone(),
+                    target_field,
                     data_type: column.col_type.to_lowercase(),
                     nullable: !column.not_null,
                 })
@@ -2946,6 +3869,7 @@ fn build_collection_mappings_with_timestamp_fields(
                 collection_name: coll_name.to_owned(),
                 mongo_dbname: db_name.to_owned(),
                 mongo_path: Some(".".to_owned()),
+                traversal: None,
                 pg_mapping: PgMapping {
                     dbname: db_name.to_owned(),
                     schema_name: mapping_schema_name.clone(),
@@ -3029,6 +3953,71 @@ fn load_reserved_mapping_table_names(
     Ok(reserved)
 }
 
+fn infer_traversal_plan(mapping: &CollectionMapping) -> TraversalPlan {
+    let fk = mapping
+        .pg_mapping
+        .ddl
+        .as_ref()
+        .and_then(|ddl| ddl.foreign_keys.first());
+
+    let parent_table = fk.map(|foreign_key| foreign_key.to_table.clone());
+    let fk_column = fk.map(|foreign_key| normalize_pg_identifier(&foreign_key.from_col));
+    let key_column = mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .find(|column| column.target_field == "key")
+        .map(|column| column.target_field.clone());
+
+    let non_structural_targets = mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .filter(|column| column.target_field != "id")
+        .filter(|column| {
+            fk_column
+                .as_ref()
+                .is_none_or(|fk_name| column.target_field != *fk_name)
+        })
+        .filter(|column| column.target_field != "key")
+        .map(|column| column.target_field.as_str())
+        .collect::<Vec<_>>();
+
+    let source_field_from_path = mapping.mongo_path.as_deref().and_then(|path| {
+        if path == "." || path.trim().is_empty() {
+            None
+        } else {
+            path.rsplit('.').next().map(str::to_owned)
+        }
+    });
+
+    let mode = if mapping.mongo_path.as_deref() == Some(".") {
+        TraversalMode::Root
+    } else if non_structural_targets.len() == 1 && non_structural_targets[0] == "value" {
+        TraversalMode::ArrayScalar
+    } else if key_column.is_some() {
+        TraversalMode::MapObject
+    } else {
+        TraversalMode::Object
+    };
+
+    TraversalPlan {
+        mode,
+        parent_table,
+        source_field: source_field_from_path,
+        fk_column,
+        key_column,
+    }
+}
+
+fn enrich_mappings_with_traversal(mappings: &mut [(String, CollectionMapping)]) {
+    for (_, mapping) in mappings.iter_mut() {
+        if mapping.traversal.is_none() {
+            mapping.traversal = Some(infer_traversal_plan(mapping));
+        }
+    }
+}
+
 /// Write `<dir>/<name>/<name>.json`, `<dir>/<name>/<name>.stats.txt`, `<dir>/<name>/<name>.stats.yaml`, and one `mapping_<table>.yaml` per generated table.
 fn write_collection_files(
     base: &Path,
@@ -3036,6 +4025,7 @@ fn write_collection_files(
     coll_name: &str,
     target_schema: Option<&str>,
     timestamp_fields: &[String],
+    known_root_table_names: Option<&HashSet<String>>,
     schema: &CollectionSchema,
     stats_lines: &[String],
     infer_warnings: &[InferWarningYaml],
@@ -3061,9 +4051,18 @@ fn write_collection_files(
     std::fs::write(&yaml_path, serde_yaml::to_string(&yaml_stats)?)
         .with_context(|| format!("Failed to write {}", yaml_path.display()))?;
 
-    let reserved_table_names = load_reserved_mapping_table_names(base, &dir)?;
+    let mut reserved_table_names = load_reserved_mapping_table_names(base, &dir)?;
+    if let Some(root_table_names) = known_root_table_names {
+        let current_root_table_name = sanitize(coll_name);
+        reserved_table_names.extend(
+            root_table_names
+                .iter()
+                .filter(|name| name.as_str() != current_root_table_name.as_str())
+                .cloned(),
+        );
+    }
 
-    let mappings = build_collection_mappings_with_timestamp_fields(
+    let mut mappings = build_collection_mappings_with_timestamp_fields(
         db_name,
         coll_name,
         target_schema,
@@ -3071,6 +4070,7 @@ fn write_collection_files(
         timestamp_fields,
         &reserved_table_names,
     );
+    enrich_mappings_with_traversal(&mut mappings);
     let expected_mapping_files = mappings
         .iter()
         .map(|(file_stem, _)| format!("mapping_{}.yaml", file_stem))
@@ -3134,7 +4134,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
         .unwrap_or_else(|| "#namespace = my_db".to_owned());
     let conf_content = format!(
-        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
+        "[project]\n title = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
         args.project_name,
@@ -3176,6 +4176,18 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .config
         .as_ref()
         .ok_or_else(|| anyhow!("Provide -c <config>"))?;
+
+    apply_config_overrides(
+        conf,
+        &ConfigOverrides {
+            project_dir: args.project_dir.clone(),
+            source_uri: args.mongo.source_uri.clone(),
+            namespace: args.namespace.clone(),
+            target_database_name: args.database_name.clone(),
+            target_schema_name: args.schema_name.clone(),
+            ..ConfigOverrides::default()
+        },
+    )?;
 
     let c = read_conf(conf)?;
     let conf_include = c.include.clone();
@@ -3345,6 +4357,17 @@ fn resolve_collections_dir(project_root: &Path, db_name: &str) -> std::path::Pat
 }
 
 async fn run_import(args: ImportArgs) -> Result<()> {
+    apply_config_overrides(
+        &args.config,
+        &ConfigOverrides {
+            project_dir: args.project_dir.clone(),
+            namespace: args.namespace.clone(),
+            target_database_name: args.database_name.clone(),
+            target_schema_name: args.schema_name.clone(),
+            ..ConfigOverrides::default()
+        },
+    )?;
+
     let c = read_conf(&args.config)?;
     let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
     let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
@@ -3425,8 +4448,9 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         return Err(anyhow!("No SQL files found in {}", tables_dir.display()));
     }
 
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     let mut allowed_table_names: HashSet<String> = HashSet::new();
+    let mut table_columns_by_name: HashMap<String, Vec<String>> = HashMap::new();
 
     for sql_path in &sql_files {
         let sql = std::fs::read_to_string(sql_path)
@@ -3436,12 +4460,38 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             continue;
         }
         for table in parse_sql(&executable_sql) {
-            allowed_table_names.insert(table.name);
+            allowed_table_names.insert(table.name.clone());
+            table_columns_by_name.insert(
+                table.name,
+                table
+                    .columns
+                    .into_iter()
+                    .map(|column| column.name)
+                    .collect(),
+            );
         }
-        pg_client
-            .batch_execute(&executable_sql)
-            .await
-            .with_context(|| format!("Failed to execute {}", sql_path.display()))?;
+        match pg_client.batch_execute(&executable_sql).await {
+            Ok(()) => {}
+            Err(err) if is_missing_postgis_control_file(&err) => {
+                let fallback_sql = strip_postgis_extension_statement(&executable_sql);
+                pg_client
+                    .batch_execute(&fallback_sql)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to execute {} after removing PostGIS extension statement",
+                            sql_path.display()
+                        )
+                    })?;
+            }
+            Err(err) => {
+                return Err(anyhow!(
+                    "Failed to execute {}\n{}",
+                    sql_path.display(),
+                    format_postgres_error(&err)
+                ));
+            }
+        }
         println!("Created PostgreSQL objects from {}", sql_path.display());
     }
 
@@ -3541,10 +4591,19 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             .and_then(|stem| stem.to_str())
             .and_then(|stem| stem.strip_suffix(".csv"))
             .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
+        let table_columns = table_columns_by_name
+            .get(table)
+            .ok_or_else(|| anyhow!("No DDL column metadata found for table {table}"))?;
+        let copy_columns = table_columns
+            .iter()
+            .map(|column| quote_ident(&column.trim_matches('"').replace("\"\"", "\"")))
+            .collect::<Vec<_>>()
+            .join(", ");
         let copy_sql = format!(
-            "COPY {}.{} FROM STDIN WITH (FORMAT csv, HEADER true)",
+            "COPY {}.{} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)",
             quote_ident(schema),
-            quote_ident(table)
+            quote_ident(table),
+            copy_columns,
         );
         let file = std::fs::File::open(csv_path)
             .with_context(|| format!("Failed to open {}", csv_path.display()))?;
@@ -3748,6 +4807,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     fn parse_topic_db_collection(
         topic: &str,
         topic_prefix: Option<&str>,
+        default_db_name: Option<&str>,
     ) -> Option<(String, String)> {
         let mut effective = topic;
         if let Some(prefix) = topic_prefix {
@@ -3758,13 +4818,24 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             effective = &topic[prefix_with_dot.len()..];
         }
         let segments = effective.split('.').collect::<Vec<_>>();
-        if segments.len() < 2 {
-            return None;
+        if segments.len() >= 2 {
+            return Some((
+                segments[segments.len() - 2].to_owned(),
+                segments[segments.len() - 1].to_owned(),
+            ));
         }
-        Some((
-            segments[segments.len() - 2].to_owned(),
-            segments[segments.len() - 1].to_owned(),
-        ))
+
+        // Some deployments set topic_prefix to include db name already
+        // (for example mongo2pg.sample_analytics), so only <collection>
+        // remains after prefix trimming. In that case fall back to configured
+        // namespace database for the db segment.
+        if segments.len() == 1 {
+            if let Some(db_name) = default_db_name {
+                return Some((db_name.to_owned(), segments[0].to_owned()));
+            }
+        }
+
+        None
     }
 
     fn mongo_path_segments(mongo_path: Option<&str>) -> Vec<&str> {
@@ -3822,6 +4893,48 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         current
     }
 
+    fn find_value_in_nested_json_object<'a>(
+        obj: &'a serde_json::Map<String, Value>,
+        source_field: &str,
+    ) -> Option<&'a Value> {
+        if let Some(value) = obj.get(source_field) {
+            return Some(value);
+        }
+
+        fn visit<'a>(value: &'a Value, source_field: &str, out: &mut Vec<&'a Value>) {
+            match value {
+                Value::Object(map) => {
+                    if let Some(found) = map.get(source_field) {
+                        out.push(found);
+                    }
+                    for child in map.values() {
+                        visit(child, source_field, out);
+                    }
+                }
+                Value::Array(items) => {
+                    for item in items {
+                        visit(item, source_field, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut matches = Vec::new();
+        for value in obj.values() {
+            visit(value, source_field, &mut matches);
+            if matches.len() > 1 {
+                break;
+            }
+        }
+
+        if matches.len() == 1 {
+            Some(matches[0])
+        } else {
+            None
+        }
+    }
+
     fn format_table_insert_exec_summary(table_insert_execs: &HashMap<String, u64>) -> String {
         if table_insert_execs.is_empty() {
             return "none".to_owned();
@@ -3844,14 +4957,44 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         raw.replace('\'', "''")
     }
 
+    fn normalized_sql_type(sql_type: Option<&str>) -> Option<String> {
+        let raw = sql_type?.trim();
+        if raw.is_empty() {
+            return None;
+        }
+
+        let lowered = raw.to_ascii_lowercase();
+        let mut cut = raw.len();
+        for marker in [
+            " default ",
+            " primary key",
+            " not null",
+            " null",
+            " references ",
+            " check ",
+            " unique",
+        ] {
+            if let Some(idx) = lowered.find(marker) {
+                cut = cut.min(idx);
+            }
+        }
+
+        let base = raw[..cut].trim();
+        if base.is_empty() {
+            None
+        } else {
+            Some(base.to_owned())
+        }
+    }
+
     fn cast_string_literal(raw: &str, sql_type: Option<&str>) -> String {
         let escaped = escape_sql_string(raw);
-        if let Some(sql_type) = sql_type {
+        if let Some(sql_type) = normalized_sql_type(sql_type) {
             let normalized = match sql_type.trim().to_ascii_lowercase().as_str() {
                 "smallserial" | "serial2" => "SMALLINT",
                 "serial" | "serial4" => "INTEGER",
                 "bigserial" | "serial8" => "BIGINT",
-                _ => sql_type,
+                _ => &sql_type,
             };
             format!("CAST('{escaped}' AS {normalized})")
         } else {
@@ -3859,10 +5002,127 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         }
     }
 
+    fn sql_type_expects_temporal(sql_type: Option<&str>) -> bool {
+        let Some(normalized) = normalized_sql_type(sql_type) else {
+            return false;
+        };
+        let lower = normalized.trim().to_ascii_lowercase();
+        lower.starts_with("timestamp") || lower == "date" || lower.starts_with("time")
+    }
+
+    fn cast_epoch_seconds_literal(seconds_expr: &str, sql_type: Option<&str>) -> String {
+        if let Some(target_type) = normalized_sql_type(sql_type) {
+            format!("CAST(to_timestamp({seconds_expr}) AS {target_type})")
+        } else {
+            format!("to_timestamp({seconds_expr})")
+        }
+    }
+
+    fn temporal_literal_from_epoch_i64(value: i64, sql_type: Option<&str>) -> String {
+        let seconds_expr = if value.unsigned_abs() >= 100_000_000_000 {
+            format!("{value}::double precision / 1000.0")
+        } else {
+            format!("{value}::double precision")
+        };
+        cast_epoch_seconds_literal(&seconds_expr, sql_type)
+    }
+
+    fn temporal_literal_from_epoch_u64(value: u64, sql_type: Option<&str>) -> String {
+        let seconds_expr = if value >= 100_000_000_000 {
+            format!("{value}::double precision / 1000.0")
+        } else {
+            format!("{value}::double precision")
+        };
+        cast_epoch_seconds_literal(&seconds_expr, sql_type)
+    }
+
+    fn temporal_literal_from_epoch_f64(value: f64, sql_type: Option<&str>) -> String {
+        let seconds_expr = if value.abs() >= 100_000_000_000.0 {
+            format!("{value} / 1000.0")
+        } else {
+            value.to_string()
+        };
+        cast_epoch_seconds_literal(&seconds_expr, sql_type)
+    }
+
+    fn temporal_literal_from_number(
+        raw: &serde_json::Number,
+        sql_type: Option<&str>,
+    ) -> Option<String> {
+        raw.as_i64()
+            .map(|v| temporal_literal_from_epoch_i64(v, sql_type))
+            .or_else(|| {
+                raw.as_u64()
+                    .map(|v| temporal_literal_from_epoch_u64(v, sql_type))
+            })
+            .or_else(|| {
+                raw.as_f64()
+                    .map(|v| temporal_literal_from_epoch_f64(v, sql_type))
+            })
+    }
+
+    fn geojson_point_coordinates(value: &Value) -> Option<(f64, f64)> {
+        match value {
+            Value::String(raw) => serde_json::from_str::<Value>(raw)
+                .ok()
+                .and_then(|parsed| geojson_point_coordinates(&parsed)),
+            Value::Object(obj) => {
+                let point_type = obj.get("type")?.as_str()?;
+                if !point_type.eq_ignore_ascii_case("point") {
+                    return None;
+                }
+                let coords = obj.get("coordinates")?.as_array()?;
+                if coords.len() != 2 {
+                    return None;
+                }
+                let lon = coords[0].as_f64()?;
+                let lat = coords[1].as_f64()?;
+                Some((lon, lat))
+            }
+            _ => None,
+        }
+    }
+
     // Map Debezium/Mongo Extended JSON wrappers to PostgreSQL SQL literals.
     // Keep this centralized so adding new wrappers is easy.
     fn map_extended_json_literal(value: &Value, sql_type: Option<&str>) -> Option<String> {
+        if sql_type_expects_temporal(sql_type) {
+            if let Value::Number(raw) = value {
+                return temporal_literal_from_number(raw, sql_type);
+            }
+        }
+
         let obj = value.as_object()?;
+
+        if sql_type_expects_temporal(sql_type) {
+            if let Some(Value::Number(raw)) = obj
+                .get("long")
+                .or_else(|| obj.get("int"))
+                .or_else(|| obj.get("double"))
+            {
+                return temporal_literal_from_number(raw, sql_type);
+            }
+            if let Some(Value::String(raw)) = obj.get("string") {
+                if let Ok(number) = raw.parse::<f64>() {
+                    return Some(temporal_literal_from_epoch_f64(number, sql_type));
+                }
+            }
+        }
+
+        let normalized = normalized_sql_type(sql_type);
+
+        if let Some(Value::String(raw)) = obj.get("$oid") {
+            if normalized
+                .as_deref()
+                .map(|t| t.eq_ignore_ascii_case("uuid"))
+                .unwrap_or(false)
+            {
+                return objectid_hex_to_uuid(raw)
+                    .map(|uuid| cast_string_literal(&uuid, sql_type))
+                    .or_else(|| Some(cast_string_literal(raw, sql_type)));
+            }
+            return Some(cast_string_literal(raw, sql_type));
+        }
 
         if let Some(Value::String(raw)) = obj
             .get("$numberDecimal")
@@ -3876,23 +5136,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         if let Some(date_value) = obj.get("$date") {
             return match date_value {
                 Value::String(raw) => Some(cast_string_literal(raw, sql_type)),
-                Value::Number(raw) => raw
-                    .as_i64()
-                    .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
-                    .or_else(|| {
-                        raw.as_u64()
-                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
-                    })
-                    .or_else(|| {
-                        raw.as_f64()
-                            .map(|ms| format!("to_timestamp({ms} / 1000.0)"))
-                    }),
+                Value::Number(raw) => temporal_literal_from_number(raw, sql_type),
                 Value::Object(inner) => {
                     if let Some(Value::String(ms_raw)) = inner.get("$numberLong") {
                         ms_raw
                             .parse::<i64>()
                             .ok()
-                            .map(|ms| format!("to_timestamp({ms}::double precision / 1000.0)"))
+                            .map(|ms| temporal_literal_from_epoch_i64(ms, sql_type))
                     } else {
                         None
                     }
@@ -3902,6 +5152,135 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         }
 
         None
+    }
+
+    fn sql_type_expects_numeric(sql_type: Option<&str>) -> bool {
+        let Some(normalized) = normalized_sql_type(sql_type) else {
+            return false;
+        };
+        let lower = normalized.trim().to_ascii_lowercase();
+        lower.starts_with("smallint")
+            || lower.starts_with("integer")
+            || lower.starts_with("bigint")
+            || lower.starts_with("serial")
+            || lower.starts_with("smallserial")
+            || lower.starts_with("bigserial")
+            || lower.starts_with("numeric")
+            || lower.starts_with("decimal")
+            || lower.starts_with("real")
+            || lower.starts_with("double precision")
+    }
+
+    fn is_object_id_wrapper(value: &Value) -> bool {
+        value
+            .as_object()
+            .and_then(|obj| obj.get("$oid"))
+            .and_then(Value::as_str)
+            .is_some()
+    }
+
+    fn validate_extended_json_compatibility(
+        value: Option<&Value>,
+        sql_type: Option<&str>,
+        source_field: &str,
+        target_field: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        let Some(value) = value else {
+            return Ok(());
+        };
+        if is_object_id_wrapper(value) && sql_type_expects_numeric(sql_type) {
+            let sql_type_name = sql_type.unwrap_or("<unknown>");
+            let sample = serde_json::to_string(value)
+                .unwrap_or_else(|_| "{\"$oid\":\"<invalid>\"}".to_owned());
+            return Err(anyhow!(
+                "incompatible ObjectId mapping: source_field={} target_field={} table={} sql_type={} value={} (ObjectId cannot cast to numeric). Update mapping to use numeric source field (example: theaterId) or change target column type to uuid/text",
+                source_field,
+                target_field,
+                table_name,
+                sql_type_name,
+                sample,
+            ));
+        }
+        Ok(())
+    }
+
+    fn singular_collection_name(collection_name: &str) -> String {
+        let trimmed = collection_name.trim();
+        if trimmed.ends_with("ies") && trimmed.len() > 3 {
+            return format!("{}y", &trimmed[..trimmed.len() - 3]);
+        }
+        if trimmed.ends_with('s') && trimmed.len() > 1 {
+            return trimmed[..trimmed.len() - 1].to_owned();
+        }
+        trimmed.to_owned()
+    }
+
+    fn candidate_numeric_root_id_source_fields(collection_name: &str) -> Vec<String> {
+        let mut fields = Vec::new();
+        let singular = singular_collection_name(collection_name);
+        if !singular.is_empty() {
+            fields.push(format!("{singular}Id"));
+        }
+        fields.push("id".to_owned());
+        fields
+    }
+
+    fn value_is_numeric_compatible(value: &Value) -> bool {
+        match value {
+            Value::Number(_) => true,
+            Value::String(raw) => raw.parse::<i128>().is_ok() || raw.parse::<f64>().is_ok(),
+            Value::Object(obj) => {
+                obj.get("$numberLong")
+                    .and_then(Value::as_str)
+                    .map(|raw| raw.parse::<i128>().is_ok())
+                    .unwrap_or(false)
+                    || obj
+                        .get("$numberInt")
+                        .and_then(Value::as_str)
+                        .map(|raw| raw.parse::<i128>().is_ok())
+                        .unwrap_or(false)
+                    || obj
+                        .get("$numberDouble")
+                        .and_then(Value::as_str)
+                        .map(|raw| raw.parse::<f64>().is_ok())
+                        .unwrap_or(false)
+                    || obj
+                        .get("$numberDecimal")
+                        .and_then(Value::as_str)
+                        .map(|raw| raw.parse::<f64>().is_ok())
+                        .unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+
+    fn resolve_value_with_numeric_id_fallback<'a>(
+        payload_obj: &'a serde_json::Map<String, Value>,
+        mapping: &CollectionMapping,
+        source_field: &str,
+        target_field: &str,
+        sql_type: Option<&str>,
+        raw_value: Option<&'a Value>,
+    ) -> (Option<&'a Value>, String) {
+        let needs_fallback = target_field == "id"
+            && source_field == "_id"
+            && sql_type_expects_numeric(sql_type)
+            && raw_value.map(is_object_id_wrapper).unwrap_or(false);
+
+        if !needs_fallback {
+            return (raw_value, source_field.to_owned());
+        }
+
+        for candidate in candidate_numeric_root_id_source_fields(&mapping.collection_name) {
+            if let Some(value) = payload_obj.get(&candidate) {
+                if value_is_numeric_compatible(value) {
+                    return (Some(value), candidate);
+                }
+            }
+        }
+
+        (raw_value, source_field.to_owned())
     }
 
     fn sql_literal(value: Option<&Value>, sql_type: Option<&str>) -> String {
@@ -3918,8 +5297,31 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     "FALSE".to_owned()
                 }
             }
-            Value::Number(v) => v.to_string(),
-            Value::String(v) => format!("'{}'", escape_sql_string(v)),
+            Value::Number(v) => {
+                map_extended_json_literal(value, sql_type).unwrap_or_else(|| v.to_string())
+            }
+            Value::String(v) => {
+                let normalized = normalized_sql_type(sql_type);
+                if normalized
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().starts_with("geometry"))
+                    .unwrap_or(false)
+                {
+                    if let Some((lon, lat)) = geojson_point_coordinates(value) {
+                        return format!("ST_SetSRID(ST_MakePoint({lon}, {lat}), 4326)");
+                    }
+                }
+                if normalized
+                    .as_deref()
+                    .map(|t| t.eq_ignore_ascii_case("uuid"))
+                    .unwrap_or(false)
+                {
+                    if let Some(uuid) = objectid_hex_to_uuid(v) {
+                        return cast_string_literal(&uuid, sql_type);
+                    }
+                }
+                format!("'{}'", escape_sql_string(v))
+            }
             Value::Array(items) => {
                 let elements = items
                     .iter()
@@ -3938,18 +5340,28 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                if let Some(array_type) = sql_type.filter(|t| t.contains("[]")) {
+                if let Some(array_type) = normalized_sql_type(sql_type).filter(|t| t.contains("[]"))
+                {
                     format!("ARRAY[{elements}]::{array_type}")
                 } else {
                     format!("'{}'", escape_sql_string(&value.to_string()))
                 }
             }
             Value::Object(_) => {
+                if normalized_sql_type(sql_type)
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().starts_with("geometry"))
+                    .unwrap_or(false)
+                {
+                    if let Some((lon, lat)) = geojson_point_coordinates(value) {
+                        return format!("ST_SetSRID(ST_MakePoint({lon}, {lat}), 4326)");
+                    }
+                }
                 if let Some(mapped) = map_extended_json_literal(value, sql_type) {
                     return mapped;
                 }
                 let as_json = value.to_string();
-                match sql_type {
+                match normalized_sql_type(sql_type) {
                     Some(t) if t.to_ascii_lowercase().contains("json") => {
                         format!("'{}'::{t}", escape_sql_string(&as_json))
                     }
@@ -3960,7 +5372,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     fn varchar_limit(sql_type: Option<&str>) -> Option<usize> {
-        let sql = sql_type?.trim().to_ascii_lowercase();
+        let sql = normalized_sql_type(sql_type)?.to_ascii_lowercase();
         let prefix = if sql.starts_with("varchar(") {
             "varchar("
         } else if sql.starts_with("character varying(") {
@@ -4002,10 +5414,126 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         Ok(())
     }
 
+    fn validate_required_mapped_value(
+        value: Option<&Value>,
+        nullable: bool,
+        source_field: &str,
+        target_field: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        if nullable {
+            return Ok(());
+        }
+        if value.is_none() || value.is_some_and(Value::is_null) {
+            return Err(anyhow!(
+                "missing required mapped field: source_field={} target_field={} table={} (value is null or missing)",
+                source_field,
+                target_field,
+                table_name,
+            ));
+        }
+        Ok(())
+    }
+
+    fn resolve_source_field_value<'a>(
+        payload_doc: &'a Value,
+        payload_obj: &'a serde_json::Map<String, Value>,
+        source_field: &str,
+    ) -> Option<&'a Value> {
+        if let Some(value) = payload_obj.get(source_field) {
+            return Some(value);
+        }
+
+        if source_field.contains('.') {
+            let segments = source_field.split('.').collect::<Vec<_>>();
+            if let Some(value) = values_at_path(payload_doc, &segments).into_iter().next() {
+                return Some(value);
+            }
+        }
+
+        find_value_in_nested_json_object(payload_obj, source_field)
+    }
+
+    fn resolve_source_field_value_from_map<'a>(
+        payload_obj: &'a serde_json::Map<String, Value>,
+        source_field: &str,
+    ) -> Option<&'a Value> {
+        fn value_at_segments<'a>(
+            current: &'a serde_json::Map<String, Value>,
+            segments: &[&str],
+        ) -> Option<&'a Value> {
+            let (head, tail) = segments.split_first()?;
+            let value = current.get(*head)?;
+            if tail.is_empty() {
+                return Some(value);
+            }
+            match value {
+                Value::Object(child) => value_at_segments(child, tail),
+                _ => None,
+            }
+        }
+
+        if let Some(value) = payload_obj.get(source_field) {
+            return Some(value);
+        }
+
+        if source_field.contains('.') {
+            let segments = source_field.split('.').collect::<Vec<_>>();
+            if let Some(value) = value_at_segments(payload_obj, &segments) {
+                return Some(value);
+            }
+
+            // Child rows can be flattened from nested objects (for example
+            // atmosphericCondition.quality -> { value, quality }).
+            // If full dotted path is absent, try progressively shorter suffixes.
+            for idx in 1..segments.len() {
+                let suffix = &segments[idx..];
+                if let Some(value) = value_at_segments(payload_obj, suffix) {
+                    return Some(value);
+                }
+                if suffix.len() == 1 {
+                    if let Some(value) = payload_obj.get(suffix[0]) {
+                        return Some(value);
+                    }
+                }
+            }
+        }
+
+        find_value_in_nested_json_object(payload_obj, source_field)
+    }
+
     fn debezium_document(value: Option<&Value>) -> Result<Option<Value>> {
         let Some(value) = value else {
             return Ok(None);
         };
+
+        fn unwrap_union_tagged_value(value: &Value) -> &Value {
+            const UNION_TAGS: [&str; 12] = [
+                "null", "string", "boolean", "int", "long", "float", "double", "bytes", "array",
+                "map", "record", "enum",
+            ];
+
+            let mut current = value;
+            loop {
+                let Value::Object(obj) = current else {
+                    break;
+                };
+                if obj.len() != 1 {
+                    break;
+                }
+                let Some((tag, inner)) = obj.iter().next() else {
+                    break;
+                };
+                if UNION_TAGS.contains(&tag.as_str()) {
+                    current = inner;
+                } else {
+                    break;
+                }
+            }
+            current
+        }
+
+        let value = unwrap_union_tagged_value(value);
         match value {
             Value::Object(_) => Ok(Some(value.clone())),
             Value::String(raw) => {
@@ -4022,13 +5550,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     fn column_sql_type<'a>(mapping: &'a CollectionMapping, target_field: &str) -> Option<&'a str> {
+        let normalized_target = normalize_pg_identifier(target_field);
         mapping
             .pg_mapping
             .ddl
             .as_ref()?
             .columns
             .iter()
-            .find(|column| column.name == target_field)
+            .find(|column| normalize_pg_identifier(&column.name) == normalized_target)
             .map(|column| column.sql_type.as_str())
     }
 
@@ -4057,7 +5586,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .columns
             .iter()
             .find(|column| column.primary_key)
-            .map(|column| column.name.clone())
+            .map(|column| normalize_pg_identifier(&column.name))
     }
 
     fn root_source_field_for_pk(mapping: &CollectionMapping, pk: &str) -> Option<String> {
@@ -4065,12 +5594,62 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .pg_mapping
             .columns
             .iter()
-            .find(|column| column.target_field == pk)
+            .find(|column| {
+                normalize_pg_identifier(&column.target_field) == normalize_pg_identifier(pk)
+            })
             .map(|column| column.source_field.clone())
     }
 
     fn is_root_mapping(mapping: &CollectionMapping) -> bool {
         mapping.mongo_path.as_deref().unwrap_or(".").trim() == "."
+    }
+
+    fn infer_error_target_field(err: &tokio_postgres::Error) -> Option<String> {
+        if let Some(column) = err.as_db_error().and_then(|db_err| db_err.column()) {
+            return Some(normalize_pg_identifier(column));
+        }
+
+        let message = err
+            .as_db_error()
+            .map(|db_err| db_err.message())
+            .unwrap_or_default();
+        let marker = "column \"";
+        let start = message.find(marker)? + marker.len();
+        let end = message[start..].find('"')?;
+        Some(normalize_pg_identifier(&message[start..start + end]))
+    }
+
+    fn source_field_for_target(mapping: &CollectionMapping, target_field: &str) -> String {
+        mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .find(|column| {
+                normalize_pg_identifier(&column.target_field)
+                    == normalize_pg_identifier(target_field)
+            })
+            .map(|column| column.source_field.clone())
+            .unwrap_or_else(|| target_field.to_owned())
+    }
+
+    fn annotate_apply_db_error(
+        err: tokio_postgres::Error,
+        mapping: &CollectionMapping,
+        table_name: &str,
+    ) -> anyhow::Error {
+        let formatted = format_postgres_error(&err);
+        if let Some(target_field) = infer_error_target_field(&err) {
+            let source_field = source_field_for_target(mapping, &target_field);
+            anyhow!(
+                "db error: {}\nDETAIL: source_field={} target_field={} table={}",
+                formatted,
+                source_field,
+                target_field,
+                table_name
+            )
+        } else {
+            anyhow!("db error: {}", formatted)
+        }
     }
 
     fn direct_children_for_parent<'a>(
@@ -4103,7 +5682,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .columns
             .iter()
             .find(|column| column.primary_key)
-            .map(|column| column.name.clone())
+            .map(|column| normalize_pg_identifier(&column.name))
     }
 
     fn child_segments_relative_to_parent(
@@ -4247,39 +5826,112 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .iter()
             .find(|mapping| is_root_mapping(mapping))
             .ok_or_else(|| anyhow!("No root mapping (mongo_path: .) found"))?;
+        let payload_obj = payload_doc
+            .as_object()
+            .ok_or_else(|| anyhow!("Kafka upsert payload must be a JSON object"))?;
         let root_table = qualified_table_name(root_mapping, fallback_schema);
         let mut affected_rows = 0_u64;
 
+        let mut mapped_target_fields = std::collections::HashSet::new();
         let mut columns = Vec::new();
         let mut values = Vec::new();
         for column in &root_mapping.pg_mapping.columns {
-            let raw_value = payload_doc
-                .as_object()
-                .and_then(|obj| obj.get(&column.source_field));
-            let sql_type = column_sql_type(root_mapping, &column.target_field);
-            validate_varchar_value(
-                raw_value,
-                sql_type,
+            let normalized_target_field = normalize_pg_identifier(&column.target_field);
+            let raw_value =
+                resolve_source_field_value(payload_doc, payload_obj, &column.source_field);
+            let sql_type = column_sql_type(root_mapping, &normalized_target_field);
+            let (resolved_value, effective_source_field) = resolve_value_with_numeric_id_fallback(
+                payload_obj,
+                root_mapping,
                 &column.source_field,
-                &column.target_field,
+                &normalized_target_field,
+                sql_type,
+                raw_value,
+            );
+            validate_required_mapped_value(
+                resolved_value,
+                column.nullable,
+                &effective_source_field,
+                &normalized_target_field,
                 &root_table,
             )?;
-            columns.push(quote_ident(&column.target_field));
-            values.push(sql_literal(raw_value, sql_type));
+            validate_extended_json_compatibility(
+                resolved_value,
+                sql_type,
+                &effective_source_field,
+                &normalized_target_field,
+                &root_table,
+            )?;
+            validate_varchar_value(
+                resolved_value,
+                sql_type,
+                &effective_source_field,
+                &normalized_target_field,
+                &root_table,
+            )?;
+            mapped_target_fields.insert(normalized_target_field.clone());
+            columns.push(quote_ident(&normalized_target_field));
+            values.push(sql_literal(resolved_value, sql_type));
+        }
+
+        if let Some(ddl) = root_mapping.pg_mapping.ddl.as_ref() {
+            for ddl_column in &ddl.columns {
+                let target_field = normalize_pg_identifier(&ddl_column.name);
+                if mapped_target_fields.contains(&target_field) || target_field == "id" {
+                    continue;
+                }
+
+                let resolved_value =
+                    resolve_source_field_value(payload_doc, payload_obj, &target_field);
+                if resolved_value.is_none() {
+                    continue;
+                }
+
+                validate_required_mapped_value(
+                    resolved_value,
+                    ddl_column.nullable,
+                    &target_field,
+                    &target_field,
+                    &root_table,
+                )?;
+                validate_extended_json_compatibility(
+                    resolved_value,
+                    Some(&ddl_column.sql_type),
+                    &target_field,
+                    &target_field,
+                    &root_table,
+                )?;
+                validate_varchar_value(
+                    resolved_value,
+                    Some(&ddl_column.sql_type),
+                    &target_field,
+                    &target_field,
+                    &root_table,
+                )?;
+
+                mapped_target_fields.insert(target_field.clone());
+                columns.push(quote_ident(&target_field));
+                values.push(sql_literal(resolved_value, Some(&ddl_column.sql_type)));
+            }
         }
 
         let root_pk = root_primary_key(root_mapping)
             .ok_or_else(|| anyhow!("Root mapping has no primary key in ddl"))?;
-        let updates = root_mapping
-            .pg_mapping
-            .columns
+        let mut update_targets = columns
             .iter()
-            .filter(|column| column.target_field != root_pk)
-            .map(|column| {
+            .map(|column| normalize_pg_identifier(column))
+            .filter(|target_field| target_field != &root_pk)
+            .collect::<Vec<_>>();
+        update_targets.sort();
+        update_targets.dedup();
+
+        let updates = update_targets
+            .into_iter()
+            .map(|target_field| {
                 format!(
                     "{} = EXCLUDED.{}",
-                    quote_ident(&column.target_field),
-                    quote_ident(&column.target_field)
+                    quote_ident(&target_field),
+                    quote_ident(&target_field)
                 )
             })
             .collect::<Vec<_>>();
@@ -4302,17 +5954,32 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 updates.join(", "),
             )
         };
-        affected_rows += pg_client.execute(upsert_sql.as_str(), &[]).await?;
+        affected_rows += pg_client
+            .execute(upsert_sql.as_str(), &[])
+            .await
+            .map_err(|err| annotate_apply_db_error(err, root_mapping, &root_table))?;
         *table_insert_execs.entry(root_table.clone()).or_insert(0) += 1;
 
         let root_pk_source = root_source_field_for_pk(root_mapping, &root_pk)
             .ok_or_else(|| anyhow!("Root mapping primary key not found in mapped columns"))?;
-        let root_pk_value = payload_doc
-            .as_object()
-            .and_then(|obj| obj.get(&root_pk_source))
-            .ok_or_else(|| anyhow!("Root payload missing {}", root_pk_source))?;
-
         let root_pk_sql_type = column_sql_type(root_mapping, &root_pk);
+        let (root_pk_value, effective_root_pk_source) = resolve_value_with_numeric_id_fallback(
+            payload_obj,
+            root_mapping,
+            &root_pk_source,
+            &root_pk,
+            root_pk_sql_type,
+            resolve_source_field_value(payload_doc, payload_obj, &root_pk_source),
+        );
+        let root_pk_value = root_pk_value.ok_or_else(|| {
+            anyhow!(
+                "Root payload missing {} (resolved source field for target {} is {})",
+                root_pk_source,
+                root_pk,
+                effective_root_pk_source
+            )
+        })?;
+
         let root_pk_literal = sql_literal(Some(root_pk_value), root_pk_sql_type);
 
         let mut non_root_mappings = mappings
@@ -4351,46 +6018,78 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 let child_pk_sql_type = column_sql_type(child_mapping, &child_pk);
 
                 for node in child_nodes {
-                    let Value::Object(obj) = node else {
-                        continue;
-                    };
+                    for obj in child_row_objects_for_mapping(node, child_mapping) {
+                        let mapped_values = child_mapping
+                            .pg_mapping
+                            .columns
+                            .iter()
+                            .map(|mapped| {
+                                let val =
+                                    resolve_source_field_value_from_map(&obj, &mapped.source_field);
+                                (mapped, val)
+                            })
+                            .collect::<Vec<_>>();
 
-                    let mut child_columns = vec![quote_ident(&fk.from_col)];
-                    let mut child_values = vec![parent_pk_literal.clone()];
-                    for mapped in &child_mapping.pg_mapping.columns {
-                        child_columns.push(quote_ident(&mapped.target_field));
-                        let val = obj.get(&mapped.source_field);
-                        let sql_type = column_sql_type(child_mapping, &mapped.target_field);
-                        validate_varchar_value(
-                            val,
-                            sql_type,
-                            &mapped.source_field,
-                            &mapped.target_field,
-                            &child_table,
-                        )?;
-                        child_values.push(sql_literal(val, sql_type));
+                        let mut child_columns = vec![quote_ident(&fk.from_col)];
+                        let mut child_values = vec![parent_pk_literal.clone()];
+                        for (mapped, val) in mapped_values {
+                            child_columns.push(quote_ident(&mapped.target_field));
+                            if val.is_none() && !mapped.nullable {
+                                let available_keys =
+                                    obj.keys().take(32).cloned().collect::<Vec<_>>().join(", ");
+                                let node_preview =
+                                    serde_json::to_string(&Value::Object(obj.clone()))
+                                        .unwrap_or_else(|_| "<unserializable-node>".to_owned());
+                                return Err(anyhow!(
+                                    "missing required child mapped field: table={} source_field={} target_field={} mongo_path={} available_keys=[{}] node={}",
+                                    child_table,
+                                    mapped.source_field,
+                                    mapped.target_field,
+                                    child_mapping.mongo_path.as_deref().unwrap_or("."),
+                                    available_keys,
+                                    node_preview,
+                                ));
+                            }
+                            let sql_type = column_sql_type(child_mapping, &mapped.target_field);
+                            validate_extended_json_compatibility(
+                                val,
+                                sql_type,
+                                &mapped.source_field,
+                                &mapped.target_field,
+                                &child_table,
+                            )?;
+                            validate_varchar_value(
+                                val,
+                                sql_type,
+                                &mapped.source_field,
+                                &mapped.target_field,
+                                &child_table,
+                            )?;
+                            child_values.push(sql_literal(val, sql_type));
+                        }
+
+                        let insert_sql = format!(
+                            "INSERT INTO {} ({}) VALUES ({}) RETURNING {}::text",
+                            child_table,
+                            child_columns.join(", "),
+                            child_values.join(", "),
+                            quote_ident(&child_pk)
+                        );
+                        let row = pg_client
+                            .query_one(insert_sql.as_str(), &[])
+                            .await
+                            .map_err(|err| {
+                                annotate_apply_db_error(err, child_mapping, &child_table)
+                            })?;
+                        let inserted_pk_text: String = row.try_get(0)?;
+
+                        affected_rows += 1;
+                        *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
+
+                        let inserted_pk_literal =
+                            cast_string_literal(&inserted_pk_text, child_pk_sql_type);
+                        pending.push((child_mapping, Value::Object(obj), inserted_pk_literal));
                     }
-
-                    let insert_sql = format!(
-                        "INSERT INTO {} ({}) VALUES ({}) RETURNING {}::text",
-                        child_table,
-                        child_columns.join(", "),
-                        child_values.join(", "),
-                        quote_ident(&child_pk)
-                    );
-                    let row = pg_client.query_one(insert_sql.as_str(), &[]).await?;
-                    let inserted_pk_text: String = row.try_get(0)?;
-
-                    affected_rows += 1;
-                    *table_insert_execs.entry(child_table.clone()).or_insert(0) += 1;
-
-                    let inserted_pk_literal =
-                        cast_string_literal(&inserted_pk_text, child_pk_sql_type);
-                    pending.push((
-                        child_mapping,
-                        Value::Object(obj.clone()),
-                        inserted_pk_literal,
-                    ));
                 }
             }
         }
@@ -4449,6 +6148,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     async fn bootstrap_pg_objects_for_kafka_import(
+        admin_client: &tokio_postgres::Client,
         pg_client: &tokio_postgres::Client,
         conf: &mongo2pg::util::ConfData,
         db_name: &str,
@@ -4483,9 +6183,26 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             ));
         }
 
+        let mut ensured_databases = std::collections::HashSet::new();
+
         for sql_path in &sql_files {
             let sql = std::fs::read_to_string(sql_path)
                 .with_context(|| format!("Failed to read {}", sql_path.display()))?;
+
+            if let Some(ddl_db_name) = extract_psql_database_name(&sql) {
+                if ddl_db_name != db_name {
+                    eprintln!(
+                        "warning: DDL file {} targets database '{}' while kafka-import target database is '{}'",
+                        sql_path.display(),
+                        ddl_db_name,
+                        db_name
+                    );
+                }
+                if ensured_databases.insert(ddl_db_name.clone()) {
+                    ensure_pg_database(admin_client, &ddl_db_name).await?;
+                }
+            }
+
             let executable_sql = strip_psql_preamble(&sql);
             if executable_sql.trim().is_empty() {
                 continue;
@@ -4527,6 +6244,24 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             match pg_client.batch_execute(&executable_sql).await {
                 Ok(()) => {
                     println!("Created PostgreSQL objects from {}", sql_path.display());
+                }
+                Err(err) if is_missing_postgis_control_file(&err) => {
+                    let fallback_sql = strip_postgis_extension_statement(&executable_sql);
+                    match pg_client.batch_execute(&fallback_sql).await {
+                        Ok(()) => {
+                            println!(
+                                "Created PostgreSQL objects from {} (without PostGIS extension statement)",
+                                sql_path.display()
+                            );
+                        }
+                        Err(fallback_err) => {
+                            return Err(anyhow!(
+                                "Failed to execute {} after removing PostGIS extension statement\n{}",
+                                sql_path.display(),
+                                format_postgres_error(&fallback_err)
+                            ));
+                        }
+                    }
                 }
                 Err(err)
                     if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_TABLE)
@@ -4597,6 +6332,21 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         Ok(tables.len())
     }
 
+    apply_config_overrides(
+        &args.config,
+        &ConfigOverrides {
+            project_dir: args.project_dir.clone(),
+            kafka_topics: (!args.topics.is_empty()).then(|| args.topics.clone()),
+            kafka_max_messages: args.max_messages,
+            kafka_offset: args.offset.clone(),
+            kafka_group_id: args.group_id.clone(),
+            kafka_topic_prefix: args.topic_prefix.clone(),
+            target_database_name: args.database_name.clone(),
+            target_schema_name: args.schema_name.clone(),
+            ..ConfigOverrides::default()
+        },
+    )?;
+
     let conf = read_conf(&args.config)?;
     let kafka_conf = conf
         .kafka
@@ -4636,16 +6386,11 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     } else {
         group_id.clone()
     };
-    let topics = if args.topics.is_empty() {
+    let mut topics = if args.topics.is_empty() {
         kafka_conf.topics.clone()
     } else {
         args.topics.clone()
     };
-    if topics.is_empty() {
-        return Err(anyhow!(
-            "No Kafka topics configured. Set [kafka].topics or pass --topics"
-        ));
-    }
 
     let target_uri = conf
         .target_uri
@@ -4655,10 +6400,15 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .target_database_name
         .clone()
         .unwrap_or_else(|| namespace_db_name.to_owned());
+
+    let admin_client = connect_pg_client(&target_uri).await?;
+    ensure_pg_database(&admin_client, &target_database_name).await?;
+
     let db_target_uri = pg_uri_with_database(&target_uri, &target_database_name);
     let pg_client = connect_pg_client(&db_target_uri).await?;
 
-    bootstrap_pg_objects_for_kafka_import(&pg_client, &conf, namespace_db_name).await?;
+    bootstrap_pg_objects_for_kafka_import(&admin_client, &pg_client, &conf, namespace_db_name)
+        .await?;
 
     let mappings_by_collection = load_collection_mapping_folders(&conf, namespace_db_name)?;
 
@@ -4680,6 +6430,39 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .set("message.timeout.ms", "5000")
         .create()
         .with_context(|| "Failed to create Kafka DLQ producer")?;
+
+    if topics.is_empty() {
+        if let Some(prefix) = kafka_conf.topic_prefix.as_deref() {
+            let metadata = consumer
+                .fetch_metadata(None, Duration::from_secs(10))
+                .with_context(|| {
+                    format!(
+                        "Failed to fetch Kafka metadata while resolving topic prefix '{}'",
+                        prefix
+                    )
+                })?;
+            let prefix_with_dot = format!("{prefix}.");
+            topics = metadata
+                .topics()
+                .iter()
+                .map(|topic| topic.name().to_owned())
+                .filter(|topic| topic.starts_with(&prefix_with_dot))
+                .collect::<Vec<_>>();
+            topics.sort();
+            topics.dedup();
+
+            if topics.is_empty() {
+                return Err(anyhow!(
+                    "No Kafka topics matched prefix '{}'. Set [kafka].topics, pass --topics, or create topics with this prefix.",
+                    prefix
+                ));
+            }
+        } else {
+            return Err(anyhow!(
+                "No Kafka topics configured. Set [kafka].topics, set [kafka].topic_prefix, or pass --topics"
+            ));
+        }
+    }
 
     let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
     consumer
@@ -4777,9 +6560,11 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         };
 
         let topic = message.topic();
-        let Some((db_name, collection_name)) =
-            parse_topic_db_collection(topic, kafka_conf.topic_prefix.as_deref())
-        else {
+        let Some((db_name, collection_name)) = parse_topic_db_collection(
+            topic,
+            kafka_conf.topic_prefix.as_deref(),
+            Some(namespace_db_name),
+        ) else {
             skipped_topic += 1;
             continue;
         };
@@ -4825,11 +6610,39 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .and_then(|value| value.as_object())
             .map(|obj| Value::Object(obj.clone()))
             .unwrap_or(decoded);
+
+        fn unwrap_union_tagged_value(value: &Value) -> &Value {
+            const UNION_TAGS: [&str; 12] = [
+                "null", "string", "boolean", "int", "long", "float", "double", "bytes", "array",
+                "map", "record", "enum",
+            ];
+
+            let mut current = value;
+            loop {
+                let Value::Object(obj) = current else {
+                    break;
+                };
+                if obj.len() != 1 {
+                    break;
+                }
+                let Some((tag, inner)) = obj.iter().next() else {
+                    break;
+                };
+                if UNION_TAGS.contains(&tag.as_str()) {
+                    current = inner;
+                } else {
+                    break;
+                }
+            }
+            current
+        }
+
         let op = payload
             .get("op")
+            .map(unwrap_union_tagged_value)
             .and_then(|value| value.as_str())
             .unwrap_or("u");
-        let after = match debezium_document(payload.get("after")) {
+        let after = match debezium_document(payload.get("after").map(unwrap_union_tagged_value)) {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
@@ -4837,7 +6650,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 continue;
             }
         };
-        let before = match debezium_document(payload.get("before")) {
+        let before = match debezium_document(payload.get("before").map(unwrap_union_tagged_value)) {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
@@ -4985,6 +6798,18 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
+    if let Some(conf) = args.config.as_deref() {
+        apply_config_overrides(
+            conf,
+            &ConfigOverrides {
+                project_dir: args.project_dir.clone(),
+                source_uri: args.mongo.source_uri.clone(),
+                namespace: (!args.namespace.is_empty()).then(|| args.namespace.clone()),
+                ..ConfigOverrides::default()
+            },
+        )?;
+    }
+
     if args.post_import {
         let conf = args
             .config
@@ -5341,15 +7166,6 @@ fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
 }
 
-fn normalize_pg_identifier(name: &str) -> String {
-    let trimmed = name.trim();
-    if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
-        trimmed[1..trimmed.len() - 1].replace("\"\"", "\"")
-    } else {
-        trimmed.to_owned()
-    }
-}
-
 fn split_namespace_scope(namespace: &str) -> (&str, Option<&str>) {
     if let Some((db_name, coll_name)) = namespace.split_once('.') {
         (db_name, Some(coll_name))
@@ -5374,6 +7190,34 @@ fn extract_search_path(sql: &str) -> Option<String> {
     })
 }
 
+fn extract_psql_database_name(sql: &str) -> Option<String> {
+    for line in sql.lines() {
+        let trimmed = line.trim();
+
+        if let Some(rest) = trimmed.strip_prefix("CREATE DATABASE ") {
+            let ident = rest.trim().trim_end_matches(';').trim();
+            if !ident.is_empty() {
+                return Some(normalize_pg_identifier(ident));
+            }
+        }
+
+        if let Some(rest) = trimmed.strip_prefix("\\connect ") {
+            let ident = rest
+                .trim()
+                .trim_end_matches(';')
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim();
+            if !ident.is_empty() {
+                return Some(normalize_pg_identifier(ident));
+            }
+        }
+    }
+
+    None
+}
+
 fn strip_psql_preamble(sql: &str) -> String {
     sql.lines()
         .filter(|line| {
@@ -5384,6 +7228,22 @@ fn strip_psql_preamble(sql: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn strip_postgis_extension_statement(sql: &str) -> String {
+    sql.lines()
+        .filter(|line| {
+            let normalized = line.trim().to_ascii_lowercase();
+            normalized != "create extension if not exists postgis;"
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn is_missing_postgis_control_file(err: &tokio_postgres::Error) -> bool {
+    format_postgres_error(err)
+        .to_ascii_lowercase()
+        .contains("postgis.control")
 }
 
 fn pg_uri_with_database(uri: &str, database: &str) -> String {
@@ -5454,6 +7314,262 @@ fn csv_line_at(contents: &str, line_number: usize) -> Option<&str> {
     }
 }
 
+fn resolve_root_table_name(
+    parsed_tables: &[mongo2pg::schema_diagram::Table],
+    coll_name: &str,
+) -> String {
+    let expected = sanitize_name(coll_name);
+
+    if let Some(table) = parsed_tables.iter().find(|table| {
+        let name = table.name.trim();
+        name.eq_ignore_ascii_case(&expected)
+            || name
+                .split('.')
+                .last()
+                .map(|leaf| leaf.eq_ignore_ascii_case(&expected))
+                .unwrap_or(false)
+    }) {
+        return table.name.clone();
+    }
+
+    parsed_tables
+        .first()
+        .map(|table| table.name.clone())
+        .unwrap_or_else(|| sanitize_name(coll_name))
+}
+
+fn resolve_post_import_table_row<'a>(
+    table_name: &str,
+    local_rows: &'a HashMap<String, PostImportTableRow>,
+    global_rows: &'a HashMap<String, PostImportTableRow>,
+) -> Option<&'a PostImportTableRow> {
+    local_rows
+        .get(table_name)
+        .or_else(|| global_rows.get(table_name))
+}
+
+fn is_hex_keyed_name(name: &str) -> bool {
+    name.len() >= 8 && name.chars().all(|ch| ch.is_ascii_hexdigit())
+}
+
+fn is_uuid_keyed_name(name: &str) -> bool {
+    let parts = name.split('-').collect::<Vec<_>>();
+    parts.len() == 5
+        && [8_usize, 4, 4, 4, 12]
+            .iter()
+            .zip(parts.iter())
+            .all(|(expected_len, part)| {
+                part.len() == *expected_len && part.chars().all(|ch| ch.is_ascii_hexdigit())
+            })
+}
+
+fn dynamic_map_value_fields(
+    fields: &IndexMap<String, FieldSchema>,
+) -> Option<&IndexMap<String, FieldSchema>> {
+    if fields.is_empty() {
+        return None;
+    }
+    if !fields
+        .keys()
+        .all(|name| is_hex_keyed_name(name) || is_uuid_keyed_name(name))
+    {
+        return None;
+    }
+
+    for field in fields.values() {
+        let non_null = field
+            .types
+            .iter()
+            .filter(|(type_name, _)| !matches!(type_name.as_str(), "Null" | "Undefined"))
+            .collect::<Vec<_>>();
+        if non_null.len() == 1 && non_null[0].0.as_str() == "Object" {
+            if let Some(value_fields) = non_null[0].1.object.as_ref() {
+                if !value_fields.is_empty() {
+                    return Some(value_fields);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn count_dynamic_map_entries(doc: &bson::Document) -> u64 {
+    doc.values()
+        .filter(|value| matches!(value, Bson::Document(entry) if !entry.is_empty()))
+        .count() as u64
+}
+
+fn child_row_objects_for_mapping(
+    node: &Value,
+    child_mapping: &CollectionMapping,
+) -> Vec<serde_json::Map<String, Value>> {
+    match node {
+        Value::Array(items) => {
+            let mut out = Vec::new();
+            for item in items {
+                out.extend(child_row_objects_for_mapping(item, child_mapping));
+            }
+            return out;
+        }
+        Value::String(raw) => {
+            if let Ok(parsed) = serde_json::from_str::<Value>(raw) {
+                return child_row_objects_for_mapping(&parsed, child_mapping);
+            }
+            return Vec::new();
+        }
+        _ => {}
+    }
+
+    let Value::Object(obj) = node else {
+        return Vec::new();
+    };
+
+    // Empty embedded object means no child rows.
+    if obj.is_empty() {
+        return Vec::new();
+    }
+
+    let mapped_source_fields = child_mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .map(|column| column.source_field.as_str())
+        .collect::<Vec<_>>();
+
+    let has_mapped_fields = |candidate: &serde_json::Map<String, Value>| {
+        mapped_source_fields
+            .iter()
+            .any(|field| candidate.contains_key(*field))
+    };
+
+    let row_from_entry_value = |entry_value: &Value| -> Option<serde_json::Map<String, Value>> {
+        match entry_value {
+            Value::Object(entry_obj) => Some(entry_obj.clone()),
+            Value::String(raw) => serde_json::from_str::<Value>(raw)
+                .ok()
+                .and_then(|parsed| parsed.as_object().cloned()),
+            _ => None,
+        }
+    };
+
+    let expects_key_column = child_mapping
+        .pg_mapping
+        .columns
+        .iter()
+        .any(|mapped| mapped.source_field == "key");
+
+    // Some connectors wrap arrays/objects before the actual row payload.
+    // If current object has none of mapped fields, recursively unwrap known
+    // wrapper keys first, then any nested aggregate container.
+    // For map-style objects that rely on dynamic keys, defer to dedicated
+    // map expansion branch below.
+    let likely_map_style_object = expects_key_column
+        && !obj.contains_key("key")
+        && obj
+            .values()
+            .all(|value| matches!(value, Value::Object(_) | Value::String(_)));
+
+    // Empty object means there is no child row to write.
+    if obj.is_empty() && !has_mapped_fields(obj) {
+        return Vec::new();
+    }
+
+    if !has_mapped_fields(obj) && !likely_map_style_object {
+        // Map-like object without dedicated key column: expand all entry payloads
+        // only when each entry clearly resolves to mapped fields.
+        let mut map_rows = Vec::new();
+        let mut all_entries_mappable = true;
+        if !obj.is_empty() {
+            for entry_value in obj.values() {
+                if let Some(row) = row_from_entry_value(entry_value) {
+                    if has_mapped_fields(&row) {
+                        map_rows.push(row);
+                    } else {
+                        all_entries_mappable = false;
+                        break;
+                    }
+                } else {
+                    all_entries_mappable = false;
+                    break;
+                }
+            }
+            if all_entries_mappable && !map_rows.is_empty() {
+                return map_rows;
+            }
+        }
+
+        for wrapper_key in [
+            "items",
+            "array",
+            "values",
+            "records",
+            "value",
+            "transactions",
+        ] {
+            if let Some(wrapped) = obj.get(wrapper_key) {
+                let extracted = child_row_objects_for_mapping(wrapped, child_mapping);
+                if !extracted.is_empty() {
+                    return extracted;
+                }
+            }
+        }
+
+        for wrapped in obj.values() {
+            match wrapped {
+                Value::Array(_) | Value::Object(_) | Value::String(_) => {
+                    let extracted = child_row_objects_for_mapping(wrapped, child_mapping);
+                    if !extracted.is_empty() {
+                        return extracted;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let key_from_row_or_entry = |row: &serde_json::Map<String, Value>, entry_key: &str| {
+        row.values()
+            .find_map(|value| match value {
+                Value::String(text) if text == entry_key => Some(text.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| entry_key.to_owned())
+    };
+
+    // Some connectors encode map entries as {"key": "...", "value": {...}}.
+    // Normalize that shape to plain row object.
+    if let Some(value_node) = obj.get("value") {
+        if let Some(mut row) = row_from_entry_value(value_node) {
+            if expects_key_column {
+                if let Some(Value::String(existing_key)) = obj.get("key") {
+                    let key_value = key_from_row_or_entry(&row, existing_key);
+                    row.insert("key".to_owned(), Value::String(key_value));
+                }
+            }
+            return vec![row];
+        }
+    }
+
+    // Map-style object branch: { "dynamic_key": { ...row... }, ... }
+    // Expand into one row per entry; inject dynamic key only when mapping requires it.
+    if expects_key_column && !obj.contains_key("key") {
+        let mut expanded = Vec::new();
+        for (entry_key, entry_value) in obj {
+            if let Some(mut row) = row_from_entry_value(entry_value) {
+                let key_value = key_from_row_or_entry(&row, entry_key);
+                row.insert("key".to_owned(), Value::String(key_value));
+                expanded.push(row);
+            }
+        }
+        if !expanded.is_empty() {
+            return expanded;
+        }
+    }
+
+    vec![obj.clone()]
+}
+
 async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
     let mut tls_builder = native_tls::TlsConnector::builder();
     if matches!(pg_sslmode(target_uri), Some(mode) if mode.eq_ignore_ascii_case("require")) {
@@ -5518,6 +7634,7 @@ async fn build_post_import_rows(
     enum CountNodeKind {
         Root,
         Object { field_name: String },
+        MapObject { field_name: String },
         ArrayScalar { field_name: String },
         ArrayObject { field_name: String },
     }
@@ -5527,9 +7644,11 @@ async fn build_post_import_rows(
         name: String,
         is_array: bool,
         mongo_count: u64,
+        pg_table_key: Option<String>,
         pg_table_name: Option<String>,
         pg_row_count: Option<i64>,
         md5_summary: Option<PostImportMd5Summary>,
+        count_diff_rows: Vec<PostImportCountDiffRow>,
         kind: CountNodeKind,
         children: Vec<CountNode>,
     }
@@ -5559,6 +7678,7 @@ async fn build_post_import_rows(
         fields: &IndexMap<String, FieldSchema>,
         pg_schema: Option<&str>,
         table_counts: &HashMap<String, PostImportTableRow>,
+        global_table_counts: &HashMap<String, PostImportTableRow>,
         md5_summaries: &HashMap<String, PostImportMd5Summary>,
     ) -> Vec<CountNode> {
         let mut nodes = Vec::new();
@@ -5577,13 +7697,19 @@ async fn build_post_import_rows(
                     continue;
                 }
                 if let Some(sub_fields) = &type_schema.object {
+                    let child_fields = dynamic_map_value_fields(sub_fields).unwrap_or(sub_fields);
                     let table_name =
                         child_table_name(parent_table_name, &sanitize_pg_name(raw_name), pg_schema);
-                    let table_ref = table_counts.get(&table_name);
+                    let table_ref = resolve_post_import_table_row(
+                        &table_name,
+                        table_counts,
+                        global_table_counts,
+                    );
                     nodes.push(CountNode {
                         name: raw_name.to_string(),
                         is_array: false,
                         mongo_count: 0,
+                        pg_table_key: table_ref.map(|_| table_name.clone()),
                         pg_table_name: table_ref.and_then(|t| {
                             Some(match &t.schema_name {
                                 Some(schema) => format!("{}.{}", schema, t.table_name),
@@ -5592,14 +7718,22 @@ async fn build_post_import_rows(
                         }),
                         pg_row_count: table_ref.map(|t| t.row_count),
                         md5_summary: md5_summaries.get(&table_name).cloned(),
-                        kind: CountNodeKind::Object {
-                            field_name: raw_name.to_string(),
+                        count_diff_rows: Vec::new(),
+                        kind: if std::ptr::eq(child_fields, sub_fields) {
+                            CountNodeKind::Object {
+                                field_name: raw_name.to_string(),
+                            }
+                        } else {
+                            CountNodeKind::MapObject {
+                                field_name: raw_name.to_string(),
+                            }
                         },
                         children: build_field_nodes(
                             &table_name,
-                            sub_fields,
+                            child_fields,
                             pg_schema,
                             table_counts,
+                            global_table_counts,
                             md5_summaries,
                         ),
                     });
@@ -5612,7 +7746,11 @@ async fn build_post_import_rows(
                 if let Some(items_field) = &type_schema.array {
                     let table_name =
                         child_table_name(parent_table_name, &sanitize_pg_name(raw_name), pg_schema);
-                    let table_ref = table_counts.get(&table_name);
+                    let table_ref = resolve_post_import_table_row(
+                        &table_name,
+                        table_counts,
+                        global_table_counts,
+                    );
                     let object_type = items_field.types.get("Object");
                     let (kind, children) = if let Some(object_ts) = object_type {
                         (
@@ -5628,6 +7766,7 @@ async fn build_post_import_rows(
                                         sub_fields,
                                         pg_schema,
                                         table_counts,
+                                        global_table_counts,
                                         md5_summaries,
                                     )
                                 })
@@ -5645,6 +7784,7 @@ async fn build_post_import_rows(
                         name: raw_name.to_string(),
                         is_array: true,
                         mongo_count: 0,
+                        pg_table_key: table_ref.map(|_| table_name.clone()),
                         pg_table_name: table_ref.and_then(|t| {
                             Some(match &t.schema_name {
                                 Some(schema) => format!("{}.{}", schema, t.table_name),
@@ -5653,6 +7793,7 @@ async fn build_post_import_rows(
                         }),
                         pg_row_count: table_ref.map(|t| t.row_count),
                         md5_summary: md5_summaries.get(&table_name).cloned(),
+                        count_diff_rows: Vec::new(),
                         kind,
                         children,
                     });
@@ -5669,8 +7810,22 @@ async fn build_post_import_rows(
                 CountNodeKind::Root => {}
                 CountNodeKind::Object { field_name } => {
                     if let Some(Bson::Document(child_doc)) = doc.get(field_name) {
-                        node.mongo_count += 1;
-                        count_children(&mut node.children, child_doc);
+                        if !child_doc.is_empty() {
+                            node.mongo_count += 1;
+                            count_children(&mut node.children, child_doc);
+                        }
+                    }
+                }
+                CountNodeKind::MapObject { field_name } => {
+                    if let Some(Bson::Document(child_doc)) = doc.get(field_name) {
+                        node.mongo_count += count_dynamic_map_entries(child_doc);
+                        for value in child_doc.values() {
+                            if let Bson::Document(entry_doc) = value {
+                                if !entry_doc.is_empty() {
+                                    count_children(&mut node.children, entry_doc);
+                                }
+                            }
+                        }
                     }
                 }
                 CountNodeKind::ArrayScalar { field_name } => {
@@ -5685,8 +7840,10 @@ async fn build_post_import_rows(
                     if let Some(Bson::Array(items)) = doc.get(field_name) {
                         for item in items {
                             if let Bson::Document(child_doc) = item {
-                                node.mongo_count += 1;
-                                count_children(&mut node.children, child_doc);
+                                if !child_doc.is_empty() {
+                                    node.mongo_count += 1;
+                                    count_children(&mut node.children, child_doc);
+                                }
                             }
                         }
                     }
@@ -5703,11 +7860,37 @@ async fn build_post_import_rows(
             pg_table_name: node.pg_table_name,
             pg_row_count: node.pg_row_count,
             md5_summary: node.md5_summary,
+            count_diff_rows: node.count_diff_rows,
             children: node
                 .children
                 .into_iter()
                 .map(into_post_import_node)
                 .collect(),
+        }
+    }
+
+    fn collect_rowcount_mismatch_tables(node: &CountNode, out: &mut Vec<String>) {
+        if let (Some(table_name), Some(pg_rows)) = (&node.pg_table_key, node.pg_row_count) {
+            if pg_rows != node.mongo_count as i64 {
+                out.push(table_name.clone());
+            }
+        }
+        for child in &node.children {
+            collect_rowcount_mismatch_tables(child, out);
+        }
+    }
+
+    fn apply_count_diff_rows(
+        node: &mut CountNode,
+        rows_by_table: &HashMap<String, Vec<PostImportCountDiffRow>>,
+    ) {
+        if let Some(table_name) = &node.pg_table_key {
+            if let Some(rows) = rows_by_table.get(table_name) {
+                node.count_diff_rows = rows.clone();
+            }
+        }
+        for child in &mut node.children {
+            apply_count_diff_rows(child, rows_by_table);
         }
     }
 
@@ -5754,6 +7937,7 @@ async fn build_post_import_rows(
     });
 
     let total_collections = collection_names.len();
+    let mut global_table_rows: HashMap<String, PostImportTableRow> = HashMap::new();
     let mut rows = Vec::new();
     for (index, coll_name) in collection_names.into_iter().enumerate() {
         let document_count = mongo_db
@@ -5784,10 +7968,7 @@ async fn build_post_import_rows(
                 .with_context(|| format!("Failed to read {}", sql_path.display()))?;
             let schema_name = extract_search_path(&sql);
             let parsed_tables = parse_sql(&sql);
-            let root_table_name = parsed_tables
-                .first()
-                .map(|table| table.name.clone())
-                .unwrap_or_else(|| sanitize_pg_name(&coll_name));
+            let root_table_name = resolve_root_table_name(&parsed_tables, &coll_name);
             let mut table_rows = HashMap::new();
             for table in parsed_tables {
                 let qualified_name = match &schema_name {
@@ -5810,6 +7991,15 @@ async fn build_post_import_rows(
                         row_count,
                     },
                 );
+            }
+            for (name, row) in &table_rows {
+                global_table_rows
+                    .entry(name.clone())
+                    .or_insert_with(|| PostImportTableRow {
+                        schema_name: row.schema_name.clone(),
+                        table_name: row.table_name.clone(),
+                        row_count: row.row_count,
+                    });
             }
             let root_ref = table_rows.get(&root_table_name);
             let md5_summaries = if include_md5 {
@@ -5835,7 +8025,9 @@ async fn build_post_import_rows(
                                         .into_iter()
                                         .map(|column| PostImportMd5Column {
                                             source_field: column.source_field,
+                                            source_type: column.source_type,
                                             target_field: column.target_field,
+                                            target_type: column.target_type,
                                         })
                                         .collect(),
                                     mismatches: table_summary
@@ -5867,6 +8059,7 @@ async fn build_post_import_rows(
                 name: coll_name.clone(),
                 is_array: false,
                 mongo_count: document_count,
+                pg_table_key: root_ref.map(|_| root_table_name.clone()),
                 pg_table_name: root_ref.and_then(|t| {
                     Some(match &t.schema_name {
                         Some(schema) => format!("{}.{}", schema, t.table_name),
@@ -5875,12 +8068,14 @@ async fn build_post_import_rows(
                 }),
                 pg_row_count: root_ref.map(|t| t.row_count),
                 md5_summary: md5_summaries.get(&root_table_name).cloned(),
+                count_diff_rows: Vec::new(),
                 kind: CountNodeKind::Root,
                 children: build_field_nodes(
                     &root_table_name,
                     &schema.object,
                     schema_name.as_deref(),
                     &table_rows,
+                    &global_table_rows,
                     &md5_summaries,
                 ),
             };
@@ -5898,6 +8093,78 @@ async fn build_post_import_rows(
                 count_children(&mut root.children, &doc);
             }
 
+            let mut mismatch_tables = Vec::new();
+            collect_rowcount_mismatch_tables(&root, &mut mismatch_tables);
+            mismatch_tables.sort();
+            mismatch_tables.dedup();
+
+            if !mismatch_tables.is_empty() {
+                for table_name in &mismatch_tables {
+                    println!(
+                        "[{}/{}] Rowcount diff detected for {}.{} table {}: searching first 5 differences",
+                        index + 1,
+                        total_collections,
+                        db_name,
+                        coll_name,
+                        table_name,
+                    );
+                }
+
+                let mismatch_set = mismatch_tables.iter().cloned().collect::<HashSet<_>>();
+                let mut rows_by_table = HashMap::new();
+
+                if !md5_summaries.is_empty() {
+                    for (table_name, summary) in &md5_summaries {
+                        if !mismatch_set.contains(table_name) {
+                            continue;
+                        }
+                        rows_by_table.insert(
+                            table_name.clone(),
+                            summary
+                                .mismatches
+                                .iter()
+                                .map(|mismatch| PostImportCountDiffRow {
+                                    row_index: mismatch.row_index,
+                                    mongo_values: mismatch.mongo_values.clone(),
+                                    pg_values: mismatch.pg_values.clone(),
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                    }
+                } else {
+                    match compute_md5_summaries_for_collection(&coll_name, config_path).await {
+                        Ok(summaries) => {
+                            for summary in summaries {
+                                if !mismatch_set.contains(&summary.table_name) {
+                                    continue;
+                                }
+                                rows_by_table.insert(
+                                    summary.table_name,
+                                    summary
+                                        .summary
+                                        .mismatches
+                                        .into_iter()
+                                        .map(|mismatch| PostImportCountDiffRow {
+                                            row_index: mismatch.row_index,
+                                            mongo_values: mismatch.mongo_values,
+                                            pg_values: mismatch.pg_values,
+                                        })
+                                        .collect::<Vec<_>>(),
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!(
+                                "warning: failed to collect count differences for {}.{}: {}",
+                                db_name, coll_name, err
+                            );
+                        }
+                    }
+                }
+
+                apply_count_diff_rows(&mut root, &rows_by_table);
+            }
+
             into_post_import_node(root)
         } else {
             PostImportNode {
@@ -5907,6 +8174,7 @@ async fn build_post_import_rows(
                 pg_table_name: None,
                 pg_row_count: None,
                 md5_summary: None,
+                count_diff_rows: Vec::new(),
                 children: Vec::new(),
             }
         };
@@ -5924,24 +8192,42 @@ async fn build_post_import_rows(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_collection_property_filters, build_collection_mappings,
-        build_collection_mappings_with_timestamp_fields, collect_infer_type_warnings,
-        collect_nullable_scalar_warnings, render_ddl_from_mapping_tables, resolve_collections_dir,
-        sanitize_name, should_infer_collection, strip_psql_preamble,
+        apply_collection_property_filters, apply_config_overrides, build_collection_mappings,
+        build_collection_mappings_with_timestamp_fields, child_row_objects_for_mapping,
+        collect_infer_type_warnings, collect_nullable_scalar_warnings, count_dynamic_map_entries,
+        dynamic_map_value_fields, render_ddl_from_mapping_tables, resolve_collections_dir,
+        resolve_post_import_table_row, resolve_root_table_name, sanitize_name,
+        should_infer_collection, strip_psql_preamble, ConfigOverrides, PostImportTableRow,
     };
     use bson::doc;
     use mongo2pg::analyzer::Analyzer;
+    use mongo2pg::schema_diagram::Table;
     use serde::Deserialize;
+    use std::collections::HashMap;
+    use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use tempfile::NamedTempFile;
 
     #[derive(Debug, Deserialize)]
     struct TestTomlProjectConfig {
+        project: Option<TestTomlProjectSection>,
         source: Option<TestTomlSourceSection>,
         target: Option<TestTomlTargetSection>,
+        kafka: Option<TestTomlKafkaSection>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct TestTomlProjectSection {
+        project_dir: Option<String>,
     }
 
     #[derive(Debug, Deserialize)]
     struct TestTomlSourceSection {
+        uri: Option<String>,
+        namespace: Option<String>,
+        number: Option<u64>,
+        percent: Option<f64>,
+        jsonb: Option<bool>,
         #[serde(default)]
         include: Vec<String>,
         #[serde(default)]
@@ -5950,7 +8236,15 @@ mod tests {
 
     #[derive(Debug, Deserialize)]
     struct TestTomlTargetSection {
-        schema: Option<String>,
+        schema_name: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct TestTomlKafkaSection {
+        topics: Option<Vec<String>>,
+        max_messages: Option<usize>,
+        offset: Option<String>,
+        auto_offset_reset: Option<String>,
     }
 
     #[test]
@@ -5960,6 +8254,159 @@ mod tests {
 
         assert!(!should_infer_collection("users", &include, &exclude));
         assert!(!should_infer_collection("orders", &include, &exclude));
+    }
+
+    #[test]
+    fn apply_config_overrides_updates_source_and_target_values() {
+        let mut file = NamedTempFile::new().expect("temp file should be created");
+        writeln!(
+            file,
+            "[project]\ntitle = \"t\"\nbase_dir = \"/tmp\"\nproject_dir = \"p\"\n\n[source]\nuri = \"mongodb://old\"\nnamespace = \"old.ns\"\nnumber = 10\npercent = 1.0\njsonb = false\n\n[target]\nschema_name = \"old_schema\"\n"
+        )
+        .expect("seed toml should be written");
+
+        apply_config_overrides(
+            file.path(),
+            &ConfigOverrides {
+                project_dir: Some("sample_airbnb".to_owned()),
+                source_uri: Some("mongodb://new".to_owned()),
+                namespace: Some("new.ns".to_owned()),
+                number: Some(100),
+                percent: Some(20.0),
+                jsonb: Some(true),
+                target_schema_name: Some("sample_training".to_owned()),
+                ..ConfigOverrides::default()
+            },
+        )
+        .expect("overrides should be applied");
+
+        let updated =
+            std::fs::read_to_string(file.path()).expect("updated file should be readable");
+        let parsed: TestTomlProjectConfig =
+            toml::from_str(&updated).expect("updated toml should parse");
+
+        let project = parsed.project.expect("project section should exist");
+        assert_eq!(project.project_dir.as_deref(), Some("sample_airbnb"));
+
+        let source = parsed.source.expect("source section should exist");
+        assert_eq!(source.uri.as_deref(), Some("mongodb://new"));
+        assert_eq!(source.namespace.as_deref(), Some("new.ns"));
+        assert_eq!(source.number, Some(100));
+        assert_eq!(source.percent, Some(20.0));
+        assert_eq!(source.jsonb, Some(true));
+
+        let target = parsed.target.expect("target section should exist");
+        assert_eq!(target.schema_name.as_deref(), Some("sample_training"));
+    }
+
+    #[test]
+    fn apply_config_overrides_updates_kafka_values() {
+        let mut file = NamedTempFile::new().expect("temp file should be created");
+        writeln!(
+            file,
+            "[project]\ntitle = \"t\"\nbase_dir = \"/tmp\"\nproject_dir = \"p\"\n\n[kafka]\ntopics = [\"old\"]\nmax_messages = 10\noffset = \"latest\"\nauto_offset_reset = \"latest\"\n"
+        )
+        .expect("seed toml should be written");
+
+        apply_config_overrides(
+            file.path(),
+            &ConfigOverrides {
+                kafka_topics: Some(vec!["a".to_owned(), "b".to_owned()]),
+                kafka_max_messages: Some(999),
+                kafka_offset: Some("earliest".to_owned()),
+                ..ConfigOverrides::default()
+            },
+        )
+        .expect("kafka overrides should be applied");
+
+        let updated =
+            std::fs::read_to_string(file.path()).expect("updated file should be readable");
+        let parsed: TestTomlProjectConfig =
+            toml::from_str(&updated).expect("updated toml should parse");
+        let kafka = parsed.kafka.expect("kafka section should exist");
+
+        assert_eq!(kafka.topics, Some(vec!["a".to_owned(), "b".to_owned()]));
+        assert_eq!(kafka.max_messages, Some(999));
+        assert_eq!(kafka.offset.as_deref(), Some("earliest"));
+        assert_eq!(kafka.auto_offset_reset.as_deref(), Some("earliest"));
+    }
+
+    #[test]
+    fn child_row_objects_for_mapping_expands_dynamic_map_entries() {
+        let mapping_yaml = r#"
+collection_name: tier_and_details
+mongo_dbname: sample_analytics
+mongo_path: .tier_and_details
+pg_mapping:
+  dbname: sample_analytics
+  schema_name: sample_analytics
+  table_name: tier_and_details
+  columns:
+    - source_field: key
+      target_field: key
+      data_type: text
+      nullable: false
+    - source_field: active
+      target_field: active
+      data_type: boolean
+      nullable: false
+    - source_field: tier
+      target_field: tier
+      data_type: text
+      nullable: false
+  ddl:
+    name: tier_and_details
+    columns:
+      - name: id
+        sql_type: BIGSERIAL
+        nullable: false
+        primary_key: true
+      - name: customers_id
+        sql_type: UUID
+        nullable: false
+        primary_key: false
+      - name: key
+        sql_type: TEXT
+        nullable: false
+        primary_key: false
+      - name: active
+        sql_type: BOOLEAN
+        nullable: false
+        primary_key: false
+      - name: tier
+        sql_type: TEXT
+        nullable: false
+        primary_key: false
+    foreign_keys:
+      - from_col: customers_id
+        to_table: customers
+        to_col: id
+"#;
+
+        let mapping: super::CollectionMapping = serde_yaml::from_str(mapping_yaml).unwrap();
+        let node = serde_json::json!({
+            "0df078f33aa74a2e9696e0520c1a828a": { "tier": "Bronze", "active": true },
+            "699456451cc24f028d2aa99d7534c219": { "tier": "Silver", "active": false }
+        });
+
+        let rows = child_row_objects_for_mapping(&node, &mapping);
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().any(|row| {
+            row.get("key")
+                == Some(&serde_json::Value::String(
+                    "0df078f33aa74a2e9696e0520c1a828a".to_owned(),
+                ))
+                && row.get("tier") == Some(&serde_json::Value::String("Bronze".to_owned()))
+                && row.get("active") == Some(&serde_json::Value::Bool(true))
+        }));
+        assert!(rows.iter().any(|row| {
+            row.get("key")
+                == Some(&serde_json::Value::String(
+                    "699456451cc24f028d2aa99d7534c219".to_owned(),
+                ))
+                && row.get("tier") == Some(&serde_json::Value::String("Silver".to_owned()))
+                && row.get("active") == Some(&serde_json::Value::Bool(false))
+        }));
     }
 
     #[test]
@@ -5983,6 +8430,107 @@ mod tests {
             .collect();
 
         assert_eq!(kept, vec!["activity-feed", "security_logs"]);
+    }
+
+    #[test]
+    fn resolve_root_table_name_prefers_collection_match_when_not_first() {
+        let parsed_tables = vec![
+            Table {
+                name: "tier_and_details".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+            Table {
+                name: "accounts".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+        ];
+
+        let root = resolve_root_table_name(&parsed_tables, "accounts");
+        assert_eq!(root, "accounts");
+    }
+
+    #[test]
+    fn resolve_root_table_name_matches_schema_qualified_collection_table() {
+        let parsed_tables = vec![
+            Table {
+                name: "sample_analytics.accounts".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+            Table {
+                name: "sample_analytics.accounts_addresses".to_owned(),
+                columns: Vec::new(),
+                foreign_keys: Vec::new(),
+            },
+        ];
+
+        let root = resolve_root_table_name(&parsed_tables, "accounts");
+        assert_eq!(root, "sample_analytics.accounts");
+    }
+
+    #[test]
+    fn resolve_post_import_table_row_falls_back_to_global_rows() {
+        let local_rows = HashMap::new();
+        let mut global_rows = HashMap::new();
+        global_rows.insert(
+            "accounts".to_owned(),
+            PostImportTableRow {
+                schema_name: Some("sample_analytics".to_owned()),
+                table_name: "accounts".to_owned(),
+                row_count: 1746,
+            },
+        );
+
+        let row = resolve_post_import_table_row("accounts", &local_rows, &global_rows)
+            .expect("global table row should be found");
+        assert_eq!(row.table_name, "accounts");
+        assert_eq!(row.row_count, 1746);
+    }
+
+    #[test]
+    fn dynamic_map_value_fields_detects_uuid_keyed_map_shape() {
+        let docs = vec![doc! {
+            "_id": "customer-1",
+            "tier_and_details": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "bronze"
+                }
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let tier_and_details = schema
+            .object
+            .get("tier_and_details")
+            .expect("tier_and_details field should exist");
+        let obj = tier_and_details
+            .types
+            .get("Object")
+            .and_then(|ts| ts.object.as_ref())
+            .expect("tier_and_details object schema should exist");
+
+        let map_values = dynamic_map_value_fields(obj).expect("map value fields should exist");
+        assert!(map_values.contains_key("active"));
+        assert!(map_values.contains_key("tier"));
+    }
+
+    #[test]
+    fn count_dynamic_map_entries_ignores_empty_map_objects() {
+        let map_doc = doc! {
+            "0df078f33aa74a2e9696e0520c1a828a": { "tier": "bronze", "active": true },
+            "699456451cc24f028d2aa99d7534c219": { "tier": "silver", "active": false },
+            "empty": {},
+            "non_doc": "skip"
+        };
+
+        assert_eq!(count_dynamic_map_entries(&map_doc), 2);
     }
 
     #[test]
@@ -6059,7 +8607,7 @@ exclude = ["audit"]
     }
 
     #[test]
-    fn toml_target_schema_is_parsed() {
+    fn toml_target_schema_name_is_parsed() {
         let config: TestTomlProjectConfig = toml::from_str(
             r#"
 [project]
@@ -6067,13 +8615,13 @@ base_dir = "/tmp"
 project_dir = "demo"
 
 [target]
-schema = "shared_schema"
+schema_name = "shared_schema"
 "#,
         )
         .expect("config should parse");
 
         let target = config.target.expect("target section should exist");
-        assert_eq!(target.schema.as_deref(), Some("shared_schema"));
+        assert_eq!(target.schema_name.as_deref(), Some("shared_schema"));
     }
 
     #[test]
@@ -6162,6 +8710,51 @@ CREATE TABLE demo (
     }
 
     #[test]
+    fn build_collection_mappings_keeps_container_parent_table_for_nested_entities_children() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "text": "tweet",
+            "entities": {
+                "hashtags": [{ "text": "rust", "indices": [0_i32, 4_i32] }],
+                "urls": [{ "url": "https://example.com", "indices": [5_i32, 10_i32] }],
+                "user_mentions": [{
+                    "name": "Ada",
+                    "screen_name": "ada",
+                    "indices": [11_i32, 14_i32]
+                }]
+            }
+        }];
+
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings("sample_training", "tweets", None, &schema);
+
+        let entities_mapping = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.mongo_path.as_deref() == Some(".entities"))
+            .map(|(_, mapping)| mapping)
+            .expect("entities mapping should exist");
+
+        assert_eq!(entities_mapping.pg_mapping.table_name, "entities");
+        assert!(entities_mapping.pg_mapping.ddl.is_some());
+
+        let ddl = entities_mapping
+            .pg_mapping
+            .ddl
+            .as_ref()
+            .expect("entities ddl should exist");
+        assert!(ddl.columns.iter().any(|column| column.name == "id"));
+        assert!(ddl
+            .foreign_keys
+            .iter()
+            .any(|fk| fk.to_table == "tweets" && fk.to_col == "id"));
+    }
+
+    #[test]
     fn build_collection_mappings_keeps_prefix_when_short_name_is_reserved_elsewhere() {
         let docs = vec![doc! {
             "_id": "project-1",
@@ -6209,6 +8802,141 @@ CREATE TABLE demo (
             .as_ref()
             .expect("team ddl should exist");
         assert_eq!(ddl.name, "team");
+    }
+
+    #[test]
+    fn build_collection_mappings_keeps_map_table_name_with_reserved_names() {
+        let docs = vec![doc! {
+            "_id": "customer-1",
+            "accounts": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "gold"
+                }
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+        let reserved_table_names = std::collections::HashSet::from(["accounts".to_owned()]);
+
+        let mappings = build_collection_mappings_with_timestamp_fields(
+            "sample_analytics",
+            "customers",
+            Some("sample_analytics"),
+            &schema,
+            &[],
+            &reserved_table_names,
+        );
+
+        let accounts_mapping = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.mongo_path.as_deref() == Some(".accounts"))
+            .map(|(_, mapping)| mapping)
+            .expect("accounts child mapping should exist");
+
+        assert_eq!(accounts_mapping.pg_mapping.table_name, "accounts");
+    }
+
+    #[test]
+    fn build_collection_mappings_keeps_map_table_name_when_no_conflict() {
+        let docs = vec![doc! {
+            "_id": "customer-1",
+            "accounts": {
+                "0df078f33aa74a2e9696e0520c1a828a": {
+                    "active": true,
+                    "tier": "gold"
+                }
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings_with_timestamp_fields(
+            "sample_analytics",
+            "customers",
+            Some("sample_analytics"),
+            &schema,
+            &[],
+            &std::collections::HashSet::new(),
+        );
+
+        let accounts_mapping = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.mongo_path.as_deref() == Some(".accounts"))
+            .map(|(_, mapping)| mapping)
+            .expect("accounts child mapping should exist");
+
+        assert_eq!(accounts_mapping.pg_mapping.table_name, "accounts");
+    }
+
+    #[test]
+    fn build_collection_mappings_maps_geojson_and_sibling_object_without_field_name_dependency() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "theaterId": 1000_i32,
+            "venue": {
+                "details": {
+                    "street1": "340 W Market",
+                    "city": "Bloomington",
+                    "state": "MN",
+                    "zipcode": "55425"
+                },
+                "point": {
+                    "type": "Point",
+                    "coordinates": [-93.24565_f64, 44.85466_f64]
+                }
+            }
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings_with_timestamp_fields(
+            "sample_mflix",
+            "theaters",
+            None,
+            &schema,
+            &[],
+            &std::collections::HashSet::new(),
+        );
+
+        let venue_mapping = mappings
+            .iter()
+            .find(|(_, mapping)| mapping.pg_mapping.table_name == "theaters_venue")
+            .map(|(_, mapping)| mapping)
+            .expect("theaters_venue mapping should exist");
+
+        assert_eq!(venue_mapping.mongo_path.as_deref(), Some("."));
+        let pairs = venue_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| {
+                (
+                    column.source_field.as_str(),
+                    column.target_field.as_str(),
+                    column.data_type.as_str(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let source_target = pairs
+            .iter()
+            .map(|(source, target, _)| (*source, *target))
+            .collect::<Vec<_>>();
+
+        assert!(source_target.contains(&("venue.details.street1", "street1")));
+        assert!(source_target.contains(&("venue.details.city", "city")));
+        assert!(source_target.contains(&("venue.details.state", "state")));
+        assert!(source_target.contains(&("venue.details.zipcode", "zipcode")));
+        assert!(pairs.contains(&("venue.point", "point", "geometry(point,4326)")));
     }
 
     #[test]
@@ -6361,24 +9089,13 @@ CREATE TABLE demo (
         assert!(columns.contains(&("namespace", "namespace")));
         assert!(columns.contains(&("namespace_id", "namespace_id")));
         assert!(columns.contains(&("provider", "provider")));
-
-        let metadata = mappings
-            .iter()
-            .find(|(stem, _)| stem == "metadata")
-            .map(|(_, mapping)| mapping)
-            .expect("metadata mapping should exist");
-        let metadata_columns = metadata
-            .pg_mapping
-            .columns
-            .iter()
-            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
-            .collect::<Vec<_>>();
-        assert!(metadata_columns.contains(&("creation_date", "creation_date")));
-        assert!(metadata_columns.contains(&("status", "status")));
+        assert!(columns.contains(&("metadata.creation_date", "creation_date")));
+        assert!(columns.contains(&("metadata.status", "status")));
+        assert!(!mappings.iter().any(|(stem, _)| stem == "metadata"));
     }
 
     #[test]
-    fn build_collection_mappings_uses_mongo_field_names_in_path_for_renamed_tables() {
+    fn build_collection_mappings_flattens_nested_array_object_with_source_paths() {
         let docs = vec![doc! {
             "_id": "project-1",
             "metadata": {
@@ -6401,17 +9118,28 @@ CREATE TABLE demo (
         let schema = analyzer.finish();
 
         let mappings = build_collection_mappings("dbapi", "projects", None, &schema);
-        let services_metadata = mappings
+        let services = mappings
             .iter()
-            .find(|(_, mapping)| mapping.pg_mapping.table_name == "services_metadata")
+            .find(|(_, mapping)| mapping.pg_mapping.table_name == "services")
             .map(|(_, mapping)| mapping)
-            .expect("services_metadata mapping should exist");
+            .expect("services mapping should exist");
 
-        assert_eq!(
-            services_metadata.mongo_path.as_deref(),
-            Some(".services.metadata")
-        );
-        assert_eq!(services_metadata.collection_name, "metadata");
+        let columns = services
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(services.mongo_path.as_deref(), Some(".services"));
+        assert!(columns.contains(&("metadata.created_from", "created_from")));
+        assert!(columns.contains(&("metadata.first_detection_time", "first_detection_time")));
+        assert!(columns.contains(&("metadata.last_update_time", "last_update_time")));
+        assert!(columns.contains(&("metadata.managed", "managed")));
+        assert!(columns.contains(&("metadata.recognized", "recognized")));
+        assert!(!mappings
+            .iter()
+            .any(|(_, mapping)| mapping.pg_mapping.table_name == "services_metadata"));
     }
 
     #[test]
@@ -6432,6 +9160,42 @@ CREATE TABLE demo (
         assert!(mappings
             .iter()
             .all(|(_, mapping)| mapping.pg_mapping.schema_name == "shared_schema"));
+    }
+
+    #[test]
+    fn build_collection_mappings_keeps_reserved_root_field_names() {
+        let docs = vec![doc! {
+            "_id": "account-1",
+            "account_id": 7_i32,
+            "limit": 10000_i32,
+            "products": ["brokerage", "savings"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mappings = build_collection_mappings(
+            "sample_analytics",
+            "accounts",
+            Some("sample_analytics"),
+            &schema,
+        );
+        let root_mapping = mappings
+            .iter()
+            .find(|(stem, _)| stem == "accounts")
+            .map(|(_, mapping)| mapping)
+            .expect("accounts root mapping should exist");
+
+        let columns = root_mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
+            .collect::<Vec<_>>();
+
+        assert!(columns.contains(&("limit", "limit")));
     }
 
     #[test]
@@ -6477,6 +9241,82 @@ CREATE TABLE demo (
             .iter()
             .any(|column| column.name == "last_update"
                 && column.sql_type == "TIMESTAMP WITH TIME ZONE"));
+    }
+
+    #[test]
+    fn should_regenerate_from_schema_when_objectid_pk_for_flattened_array_root() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "transactions": [{ "amount": 1_i32 }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mapping_tables = vec![super::DdlTableMapping {
+            name: "transactions_transactions_transactions".to_owned(),
+            columns: vec![
+                super::DdlColumnMapping {
+                    name: "id".to_owned(),
+                    sql_type: "BIGSERIAL".to_owned(),
+                    nullable: false,
+                    primary_key: true,
+                },
+                super::DdlColumnMapping {
+                    name: "amount".to_owned(),
+                    sql_type: "INTEGER".to_owned(),
+                    nullable: false,
+                    primary_key: false,
+                },
+            ],
+            foreign_keys: Vec::new(),
+        }];
+
+        assert!(super::should_regenerate_from_schema_when_objectid_pk(
+            &schema,
+            &mapping_tables,
+            "transactions",
+        ));
+    }
+
+    #[test]
+    fn should_not_regenerate_when_mapping_already_contains_parent_uuid_column() {
+        let docs = vec![doc! {
+            "_id": bson::oid::ObjectId::new(),
+            "transactions": [{ "amount": 1_i32 }]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let schema = analyzer.finish();
+
+        let mapping_tables = vec![super::DdlTableMapping {
+            name: "transactions_transactions_transactions".to_owned(),
+            columns: vec![
+                super::DdlColumnMapping {
+                    name: "id".to_owned(),
+                    sql_type: "BIGSERIAL".to_owned(),
+                    nullable: false,
+                    primary_key: true,
+                },
+                super::DdlColumnMapping {
+                    name: "transactions_id".to_owned(),
+                    sql_type: "UUID".to_owned(),
+                    nullable: false,
+                    primary_key: false,
+                },
+            ],
+            foreign_keys: Vec::new(),
+        }];
+
+        assert!(!super::should_regenerate_from_schema_when_objectid_pk(
+            &schema,
+            &mapping_tables,
+            "transactions",
+        ));
     }
 
     #[test]
@@ -6529,6 +9369,48 @@ CREATE TABLE demo (
     }
 
     #[test]
+    fn render_ddl_from_mapping_tables_skips_legacy_index_pseudo_columns() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "competitor".to_owned(),
+                columns: vec![
+                    super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "BIGSERIAL".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    super::DdlColumnMapping {
+                        name: "companies_id".to_owned(),
+                        sql_type: "UUID".to_owned(),
+                        nullable: false,
+                        primary_key: false,
+                    },
+                    super::DdlColumnMapping {
+                        name: "CREATE".to_owned(),
+                        sql_type:
+                            "INDEX IF NOT EXISTS idx_competitor_companies_id ON competitor (companies_id"
+                                .to_owned(),
+                        nullable: false,
+                        primary_key: false,
+                    },
+                ],
+                foreign_keys: vec![super::DdlForeignKeyMapping {
+                    from_col: "companies_id".to_owned(),
+                    to_table: "companies".to_owned(),
+                    to_col: "id".to_owned(),
+                }],
+            }],
+            None,
+        );
+
+        assert!(!sql.contains(
+            "CREATE INDEX IF NOT EXISTS idx_competitor_companies_id ON competitor (companies_id,"
+        ));
+        assert!(sql.contains("FOREIGN KEY (companies_id) REFERENCES companies (id)"));
+    }
+
+    #[test]
     fn render_ddl_from_mapping_tables_orders_parents_before_children() {
         let sql = render_ddl_from_mapping_tables(
             &[
@@ -6578,6 +9460,238 @@ CREATE TABLE demo (
             parent_pos < child_pos,
             "parent table should be rendered before child table"
         );
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_adds_index_for_foreign_key_columns() {
+        let sql = render_ddl_from_mapping_tables(
+            &[
+                super::DdlTableMapping {
+                    name: "child".to_owned(),
+                    columns: vec![
+                        super::DdlColumnMapping {
+                            name: "id".to_owned(),
+                            sql_type: "BIGSERIAL".to_owned(),
+                            nullable: false,
+                            primary_key: true,
+                        },
+                        super::DdlColumnMapping {
+                            name: "parent_id".to_owned(),
+                            sql_type: "BIGINT".to_owned(),
+                            nullable: false,
+                            primary_key: false,
+                        },
+                    ],
+                    foreign_keys: vec![super::DdlForeignKeyMapping {
+                        from_col: "parent_id".to_owned(),
+                        to_table: "parent".to_owned(),
+                        to_col: "id".to_owned(),
+                    }],
+                },
+                super::DdlTableMapping {
+                    name: "parent".to_owned(),
+                    columns: vec![super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "BIGSERIAL".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    }],
+                    foreign_keys: Vec::new(),
+                },
+            ],
+            Some("dbapi"),
+        );
+
+        assert!(sql.contains(
+            "CREATE INDEX IF NOT EXISTS \"idx_child_parent_id\" ON \"dbapi\".\"child\" (\"parent_id\");"
+        ));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_adds_index_for_composite_foreign_keys() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "child".to_owned(),
+                columns: vec![
+                    super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "BIGSERIAL".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    super::DdlColumnMapping {
+                        name: "parent_a".to_owned(),
+                        sql_type: "BIGINT".to_owned(),
+                        nullable: false,
+                        primary_key: false,
+                    },
+                    super::DdlColumnMapping {
+                        name: "parent_b".to_owned(),
+                        sql_type: "BIGINT".to_owned(),
+                        nullable: false,
+                        primary_key: false,
+                    },
+                ],
+                foreign_keys: vec![super::DdlForeignKeyMapping {
+                    from_col: "parent_a, parent_b".to_owned(),
+                    to_table: "parent".to_owned(),
+                    to_col: "id_a, id_b".to_owned(),
+                }],
+            }],
+            None,
+        );
+
+        assert!(sql.contains(
+            "CREATE INDEX IF NOT EXISTS \"idx_child_parent_a_parent_b\" ON \"child\" (\"parent_a\", \"parent_b\");"
+        ));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_emits_only_pgcrypto_for_uuid_without_geometry() {
+        let sql = render_ddl_from_mapping_tables(
+            &[
+                super::DdlTableMapping {
+                    name: "transactions".to_owned(),
+                    columns: vec![
+                        super::DdlColumnMapping {
+                            name: "id".to_owned(),
+                            sql_type: "UUID DEFAULT public.gen_random_uuid()".to_owned(),
+                            nullable: false,
+                            primary_key: true,
+                        },
+                        super::DdlColumnMapping {
+                            name: "account_id".to_owned(),
+                            sql_type: "INTEGER".to_owned(),
+                            nullable: false,
+                            primary_key: false,
+                        },
+                    ],
+                    foreign_keys: Vec::new(),
+                },
+                super::DdlTableMapping {
+                    name: "transactions_transactions".to_owned(),
+                    columns: vec![
+                        super::DdlColumnMapping {
+                            name: "id".to_owned(),
+                            sql_type: "BIGSERIAL".to_owned(),
+                            nullable: false,
+                            primary_key: true,
+                        },
+                        super::DdlColumnMapping {
+                            name: "transactions_id".to_owned(),
+                            sql_type: "UUID".to_owned(),
+                            nullable: false,
+                            primary_key: false,
+                        },
+                    ],
+                    foreign_keys: vec![super::DdlForeignKeyMapping {
+                        from_col: "transactions_id".to_owned(),
+                        to_table: "transactions".to_owned(),
+                        to_col: "id".to_owned(),
+                    }],
+                },
+            ],
+            Some("sample_analytics"),
+        );
+
+        assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"));
+        assert!(!sql.contains("CREATE EXTENSION IF NOT EXISTS postgis;"));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_emits_postgis_when_geometry_present() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "venues".to_owned(),
+                columns: vec![
+                    super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "UUID DEFAULT public.gen_random_uuid()".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    super::DdlColumnMapping {
+                        name: "point".to_owned(),
+                        sql_type: "geometry(Point,4326)".to_owned(),
+                        nullable: false,
+                        primary_key: false,
+                    },
+                ],
+                foreign_keys: Vec::new(),
+            }],
+            Some("sample_analytics"),
+        );
+
+        assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";"));
+        assert!(sql.contains("CREATE EXTENSION IF NOT EXISTS postgis;"));
+    }
+
+    #[test]
+    fn load_mapping_ddl_tables_relaxes_non_key_not_null_when_mapping_columns_empty() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let mapping_dir = std::env::temp_dir().join(format!("mongo2pg-mapping-ddl-test-{unique}"));
+        std::fs::create_dir_all(&mapping_dir).expect("mapping dir should be created");
+
+        let mapping_yaml = r#"
+collection_name: investments
+mongo_dbname: sample_training
+mongo_path: .investments
+pg_mapping:
+  dbname: sample_training
+  schema_name: sample_training
+  table_name: investments
+  columns: []
+  ddl:
+    name: investments
+    columns:
+      - name: id
+        sql_type: BIGSERIAL
+        nullable: false
+        primary_key: true
+      - name: funding_rounds_id
+        sql_type: BIGINT
+        nullable: false
+        primary_key: false
+      - name: company_name
+        sql_type: TEXT
+        nullable: false
+        primary_key: false
+    foreign_keys:
+      - from_col: funding_rounds_id
+        to_table: funding_rounds
+        to_col: id
+"#;
+
+        let mapping_path = mapping_dir.join("mapping_investments.yaml");
+        std::fs::write(&mapping_path, mapping_yaml).expect("mapping file should be written");
+
+        let tables = super::load_mapping_ddl_tables(&mapping_dir)
+            .expect("mapping load should succeed")
+            .expect("ddl tables should be present");
+
+        let investments = tables
+            .iter()
+            .find(|table| table.name == "investments")
+            .expect("investments ddl should be loaded");
+
+        let company_name = investments
+            .columns
+            .iter()
+            .find(|column| column.name == "company_name")
+            .expect("company_name should be present");
+        assert!(company_name.nullable);
+
+        let funding_rounds_id = investments
+            .columns
+            .iter()
+            .find(|column| column.name == "funding_rounds_id")
+            .expect("funding_rounds_id should be present");
+        assert!(!funding_rounds_id.nullable);
+
+        std::fs::remove_dir_all(&mapping_dir).expect("temp mapping dir should be removed");
     }
 
     #[test]
@@ -6776,6 +9890,9 @@ CREATE TABLE demo (
             jsonb: false,
             print_json: false,
             no_output: false,
+            database_name: None,
+            schema_name: None,
+            project_dir: None,
             output_dir: None,
             config: Some(config), // Set to Some because it conflicts with `output_dir`
         }
@@ -6785,6 +9902,9 @@ CREATE TABLE demo (
             mongo: UriArg { source_uri: None },
             collection: None,
             namespace: None,
+            database_name: None,
+            schema_name: None,
+            project_dir: None,
             output_dir: None,
             config: Some(config),
         }
@@ -6793,11 +9913,14 @@ CREATE TABLE demo (
         ImportArgs {
             collection: None,
             namespace: None,
+            database_name: None,
+            schema_name: None,
+            project_dir: None,
             config: config,
         }
     }
 
-    use crate::{run_check_md5, run_export, run_import, run_infer, run_init};
+    use crate::{run_export, run_import, run_infer, run_init};
     use chrono::{DateTime, TimeZone, Utc};
     use indoc::indoc;
     use std::fs;
@@ -7032,11 +10155,13 @@ CREATE TABLE demo (
             CREATE DATABASE "test_db";
             \connect "test_db"
 
+            CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
             CREATE SCHEMA IF NOT EXISTS "employees";
-            SET search_path = "employees";
+            SET search_path = "employees", public;
 
             CREATE TABLE employees (
-                id TEXT PRIMARY KEY,
+                id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
                 created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                 hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
                 last_update TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -7108,10 +10233,6 @@ CREATE TABLE demo (
         assert_eq!(retrieved_date, hire_date);
         assert_eq!(retrieved_created_at, created_at);
         assert_eq!(retrieved_last_update, last_update);
-
-        run_check_md5("employees".to_owned(), Some(config.clone()), false)
-            .await
-            .expect("can't run checkmd5");
 
         Ok(())
     }

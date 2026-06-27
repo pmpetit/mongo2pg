@@ -1,0 +1,312 @@
+collection_name: listingsAndReviews
+mongo_dbname: sample_airbnb
+mongo_path: .
+traversal:
+  mode: root
+pg_mapping:
+  dbname: sample_airbnb
+  schema_name: sample_airbnb
+  table_name: listingsandreviews
+  columns:
+  - source_field: _id
+    target_field: id
+    data_type: bigserial
+    nullable: false
+  - source_field: access
+    target_field: access
+    data_type: text
+    nullable: false
+  - source_field: accommodates
+    target_field: accommodates
+    data_type: integer
+    nullable: false
+  - source_field: amenities
+    target_field: amenities
+    data_type: text[]
+    nullable: false
+  - source_field: bathrooms
+    target_field: bathrooms
+    data_type: numeric
+    nullable: true
+  - source_field: bed_type
+    target_field: bed_type
+    data_type: varchar(20)
+    nullable: false
+  - source_field: bedrooms
+    target_field: bedrooms
+    data_type: integer
+    nullable: true
+  - source_field: beds
+    target_field: beds
+    data_type: integer
+    nullable: true
+  - source_field: calendar_last_scraped
+    target_field: calendar_last_scraped
+    data_type: timestamp with time zone
+    nullable: false
+  - source_field: cancellation_policy
+    target_field: cancellation_policy
+    data_type: text
+    nullable: false
+  - source_field: cleaning_fee
+    target_field: cleaning_fee
+    data_type: numeric
+    nullable: true
+  - source_field: description
+    target_field: description
+    data_type: text
+    nullable: false
+  - source_field: extra_people
+    target_field: extra_people
+    data_type: numeric
+    nullable: false
+  - source_field: first_review
+    target_field: first_review
+    data_type: timestamp with time zone
+    nullable: true
+  - source_field: guests_included
+    target_field: guests_included
+    data_type: numeric
+    nullable: false
+  - source_field: house_rules
+    target_field: house_rules
+    data_type: text
+    nullable: false
+  - source_field: interaction
+    target_field: interaction
+    data_type: text
+    nullable: false
+  - source_field: last_review
+    target_field: last_review
+    data_type: timestamp with time zone
+    nullable: true
+  - source_field: last_scraped
+    target_field: last_scraped
+    data_type: timestamp with time zone
+    nullable: false
+  - source_field: listing_url
+    target_field: listing_url
+    data_type: text
+    nullable: false
+  - source_field: maximum_nights
+    target_field: maximum_nights
+    data_type: varchar(20)
+    nullable: false
+  - source_field: minimum_nights
+    target_field: minimum_nights
+    data_type: varchar(4)
+    nullable: false
+  - source_field: monthly_price
+    target_field: monthly_price
+    data_type: numeric
+    nullable: true
+  - source_field: name
+    target_field: name
+    data_type: text
+    nullable: false
+  - source_field: neighborhood_overview
+    target_field: neighborhood_overview
+    data_type: text
+    nullable: false
+  - source_field: notes
+    target_field: notes
+    data_type: text
+    nullable: false
+  - source_field: number_of_reviews
+    target_field: number_of_reviews
+    data_type: integer
+    nullable: false
+  - source_field: price
+    target_field: price
+    data_type: numeric
+    nullable: false
+  - source_field: property_type
+    target_field: property_type
+    data_type: text
+    nullable: false
+  - source_field: reviews_per_month
+    target_field: reviews_per_month
+    data_type: integer
+    nullable: true
+  - source_field: room_type
+    target_field: room_type
+    data_type: varchar(20)
+    nullable: false
+  - source_field: security_deposit
+    target_field: security_deposit
+    data_type: numeric
+    nullable: true
+  - source_field: space
+    target_field: space
+    data_type: text
+    nullable: false
+  - source_field: summary
+    target_field: summary
+    data_type: text
+    nullable: false
+  - source_field: transit
+    target_field: transit
+    data_type: text
+    nullable: false
+  - source_field: weekly_price
+    target_field: weekly_price
+    data_type: numeric
+    nullable: true
+  ddl:
+    name: listingsandreviews
+    columns:
+    - name: id
+      sql_type: BIGSERIAL
+      nullable: false
+      primary_key: true
+    - name: access
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: accommodates
+      sql_type: INTEGER
+      nullable: false
+      primary_key: false
+    - name: amenities
+      sql_type: TEXT[]
+      nullable: false
+      primary_key: false
+    - name: bathrooms
+      sql_type: NUMERIC
+      nullable: true
+      primary_key: false
+    - name: bed_type
+      sql_type: VARCHAR(20)
+      nullable: false
+      primary_key: false
+    - name: bedrooms
+      sql_type: INTEGER
+      nullable: true
+      primary_key: false
+    - name: beds
+      sql_type: INTEGER
+      nullable: true
+      primary_key: false
+    - name: calendar_last_scraped
+      sql_type: TIMESTAMP WITH TIME ZONE
+      nullable: false
+      primary_key: false
+    - name: cancellation_policy
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: cleaning_fee
+      sql_type: NUMERIC
+      nullable: true
+      primary_key: false
+    - name: description
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: extra_people
+      sql_type: NUMERIC
+      nullable: false
+      primary_key: false
+    - name: first_review
+      sql_type: TIMESTAMP WITH TIME ZONE
+      nullable: true
+      primary_key: false
+    - name: guests_included
+      sql_type: NUMERIC
+      nullable: false
+      primary_key: false
+    - name: house_rules
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: interaction
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: last_review
+      sql_type: TIMESTAMP WITH TIME ZONE
+      nullable: true
+      primary_key: false
+    - name: last_scraped
+      sql_type: TIMESTAMP WITH TIME ZONE
+      nullable: false
+      primary_key: false
+    - name: listing_url
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: maximum_nights
+      sql_type: VARCHAR(20)
+      nullable: false
+      primary_key: false
+    - name: minimum_nights
+      sql_type: VARCHAR(4)
+      nullable: false
+      primary_key: false
+    - name: monthly_price
+      sql_type: NUMERIC
+      nullable: true
+      primary_key: false
+    - name: name
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: neighborhood_overview
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: notes
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: number_of_reviews
+      sql_type: INTEGER
+      nullable: false
+      primary_key: false
+    - name: price
+      sql_type: NUMERIC
+      nullable: false
+      primary_key: false
+    - name: property_type
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: reviews_per_month
+      sql_type: INTEGER
+      nullable: true
+      primary_key: false
+    - name: room_type
+      sql_type: VARCHAR(20)
+      nullable: false
+      primary_key: false
+    - name: security_deposit
+      sql_type: NUMERIC
+      nullable: true
+      primary_key: false
+    - name: space
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: summary
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: transit
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: weekly_price
+      sql_type: NUMERIC
+      nullable: true
+      primary_key: false
+    foreign_keys: []
+  ddl_editing:
+    safe_to_edit:
+    - pg_mapping.ddl.columns[].sql_type
+    - pg_mapping.ddl.columns[].nullable
+    - pg_mapping.ddl.columns[].primary_key
+    - pg_mapping.ddl.foreign_keys[]
+    notes:
+    - Edit the ddl section, then rerun to-pg to regenerate the SQL file.
+    - Keep pg_mapping.columns aligned with source-to-target mappings for export and md5.
+    - Export reads the generated SQL files, so mapping edits take effect after to-pg.

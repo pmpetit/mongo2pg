@@ -1,0 +1,33 @@
+[project]
+title = "Mongo2Pg Project migration"
+base_dir = "results"
+project_dir = "localhost"
+
+[source]
+uri = "mongodb://user:pass@localhost:27017/?authSource=admin&directConnection=true"
+namespace = "sample_training"
+#number = 1000
+percent = 100.0
+jsonb = false
+# include = ["collection_a", "collection_b"]
+# exclude = ["collection_to_skip"]
+datetime_field = ["created_at", "last_update", "updated_at", "*_date", "date"]
+
+[target]
+uri = "postgres://myuser:x@localhost:5432/postgres?sslmode=disable"
+database_name = "sample_training"
+schema_name = "sample_training"
+
+[kafka]
+bootstrap_servers = "localhost:9092"
+group_id = "mongo2pg-sample_training_group"
+# topics = ["mongo2pg_sample_training.sample_training.listingsAndReviews"]
+# ...or use only a Debezium topic prefix and let kafka-import parse db/collection from topics.
+topic_prefix = "mongo2pg.sample_supplies"
+schema_registry_url = "http://localhost:8081"
+batch_log_messages = 100
+# schema_registry_username = ""
+# schema_registry_password = ""
+# offset = "latest"
+# auto_offset_reset = "earliest" # legacy key still supported
+# max_messages = 1000

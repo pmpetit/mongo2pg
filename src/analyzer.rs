@@ -197,6 +197,9 @@ impl FieldAcc {
         if matches!(bson, Bson::Array(arr) if arr.is_empty()) {
             return;
         }
+        if matches!(bson, Bson::Document(doc) if doc.is_empty()) {
+            return;
+        }
 
         self.count += 1;
         let type_name = bson_type_name(bson);
