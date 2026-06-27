@@ -561,7 +561,7 @@ fn add_child_table(
         child_fields,
         "",
         true,
-        true,
+        false,
         pg_schema,
         timestamp_fields,
     );
@@ -1631,6 +1631,62 @@ fn collapse_passthrough_root(mut root: Table) -> Table {
     child
 }
 
+fn ensure_unique_table_names(root: &mut Table) {
+    fn strip_numeric_suffix(name: &str) -> String {
+        if let Some((prefix, tail)) = name.rsplit_once('_') {
+            if !prefix.is_empty() && !tail.is_empty() && tail.chars().all(|c| c.is_ascii_digit()) {
+                return prefix.to_owned();
+            }
+        }
+        name.to_owned()
+    }
+
+    fn next_unique_name(base: &str, parent_path: &[String], used: &HashSet<String>) -> String {
+        if !used.contains(base) {
+            return base.to_owned();
+        }
+
+        for depth in 1..=parent_path.len() {
+            let prefix = parent_path[parent_path.len() - depth..].join("_");
+            let candidate = format!("{prefix}_{base}");
+            if !used.contains(&candidate) {
+                return candidate;
+            }
+        }
+
+        let mut suffix = 2usize;
+        loop {
+            let candidate = format!("{base}_{suffix}");
+            if !used.contains(&candidate) {
+                return candidate;
+            }
+            suffix += 1;
+        }
+    }
+
+    fn visit(node: &mut Table, parent_path: &[String], used: &mut HashSet<String>) {
+        let canonical = strip_numeric_suffix(&node.name);
+        let unique_name = next_unique_name(&canonical, parent_path, used);
+        node.name = unique_name.clone();
+        used.insert(unique_name.clone());
+
+        let mut child_parent_path = parent_path.to_vec();
+        child_parent_path.push(unique_name.clone());
+
+        for child in &mut node.child_tables {
+            if let Some(parent_refs) = child.parent_ref.as_mut() {
+                for (_, ref_table, _) in parent_refs.iter_mut() {
+                    *ref_table = unique_name.clone();
+                }
+            }
+            visit(child, &child_parent_path, used);
+        }
+    }
+
+    let mut used = HashSet::new();
+    visit(root, &[], &mut used);
+}
+
 fn render_column(col: &Column, inline_primary_key: bool) -> String {
     let rendered_pg_type = if col.pg_type.eq_ignore_ascii_case("VARCHAR(0)") {
         "TEXT"
@@ -1795,6 +1851,8 @@ pub fn schema_to_ddl_with_timestamp_fields(
             timestamp_fields,
         );
 
+        ensure_unique_table_names(&mut root);
+
         let tables = collect_tables(&root);
         let ddl = tables
             .iter()
@@ -1855,6 +1913,8 @@ pub fn schema_to_ddl_with_timestamp_fields(
                     );
                 }
 
+                ensure_unique_table_names(&mut root);
+
                 let tables = collect_tables(&root);
                 let ddl = tables
                     .iter()
@@ -1881,7 +1941,8 @@ pub fn schema_to_ddl_with_timestamp_fields(
         timestamp_fields,
     );
 
-    let root = collapse_passthrough_root(root);
+    let mut root = collapse_passthrough_root(root);
+    ensure_unique_table_names(&mut root);
     let tables = collect_tables(&root);
 
     // Suppressed debug output: tables and columns count

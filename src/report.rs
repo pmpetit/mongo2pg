@@ -875,7 +875,7 @@ pub fn render_post_import_html(
         )
     }
 
-    fn render_md5_detail(md5_summary: &PostImportMd5Summary) -> String {
+    fn render_md5_detail(md5_summary: &PostImportMd5Summary, detail_id: &str) -> String {
         let summary_label = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
             escape_html(&md5_summary.mongo_md5)
         } else {
@@ -933,12 +933,15 @@ pub fn render_post_import_html(
             .collect::<Vec<_>>()
             .join("");
         let mismatch_detail = if md5_summary.mismatches.is_empty() {
-            String::new()
+          String::new()
         } else {
-            format!(
-                r#"<div class="md5-mismatch-label">First 5 non-corresponding rows</div><table class="md5-mismatch-table"><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{}</tbody></table>"#,
-                mismatch_rows,
-            )
+          format!(
+            r#"<button type="button" class="md5-open-window" onclick="openMd5DiffWindow('{detail_id}')">Open diff in new page</button><template id="{detail_id}"><!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mongo2pg md5 mismatch</title><style>body{{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;padding:1.25rem;background:#f8fafc;color:#1f2937}}h1{{margin:.2rem 0 .5rem;font-size:1.1rem}}.meta{{margin:0 0 1rem;font-size:.9rem;color:#475569}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{border:1px solid #cbd5e1;padding:.45rem .5rem;vertical-align:top;text-align:left;font-size:.85rem;line-height:1.35}}th{{background:#e2e8f0;color:#0f172a}}code{{white-space:pre-wrap;word-break:break-word}}</style></head><body><h1>First 5 non-corresponding rows</h1><p class="meta"><strong>MongoDB:</strong> {mongo_md5}<br><strong>PostgreSQL:</strong> {pg_md5}</p><table><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{mismatch_rows}</tbody></table></body></html></template>"#,
+            detail_id = detail_id,
+            mongo_md5 = escape_html(&md5_summary.mongo_md5),
+            pg_md5 = escape_html(&md5_summary.pg_md5),
+            mismatch_rows = mismatch_rows,
+          )
         };
         let state_class = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
             "is-match"
@@ -986,10 +989,11 @@ pub fn render_post_import_html(
         let mismatch = node
             .pg_row_count
             .map(|pg_rows| pg_rows - node.mongo_count as i64);
+        let md5_detail_id = format!("md5-diff-{node_id}");
         let md5_detail = node
             .md5_summary
             .as_ref()
-            .map(render_md5_detail)
+          .map(|summary| render_md5_detail(summary, &md5_detail_id))
             .unwrap_or_default();
         let pg_cell = match (&node.pg_table_name, node.pg_row_count) {
             (Some(table_name), Some(row_count)) => format!(
@@ -1289,6 +1293,17 @@ pub fn render_post_import_html(
     .md5-source {{ color: #7c3aed; }}
     .md5-target {{ color: #2471a3; }}
     .md5-arrow {{ color: #7f8c8d; }}
+    .md5-open-window {{
+      margin-top: 0.5rem;
+      border: 1px solid #93c5fd;
+      border-radius: 6px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.22rem 0.55rem;
+      cursor: pointer;
+    }}
     .pg-empty {{ color: #95a5a6; font-style: italic; }}
     .tree-children {{ display: block; }}
     footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
@@ -1319,6 +1334,16 @@ pub fn render_post_import_html(
       row.style.display = open ? 'none' : '';
       if (open) {{ icon.classList.remove('open'); }}
       else      {{ icon.classList.add('open'); }}
+    }}
+
+    function openMd5DiffWindow(templateId) {{
+      var tpl = document.getElementById(templateId);
+      if (!tpl) return;
+      var popup = window.open('', '_blank');
+      if (!popup) return;
+      popup.document.open();
+      popup.document.write(tpl.innerHTML);
+      popup.document.close();
     }}
   </script>
 </body>

@@ -457,11 +457,10 @@ fn test_build_mongo_mermaid_output() {
 /// `{directory_name}.sql` (original case), so the file is never found and the
 /// report shows 0 tables instead of the real count.
 #[test]
-fn test_camelcase_collection_table_count_matches_report() {
+fn test_schema_to_ddl_and_collect_rows_table_count_match_for_camel_case() {
     use mongo2pg::report::collect_rows;
     use mongo2pg::to_pg::schema_to_ddl;
-    use std::fs;
-    use std::path::PathBuf;
+    use std::{fs, path::PathBuf};
 
     // Schema with a nested object → produces a root table + one child table.
     let docs = vec![doc! {

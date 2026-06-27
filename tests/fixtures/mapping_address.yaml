@@ -1,0 +1,94 @@
+collection_name: address
+mongo_dbname: sample_airbnb
+mongo_path: .address
+traversal:
+  mode: object
+  parent_table: listingsandreviews
+  source_field: address
+  fk_column: listingsandreviews_id
+pg_mapping:
+  dbname: sample_airbnb
+  schema_name: sample_airbnb
+  table_name: address
+  columns:
+  - source_field: country
+    target_field: country
+    data_type: varchar(20)
+    nullable: false
+  - source_field: country_code
+    target_field: country_code
+    data_type: varchar(2)
+    nullable: false
+  - source_field: government_area
+    target_field: government_area
+    data_type: text
+    nullable: false
+  - source_field: location
+    target_field: location
+    data_type: geometry(point,4326)
+    nullable: false
+  - source_field: market
+    target_field: market
+    data_type: text
+    nullable: false
+  - source_field: street
+    target_field: street
+    data_type: text
+    nullable: false
+  - source_field: suburb
+    target_field: suburb
+    data_type: text
+    nullable: false
+  ddl:
+    name: address
+    columns:
+    - name: id
+      sql_type: BIGSERIAL
+      nullable: false
+      primary_key: true
+    - name: listingsandreviews_id
+      sql_type: BIGINT
+      nullable: false
+      primary_key: false
+    - name: country
+      sql_type: VARCHAR(20)
+      nullable: false
+      primary_key: false
+    - name: country_code
+      sql_type: VARCHAR(2)
+      nullable: false
+      primary_key: false
+    - name: government_area
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: location
+      sql_type: geometry(Point,4326)
+      nullable: false
+      primary_key: false
+    - name: market
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: street
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    - name: suburb
+      sql_type: TEXT
+      nullable: false
+      primary_key: false
+    foreign_keys:
+    - from_col: listingsandreviews_id
+      to_table: listingsandreviews
+      to_col: id
+  ddl_editing:
+    safe_to_edit:
+    - pg_mapping.ddl.columns[].sql_type
+    - pg_mapping.ddl.columns[].nullable
+    - pg_mapping.ddl.columns[].primary_key
+    - pg_mapping.ddl.foreign_keys[]
+    notes:
+    - Edit the ddl section, then rerun to-pg to regenerate the SQL file.
+    - Keep pg_mapping.columns aligned with source-to-target mappings for export and md5.
+    - Export reads the generated SQL files, so mapping edits take effect after to-pg.

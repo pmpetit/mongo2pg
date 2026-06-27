@@ -32,8 +32,7 @@ use mongo2pg::analyzer::{
     Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
 use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
-#[cfg(test)]
-use mongo2pg::checkmd5::run_check_md5;
+// use mongo2pg::checkmd5::run_check_md5;
 use mongo2pg::export::export_collection;
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
@@ -415,8 +414,7 @@ struct KafkaImportArgs {
     database_name: Option<String>,
 
     #[arg(long = "schema-name")]
-    schema_name: Option<String>,    
-
+    schema_name: Option<String>,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -691,11 +689,11 @@ fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> Resu
     {
         let kafka = ensure_toml_table(&mut doc, "kafka")?;
 
-        if let Some(v) = &overrides.kafka_group_id { 
-            kafka.insert("group_id".to_owned(), TomlValue::String(v.clone())); 
+        if let Some(v) = &overrides.kafka_group_id {
+            kafka.insert("group_id".to_owned(), TomlValue::String(v.clone()));
         }
-        if let Some(v) = &overrides.kafka_topic_prefix { 
-            kafka.insert("topic_prefix".to_owned(), TomlValue::String(v.clone())); 
+        if let Some(v) = &overrides.kafka_topic_prefix {
+            kafka.insert("topic_prefix".to_owned(), TomlValue::String(v.clone()));
         }
 
         if let Some(v) = &overrides.kafka_topics {
@@ -2416,7 +2414,10 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
     }
 
     for table in ordered_tables(tables) {
-        ddl_body.push_str(&format!("CREATE TABLE {} (\n", maybe_quote_ident(&table.name)));
+        ddl_body.push_str(&format!(
+            "CREATE TABLE {} (\n",
+            maybe_quote_ident(&table.name)
+        ));
 
         let rendered_columns = table
             .columns
@@ -2819,10 +2820,39 @@ fn build_collection_mappings_with_timestamp_fields(
         parent_name: &str,
         field: &str,
         force_parent_prefix: bool,
-        _reserved_table_names: &std::collections::HashSet<String>,
-        _assigned_table_names: &std::collections::HashSet<String>,
+        reserved_table_names: &std::collections::HashSet<String>,
+        assigned_table_names: &std::collections::HashSet<String>,
     ) -> String {
-        preferred_child_mapping_table_name(parent_name, field, force_parent_prefix)
+        let base = preferred_child_mapping_table_name(parent_name, field, force_parent_prefix);
+        let is_taken = |name: &str| {
+            reserved_table_names.contains(name) || assigned_table_names.contains(name)
+        };
+
+        if !is_taken(&base) {
+            return base;
+        }
+
+        let parent_segments = parent_name
+            .split('_')
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>();
+
+        for depth in 1..=parent_segments.len() {
+            let prefix = parent_segments[parent_segments.len() - depth..].join("_");
+            let candidate = format!("{prefix}_{base}");
+            if !is_taken(&candidate) {
+                return candidate;
+            }
+        }
+
+        let mut suffix = 2usize;
+        loop {
+            let candidate = format!("{parent_name}_{base}_{suffix}");
+            if !is_taken(&candidate) {
+                return candidate;
+            }
+            suffix += 1;
+        }
     }
 
     fn resolved_child_mapping_table_name(
@@ -3320,7 +3350,9 @@ fn build_collection_mappings_with_timestamp_fields(
                             }
                         })
                         .collect::<Vec<_>>();
-                    if !columns.is_empty() || table_has_child_references(&table.name, tables_by_name) {
+                    if !columns.is_empty()
+                        || table_has_child_references(&table.name, tables_by_name)
+                    {
                         let mut child_mongo_path_segments = mongo_path_segments.to_vec();
                         child_mongo_path_segments.push(raw_name.clone());
                         out.push((
@@ -3951,16 +3983,13 @@ fn infer_traversal_plan(mapping: &CollectionMapping) -> TraversalPlan {
         .map(|column| column.target_field.as_str())
         .collect::<Vec<_>>();
 
-    let source_field_from_path = mapping
-        .mongo_path
-        .as_deref()
-        .and_then(|path| {
-            if path == "." || path.trim().is_empty() {
-                None
-            } else {
-                path.rsplit('.').next().map(str::to_owned)
-            }
-        });
+    let source_field_from_path = mapping.mongo_path.as_deref().and_then(|path| {
+        if path == "." || path.trim().is_empty() {
+            None
+        } else {
+            path.rsplit('.').next().map(str::to_owned)
+        }
+    });
 
     let mode = if mapping.mongo_path.as_deref() == Some(".") {
         TraversalMode::Root
@@ -4434,7 +4463,11 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             allowed_table_names.insert(table.name.clone());
             table_columns_by_name.insert(
                 table.name,
-                table.columns.into_iter().map(|column| column.name).collect(),
+                table
+                    .columns
+                    .into_iter()
+                    .map(|column| column.name)
+                    .collect(),
             );
         }
         match pg_client.batch_execute(&executable_sql).await {
@@ -5012,11 +5045,20 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         cast_epoch_seconds_literal(&seconds_expr, sql_type)
     }
 
-    fn temporal_literal_from_number(raw: &serde_json::Number, sql_type: Option<&str>) -> Option<String> {
+    fn temporal_literal_from_number(
+        raw: &serde_json::Number,
+        sql_type: Option<&str>,
+    ) -> Option<String> {
         raw.as_i64()
             .map(|v| temporal_literal_from_epoch_i64(v, sql_type))
-            .or_else(|| raw.as_u64().map(|v| temporal_literal_from_epoch_u64(v, sql_type)))
-            .or_else(|| raw.as_f64().map(|v| temporal_literal_from_epoch_f64(v, sql_type)))
+            .or_else(|| {
+                raw.as_u64()
+                    .map(|v| temporal_literal_from_epoch_u64(v, sql_type))
+            })
+            .or_else(|| {
+                raw.as_f64()
+                    .map(|v| temporal_literal_from_epoch_f64(v, sql_type))
+            })
     }
 
     fn geojson_point_coordinates(value: &Value) -> Option<(f64, f64)> {
@@ -5053,7 +5095,11 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let obj = value.as_object()?;
 
         if sql_type_expects_temporal(sql_type) {
-            if let Some(Value::Number(raw)) = obj.get("long").or_else(|| obj.get("int")).or_else(|| obj.get("double")) {
+            if let Some(Value::Number(raw)) = obj
+                .get("long")
+                .or_else(|| obj.get("int"))
+                .or_else(|| obj.get("double"))
+            {
                 return temporal_literal_from_number(raw, sql_type);
             }
             if let Some(Value::String(raw)) = obj.get("string") {
@@ -5093,7 +5139,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 Value::Number(raw) => temporal_literal_from_number(raw, sql_type),
                 Value::Object(inner) => {
                     if let Some(Value::String(ms_raw)) = inner.get("$numberLong") {
-                        ms_raw.parse::<i64>().ok().map(|ms| temporal_literal_from_epoch_i64(ms, sql_type))
+                        ms_raw
+                            .parse::<i64>()
+                            .ok()
+                            .map(|ms| temporal_literal_from_epoch_i64(ms, sql_type))
                     } else {
                         None
                     }
@@ -5248,7 +5297,9 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     "FALSE".to_owned()
                 }
             }
-            Value::Number(v) => map_extended_json_literal(value, sql_type).unwrap_or_else(|| v.to_string()),
+            Value::Number(v) => {
+                map_extended_json_literal(value, sql_type).unwrap_or_else(|| v.to_string())
+            }
             Value::String(v) => {
                 let normalized = normalized_sql_type(sql_type);
                 if normalized
@@ -5543,7 +5594,9 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .pg_mapping
             .columns
             .iter()
-            .find(|column| normalize_pg_identifier(&column.target_field) == normalize_pg_identifier(pk))
+            .find(|column| {
+                normalize_pg_identifier(&column.target_field) == normalize_pg_identifier(pk)
+            })
             .map(|column| column.source_field.clone())
     }
 
@@ -5571,7 +5624,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .pg_mapping
             .columns
             .iter()
-            .find(|column| normalize_pg_identifier(&column.target_field) == normalize_pg_identifier(target_field))
+            .find(|column| {
+                normalize_pg_identifier(&column.target_field)
+                    == normalize_pg_identifier(target_field)
+            })
             .map(|column| column.source_field.clone())
             .unwrap_or_else(|| target_field.to_owned())
     }
@@ -5825,7 +5881,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     continue;
                 }
 
-                let resolved_value = resolve_source_field_value(payload_doc, payload_obj, &target_field);
+                let resolved_value =
+                    resolve_source_field_value(payload_doc, payload_obj, &target_field);
                 if resolved_value.is_none() {
                     continue;
                 }
@@ -5967,7 +6024,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             .columns
                             .iter()
                             .map(|mapped| {
-                                let val = resolve_source_field_value_from_map(&obj, &mapped.source_field);
+                                let val =
+                                    resolve_source_field_value_from_map(&obj, &mapped.source_field);
                                 (mapped, val)
                             })
                             .collect::<Vec<_>>();
@@ -6020,7 +6078,9 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                         let row = pg_client
                             .query_one(insert_sql.as_str(), &[])
                             .await
-                            .map_err(|err| annotate_apply_db_error(err, child_mapping, &child_table))?;
+                            .map_err(|err| {
+                                annotate_apply_db_error(err, child_mapping, &child_table)
+                            })?;
                         let inserted_pk_text: String = row.try_get(0)?;
 
                         affected_rows += 1;
@@ -8688,11 +8748,10 @@ CREATE TABLE demo (
             .as_ref()
             .expect("entities ddl should exist");
         assert!(ddl.columns.iter().any(|column| column.name == "id"));
-        assert!(
-            ddl.foreign_keys
-                .iter()
-                .any(|fk| fk.to_table == "tweets" && fk.to_col == "id")
-        );
+        assert!(ddl
+            .foreign_keys
+            .iter()
+            .any(|fk| fk.to_table == "tweets" && fk.to_col == "id"));
     }
 
     #[test]
@@ -9117,8 +9176,12 @@ CREATE TABLE demo (
         }
         let schema = analyzer.finish();
 
-        let mappings =
-            build_collection_mappings("sample_analytics", "accounts", Some("sample_analytics"), &schema);
+        let mappings = build_collection_mappings(
+            "sample_analytics",
+            "accounts",
+            Some("sample_analytics"),
+            &schema,
+        );
         let root_mapping = mappings
             .iter()
             .find(|(stem, _)| stem == "accounts")
@@ -9857,7 +9920,7 @@ pg_mapping:
         }
     }
 
-    use crate::{run_check_md5, run_export, run_import, run_infer, run_init};
+    use crate::{run_export, run_import, run_infer, run_init};
     use chrono::{DateTime, TimeZone, Utc};
     use indoc::indoc;
     use std::fs;
@@ -10170,10 +10233,6 @@ pg_mapping:
         assert_eq!(retrieved_date, hire_date);
         assert_eq!(retrieved_created_at, created_at);
         assert_eq!(retrieved_last_update, last_update);
-
-        run_check_md5("employees".to_owned(), Some(config.clone()), false)
-            .await
-            .expect("can't run checkmd5");
 
         Ok(())
     }

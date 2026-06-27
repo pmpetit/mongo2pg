@@ -417,7 +417,6 @@ struct TableNode {
     children: Vec<TableNode>,
 }
 
-#[cfg(test)]
 fn build_tree(
     sql_tables: &[SqlTable],
     flattened_root: Option<(String, String)>,
@@ -426,7 +425,6 @@ fn build_tree(
     build_tree_with_grouped_root(sql_tables, flattened_root, None, grouped_root_sources)
 }
 
-#[cfg(test)]
 fn build_tree_with_grouped_root(
     sql_tables: &[SqlTable],
     flattened_root: Option<(String, String)>,
@@ -679,6 +677,8 @@ fn find_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bs
 struct ExportMappingYaml {
     #[serde(default)]
     traversal: Option<ExportTraversalPlan>,
+    #[serde(default)]
+    mongo_path: Option<String>,
     pg_mapping: ExportPgMappingYaml,
 }
 
@@ -721,6 +721,7 @@ struct ExportMappingColumnYaml {
 #[derive(Debug, Clone)]
 struct ExportTablePlan {
     traversal: ExportTraversalPlan,
+    mongo_path: Option<String>,
     target_to_source: HashMap<String, String>,
 }
 
@@ -768,6 +769,7 @@ fn load_export_table_plans(
             sanitize(&mapping.pg_mapping.table_name),
             ExportTablePlan {
                 traversal,
+                mongo_path: mapping.mongo_path,
                 target_to_source,
             },
         );
@@ -778,6 +780,7 @@ fn load_export_table_plans(
 
 fn build_node_from_plan(
     sql_t: &SqlTable,
+    depth: usize,
     parent_key: Option<&str>,
     children_of: &HashMap<String, Vec<String>>,
     sql_by_key: &HashMap<String, &SqlTable>,
@@ -837,7 +840,14 @@ fn build_node_from_plan(
             keys.iter()
                 .filter_map(|key| {
                     sql_by_key.get(key).and_then(|child_sql| {
-                        build_node_from_plan(child_sql, Some(&table_key), children_of, sql_by_key, plans)
+                        build_node_from_plan(
+                            child_sql,
+                            depth + 1,
+                            Some(&table_key),
+                            children_of,
+                            sql_by_key,
+                            plans,
+                        )
                     })
                 })
                 .collect::<Vec<_>>()
@@ -847,7 +857,8 @@ fn build_node_from_plan(
     let mongo_field = if parent_key.is_none() {
         String::new()
     } else {
-        plan.traversal
+        let fallback = plan
+            .traversal
             .source_field
             .clone()
             .unwrap_or_else(|| {
@@ -859,7 +870,19 @@ fn build_node_from_plan(
                             .map(str::to_owned)
                     })
                     .unwrap_or_else(|| sql_t.name.clone())
-            })
+            });
+
+        if depth == 1 {
+            plan.mongo_path
+                .as_deref()
+                .map(str::trim)
+                .map(|path| path.trim_start_matches('.'))
+                .filter(|path| !path.is_empty())
+                .map(str::to_owned)
+                .unwrap_or(fallback)
+        } else {
+            fallback
+        }
     };
 
     let (root_array_field, root_parent_id_col) = if parent_key.is_none()
@@ -940,7 +963,9 @@ fn build_tree_from_mapping_plan(
         .filter_map(|root_key| {
             sql_by_key
                 .get(root_key)
-                .and_then(|sql_t| build_node_from_plan(sql_t, None, &children_of, &sql_by_key, plans))
+                .and_then(|sql_t| {
+                    build_node_from_plan(sql_t, 0, None, &children_of, &sql_by_key, plans)
+                })
         })
         .collect::<Vec<_>>();
 
@@ -992,6 +1017,58 @@ fn find_mongo_field_by_source_path<'a>(
     }
 
     Some(current)
+}
+
+fn collect_mongo_values_by_path(current: &Bson, segments: &[&str], out: &mut Vec<Bson>) {
+    if segments.is_empty() {
+        out.push(current.clone());
+        return;
+    }
+
+    match current {
+        Bson::Document(doc) => {
+            if let Some(next) = find_field_by_segment(doc, segments[0]) {
+                collect_mongo_values_by_path(next, &segments[1..], out);
+            }
+        }
+        Bson::Array(items) => {
+            for item in items {
+                collect_mongo_values_by_path(item, segments, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn find_mongo_field_for_traversal(doc: &bson::Document, source_field: &str) -> Option<Bson> {
+    let trimmed = source_field.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let segments = trimmed
+        .split('.')
+        .filter(|segment| !segment.trim().is_empty())
+        .collect::<Vec<_>>();
+
+    if segments.is_empty() {
+        return None;
+    }
+
+    let mut values = Vec::new();
+    if let Some(first) = find_field_by_segment(doc, segments[0]) {
+        collect_mongo_values_by_path(first, &segments[1..], &mut values);
+    }
+
+    if values.is_empty() {
+        return find_mongo_field(doc, trimmed).cloned();
+    }
+
+    if values.len() == 1 {
+        values.into_iter().next()
+    } else {
+        Some(Bson::Array(values))
+    }
 }
 
 fn find_root_mongo_field_mapped<'a>(
@@ -1101,7 +1178,7 @@ fn extract_child_document_rows(
             .push(child_row);
 
         for grandchild in &child.children {
-            match find_mongo_field(item_doc, &grandchild.mongo_field) {
+            match find_mongo_field_for_traversal(item_doc, &grandchild.mongo_field).as_ref() {
                 Some(Bson::Array(arr)) => {
                     if grandchild.is_scalar_array {
                         for item in arr {
@@ -1175,6 +1252,11 @@ fn extract_child_document_rows(
 }
 
 fn map_document_entries<'a>(node: &TableNode, doc: &'a bson::Document) -> Vec<(&'a str, &'a bson::Document)> {
+    let has_key_column = node.columns.iter().any(|col| col == "key");
+    if !has_key_column {
+        return Vec::new();
+    }
+
     let non_structural_cols: Vec<&String> = node
         .columns
         .iter()
@@ -1304,7 +1386,7 @@ fn extract_rows_with_mapping(
                         all_rows.entry(node.sql_name.clone()).or_default().push(row);
 
                         for child in &node.children {
-                            match find_mongo_field(item_doc, &child.mongo_field) {
+                            match find_mongo_field_for_traversal(item_doc, &child.mongo_field).as_ref() {
                                 Some(Bson::Array(arr)) => {
                                     if child.is_scalar_array {
                                         for child_item in arr {
@@ -1420,7 +1502,7 @@ fn extract_rows_with_mapping(
                     all_rows.entry(node.sql_name.clone()).or_default().push(row);
 
                     for child in &node.children {
-                        match find_mongo_field(item_doc, &child.mongo_field) {
+                        match find_mongo_field_for_traversal(item_doc, &child.mongo_field).as_ref() {
                             Some(Bson::Array(arr)) => {
                                 if child.is_scalar_array {
                                     for child_item in arr {
@@ -1533,7 +1615,7 @@ fn extract_rows_with_mapping(
                 all_rows.entry(node.sql_name.clone()).or_default().push(row);
 
                 for child in &node.children {
-                    match find_mongo_field(entry_doc, &child.mongo_field) {
+                    match find_mongo_field_for_traversal(entry_doc, &child.mongo_field).as_ref() {
                         Some(Bson::Array(arr)) => {
                             if child.is_scalar_array {
                                 for item in arr {
@@ -1702,7 +1784,7 @@ fn extract_rows_with_mapping(
                                 .push(child_row);
 
                             for grandchild in &child.children {
-                                match find_mongo_field(item_doc, &grandchild.mongo_field) {
+                                match find_mongo_field_for_traversal(item_doc, &grandchild.mongo_field).as_ref() {
                                     Some(Bson::Array(arr)) => {
                                         if grandchild.is_scalar_array {
                                             for item in arr {
@@ -1784,7 +1866,7 @@ fn extract_rows_with_mapping(
             continue;
         }
 
-        match find_mongo_field(doc, &child.mongo_field) {
+        match find_mongo_field_for_traversal(doc, &child.mongo_field).as_ref() {
             Some(Bson::Array(arr)) => {
                 if child.is_scalar_array {
                     // One row per scalar element.
@@ -1886,13 +1968,28 @@ pub async fn export_collection(
     let safe_name = coll_name.replace('/', "_");
     let plans = load_export_table_plans(collections_dir, &safe_name);
 
-    let (roots, root_target_to_source) = build_tree_from_mapping_plan(&sql_tables, &plans)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No complete traversal mapping plan found for collection '{}'. Regenerate mapping_*.yaml with traversal metadata before export.",
-                coll_name
-            )
-        })?;
+    let (roots, root_target_to_source) = if let Some((roots, root_target_to_source)) =
+        build_tree_from_mapping_plan(&sql_tables, &plans)
+    {
+        (roots, root_target_to_source)
+    } else {
+        // Fallback for stale/incomplete mapping_*.yaml: traverse by SQL FK topology.
+        // This keeps export working (especially child tables) until mappings are regenerated.
+        eprintln!(
+            "warning: traversal metadata incomplete for '{}'; falling back to SQL-structure traversal",
+            coll_name
+        );
+
+        let fallback_roots = build_tree(&sql_tables, None, &HashMap::new());
+        let fallback_root_target_to_source = sql_tables
+            .iter()
+            .find(|table| table.foreign_keys.is_empty())
+            .and_then(|root_table| plans.get(&sanitize(&root_table.name)))
+            .map(|plan| plan.target_to_source.clone())
+            .unwrap_or_default();
+
+        (fallback_roots, fallback_root_target_to_source)
+    };
 
     // Query MongoDB using the original collection name.
     let db = client.database(db_name);
@@ -1924,6 +2021,69 @@ pub async fn export_collection(
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("Cannot create {}", out_dir.display()))?;
 
+    fn split_numeric_suffix(name: &str) -> Option<(&str, usize)> {
+        let (base, suffix) = name.rsplit_once('_')?;
+        let parsed = suffix.parse::<usize>().ok()?;
+        Some((base, parsed))
+    }
+
+    // Keep backward-compatible filenames when table names get suffixed by deduplication.
+    // Example: write both `company_2.csv.gz` and `company.csv.gz` when `company` table
+    // no longer exists in current DDL but `company_2` is the primary replacement.
+    let table_names = sql_tables
+        .iter()
+        .map(|table| table.name.clone())
+        .collect::<HashSet<_>>();
+    let mut alias_candidates: HashMap<String, Vec<(usize, String)>> = HashMap::new();
+    for table_name in &table_names {
+        if let Some((base, suffix)) = split_numeric_suffix(table_name) {
+            if !table_names.contains(base) {
+                alias_candidates
+                    .entry(base.to_owned())
+                    .or_default()
+                    .push((suffix, table_name.clone()));
+            }
+        }
+    }
+    let mut alias_for_table: HashMap<String, String> = HashMap::new();
+    for (base, mut candidates) in alias_candidates {
+        candidates.sort_by_key(|(suffix, _)| *suffix);
+        if let Some((_, table_name)) = candidates.into_iter().next() {
+            alias_for_table.insert(table_name, base);
+        }
+    }
+
+    let mut expected_files = sql_tables
+        .iter()
+        .flat_map(|table| {
+            [
+                format!("{}.csv", table.name),
+                format!("{}.csv.gz", table.name),
+            ]
+        })
+        .collect::<HashSet<_>>();
+    for alias in alias_for_table.values() {
+        expected_files.insert(format!("{alias}.csv"));
+        expected_files.insert(format!("{alias}.csv.gz"));
+    }
+
+    for entry in std::fs::read_dir(&out_dir)
+        .with_context(|| format!("Cannot read {}", out_dir.display()))?
+    {
+        let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let is_export_file = file_name.ends_with(".csv") || file_name.ends_with(".csv.gz");
+        if is_export_file && !expected_files.contains(file_name) {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("Cannot remove stale export file {}", path.display()))?;
+        }
+    }
+
     for sql_t in &sql_tables {
         // let columns: Vec<String> = sql_t
         //     .columns
@@ -1952,6 +2112,17 @@ pub async fn export_collection(
 
         gz.finish()
             .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
+
+        if let Some(alias) = alias_for_table.get(&sql_t.name) {
+            let alias_path = out_dir.join(format!("{alias}.csv.gz"));
+            std::fs::copy(&csv_path, &alias_path).with_context(|| {
+                format!(
+                    "Cannot create alias export file {} from {}",
+                    alias_path.display(),
+                    csv_path.display()
+                )
+            })?;
+        }
     }
 
     Ok(())
