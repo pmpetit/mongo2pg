@@ -141,6 +141,10 @@ struct InferArgs {
     #[arg(short = 'p', long = "percent", conflicts_with = "number", value_parser = clap::value_parser!(f64))]
     percent: Option<f64>,
 
+    /// Maximum server-side query time in milliseconds for infer sampling reads.
+    #[arg(long = "max-time-ms")]
+    max_time_ms: Option<u64>,
+
     /// Treat all MongoDB Object fields as JSONB columns in the generated DDL
     /// instead of creating 1:1 child tables (arrays of objects are unaffected)
     #[arg(long = "jsonb", action = clap::ArgAction::SetTrue)]
@@ -595,6 +599,7 @@ struct ConfigOverrides {
     namespace: Option<String>,
     number: Option<u64>,
     percent: Option<f64>,
+    max_time_ms: Option<u64>,
     jsonb: Option<bool>,
     target_database_name: Option<String>,
     target_schema_name: Option<String>,
@@ -633,6 +638,7 @@ fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> Resu
         || overrides.namespace.is_some()
         || overrides.number.is_some()
         || overrides.percent.is_some()
+        || overrides.max_time_ms.is_some()
         || overrides.jsonb.is_some()
         || overrides.target_database_name.is_some()
         || overrides.target_schema_name.is_some()
@@ -671,6 +677,9 @@ fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> Resu
         }
         if let Some(v) = overrides.percent {
             source.insert("percent".to_owned(), TomlValue::Float(v));
+        }
+        if let Some(v) = overrides.max_time_ms {
+            source.insert("max_time_ms".to_owned(), TomlValue::Integer(v as i64));
         }
         if let Some(v) = overrides.jsonb {
             source.insert("jsonb".to_owned(), TomlValue::Boolean(v));
@@ -965,6 +974,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 namespace: args.namespace.clone(),
                 number: args.number,
                 percent: args.percent,
+                max_time_ms: args.max_time_ms,
                 jsonb: args.jsonb.then_some(true),
                 target_database_name: args.database_name.clone(),
                 target_schema_name: args.schema_name.clone(),
@@ -983,6 +993,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         conf_namespace,
         conf_number,
         conf_percent,
+        conf_max_time_ms,
         conf_jsonb,
         conf_target_schema,
         conf_timestamp_fields,
@@ -1005,6 +1016,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             c.namespace,
             c.number,
             c.percent,
+            c.max_time_ms,
             c.jsonb,
             c.target_schema,
             c.timestamp_fields,
@@ -1019,6 +1031,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         (
             source_uri,
             args.output_dir.clone(),
+            None,
             None,
             None,
             None,
@@ -1040,6 +1053,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     // CLI takes priority over conf for number/percent/jsonb; then fall back to defaults
     let resolved_number = args.number.or(conf_number);
     let resolved_percent = args.percent.or(conf_percent);
+    let resolved_max_time_ms = args.max_time_ms.or(conf_max_time_ms);
     let resolved_jsonb = args.jsonb || conf_jsonb;
 
     let args = InferArgs {
@@ -1050,6 +1064,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         output_dir: effective_output_dir,
         number: resolved_number,
         percent: resolved_percent,
+        max_time_ms: resolved_max_time_ms,
         jsonb: resolved_jsonb,
         config: None,
         ..args
@@ -1926,9 +1941,28 @@ async fn infer_all_databases(
     Ok(())
 }
 
-/// Returns `true` when `$sample` failed with error 292 (sort exceeds memory limit).
-/// Maximum time we allow a single sampling query to run on the server.
-const SAMPLE_MAX_TIME: Duration = Duration::from_secs(120);
+/// Default maximum time we allow a single infer sampling query to run on the server.
+const DEFAULT_SAMPLE_MAX_TIME: Duration = Duration::from_secs(120);
+
+fn infer_query_max_time(max_time_ms: Option<u64>) -> Duration {
+    max_time_ms
+        .filter(|value| *value > 0)
+        .map(Duration::from_millis)
+        .unwrap_or(DEFAULT_SAMPLE_MAX_TIME)
+}
+
+fn timeout_fallback_hint(error_text: &str, max_time_ms: Option<u64>) -> String {
+    if error_text.contains("MaxTimeMSExpired") || error_text.contains("Error code 50") {
+        match max_time_ms {
+            Some(value) if value > 0 => {
+                format!("; timeout hit (source.max_time_ms={value}ms)")
+            }
+            _ => "; timeout hit".to_owned(),
+        }
+    } else {
+        String::new()
+    }
+}
 
 /// Infer the schema for a single collection, print stats to stderr, and optionally write output files.
 ///
@@ -1984,6 +2018,7 @@ async fn infer_collection(
     };
 
     let mut analyzer = Analyzer::new(true);
+    let sample_max_time = infer_query_max_time(args.max_time_ms);
 
     // Try $sample; on any error fall back to a sequential find().limit().
     // $sample internally sorts documents, which can fail on Atlas shared tiers
@@ -1998,7 +2033,7 @@ async fn infer_collection(
     let sample_result = collection
         .aggregate(pipeline)
         .allow_disk_use(true)
-        .max_time(SAMPLE_MAX_TIME)
+        .max_time(sample_max_time)
         .await;
 
     /// Run a `find().limit()` into `analyzer`, logging any error without propagating.
@@ -2006,13 +2041,14 @@ async fn infer_collection(
         collection: &mongodb::Collection<bson::Document>,
         analyzer: &mut Analyzer,
         sample_size: u64,
+        sample_max_time: Duration,
         db_name: &str,
         coll_name: &str,
     ) {
         match collection
             .find(doc! {})
             .limit(sample_size as i64)
-            .max_time(SAMPLE_MAX_TIME)
+            .max_time(sample_max_time)
             .await
         {
             Err(e) => {
@@ -2033,11 +2069,20 @@ async fn infer_collection(
 
     match sample_result {
         Err(e) => {
+            let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
             eprintln!(
                 "  [warn] $sample failed for {db_name}.{coll_name} \
-                 ({e}); falling back to sequential find().limit({sample_size})"
+                 ({e}){timeout_hint}; falling back to sequential find().limit({sample_size})"
             );
-            find_fallback(&collection, &mut analyzer, sample_size, db_name, coll_name).await;
+            find_fallback(
+                &collection,
+                &mut analyzer,
+                sample_size,
+                sample_max_time,
+                db_name,
+                coll_name,
+            )
+            .await;
         }
         Ok(mut cursor) => loop {
             match cursor.try_next().await {
@@ -2045,12 +2090,20 @@ async fn infer_collection(
                 Ok(None) => break,
                 Err(e) => {
                     analyzer = Analyzer::new(true);
+                    let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
                     eprintln!(
                         "  [warn] $sample cursor error for {db_name}.{coll_name} \
-                             ({e}); falling back to sequential find().limit({sample_size})"
+                             ({e}){timeout_hint}; falling back to sequential find().limit({sample_size})"
                     );
-                    find_fallback(&collection, &mut analyzer, sample_size, db_name, coll_name)
-                        .await;
+                    find_fallback(
+                        &collection,
+                        &mut analyzer,
+                        sample_size,
+                        sample_max_time,
+                        db_name,
+                        coll_name,
+                    )
+                    .await;
                     break;
                 }
             }
@@ -8270,9 +8323,10 @@ mod tests {
         apply_collection_property_filters, apply_config_overrides, build_collection_mappings,
         build_collection_mappings_with_timestamp_fields, child_row_objects_for_mapping,
         collect_infer_type_warnings, collect_nullable_scalar_warnings, count_dynamic_map_entries,
-        dynamic_map_value_fields, render_ddl_from_mapping_tables, resolve_collections_dir,
-        resolve_post_import_table_row, resolve_root_table_name, sanitize_name,
-        should_infer_collection, strip_psql_preamble, ConfigOverrides, PostImportTableRow,
+        dynamic_map_value_fields, infer_query_max_time, render_ddl_from_mapping_tables,
+        resolve_collections_dir, resolve_post_import_table_row, resolve_root_table_name,
+        sanitize_name, should_infer_collection, strip_psql_preamble, timeout_fallback_hint,
+        ConfigOverrides, PostImportTableRow, DEFAULT_SAMPLE_MAX_TIME,
     };
     use bson::doc;
     use mongo2pg::analyzer::Analyzer;
@@ -8280,7 +8334,7 @@ mod tests {
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::io::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use tempfile::NamedTempFile;
 
     #[derive(Debug, Deserialize)]
@@ -8302,6 +8356,7 @@ mod tests {
         namespace: Option<String>,
         number: Option<u64>,
         percent: Option<f64>,
+        max_time_ms: Option<u64>,
         jsonb: Option<bool>,
         #[serde(default)]
         include: Vec<String>,
@@ -8348,6 +8403,7 @@ mod tests {
                 namespace: Some("new.ns".to_owned()),
                 number: Some(100),
                 percent: Some(20.0),
+                max_time_ms: Some(60_000),
                 jsonb: Some(true),
                 target_schema_name: Some("sample_training".to_owned()),
                 ..ConfigOverrides::default()
@@ -8368,6 +8424,7 @@ mod tests {
         assert_eq!(source.namespace.as_deref(), Some("new.ns"));
         assert_eq!(source.number, Some(100));
         assert_eq!(source.percent, Some(20.0));
+        assert_eq!(source.max_time_ms, Some(60_000));
         assert_eq!(source.jsonb, Some(true));
 
         let target = parsed.target.expect("target section should exist");
@@ -8404,6 +8461,23 @@ mod tests {
         assert_eq!(kafka.max_messages, Some(999));
         assert_eq!(kafka.offset.as_deref(), Some("earliest"));
         assert_eq!(kafka.auto_offset_reset.as_deref(), Some("earliest"));
+    }
+
+    #[test]
+    fn infer_query_max_time_uses_configured_ms_when_present() {
+        assert_eq!(infer_query_max_time(Some(60_000)), Duration::from_secs(60));
+        assert_eq!(infer_query_max_time(Some(0)), DEFAULT_SAMPLE_MAX_TIME);
+        assert_eq!(infer_query_max_time(None), DEFAULT_SAMPLE_MAX_TIME);
+    }
+
+    #[test]
+    fn timeout_fallback_hint_mentions_configured_max_time() {
+        let hinted = timeout_fallback_hint(
+            "Command failed: Error code 50 (MaxTimeMSExpired)",
+            Some(60_000),
+        );
+        assert!(hinted.contains("source.max_time_ms=60000ms"));
+        assert!(timeout_fallback_hint("some other error", Some(60_000)).is_empty());
     }
 
     #[test]
@@ -9968,6 +10042,7 @@ pg_mapping:
             namespace: None,
             number: Some(500),
             percent: None, // Set to None because it conflicts with `number`
+            max_time_ms: None,
             jsonb: false,
             print_json: false,
             no_output: false,

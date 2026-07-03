@@ -17,6 +17,7 @@ pub struct ConfData {
     pub namespace: Option<String>,
     pub number: Option<u64>,
     pub percent: Option<f64>,
+    pub max_time_ms: Option<u64>,
     pub jsonb: bool,
     pub timestamp_fields: Vec<String>,
     pub include: Vec<String>,
@@ -63,6 +64,7 @@ struct TomlSourceSection {
     namespace: Option<String>,
     number: Option<u64>,
     percent: Option<f64>,
+    max_time_ms: Option<u64>,
     jsonb: Option<bool>,
     #[serde(default = "default_timestamp_fields", alias = "timestamp_field")]
     datetime_field: Vec<String>,
@@ -136,6 +138,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             namespace: source.namespace,
             number: source.number,
             percent: source.percent,
+            max_time_ms: source.max_time_ms,
             jsonb: source.jsonb.unwrap_or(false),
             timestamp_fields: source.datetime_field,
             include: source.include,
@@ -167,6 +170,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
         let mut namespace: Option<String> = None;
         let mut number: Option<u64> = None;
         let mut percent: Option<f64> = None;
+        let mut max_time_ms: Option<u64> = None;
         let mut jsonb: bool = false;
 
         for line in content.lines() {
@@ -183,6 +187,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
                     "NAMESPACE" => namespace = Some(parsed),
                     "NUMBER" => number = parsed.parse().ok(),
                     "PERCENT" => percent = parsed.parse().ok(),
+                    "MAX_TIME_MS" => max_time_ms = parsed.parse().ok(),
                     "JSONB" => {
                         jsonb = matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes")
                     }
@@ -207,6 +212,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             namespace,
             number,
             percent,
+            max_time_ms,
             jsonb,
             timestamp_fields: default_timestamp_fields(),
             include: Vec::new(),
@@ -853,6 +859,37 @@ timestamp_field = ["updated_at"]
 
         let conf = read_conf(&config_path).expect("config should parse");
         assert_eq!(conf.timestamp_fields, vec!["updated_at"]);
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_max_time_ms() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+max_time_ms = 60000
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert_eq!(conf.max_time_ms, Some(60000));
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);
