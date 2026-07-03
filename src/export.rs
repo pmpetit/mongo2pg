@@ -716,6 +716,8 @@ struct ExportPgMappingYaml {
 struct ExportMappingColumnYaml {
     source_field: String,
     target_field: String,
+    #[serde(default)]
+    literal_value: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -723,6 +725,7 @@ struct ExportTablePlan {
     traversal: ExportTraversalPlan,
     mongo_path: Option<String>,
     target_to_source: HashMap<String, String>,
+    target_to_literal: HashMap<String, String>,
 }
 
 fn load_export_table_plans(
@@ -755,6 +758,17 @@ fn load_export_table_plans(
             continue;
         };
 
+        let target_to_literal = mapping
+            .pg_mapping
+            .columns
+            .iter()
+            .filter_map(|column| {
+                column
+                    .literal_value
+                    .as_ref()
+                    .map(|lit| (sanitize(&column.target_field), lit.clone()))
+            })
+            .collect::<HashMap<_, _>>();
         let target_to_source = mapping
             .pg_mapping
             .columns
@@ -771,11 +785,45 @@ fn load_export_table_plans(
                 traversal,
                 mongo_path: mapping.mongo_path,
                 target_to_source,
+                target_to_literal,
             },
         );
     }
 
     plans
+}
+
+pub fn resolve_grouped_sql_lookup_name(collections_dir: &Path, coll_name: &str) -> Option<String> {
+    let safe_name = coll_name.replace('/', "_");
+    let mappings_dir = collections_dir.join(&safe_name);
+    let entries = std::fs::read_dir(&mappings_dir).ok()?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !file_name.starts_with("mapping_") || !file_name.ends_with(".yaml") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(mapping) = serde_yaml::from_str::<ExportMappingYaml>(&content) else {
+            continue;
+        };
+
+        let is_root = mapping.mongo_path.as_deref() == Some(".")
+            || mapping
+                .traversal
+                .as_ref()
+                .is_some_and(|plan| matches!(plan.mode, ExportTraversalMode::Root));
+        if is_root {
+            return Some(sanitize(&mapping.pg_mapping.table_name));
+        }
+    }
+
+    None
 }
 
 fn build_node_from_plan(
@@ -1308,7 +1356,7 @@ fn extract_rows(
     all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
     counters: &mut HashMap<String, u64>,
 ) {
-    let root_target_to_source = HashMap::new();
+    let empty = HashMap::new();
     extract_rows_with_mapping(
         val,
         node,
@@ -1316,7 +1364,8 @@ fn extract_rows(
         is_root,
         all_rows,
         counters,
-        &root_target_to_source,
+        &empty,
+        &empty,
     );
 }
 
@@ -1328,6 +1377,7 @@ fn extract_rows_with_mapping(
     all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
     counters: &mut HashMap<String, u64>,
     root_target_to_source: &HashMap<String, String>,
+    root_target_to_literal: &HashMap<String, String>,
 ) {
     let doc = match val {
         Bson::Document(d) => d,
@@ -1707,6 +1757,11 @@ fn extract_rows_with_mapping(
             } else if Some(col) == node.fk_col.as_ref() {
                 Some(parent_id.unwrap_or("").to_owned())
             } else {
+                if is_root {
+                    if let Some(lit) = root_target_to_literal.get(col.as_str()) {
+                        return Some(lit.clone());
+                    }
+                }
                 let lookup = if is_root {
                     find_root_mongo_field_mapped(doc, col, root_target_to_source)
                 } else {
@@ -1932,16 +1987,22 @@ fn extract_rows_with_mapping(
 /// One `.csv.gz` file is written per SQL table (root + all child tables) into
 /// `<data_dir>/<db_name>/<sanitize(coll_name)>/`.  The SQL schema is read from
 /// `<tables_dir>/<sanitize(coll_name)>.sql`.
-pub async fn export_collection(
+pub async fn export_collections_to_sql(
     client: &Client,
     db_name: &str,
-    coll_name: &str,
+    coll_names: &[String],
+    sql_lookup_name: &str,
     tables_dir: &Path,
     collections_dir: &Path,
     data_dir: &Path,
 ) -> Result<()> {
-    // Only the SQL filename is sanitized; the MongoDB collection name must stay raw.
-    let sql_lookup_name = sanitize(coll_name);
+    const PROGRESS_LOG_EVERY_DOCS: u64 = 10_000;
+
+    if coll_names.is_empty() {
+        return Ok(());
+    }
+
+    let sql_lookup_name = sanitize(sql_lookup_name);
     let sql_path = tables_dir.join(format!("{sql_lookup_name}.sql"));
     if !sql_path.exists() {
         return Err(anyhow::anyhow!(
@@ -1961,58 +2022,91 @@ pub async fn export_collection(
         ));
     }
 
-    let safe_name = coll_name.replace('/', "_");
-    let plans = load_export_table_plans(collections_dir, &safe_name);
-
-    let (roots, root_target_to_source) = if let Some((roots, root_target_to_source)) =
-        build_tree_from_mapping_plan(&sql_tables, &plans)
-    {
-        (roots, root_target_to_source)
-    } else {
-        // Fallback for stale/incomplete mapping_*.yaml: traverse by SQL FK topology.
-        // This keeps export working (especially child tables) until mappings are regenerated.
-        eprintln!(
-            "warning: traversal metadata incomplete for '{}'; falling back to SQL-structure traversal",
-            coll_name
-        );
-
-        let fallback_roots = build_tree(&sql_tables, None, &HashMap::new());
-        let fallback_root_target_to_source = sql_tables
-            .iter()
-            .find(|table| table.foreign_keys.is_empty())
-            .and_then(|root_table| plans.get(&sanitize(&root_table.name)))
-            .map(|plan| plan.target_to_source.clone())
-            .unwrap_or_default();
-
-        (fallback_roots, fallback_root_target_to_source)
-    };
-
-    // Query MongoDB using the original collection name.
-    let db = client.database(db_name);
-    let collection = db.collection::<bson::Document>(coll_name);
-    let mut cursor = collection
-        .find(bson::doc! {})
-        .await
-        .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
+    let mut coll_names = coll_names.to_vec();
+    coll_names.sort();
 
     let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
-    while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
-        let bson_val = Bson::Document(doc);
-        for root in &roots {
-            extract_rows_with_mapping(
-                &bson_val,
-                root,
-                None,
-                true,
-                &mut all_rows,
-                &mut counters,
-                &root_target_to_source,
+
+    let total_sources = coll_names.len();
+    for (source_index, coll_name) in coll_names.iter().enumerate() {
+        eprintln!(
+            "      -> export source [{}/{}]: {}.{} -> {}.sql",
+            source_index + 1,
+            total_sources,
+            db_name,
+            coll_name,
+            sql_lookup_name
+        );
+
+        let safe_name = coll_name.replace('/', "_");
+        let plans = load_export_table_plans(collections_dir, &safe_name);
+
+        let (roots, root_target_to_source) = if let Some((roots, root_target_to_source)) =
+            build_tree_from_mapping_plan(&sql_tables, &plans)
+        {
+            (roots, root_target_to_source)
+        } else {
+            eprintln!(
+                "warning: traversal metadata incomplete for '{}'; falling back to SQL-structure traversal",
+                coll_name
             );
+
+            let fallback_roots = build_tree(&sql_tables, None, &HashMap::new());
+            let fallback_root_target_to_source = sql_tables
+                .iter()
+                .find(|table| table.foreign_keys.is_empty())
+                .and_then(|root_table| plans.get(&sanitize(&root_table.name)))
+                .map(|plan| plan.target_to_source.clone())
+                .unwrap_or_default();
+
+            (fallback_roots, fallback_root_target_to_source)
+        };
+
+        let root_target_to_literal = roots
+            .first()
+            .and_then(|root_node| plans.get(&sanitize(&root_node.sql_name)))
+            .map(|plan| plan.target_to_literal.clone())
+            .unwrap_or_default();
+
+        let db = client.database(db_name);
+        let collection = db.collection::<bson::Document>(coll_name);
+        let mut cursor = collection
+            .find(bson::doc! {})
+            .await
+            .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
+        let mut source_docs_exported = 0_u64;
+
+        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
+            source_docs_exported += 1;
+            if source_docs_exported % PROGRESS_LOG_EVERY_DOCS == 0 {
+                eprintln!(
+                    "         progress {}.{}: {} docs exported",
+                    db_name, coll_name, source_docs_exported
+                );
+            }
+
+            let bson_val = Bson::Document(doc);
+            for root in &roots {
+                extract_rows_with_mapping(
+                    &bson_val,
+                    root,
+                    None,
+                    true,
+                    &mut all_rows,
+                    &mut counters,
+                    &root_target_to_source,
+                    &root_target_to_literal,
+                );
+            }
         }
+
+        eprintln!(
+            "      -> completed {}.{}: {} docs exported",
+            db_name, coll_name, source_docs_exported
+        );
     }
 
-    // Keep the database name raw, but sanitize the collection folder for filesystem safety.
     let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("Cannot create {}", out_dir.display()))?;
@@ -2023,9 +2117,6 @@ pub async fn export_collection(
         Some((base, parsed))
     }
 
-    // Keep backward-compatible filenames when table names get suffixed by deduplication.
-    // Example: write both `company_2.csv.gz` and `company.csv.gz` when `company` table
-    // no longer exists in current DDL but `company_2` is the primary replacement.
     let table_names = sql_tables
         .iter()
         .map(|table| table.name.clone())
@@ -2051,12 +2142,7 @@ pub async fn export_collection(
 
     let mut expected_files = sql_tables
         .iter()
-        .flat_map(|table| {
-            [
-                format!("{}.csv", table.name),
-                format!("{}.csv.gz", table.name),
-            ]
-        })
+        .flat_map(|table| [format!("{}.csv", table.name), format!("{}.csv.gz", table.name)])
         .collect::<HashSet<_>>();
     for alias in alias_for_table.values() {
         expected_files.insert(format!("{alias}.csv"));
@@ -2081,11 +2167,6 @@ pub async fn export_collection(
     }
 
     for sql_t in &sql_tables {
-        // let columns: Vec<String> = sql_t
-        //     .columns
-        //     .iter()
-        //     .map(|c| unquote_sql_ident(&c.name))
-        //     .collect();
         let rows = all_rows.get(&sql_t.name).cloned().unwrap_or_default();
 
         let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
@@ -2093,13 +2174,10 @@ pub async fn export_collection(
             .with_context(|| format!("Cannot create {}", csv_path.display()))?;
         let mut gz = GzEncoder::new(file, Compression::default());
 
-        // Header row
-        //let header: Vec<String> = columns.iter().map(|c| csv_escape(c)).collect();
         let header: Vec<String> = sql_t.columns.iter().map(|c| if c.name.starts_with('"') && c.name.ends_with('"') { format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\"")) } else { csv_escape(&unquote_sql_ident(&c.name)) }).collect();
         writeln!(gz, "{}", header.join(","))
             .with_context(|| format!("Write error for {}", csv_path.display()))?;
 
-        // Data rows
         for row in &rows {
             let line: Vec<String> = row.iter().map(|v| csv_cell_text(v.as_deref())).collect();
             writeln!(gz, "{}", line.join(","))
@@ -2122,6 +2200,27 @@ pub async fn export_collection(
     }
 
     Ok(())
+}
+
+pub async fn export_collection(
+    client: &Client,
+    db_name: &str,
+    coll_name: &str,
+    tables_dir: &Path,
+    collections_dir: &Path,
+    data_dir: &Path,
+) -> Result<()> {
+    let sql_lookup_name = sanitize(coll_name);
+    export_collections_to_sql(
+        client,
+        db_name,
+        &[coll_name.to_owned()],
+        &sql_lookup_name,
+        tables_dir,
+        collections_dir,
+        data_dir,
+    )
+    .await
 }
 
 #[cfg(test)]
