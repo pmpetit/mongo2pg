@@ -1252,11 +1252,6 @@ fn extract_child_document_rows(
 }
 
 fn map_document_entries<'a>(node: &TableNode, doc: &'a bson::Document) -> Vec<(&'a str, &'a bson::Document)> {
-    let has_key_column = node.columns.iter().any(|col| col == "key");
-    if !has_key_column {
-        return Vec::new();
-    }
-
     let non_structural_cols: Vec<&String> = node
         .columns
         .iter()
@@ -1268,6 +1263,7 @@ fn map_document_entries<'a>(node: &TableNode, doc: &'a bson::Document) -> Vec<(&
         .collect();
 
     // Regular embedded object tables already expose value fields at current level.
+    // Dynamic map objects do not, and keep one nested document per map key.
     if non_structural_cols
         .iter()
         .any(|col| find_mongo_field(doc, col.as_str()).is_some())
@@ -2627,6 +2623,65 @@ CREATE TABLE tier_and_details (
         assert_eq!(detail_rows[0][3].is_some(), true);
         assert_eq!(detail_rows[0][4].is_some(), true);
         assert_eq!(detail_rows[0][5].is_some(), true);
+    }
+
+    #[test]
+    fn export_map_like_object_without_key_column_emits_rows_per_entry() {
+        let sql = r#"
+CREATE TABLE customers (
+    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+CREATE TABLE tier_and_details (
+    id BIGSERIAL PRIMARY KEY,
+    customers_id UUID NOT NULL,
+    active BOOLEAN NOT NULL,
+    benefits TEXT[] NOT NULL,
+    tier VARCHAR(20) NOT NULL,
+    FOREIGN KEY (customers_id) REFERENCES customers (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+            "name": "Alice",
+            "tier_and_details": {
+                "0134c72f17e3419cbdc857171cbb5651": {
+                    "active": true,
+                    "benefits": ["cashback", "support"],
+                    "tier": "gold"
+                },
+                "01c680e72a154c3abb7e3c71a8848553": {
+                    "active": false,
+                    "benefits": ["support"],
+                    "tier": "silver"
+                }
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let detail_rows = all_rows
+            .get("tier_and_details")
+            .expect("tier_and_details rows missing");
+        assert_eq!(detail_rows.len(), 2);
+
+        assert!(detail_rows.iter().any(|row| row[2].as_deref() == Some("true")
+            && row[4].as_deref() == Some("gold")));
+        assert!(detail_rows.iter().any(|row| row[2].as_deref() == Some("false")
+            && row[4].as_deref() == Some("silver")));
     }
 
     #[test]

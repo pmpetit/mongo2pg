@@ -44,7 +44,7 @@ md5 = "0.7"
 
 [dev-dependencies]
 indoc = "2.0.7"
-postgresql = "0.1.1"
+postgres = "0.19.14"
 rstest = "0.26.1"
 tempfile = "3.27.0"
 testcontainers = "0.27.1"
