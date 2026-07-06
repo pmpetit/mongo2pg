@@ -138,6 +138,15 @@ pub struct CollectionStatsYaml {
     pub migrability_score: f64,
     #[serde(default)]
     pub infer_warnings: Vec<InferWarningYaml>,
+    #[serde(default)]
+    pub read_ops: Option<CollectionReadOpsYaml>,
+  }
+
+  #[derive(Debug, Deserialize)]
+  pub struct CollectionReadOpsYaml {
+    pub read_ops: u64,
+    #[serde(default)]
+    pub since: Option<String>,
 }
 
 pub struct CollectionRow {
@@ -220,6 +229,32 @@ fn escape_html(value: &str) -> String {
         .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+fn render_documents_cell(stats: &CollectionStatsYaml) -> String {
+  let doc_count = match &stats.documents_in_collection {
+    serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
+    _ => "startup".to_owned(),
+  };
+
+  let read_ops_hint = stats
+    .read_ops
+    .as_ref()
+    .map(|read_ops| {
+      let since = read_ops.since.as_deref().unwrap_or("startup");
+      format!(
+        r#"<div class="docs-extra" title="MongoDB collection read operations from $collStats latencyStats.reads">reads: {} since {}</div>"#,
+        read_ops.read_ops,
+        escape_html(since),
+      )
+    })
+    .unwrap_or_default();
+
+  format!(
+    r#"<td class="num">{}{}</td>"#,
+    doc_count,
+    read_ops_hint,
+  )
 }
 
 /// Read every `<base>/<collection>/<collection>.stats.yaml` and return sorted rows.
@@ -351,10 +386,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     let table_rows: String = rows
         .iter()
         .map(|r| {
-            let doc_count = match &r.stats.documents_in_collection {
-                serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
-                _ => "unknown".to_owned(),
-            };
+            let docs_cell = render_documents_cell(&r.stats);
 
             let score_color = if r.stats.migrability_score < 3.0 {
                 "#27ae60"
@@ -445,7 +477,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
             format!(
                 r#"<tr class="collection-row">
           {name_cell}
-          <td class="num">{doc_count}</td>
+          {docs_cell}
           <td class="num">{sampled}</td>
           <td class="num">{width_top}</td>
           <td class="num">{width_max:.1} <span class="level">(L{width_max_level})</span></td>
@@ -456,7 +488,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
         </tr>
         {detail_row}"#,
                 name_cell = name_cell,
-                doc_count = doc_count,
+                docs_cell = docs_cell,
                 sampled = r.stats.documents_sampled,
                 width_top = r.stats.width_top_level,
                 width_max = r.stats.width_max,
@@ -639,6 +671,13 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
     .score-explainer {{ margin-top: 1rem; margin-bottom: 2rem; font-size: 0.82rem; color: #7f8c8d; }}
     .score-explainer code {{ background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }}
+    .docs-extra {{
+      font-size: 0.72rem;
+      color: #7f8c8d;
+      font-weight: 500;
+      margin-top: 0.15rem;
+      white-space: nowrap;
+    }}
   </style>
 </head>
 <body>
@@ -1611,6 +1650,7 @@ mod tests {
                             },
                         ],
                     }],
+                      read_ops: None,
                 },
                 table_names: Vec::new(),
             }],
@@ -1659,6 +1699,7 @@ mod tests {
                             examples: vec!["1609954220".to_owned()],
                         }],
                     }],
+                      read_ops: None,
                 },
                 table_names: Vec::new(),
             }],
@@ -1704,6 +1745,7 @@ mod tests {
                             examples: vec!["\"2026-05-22 18:50:52.681 +00:00:00\"".to_owned()],
                         }],
                     }],
+                      read_ops: None,
                 },
                 table_names: Vec::new(),
             }],
@@ -1716,6 +1758,42 @@ mod tests {
         assert!(html.contains("date"));
         assert!(html.contains("Date"));
     }
+
+      #[test]
+      fn render_html_shows_collection_read_ops_hint() {
+        let html = render_html(
+          &[CollectionRow {
+            name: "customers".to_owned(),
+            stats: CollectionStatsYaml {
+              documents_in_collection: serde_yaml::Value::Number(500_u64.into()),
+              documents_sampled: 500,
+              width_top_level: 8,
+              width_max: 8.0,
+              width_max_level: 1,
+              depth_max: 2,
+              branch_total: 9.4,
+              branch_per_level: indexmap::IndexMap::from([
+                ("L1".to_owned(), 8.0),
+                ("L2".to_owned(), 1.4),
+              ]),
+              array_field_count: 1,
+              avg_fields_per_doc: 6.8,
+              migrability_score: 2.3,
+              infer_warnings: Vec::new(),
+              read_ops: Some(super::CollectionReadOpsYaml {
+                read_ops: 1234,
+                since: Some("2026-07-03 10:00:00 UTC".to_owned()),
+              }),
+            },
+            table_names: Vec::new(),
+          }],
+          "sample_analytics",
+          "cluster0",
+          "Read Ops",
+        );
+
+        assert!(html.contains("reads: 1234 since 2026-07-03 10:00:00 UTC"));
+      }
 
     #[test]
     fn render_post_import_html_shows_clickable_md5_details() {
@@ -1928,10 +2006,7 @@ pub fn render_multi_db_html(
             let collection_rows: String = rows
                 .iter()
                 .map(|r| {
-                    let doc_count = match &r.stats.documents_in_collection {
-                        serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
-                        _ => "unknown".to_owned(),
-                    };
+                    let docs_cell = render_documents_cell(&r.stats);
                     let score_color = if r.stats.migrability_score < 3.0 {
                         "#27ae60"
                     } else if r.stats.migrability_score < 8.0 {
@@ -2016,7 +2091,7 @@ pub fn render_multi_db_html(
                     format!(
                         r#"<tr class="collection-row">
           {name_cell}
-          <td class="num">{doc_count}</td>
+          {docs_cell}
           <td class="num">{sampled}</td>
           <td class="num">{width_top}</td>
           <td class="num">{width_max:.1} <span class="level">(L{width_max_level})</span></td>
@@ -2026,7 +2101,7 @@ pub fn render_multi_db_html(
           {tables_cell}
         </tr>
         {detail_row}"#,
-                        doc_count = doc_count,
+                        docs_cell = docs_cell,
                         sampled = r.stats.documents_sampled,
                         width_top = r.stats.width_top_level,
                         width_max = r.stats.width_max,
@@ -2278,6 +2353,13 @@ pub fn render_multi_db_html(
     footer {{ margin-top: 2rem; font-size: 0.75rem; color: #aaa; }}
     .score-explainer {{ margin-top: -1rem; margin-bottom: 1.5rem; font-size: 0.82rem; color: #7f8c8d; }}
     .score-explainer code {{ background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }}
+    .docs-extra {{
+      font-size: 0.72rem;
+      color: #7f8c8d;
+      font-weight: 500;
+      margin-top: 0.15rem;
+      white-space: nowrap;
+    }}
   </style>
 </head>
 <body>

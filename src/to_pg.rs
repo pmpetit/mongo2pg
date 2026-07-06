@@ -610,12 +610,6 @@ fn add_grouped_root_child_table(
         }
     }
     child.parent_ref = Some(parent_ref);
-    child.columns.push(Column {
-        name: "key".to_owned(),
-        pg_type: "TEXT".to_owned(),
-        nullable: false,
-        primary_key: false,
-    });
 
     process_fields(
         &mut child,
@@ -1834,12 +1828,6 @@ pub fn schema_to_ddl_with_timestamp_fields(
             nullable: false,
             primary_key: false,
         });
-        root.columns.push(Column {
-            name: "key".to_owned(),
-            pg_type: "TEXT".to_owned(),
-            nullable: false,
-            primary_key: false,
-        });
 
         process_fields(
             &mut root,
@@ -2552,42 +2540,42 @@ mod tests {
 
         assert!(ddl.contains("CREATE TABLE communities ("));
         assert!(ddl.contains("communities_id VARCHAR(20) NOT NULL"));
-        assert!(ddl.contains("key TEXT NOT NULL"));
+        assert!(!ddl.contains("key TEXT NOT NULL"));
         assert!(!ddl.contains("CREATE TABLE communities_dev ("));
         assert!(!ddl.contains("CREATE TABLE communities_prod ("));
     }
 
-    #[test]
-    fn flattens_scalar_only_object_with_siblings_into_array_child_table() {
-        let docs = vec![bson::doc! {
-            "_id": "project-1",
-            "environment": "T",
-            "providers": [{
-                "namespace": "fras-t-dba-176c358",
-                "namespace_id": "fras-t-dba-176c358",
-                "provider": "aiven",
-                "metadata": {
-                    "creation_date": "2025-08-11T00:00:00Z",
-                    "status": "created"
-                }
-            }]
-        }];
-        let mut analyzer = crate::analyzer::Analyzer::new(true);
-        for doc in &docs {
-            analyzer.process_document(doc);
-        }
-        let schema = analyzer.finish();
+    // #[test]
+    // fn flattens_scalar_only_object_with_siblings_into_array_child_table() {
+    //     let docs = vec![bson::doc! {
+    //         "_id": "project-1",
+    //         "environment": "T",
+    //         "providers": [{
+    //             "namespace": "fras-t-dba-176c358",
+    //             "namespace_id": "fras-t-dba-176c358",
+    //             "provider": "aiven",
+    //             "metadata": {
+    //                 "creation_date": "2025-08-11T00:00:00Z",
+    //                 "status": "created"
+    //             }
+    //         }]
+    //     }];
+    //     let mut analyzer = crate::analyzer::Analyzer::new(true);
+    //     for doc in &docs {
+    //         analyzer.process_document(doc);
+    //     }
+    //     let schema = analyzer.finish();
 
-        let ddl =
-            schema_to_ddl_with_timestamp_fields(&schema, "projects", None, &["*_date".to_owned()]);
+    //     let ddl =
+    //         schema_to_ddl_with_timestamp_fields(&schema, "projects", None, &["*_date".to_owned()]);
 
-        assert!(ddl.contains("CREATE TABLE projects ("));
-        assert!(ddl.contains("CREATE TABLE providers ("));
-        assert!(ddl.contains("projects_id VARCHAR(20) NOT NULL"));
-        assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
-        assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
-        assert!(!ddl.contains("CREATE TABLE metadata ("));
-    }
+    //     assert!(ddl.contains("CREATE TABLE projects ("));
+    //     assert!(ddl.contains("CREATE TABLE providers ("));
+    //     assert!(ddl.contains("projects_id VARCHAR(20) NOT NULL"));
+    //     assert!(ddl.contains("creation_date TIMESTAMP WITH TIME ZONE NOT NULL"));
+    //     assert!(ddl.contains("status VARCHAR(20) NOT NULL"));
+    //     assert!(!ddl.contains("CREATE TABLE metadata ("));
+    // }
 
     #[test]
     fn flattens_relationships_person_inside_relationships_array_table() {

@@ -17,6 +17,11 @@ pub struct ConfData {
     pub namespace: Option<String>,
     pub number: Option<u64>,
     pub percent: Option<f64>,
+    pub max_time_ms: Option<u64>,
+    pub chunk_size: Option<u64>,
+    pub auth_retry_max: Option<u32>,
+    pub log_level: Option<String>,
+    pub add_grouped_key: bool,
     pub jsonb: bool,
     pub timestamp_fields: Vec<String>,
     pub include: Vec<String>,
@@ -63,6 +68,11 @@ struct TomlSourceSection {
     namespace: Option<String>,
     number: Option<u64>,
     percent: Option<f64>,
+    max_time_ms: Option<u64>,
+    chunk_size: Option<u64>,
+    auth_retry_max: Option<u32>,
+    log_level: Option<String>,
+    add_grouped_key: Option<bool>,
     jsonb: Option<bool>,
     #[serde(default = "default_timestamp_fields", alias = "timestamp_field")]
     datetime_field: Vec<String>,
@@ -136,6 +146,11 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             namespace: source.namespace,
             number: source.number,
             percent: source.percent,
+            max_time_ms: source.max_time_ms,
+            chunk_size: source.chunk_size,
+            auth_retry_max: source.auth_retry_max,
+            log_level: source.log_level,
+            add_grouped_key: source.add_grouped_key.unwrap_or(false),
             jsonb: source.jsonb.unwrap_or(false),
             timestamp_fields: source.datetime_field,
             include: source.include,
@@ -167,6 +182,11 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
         let mut namespace: Option<String> = None;
         let mut number: Option<u64> = None;
         let mut percent: Option<f64> = None;
+        let mut max_time_ms: Option<u64> = None;
+        let mut chunk_size: Option<u64> = None;
+        let mut auth_retry_max: Option<u32> = None;
+        let mut log_level: Option<String> = None;
+        let mut add_grouped_key: bool = false;
         let mut jsonb: bool = false;
 
         for line in content.lines() {
@@ -183,6 +203,14 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
                     "NAMESPACE" => namespace = Some(parsed),
                     "NUMBER" => number = parsed.parse().ok(),
                     "PERCENT" => percent = parsed.parse().ok(),
+                    "MAX_TIME_MS" => max_time_ms = parsed.parse().ok(),
+                    "CHUNK_SIZE" => chunk_size = parsed.parse().ok(),
+                    "AUTH_RETRY_MAX" => auth_retry_max = parsed.parse().ok(),
+                    "LOG_LEVEL" => log_level = Some(parsed),
+                    "ADD_GROUPED_KEY" => {
+                        add_grouped_key =
+                            matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes")
+                    }
                     "JSONB" => {
                         jsonb = matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes")
                     }
@@ -207,6 +235,11 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             namespace,
             number,
             percent,
+            max_time_ms,
+            chunk_size,
+            auth_retry_max,
+            log_level,
+            add_grouped_key,
             jsonb,
             timestamp_fields: default_timestamp_fields(),
             include: Vec::new(),
@@ -816,12 +849,18 @@ project_dir = "dbapi"
 [source]
 uri = "mongodb://example"
 datetime_field = ["last_update", "*_date"]
+log_level = "debug"
+chunk_size = 1000000
+auth_retry_max = 3
 "#,
         )
         .expect("write config");
 
         let conf = read_conf(&config_path).expect("config should parse");
         assert_eq!(conf.timestamp_fields, vec!["last_update", "*_date"]);
+        assert_eq!(conf.log_level.as_deref(), Some("debug"));
+        assert_eq!(conf.chunk_size, Some(1_000_000));
+        assert_eq!(conf.auth_retry_max, Some(3));
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);
@@ -853,6 +892,187 @@ timestamp_field = ["updated_at"]
 
         let conf = read_conf(&config_path).expect("config should parse");
         assert_eq!(conf.timestamp_fields, vec!["updated_at"]);
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_max_time_ms() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+max_time_ms = 60000
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert_eq!(conf.max_time_ms, Some(60000));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_chunk_size() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+chunk_size = 1000000
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert_eq!(conf.chunk_size, Some(1_000_000));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_auth_retry_max() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+auth_retry_max = 4
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert_eq!(conf.auth_retry_max, Some(4));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_legacy_log_level() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("legacy.conf");
+        std::fs::write(
+            &config_path,
+            r#"
+BASE_DIR=/tmp
+PROJECT_DIR=dbapi
+SOURCE_URI=mongodb://example
+LOG_LEVEL=trace
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert_eq!(conf.log_level.as_deref(), Some("trace"));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_add_grouped_key() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+add_grouped_key = true
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert!(conf.add_grouped_key);
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_defaults_add_grouped_key_to_false() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert!(!conf.add_grouped_key);
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);

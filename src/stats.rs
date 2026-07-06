@@ -346,6 +346,15 @@ pub struct StatsYaml {
     pub migrability_score: f64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub infer_warnings: Vec<InferWarningYaml>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_ops: Option<CollectionReadOpsYaml>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CollectionReadOpsYaml {
+    pub read_ops: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<String>,
 }
 
 /// Build a [`StatsYaml`] from a schema.
@@ -353,6 +362,7 @@ pub fn stats_to_yaml(
     schema: &CollectionSchema,
     total_docs: Option<u64>,
     infer_warnings: &[InferWarningYaml],
+    read_ops: Option<CollectionReadOpsYaml>,
 ) -> StatsYaml {
     let s = SchemaStats::compute(schema);
 
@@ -410,6 +420,7 @@ pub fn stats_to_yaml(
         max_poly_level: s.max_poly_level,
         migrability_score: score,
         infer_warnings: infer_warnings.to_vec(),
+        read_ops,
     }
 }
 
@@ -498,7 +509,7 @@ mod tests {
         let schema = two_field_schema();
         // width=2, avg_fields_per_doc = 1.0 + 0.5 = 1.5
         // distinct_over_avg = 2 / 1.5 ≈ 1.3333
-        let yaml = stats_to_yaml(&schema, Some(2), &[]);
+        let yaml = stats_to_yaml(&schema, Some(2), &[], None);
         let expected = (2.0_f64 / 1.5 * 10000.0).round() / 10000.0;
         assert!(
             (yaml.distinct_fields_over_avg_fields_per_doc - expected).abs() < 1e-9,
@@ -515,7 +526,7 @@ mod tests {
             sampled: 0,
             object: IndexMap::new(),
         };
-        let yaml = stats_to_yaml(&empty, None, &[]);
+        let yaml = stats_to_yaml(&empty, None, &[], None);
         assert_eq!(
             yaml.distinct_fields_over_avg_fields_per_doc, 0.0,
             "should be 0 when avg_fields_per_doc is 0"
@@ -543,7 +554,7 @@ mod tests {
             }],
         }];
 
-        let yaml = stats_to_yaml(&schema, Some(2), &warnings);
+        let yaml = stats_to_yaml(&schema, Some(2), &warnings, None);
 
         assert_eq!(yaml.infer_warnings, warnings);
     }

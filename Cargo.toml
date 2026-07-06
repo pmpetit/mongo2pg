@@ -39,12 +39,14 @@ reqwest = { version = "0.12", default-features = false, features = [
     "rustls-tls",
 ] }
 apache-avro = "0.17"
+env_logger = "0.11"
+log = "0.4"
 
 md5 = "0.7"
 
 [dev-dependencies]
 indoc = "2.0.7"
-postgresql = "0.1.1"
+postgres = "0.19.14"
 rstest = "0.26.1"
 tempfile = "3.27.0"
 testcontainers = "0.27.1"
