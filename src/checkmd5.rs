@@ -15,6 +15,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tokio_postgres::{Client, Row};
+use log::{info, error};
 
 #[derive(Debug, Clone, Deserialize)]
 struct MappingYaml {
@@ -23,7 +24,28 @@ struct MappingYaml {
     mongo_dbname: Option<String>,
     #[serde(default)]
     mongo_path: Option<String>,
+    #[serde(default)]
+    traversal: Option<TraversalYaml>,
     pg_mapping: PgMappingYaml,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TraversalModeYaml {
+    Root,
+    Object,
+    ArrayObject,
+    ArrayScalar,
+    MapObject,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TraversalYaml {
+    mode: TraversalModeYaml,
+    #[serde(default)]
+    parent_table: Option<String>,
+    #[serde(default)]
+    source_field: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -139,88 +161,122 @@ struct RowSnapshot {
 fn build_row_deltas(
     mongo_vals: Option<&[String]>,
     pg_vals: Option<&[String]>,
-    target_fields: &[String],
+    _target_fields: &[String], // Prepended with '_' since field names aren't needed anymore
 ) -> (Vec<String>, Vec<String>) {
-    let (mongo_values, pg_values) = match (mongo_vals, pg_vals) {
-        (None, Some(pv)) => {
-            return (
-                vec![format!("Row missing in MongoDB")],
-                vec![format!("Row exists only in PostgreSQL: {:?}", pv)],
-            );
-        }
-        (Some(mv), None) => {
-            return (
-                vec![format!("Row exists only in MongoDB: {:?}", mv)],
-                vec![format!("Row missing in PostgreSQL")],
-            );
-        }
-        (Some(mv), Some(pv)) => (mv, pv),
-        (None, None) => return (vec![], vec![]),
-    };
-
-    let mut mongo_deltas = Vec::new();
-    let mut pg_deltas = Vec::new();
-    let max_len = std::cmp::max(mongo_values.len(), pg_values.len());
-
-    for i in 0..max_len {
-        let m_raw = mongo_values.get(i).map(String::as_str).unwrap_or("");
-        let p_raw = pg_values.get(i).map(String::as_str).unwrap_or("");
-        let col = target_fields.get(i).map(String::as_str).unwrap_or("?");
-
-        let m_clean = m_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
-        let p_clean = p_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
-
-        if m_clean == p_clean {
-            continue;
-        }
-
-        let (m_preview, p_preview) = {
-            let mc: Vec<char> = m_clean.chars().collect();
-            let pc: Vec<char> = p_clean.chars().collect();
-            let mut start = 0;
-            while start < mc.len() && start < pc.len() && mc[start] == pc[start] {
-                start += 1;
+    match (mongo_vals, pg_vals) {
+        // Case 1: Row completely missing in MongoDB
+        (None, Some(pv)) => (
+            vec![format!("Row missing in MongoDB")],
+            vec![format!("Row exists only in PostgreSQL: {:?}", pv)],
+        ),
+        // Case 2: Row completely missing in PostgreSQL
+        (Some(mv), None) => (
+            vec![format!("Row exists only in MongoDB: {:?}", mv)],
+            vec![format!("Row missing in PostgreSQL")],
+        ),
+        // Case 3: Both exist, check if the data arrays differ
+        (Some(mv), Some(pv)) => {
+            if mv == pv {
+                // Perfect match, no deltas to return
+                (vec![], vec![])
+            } else {
+                // They are different, just return the complete document/row representations
+                (
+                    vec![format!("MongoDB Document: {:?}", mv)],
+                    vec![format!("PostgreSQL Row: {:?}", pv)],
+                )
             }
-            let mut em = mc.len();
-            let mut ep = pc.len();
-            while em > start && ep > start && mc[em - 1] == pc[ep - 1] {
-                em -= 1;
-                ep -= 1;
-            }
-            let md: String = mc[start..em].iter().collect();
-            let pd: String = pc[start..ep].iter().collect();
-            let m_hi = format!(
-                "{}{}{}",
-                mc[0..start].iter().collect::<String>(),
-                if md.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", md) },
-                mc[em..].iter().collect::<String>()
-            );
-            let p_hi = format!(
-                "{}{}{}",
-                pc[0..start].iter().collect::<String>(),
-                if pd.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", pd) },
-                pc[ep..].iter().collect::<String>()
-            );
-            (m_hi, p_hi)
-        };
-
-        mongo_deltas.push(format!(
-            "Col '{}'\n     Original: {}\n     Diff:     {}",
-            col, m_raw, m_preview
-        ));
-        pg_deltas.push(format!(
-            "Col '{}'\n     Original: {}\n     Diff:     {}",
-            col, p_raw, p_preview
-        ));
+        }
+        // Case 4: Neither exists
+        (None, None) => (vec![], vec![]),
     }
-
-    if mongo_deltas.is_empty() {
-        mongo_deltas.push(format!("No column-level delta found"));
-        pg_deltas.push(format!("No column-level delta found"));
-    }
-
-    (mongo_deltas, pg_deltas)
 }
+
+// fn build_row_deltas(
+//     mongo_vals: Option<&[String]>,
+//     pg_vals: Option<&[String]>,
+//     target_fields: &[String],
+// ) -> (Vec<String>, Vec<String>) {
+//     let (mongo_values, pg_values) = match (mongo_vals, pg_vals) {
+//         (None, Some(pv)) => {
+//             return (
+//                 vec![format!("Row missing in MongoDB")],
+//                 vec![format!("Row exists only in PostgreSQL: {:?}", pv)],
+//             );
+//         }
+//         (Some(mv), None) => {
+//             return (
+//                 vec![format!("Row exists only in MongoDB: {:?}", mv)],
+//                 vec![format!("Row missing in PostgreSQL")],
+//             );
+//         }
+//         (Some(mv), Some(pv)) => (mv, pv),
+//         (None, None) => return (vec![], vec![]),
+//     };
+
+//     let mut mongo_deltas = Vec::new();
+//     let mut pg_deltas = Vec::new();
+//     let max_len = std::cmp::max(mongo_values.len(), pg_values.len());
+
+//     for i in 0..max_len {
+//         let m_raw = mongo_values.get(i).map(String::as_str).unwrap_or("");
+//         let p_raw = pg_values.get(i).map(String::as_str).unwrap_or("");
+//         let col = target_fields.get(i).map(String::as_str).unwrap_or("?");
+
+//         let m_clean = m_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
+//         let p_clean = p_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
+
+//         if m_clean == p_clean {
+//             continue;
+//         }
+
+//         let (m_preview, p_preview) = {
+//             let mc: Vec<char> = m_clean.chars().collect();
+//             let pc: Vec<char> = p_clean.chars().collect();
+//             let mut start = 0;
+//             while start < mc.len() && start < pc.len() && mc[start] == pc[start] {
+//                 start += 1;
+//             }
+//             let mut em = mc.len();
+//             let mut ep = pc.len();
+//             while em > start && ep > start && mc[em - 1] == pc[ep - 1] {
+//                 em -= 1;
+//                 ep -= 1;
+//             }
+//             let md: String = mc[start..em].iter().collect();
+//             let pd: String = pc[start..ep].iter().collect();
+//             let m_hi = format!(
+//                 "{}{}{}",
+//                 mc[0..start].iter().collect::<String>(),
+//                 if md.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", md) },
+//                 mc[em..].iter().collect::<String>()
+//             );
+//             let p_hi = format!(
+//                 "{}{}{}",
+//                 pc[0..start].iter().collect::<String>(),
+//                 if pd.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", pd) },
+//                 pc[ep..].iter().collect::<String>()
+//             );
+//             (m_hi, p_hi)
+//         };
+
+//         mongo_deltas.push(format!(
+//             "Col '{}'\n     Original: {}\n     Diff:     {}",
+//             col, m_raw, m_preview
+//         ));
+//         pg_deltas.push(format!(
+//             "Col '{}'\n     Original: {}\n     Diff:     {}",
+//             col, p_raw, p_preview
+//         ));
+//     }
+
+//     if mongo_deltas.is_empty() {
+//         mongo_deltas.push(format!("No column-level delta found"));
+//         pg_deltas.push(format!("No column-level delta found"));
+//     }
+
+//     (mongo_deltas, pg_deltas)
+// }
 
 /// Orchestrates the process using temporary tables to sort and calculate the aggregate checksums.
 async fn compute_collection_checksums_via_temp_tables(
@@ -279,7 +335,7 @@ async fn compute_collection_checksums_via_temp_tables(
         .await?;
 
     // --- STEP 2: Stream Mongo data, calculate MD5 row-by-row, and save to temp table ---
-    println!("🔄 [Collection: {}] Starting MongoDB streaming...", table_name);
+    info!("🔄 [Collection: {}] Starting MongoDB md5 docs compute...", table_name);
     let mut mongo_row_count: usize = 0;
     let mongo_log_every: usize = 10000;
     while let Some(doc) = mongo_cursor.try_next().await? {
@@ -297,7 +353,7 @@ async fn compute_collection_checksums_via_temp_tables(
                 .await?;
             mongo_row_count += 1;
             if mongo_row_count % mongo_log_every == 0 {
-                println!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
+                info!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
             }
             continue;
         }
@@ -318,17 +374,17 @@ async fn compute_collection_checksums_via_temp_tables(
                 .await?;
             mongo_row_count += 1;
             if mongo_row_count % mongo_log_every == 0 {
-                println!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
+                info!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
             }
         }
     }
-    println!(
-        "✅ [Collection: {}] MongoDB streaming complete. Docs: {}",
+    info!(
+        "✅ [Collection: {}] MongoDB md5 docs complete. Docs: {}",
         table_name, mongo_row_count
     );
 
     // --- STEP 3: Stream target Postgres data (unordered), calculate MD5, and save to temp table ---
-    println!("🔄 [Collection: {}] Starting PostgreSQL streaming...", table_name);
+    info!("🔄 [Collection: {}] Starting PostgreSQL md5 rows compute...", table_name);
     let pg_order_field = source_fields
         .iter()
         .zip(target_fields.iter())
@@ -370,7 +426,7 @@ async fn compute_collection_checksums_via_temp_tables(
         pg_hash_rows.push((record.md5, record_values, row_id));
         pg_row_count += 1;
         if pg_row_count % mongo_log_every == 0 {
-            println!("  ↳ 📥 Processed {} PostgreSQL rows from {}...", pg_row_count, table_name);
+            info!("  ↳ 📥 Processed {} PostgreSQL rows from {}...", pg_row_count, table_name);
         }
     }
 
@@ -378,9 +434,9 @@ async fn compute_collection_checksums_via_temp_tables(
     for (md5, values, _) in &pg_hash_rows {
         pg_client.execute(&insert_pg_stmt, &[md5, values]).await?;
     }
-    println!(
-        "✅ [Collection: {}] PostgreSQL streaming complete. Rows: {} duration {:?}",
-        table_name, pg_row_count, _pg_stream_started_at.elapsed()
+    info!(
+        "✅ [Collection: {}] PostgreSQL md5 rows completed. Rows: {}",
+        table_name, pg_row_count
     );
 
     // 3. Complete internal sorted aggregation calculations using string_agg entirely inside PG
@@ -1675,6 +1731,69 @@ fn discover_mapping_targets_for_collection(
         }
     }
 
+    fn source_path_from_traversal_chain(
+        table_name: &str,
+        mapping_by_table: &HashMap<String, MappingYaml>,
+        fallback_source_paths: &HashMap<String, SourcePath>,
+        visiting: &mut HashSet<String>,
+    ) -> Option<SourcePath> {
+        if !visiting.insert(table_name.to_owned()) {
+            return None;
+        }
+
+        let derived = mapping_by_table.get(table_name).and_then(|mapping| {
+            let traversal = mapping.traversal.as_ref()?;
+            match traversal.mode {
+                TraversalModeYaml::Root => Some(SourcePath {
+                    path: Vec::new(),
+                    scalar_array_field: None,
+                    grouped_fields: None,
+                }),
+                _ => {
+                    let mut source_segments = traversal
+                        .source_field
+                        .as_deref()
+                        .unwrap_or_default()
+                        .split('.')
+                        .filter(|segment| !segment.trim().is_empty())
+                        .map(|segment| segment.to_owned())
+                        .collect::<Vec<_>>();
+                    if source_segments.is_empty() {
+                        return None;
+                    }
+
+                    let mut parent_path = traversal.parent_table.as_deref().and_then(|parent| {
+                        source_path_from_traversal_chain(
+                            parent,
+                            mapping_by_table,
+                            fallback_source_paths,
+                            visiting,
+                        )
+                        .or_else(|| fallback_source_paths.get(parent).cloned())
+                    });
+
+                    if parent_path.is_none() {
+                        parent_path = Some(SourcePath {
+                            path: Vec::new(),
+                            scalar_array_field: None,
+                            grouped_fields: None,
+                        });
+                    }
+
+                    parent_path.map(|mut parent| {
+                        parent.path.append(&mut source_segments);
+                        parent.scalar_array_field = None;
+                        parent.grouped_fields = None;
+                        parent
+                    })
+                }
+            }
+        });
+
+        visiting.remove(table_name);
+        derived
+    }
+
     let (_, collections_dir) = collection_paths_from_conf(conf)?;
     let safe_collection_name = collection.replace('/', "_");
     let coll_dir = collections_dir.join(&safe_collection_name);
@@ -1686,7 +1805,7 @@ fn discover_mapping_targets_for_collection(
     .with_context(|| format!("Failed to parse {}", schema_path.display()))?;
     let source_paths = build_mapping_source_paths(collection, &schema);
 
-    let mut targets = std::fs::read_dir(&coll_dir)
+    let mapping_files = std::fs::read_dir(&coll_dir)
         .with_context(|| format!("Cannot read mapping directory {}", coll_dir.display()))?
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path())
@@ -1697,12 +1816,37 @@ fn discover_mapping_targets_for_collection(
                 .map(|name| name.starts_with("mapping_") && name.ends_with(".yaml"))
                 .unwrap_or(false)
         })
+        .collect::<Vec<_>>();
+
+    let mut parsed_mappings = mapping_files
+        .into_iter()
         .map(|mapping_path| {
-            let mut mapping_yaml = read_mapping_yaml(&mapping_path)?;
+            let mapping_yaml = read_mapping_yaml(&mapping_path)?;
+            Ok((mapping_path, mapping_yaml))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let mapping_by_table = parsed_mappings
+        .iter()
+        .map(|(_, mapping_yaml)| {
+            (
+                mapping_yaml.pg_mapping.table_name.clone(),
+                mapping_yaml.clone(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut targets = parsed_mappings
+        .drain(..)
+        .map(|(mapping_path, mut mapping_yaml)| {
             let table_name = mapping_yaml.pg_mapping.table_name.clone();
-            let source_path = source_paths
-                .get(&table_name)
-                .cloned()
+            let source_path = source_path_from_traversal_chain(
+                &table_name,
+                &mapping_by_table,
+                &source_paths,
+                &mut HashSet::new(),
+            )
+                .or_else(|| source_paths.get(&table_name).cloned())
                 .or_else(|| {
                     mapping_yaml.mongo_path.as_deref().map(|mongo_path| {
                         let parsed = parse_mongo_path(mongo_path);
@@ -1814,157 +1958,12 @@ async fn connect_pg_client(target_uri: &str) -> Result<Client> {
         .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
     tokio::spawn(async move {
         if let Err(err) = pg_connection.await {
-            eprintln!("warning: PostgreSQL connection error: {err}");
+            error!("PostgreSQL connection error: {err}");
         }
     });
 
     Ok(pg_client)
 }
-
-// fn pg_select_query(
-//     schema_name: Option<&str>,
-//     table_name: &str,
-//     target_fields: &[String],
-// ) -> String {
-//     let select_list = target_fields
-//         .iter()
-//         .map(|field| {
-//             let quoted = quote_ident(field);
-//             format!("COALESCE(to_json({quoted})::text, 'null') AS {quoted}")
-//         })
-//         .collect::<Vec<_>>()
-//         .join(", ");
-//     let qualified_table = match schema_name {
-//         Some(schema_name) => format!("{}.{}", quote_ident(schema_name), quote_ident(table_name)),
-//         None => quote_ident(table_name),
-//     };
-//     let order_by = (1..=target_fields.len())
-//         .map(|index| index.to_string())
-//         .collect::<Vec<_>>()
-//         .join(", ");
-
-//     format!("SELECT {select_list} FROM {qualified_table} ORDER BY {order_by}",)
-// }
-
-// fn format_record_values(values: &[String]) -> String {
-//     format!("[{}]", values.join(", "))
-// }
-
-// fn print_hash_output(label: &str, records: &[HashRecord], aggregate: bool) {
-//     if aggregate {
-//         println!(
-//             "{label}: {}",
-//             aggregate_md5_hexes(records.iter().map(|record| record.md5.clone()))
-//         );
-//     } else {
-//         println!("{label}:");
-//         for record in records {
-//             println!("{}", record.md5);
-//         }
-//     }
-// }
-
-// fn print_mismatched_records(mongo_records: &[HashRecord], pg_records: &[HashRecord]) {
-//     for mismatch in collect_mismatched_record_samples(mongo_records, pg_records, usize::MAX) {
-//         println!("Mismatch at row {}:", mismatch.row_index);
-//         match &mismatch.mongo_values {
-//             Some(values) => {
-//                 println!("  MongoDB md5: {}", md5_hex_from_fragments(values.iter()));
-//                 println!("  MongoDB values: {}", format_record_values(values));
-//             }
-//             None => println!("  MongoDB: missing row"),
-//         }
-//         match &mismatch.pg_values {
-//             Some(values) => {
-//                 println!(
-//                     "  PostgreSQL md5: {}",
-//                     md5_hex_from_fragments(values.iter())
-//                 );
-//                 println!("  PostgreSQL values: {}", format_record_values(values));
-//             }
-//             None => println!("  PostgreSQL: missing row"),
-//         }
-//     }
-// }
-
-// fn collect_mismatched_record_samples(
-//     mongo_records: &[HashRecord],
-//     pg_records: &[HashRecord],
-//     limit: usize,
-// ) -> Vec<Md5MismatchRow> {
-//     let mut mongo_counts: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
-//     let mut pg_counts: BTreeMap<(String, Vec<String>), usize> = BTreeMap::new();
-
-//     for record in mongo_records {
-//         *mongo_counts
-//             .entry((record.md5.clone(), record.values.clone()))
-//             .or_insert(0) += 1;
-//     }
-//     for record in pg_records {
-//         *pg_counts
-//             .entry((record.md5.clone(), record.values.clone()))
-//             .or_insert(0) += 1;
-//     }
-
-//     let mut mongo_only = Vec::new();
-//     let mut pg_only = Vec::new();
-
-//     for (key, mongo_count) in &mongo_counts {
-//         let pg_count = pg_counts.get(key).copied().unwrap_or(0);
-//         if *mongo_count > pg_count {
-//             for _ in 0..(*mongo_count - pg_count) {
-//                 mongo_only.push(key.1.clone());
-//             }
-//         }
-//     }
-
-//     for (key, pg_count) in &pg_counts {
-//         let mongo_count = mongo_counts.get(key).copied().unwrap_or(0);
-//         if *pg_count > mongo_count {
-//             for _ in 0..(*pg_count - mongo_count) {
-//                 pg_only.push(key.1.clone());
-//             }
-//         }
-//     }
-
-//     let mut mismatches = Vec::new();
-//     let pair_count = mongo_only.len().min(pg_only.len());
-
-//     for index in 0..pair_count {
-//         mismatches.push(Md5MismatchRow {
-//             row_index: mismatches.len() + 1,
-//             mongo_values: Some(mongo_only[index].clone()),
-//             pg_values: Some(pg_only[index].clone()),
-//         });
-//         if mismatches.len() == limit {
-//             return mismatches;
-//         }
-//     }
-
-//     for values in mongo_only.into_iter().skip(pair_count) {
-//         mismatches.push(Md5MismatchRow {
-//             row_index: mismatches.len() + 1,
-//             mongo_values: Some(values),
-//             pg_values: None,
-//         });
-//         if mismatches.len() == limit {
-//             return mismatches;
-//         }
-//     }
-
-//     for values in pg_only.into_iter().skip(pair_count) {
-//         mismatches.push(Md5MismatchRow {
-//             row_index: mismatches.len() + 1,
-//             mongo_values: None,
-//             pg_values: Some(values),
-//         });
-//         if mismatches.len() == limit {
-//             return mismatches;
-//         }
-//     }
-
-//     mismatches
-// }
 
 pub async fn compute_md5_summaries_for_collection(
     collection: &str,
@@ -2917,23 +2916,23 @@ pg_mapping:
 
         if !result.matches {
             if let Some(mismatches) = result.mismatches {
-                println!("\n=== DATA MISMATCH DETECTED ===");
-                println!("Global Mongo MD5 Checksum: {}", result.mongo_md5);
-                println!("Global Postgres MD5 Checksum: {}", result.pg_md5);
+                    eprintln!("\n=== DATA MISMATCH DETECTED ===");
+                    eprintln!("Global Mongo MD5 Checksum: {}", result.mongo_md5);
+                    eprintln!("Global Postgres MD5 Checksum: {}", result.pg_md5);
                 
-                println!("\nFirst 5 Rows Only in MongoDB:");
-                for row in mismatches.mongo_only {
-                    println!("  - Row MD5: {}", row.md5);
-                    println!("    Values Snapshot: {:?}", row.delta);
-                }
+                    eprintln!("\nFirst 5 Rows Only in MongoDB:");
+                    for row in mismatches.mongo_only {
+                        eprintln!("  - Row MD5: {}", row.md5);
+                        eprintln!("    Values Snapshot: {:?}", row.delta);
+                    }
 
-                println!("\nFirst 5 Rows Only in PostgreSQL:");
-                for row in mismatches.pg_only {
-                    println!("  - Row MD5: {}", row.md5);
-                    println!("    Values Snapshot: {:?}", row.delta);
+                    eprintln!("\nFirst 5 Rows Only in PostgreSQL:");
+                    for row in mismatches.pg_only {
+                        eprintln!("  - Row MD5: {}", row.md5);
+                        eprintln!("    Values Snapshot: {:?}", row.delta);
+                    }
+                    eprintln!("===============================\n");
                 }
-                println!("===============================\n");
-            }
         }
 
         assert!(
@@ -2963,12 +2962,34 @@ pg_mapping:
             Some(schema) => format!("\"{}\".\"{}\"", schema, harness.table_name),
             None => format!("\"{}\"", harness.table_name),
         };
-        harness.pg_client
-            .execute(
-                &format!("UPDATE {} SET room_type = 'Entire home/apt-2bis' WHERE id = 10009999;", qualified_table),
-                &[]
-            )
-            .await?;        
+
+
+        let room_types = [
+            "Entire home/apt-1",
+            "Entire home/apt-2",
+            "Entire home/apt-3",
+            "Private room-1",
+            "Private room-2",
+            "Shared room-1",
+            "Hotel room-1",
+            "Entire home/apt-2bis",
+            "Private room-3",
+            "Shared room-2",
+        ];
+
+        // Use qualified_table from your harness setup context if applicable
+        for i in 0..10 {
+            // Explicitly define target_id as i64 to match Postgres Int8
+            let target_id: i64 = 10009999 + i as i64;
+            let current_room_type = room_types[i];
+
+            harness.pg_client
+                .execute(
+                    &format!("UPDATE {} SET room_type = $1 WHERE id = $2;", qualified_table),
+                    &[&current_room_type, &target_id]
+                )
+                .await?;
+        }
 
         // 2. Specify fields to test deterministically
         let source_fields = vec![
@@ -3006,22 +3027,22 @@ pg_mapping:
 
         if !result.matches {
             if let Some(mismatches) = result.mismatches {
-                println!("\n=== DATA MISMATCH DETECTED ===");
-                println!("Global Mongo MD5 Checksum: {}", result.mongo_md5);
-                println!("Global Postgres MD5 Checksum: {}", result.pg_md5);
+                eprintln!("\n=== DATA MISMATCH DETECTED ===");
+                eprintln!("Global Mongo MD5 Checksum: {}", result.mongo_md5);
+                eprintln!("Global Postgres MD5 Checksum: {}", result.pg_md5);
                 
-                println!("\nFirst 5 Rows Only in MongoDB:");
+                eprintln!("\nFirst 5 Rows Only in MongoDB:");
                 for row in mismatches.mongo_only {
-                    println!("  - Row MD5: {}", row.md5);
-                    println!("    Values Snapshot: {:?}", row.delta);
+                    eprintln!("  - Row MD5: {}", row.md5);
+                    eprintln!("    Values Snapshot: {:?}", row.delta);
                 }
 
-                println!("\nFirst 5 Rows Only in PostgreSQL:");
+                eprintln!("\nFirst 5 Rows Only in PostgreSQL:");
                 for row in mismatches.pg_only {
-                    println!("  - Row MD5: {}", row.md5);
-                    println!("    Values Snapshot: {:?}", row.delta);
+                    eprintln!("  - Row MD5: {}", row.md5);
+                    eprintln!("    Values Snapshot: {:?}", row.delta);
                 }
-                println!("===============================\n");
+                eprintln!("===============================\n");
             }
         }
 

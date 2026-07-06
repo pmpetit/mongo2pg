@@ -19,15 +19,13 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::TryStreamExt;
+use log::{info, warn};
 use mongodb::Client;
 use serde::Deserialize;
 
 use crate::schema_diagram::{parse_sql, Table as SqlTable};
 
-use crate::util::{
-    objectid_hex_to_uuid,
-    sanitize,
-};
+use crate::util::{objectid_hex_to_uuid, sanitize};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // BSON → CSV string
@@ -228,10 +226,7 @@ fn is_uuid_col_type(col_type: &str) -> bool {
 }
 
 fn is_geometry_col_type(col_type: &str) -> bool {
-    col_type
-        .trim()
-        .to_ascii_lowercase()
-        .starts_with("geometry")
+    col_type.trim().to_ascii_lowercase().starts_with("geometry")
 }
 
 fn bson_number_to_f64(value: &Bson) -> Option<f64> {
@@ -592,7 +587,11 @@ fn grouped_root_table_sources(
         .into_iter()
         .map(|group| {
             (
-                format!("{}_{}", sanitize(coll_name), sanitize(&group.representative)),
+                format!(
+                    "{}_{}",
+                    sanitize(coll_name),
+                    sanitize(&group.representative)
+                ),
                 group.members,
             )
         })
@@ -607,7 +606,9 @@ fn flattened_grouped_root_for_export(
 ) -> Option<(Vec<String>, String)> {
     let group = crate::util::flatten_grouped_root_array_object_fields(schema)?;
     let parent_id_col = crate::util::flattened_root_parent_id_column(coll_name);
-    let root_table = sql_tables.iter().find(|table| table.foreign_keys.is_empty())?;
+    let root_table = sql_tables
+        .iter()
+        .find(|table| table.foreign_keys.is_empty())?;
 
     if root_table
         .columns
@@ -642,6 +643,20 @@ fn find_mongo_field<'a>(doc: &'a bson::Document, sql_col: &str) -> Option<&'a Bs
                 }
                 if let Some(value) = find_mongo_field(child_doc, sql_col) {
                     matches.push(value);
+                }
+            }
+            if let Bson::Array(arr) = val {
+                // Search array items that are documents for matches as well.
+                for item in arr {
+                    if let Bson::Document(item_doc) = item {
+                        if sanitize(key) == sql_col {
+                            // array value itself is candidate
+                            matches.push(val);
+                        }
+                        if let Some(value) = find_mongo_field(item_doc, sql_col) {
+                            matches.push(value);
+                        }
+                    }
                 }
             }
         }
@@ -905,20 +920,16 @@ fn build_node_from_plan(
     let mongo_field = if parent_key.is_none() {
         String::new()
     } else {
-        let fallback = plan
-            .traversal
-            .source_field
-            .clone()
-            .unwrap_or_else(|| {
-                parent_key
-                    .and_then(|parent| {
-                        sql_t
-                            .name
-                            .strip_prefix(&format!("{parent}_"))
-                            .map(str::to_owned)
-                    })
-                    .unwrap_or_else(|| sql_t.name.clone())
-            });
+        let fallback = plan.traversal.source_field.clone().unwrap_or_else(|| {
+            parent_key
+                .and_then(|parent| {
+                    sql_t
+                        .name
+                        .strip_prefix(&format!("{parent}_"))
+                        .map(str::to_owned)
+                })
+                .unwrap_or_else(|| sql_t.name.clone())
+        });
 
         if depth == 1 {
             plan.mongo_path
@@ -1009,11 +1020,9 @@ fn build_tree_from_mapping_plan(
     let root_nodes = roots
         .iter()
         .filter_map(|root_key| {
-            sql_by_key
-                .get(root_key)
-                .and_then(|sql_t| {
-                    build_node_from_plan(sql_t, 0, None, &children_of, &sql_by_key, plans)
-                })
+            sql_by_key.get(root_key).and_then(|sql_t| {
+                build_node_from_plan(sql_t, 0, None, &children_of, &sql_by_key, plans)
+            })
         })
         .collect::<Vec<_>>();
 
@@ -1201,17 +1210,16 @@ fn extract_child_document_rows(
                 } else if col == "key" {
                     Some(map_key.clone())
                 } else {
-                    find_mongo_field(item_doc, col)
-                        .and_then(|v| {
-                            serialize_column_value(
-                                &child.jsonb_cols,
-                                &child.timestamp_cols,
-                                &child.uuid_cols,
-                                &child.geometry_cols,
-                                col,
-                                v,
-                            )
-                        })
+                    find_mongo_field(item_doc, col).and_then(|v| {
+                        serialize_column_value(
+                            &child.jsonb_cols,
+                            &child.timestamp_cols,
+                            &child.uuid_cols,
+                            &child.geometry_cols,
+                            col,
+                            v,
+                        )
+                    })
                 }
             })
             .collect();
@@ -1231,9 +1239,7 @@ fn extract_child_document_rows(
                     if grandchild.is_scalar_array {
                         for item in arr {
                             let grandchild_id = {
-                                let c = counters
-                                    .entry(grandchild.sql_name.clone())
-                                    .or_insert(0);
+                                let c = counters.entry(grandchild.sql_name.clone()).or_insert(0);
                                 *c += 1;
                                 c.to_string()
                             };
@@ -1241,15 +1247,9 @@ fn extract_child_document_rows(
                                 .columns
                                 .iter()
                                 .map(|col| {
-                                    if grandchild
-                                        .pk_cols
-                                        .iter()
-                                        .any(|pk| pk == col)
-                                    {
+                                    if grandchild.pk_cols.iter().any(|pk| pk == col) {
                                         Some(grandchild_id.clone())
-                                    } else if Some(col)
-                                        == grandchild.fk_col.as_ref()
-                                    {
+                                    } else if Some(col) == grandchild.fk_col.as_ref() {
                                         Some(child_id.clone())
                                     } else if col == "value" {
                                         serialize_column_value(
@@ -1299,7 +1299,10 @@ fn extract_child_document_rows(
     }
 }
 
-fn map_document_entries<'a>(node: &TableNode, doc: &'a bson::Document) -> Vec<(&'a str, &'a bson::Document)> {
+fn map_document_entries<'a>(
+    node: &TableNode,
+    doc: &'a bson::Document,
+) -> Vec<(&'a str, &'a bson::Document)> {
     let non_structural_cols: Vec<&String> = node
         .columns
         .iter()
@@ -1309,6 +1312,12 @@ fn map_document_entries<'a>(node: &TableNode, doc: &'a bson::Document) -> Vec<(&
                 && col.as_str() != "key"
         })
         .collect();
+
+    // Container-only tables (PK/FK only) should not be treated as map objects.
+    // They exist to anchor nested children and must keep the full current document context.
+    if non_structural_cols.is_empty() {
+        return Vec::new();
+    }
 
     // Regular embedded object tables already expose value fields at current level.
     // Dynamic map objects do not, and keep one nested document per map key.
@@ -1358,14 +1367,7 @@ fn extract_rows(
 ) {
     let empty = HashMap::new();
     extract_rows_with_mapping(
-        val,
-        node,
-        parent_id,
-        is_root,
-        all_rows,
-        counters,
-        &empty,
-        &empty,
+        val, node, parent_id, is_root, all_rows, counters, &empty, &empty,
     );
 }
 
@@ -1414,17 +1416,16 @@ fn extract_rows_with_mapping(
                                 } else if col == "key" {
                                     Some(grouped_field.clone())
                                 } else {
-                                    find_mongo_field(item_doc, col)
-                                        .and_then(|v| {
-                                            serialize_column_value(
-                                                &node.jsonb_cols,
-                                                &node.timestamp_cols,
-                                                &node.uuid_cols,
-                                                &node.geometry_cols,
-                                                col,
-                                                v,
-                                            )
-                                        })
+                                    find_mongo_field(item_doc, col).and_then(|v| {
+                                        serialize_column_value(
+                                            &node.jsonb_cols,
+                                            &node.timestamp_cols,
+                                            &node.uuid_cols,
+                                            &node.geometry_cols,
+                                            col,
+                                            v,
+                                        )
+                                    })
                                 }
                             })
                             .collect();
@@ -1432,7 +1433,9 @@ fn extract_rows_with_mapping(
                         all_rows.entry(node.sql_name.clone()).or_default().push(row);
 
                         for child in &node.children {
-                            match find_mongo_field_for_traversal(item_doc, &child.mongo_field).as_ref() {
+                            match find_mongo_field_for_traversal(item_doc, &child.mongo_field)
+                                .as_ref()
+                            {
                                 Some(Bson::Array(arr)) => {
                                     if child.is_scalar_array {
                                         for child_item in arr {
@@ -1449,9 +1452,7 @@ fn extract_rows_with_mapping(
                                                 .map(|col| {
                                                     if child.pk_cols.iter().any(|pk| pk == col) {
                                                         Some(child_id.clone())
-                                                    } else if Some(col)
-                                                        == child.fk_col.as_ref()
-                                                    {
+                                                    } else if Some(col) == child.fk_col.as_ref() {
                                                         Some(my_id.clone())
                                                     } else if col == "value" {
                                                         serialize_column_value(
@@ -1530,17 +1531,16 @@ fn extract_rows_with_mapping(
                             } else if col == root_parent_id_col {
                                 Some(parent_source_id.clone())
                             } else {
-                                find_mongo_field(item_doc, col)
-                                    .and_then(|v| {
-                                        serialize_column_value(
-                                            &node.jsonb_cols,
-                                            &node.timestamp_cols,
-                                            &node.uuid_cols,
-                                            &node.geometry_cols,
-                                            col,
-                                            v,
-                                        )
-                                    })
+                                find_mongo_field(item_doc, col).and_then(|v| {
+                                    serialize_column_value(
+                                        &node.jsonb_cols,
+                                        &node.timestamp_cols,
+                                        &node.uuid_cols,
+                                        &node.geometry_cols,
+                                        col,
+                                        v,
+                                    )
+                                })
                             }
                         })
                         .collect();
@@ -1548,14 +1548,14 @@ fn extract_rows_with_mapping(
                     all_rows.entry(node.sql_name.clone()).or_default().push(row);
 
                     for child in &node.children {
-                        match find_mongo_field_for_traversal(item_doc, &child.mongo_field).as_ref() {
+                        match find_mongo_field_for_traversal(item_doc, &child.mongo_field).as_ref()
+                        {
                             Some(Bson::Array(arr)) => {
                                 if child.is_scalar_array {
                                     for child_item in arr {
                                         let child_id = {
-                                            let c = counters
-                                                .entry(child.sql_name.clone())
-                                                .or_insert(0);
+                                            let c =
+                                                counters.entry(child.sql_name.clone()).or_insert(0);
                                             *c += 1;
                                             c.to_string()
                                         };
@@ -1565,9 +1565,7 @@ fn extract_rows_with_mapping(
                                             .map(|col| {
                                                 if child.pk_cols.iter().any(|pk| pk == col) {
                                                     Some(child_id.clone())
-                                                } else if Some(col)
-                                                    == child.fk_col.as_ref()
-                                                {
+                                                } else if Some(col) == child.fk_col.as_ref() {
                                                     Some(my_id.clone())
                                                 } else if col == "value" {
                                                     serialize_column_value(
@@ -1639,17 +1637,16 @@ fn extract_rows_with_mapping(
                         } else if col == "key" {
                             Some(entry_key.to_owned())
                         } else {
-                            find_mongo_field(entry_doc, col)
-                                .and_then(|v| {
-                                    serialize_column_value(
-                                        &node.jsonb_cols,
-                                        &node.timestamp_cols,
-                                        &node.uuid_cols,
-                                        &node.geometry_cols,
-                                        col,
-                                        v,
-                                    )
-                                })
+                            find_mongo_field(entry_doc, col).and_then(|v| {
+                                serialize_column_value(
+                                    &node.jsonb_cols,
+                                    &node.timestamp_cols,
+                                    &node.uuid_cols,
+                                    &node.geometry_cols,
+                                    col,
+                                    v,
+                                )
+                            })
                         }
                     })
                     .collect();
@@ -1666,9 +1663,7 @@ fn extract_rows_with_mapping(
                             if child.is_scalar_array {
                                 for item in arr {
                                     let grandchild_id = {
-                                        let c = counters
-                                            .entry(child.sql_name.clone())
-                                            .or_insert(0);
+                                        let c = counters.entry(child.sql_name.clone()).or_insert(0);
                                         *c += 1;
                                         c.to_string()
                                     };
@@ -1678,9 +1673,7 @@ fn extract_rows_with_mapping(
                                         .map(|col| {
                                             if child.pk_cols.iter().any(|pk| pk == col) {
                                                 Some(grandchild_id.clone())
-                                            } else if Some(col)
-                                                == child.fk_col.as_ref()
-                                            {
+                                            } else if Some(col) == child.fk_col.as_ref() {
                                                 Some(child_id.clone())
                                             } else if col == "value" {
                                                 serialize_column_value(
@@ -1767,17 +1760,16 @@ fn extract_rows_with_mapping(
                 } else {
                     find_mongo_field(doc, col)
                 };
-                lookup
-                    .and_then(|v| {
-                        serialize_column_value(
-                            &node.jsonb_cols,
-                            &node.timestamp_cols,
-                            &node.uuid_cols,
-                            &node.geometry_cols,
-                            col,
-                            v,
-                        )
-                    })
+                lookup.and_then(|v| {
+                    serialize_column_value(
+                        &node.jsonb_cols,
+                        &node.timestamp_cols,
+                        &node.uuid_cols,
+                        &node.geometry_cols,
+                        col,
+                        v,
+                    )
+                })
             }
         })
         .collect();
@@ -1815,17 +1807,16 @@ fn extract_rows_with_mapping(
                                     } else if col == "key" {
                                         Some(grouped_field.clone())
                                     } else {
-                                        find_mongo_field(item_doc, col)
-                                            .and_then(|v| {
-                                                serialize_column_value(
-                                                    &child.jsonb_cols,
-                                                    &child.timestamp_cols,
-                                                    &child.uuid_cols,
-                                                    &child.geometry_cols,
-                                                    col,
-                                                    v,
-                                                )
-                                            })
+                                        find_mongo_field(item_doc, col).and_then(|v| {
+                                            serialize_column_value(
+                                                &child.jsonb_cols,
+                                                &child.timestamp_cols,
+                                                &child.uuid_cols,
+                                                &child.geometry_cols,
+                                                col,
+                                                v,
+                                            )
+                                        })
                                     }
                                 })
                                 .collect();
@@ -1835,7 +1826,12 @@ fn extract_rows_with_mapping(
                                 .push(child_row);
 
                             for grandchild in &child.children {
-                                match find_mongo_field_for_traversal(item_doc, &grandchild.mongo_field).as_ref() {
+                                match find_mongo_field_for_traversal(
+                                    item_doc,
+                                    &grandchild.mongo_field,
+                                )
+                                .as_ref()
+                                {
                                     Some(Bson::Array(arr)) => {
                                         if grandchild.is_scalar_array {
                                             for item in arr {
@@ -1964,13 +1960,7 @@ fn extract_rows_with_mapping(
             Some(doc_val @ Bson::Document(_)) => {
                 // Embedded 1:1 object.
                 if let Bson::Document(child_doc) = doc_val {
-                    extract_child_document_rows(
-                        child_doc,
-                        child,
-                        &my_id,
-                        all_rows,
-                        counters,
-                    );
+                    extract_child_document_rows(child_doc, child, &my_id, all_rows, counters);
                 }
             }
             _ => {} // field absent or unexpected type – skip
@@ -2030,8 +2020,8 @@ pub async fn export_collections_to_sql(
 
     let total_sources = coll_names.len();
     for (source_index, coll_name) in coll_names.iter().enumerate() {
-        eprintln!(
-            "      -> export source [{}/{}]: {}.{} -> {}.sql",
+        info!(
+            "-> export source [{}/{}]: {}.{} -> {}.sql",
             source_index + 1,
             total_sources,
             db_name,
@@ -2047,8 +2037,8 @@ pub async fn export_collections_to_sql(
         {
             (roots, root_target_to_source)
         } else {
-            eprintln!(
-                "warning: traversal metadata incomplete for '{}'; falling back to SQL-structure traversal",
+            warn!(
+                "traversal metadata incomplete for '{}'; falling back to SQL-structure traversal",
                 coll_name
             );
 
@@ -2080,8 +2070,8 @@ pub async fn export_collections_to_sql(
         while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
             source_docs_exported += 1;
             if source_docs_exported % PROGRESS_LOG_EVERY_DOCS == 0 {
-                eprintln!(
-                    "         progress {}.{}: {} docs exported",
+                info!(
+                    "progress {}.{}: {} docs exported",
                     db_name, coll_name, source_docs_exported
                 );
             }
@@ -2101,8 +2091,8 @@ pub async fn export_collections_to_sql(
             }
         }
 
-        eprintln!(
-            "      -> completed {}.{}: {} docs exported",
+        info!(
+            "-> completed {}.{}: {} docs exported",
             db_name, coll_name, source_docs_exported
         );
     }
@@ -2142,15 +2132,20 @@ pub async fn export_collections_to_sql(
 
     let mut expected_files = sql_tables
         .iter()
-        .flat_map(|table| [format!("{}.csv", table.name), format!("{}.csv.gz", table.name)])
+        .flat_map(|table| {
+            [
+                format!("{}.csv", table.name),
+                format!("{}.csv.gz", table.name),
+            ]
+        })
         .collect::<HashSet<_>>();
     for alias in alias_for_table.values() {
         expected_files.insert(format!("{alias}.csv"));
         expected_files.insert(format!("{alias}.csv.gz"));
     }
 
-    for entry in std::fs::read_dir(&out_dir)
-        .with_context(|| format!("Cannot read {}", out_dir.display()))?
+    for entry in
+        std::fs::read_dir(&out_dir).with_context(|| format!("Cannot read {}", out_dir.display()))?
     {
         let path = entry?.path();
         if !path.is_file() {
@@ -2174,7 +2169,17 @@ pub async fn export_collections_to_sql(
             .with_context(|| format!("Cannot create {}", csv_path.display()))?;
         let mut gz = GzEncoder::new(file, Compression::default());
 
-        let header: Vec<String> = sql_t.columns.iter().map(|c| if c.name.starts_with('"') && c.name.ends_with('"') { format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\"")) } else { csv_escape(&unquote_sql_ident(&c.name)) }).collect();
+        let header: Vec<String> = sql_t
+            .columns
+            .iter()
+            .map(|c| {
+                if c.name.starts_with('"') && c.name.ends_with('"') {
+                    format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\""))
+                } else {
+                    csv_escape(&unquote_sql_ident(&c.name))
+                }
+            })
+            .collect();
         writeln!(gz, "{}", header.join(","))
             .with_context(|| format!("Write error for {}", csv_path.display()))?;
 
@@ -2372,9 +2377,9 @@ CREATE TABLE tier_and_details (
             .get("tier_and_details")
             .expect("tier_and_details rows missing");
         assert_eq!(rows.len(), 2);
-        assert!(rows.iter().all(|row| {
-            row[1].as_deref() == Some("00000000-5ca4-bbce-a2dd-94ee58162a68")
-        }));
+        assert!(rows
+            .iter()
+            .all(|row| { row[1].as_deref() == Some("00000000-5ca4-bbce-a2dd-94ee58162a68") }));
         assert!(rows
             .iter()
             .any(|row| row[2].as_deref() == Some("0df078f33aa74a2e9696e0520c1a828a")));
@@ -2500,7 +2505,10 @@ CREATE TABLE places (
 
         let rows = all_rows.get("places").expect("root rows missing");
         assert_eq!(rows[0][0].as_deref(), Some("place-1"));
-        assert_eq!(rows[0][1].as_deref(), Some("SRID=4326;POINT(2.3522 48.8566)"));
+        assert_eq!(
+            rows[0][1].as_deref(),
+            Some("SRID=4326;POINT(2.3522 48.8566)")
+        );
     }
 
     #[test]
@@ -2777,10 +2785,80 @@ CREATE TABLE tier_and_details (
             .expect("tier_and_details rows missing");
         assert_eq!(detail_rows.len(), 2);
 
-        assert!(detail_rows.iter().any(|row| row[2].as_deref() == Some("true")
-            && row[4].as_deref() == Some("gold")));
-        assert!(detail_rows.iter().any(|row| row[2].as_deref() == Some("false")
-            && row[4].as_deref() == Some("silver")));
+        assert!(detail_rows
+            .iter()
+            .any(|row| row[2].as_deref() == Some("true") && row[4].as_deref() == Some("gold")));
+        assert!(detail_rows
+            .iter()
+            .any(|row| row[2].as_deref() == Some("false") && row[4].as_deref() == Some("silver")));
+    }
+
+    #[test]
+    fn export_container_object_without_payload_keeps_child_document_context() {
+        let sql = r#"
+CREATE TABLE companies (
+    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+CREATE TABLE companies_investments (
+    id BIGSERIAL PRIMARY KEY,
+    companies_id UUID NOT NULL,
+    FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE financial_org (
+    id BIGSERIAL PRIMARY KEY,
+    companies_investments_id BIGINT NOT NULL,
+    name TEXT NOT NULL,
+    permalink TEXT NOT NULL,
+    FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+            "name": "Wetpaint",
+            "companies_investments": {
+                "company": Bson::Null,
+                "financial_org": {
+                    "name": "Frazier Technology Ventures",
+                    "permalink": "frazier-technology-ventures"
+                },
+                "person": Bson::Null
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let investment_rows = all_rows
+            .get("companies_investments")
+            .expect("companies_investments rows missing");
+        assert_eq!(investment_rows.len(), 1);
+
+        let financial_rows = all_rows
+            .get("financial_org")
+            .expect("financial_org rows missing");
+        assert_eq!(financial_rows.len(), 1);
+        assert_eq!(
+            financial_rows[0][2].as_deref(),
+            Some("Frazier Technology Ventures")
+        );
+        assert_eq!(
+            financial_rows[0][3].as_deref(),
+            Some("frazier-technology-ventures")
+        );
     }
 
     #[test]

@@ -610,12 +610,6 @@ fn add_grouped_root_child_table(
         }
     }
     child.parent_ref = Some(parent_ref);
-    child.columns.push(Column {
-        name: "key".to_owned(),
-        pg_type: "TEXT".to_owned(),
-        nullable: false,
-        primary_key: false,
-    });
 
     process_fields(
         &mut child,
@@ -1834,12 +1828,6 @@ pub fn schema_to_ddl_with_timestamp_fields(
             nullable: false,
             primary_key: false,
         });
-        root.columns.push(Column {
-            name: "key".to_owned(),
-            pg_type: "TEXT".to_owned(),
-            nullable: false,
-            primary_key: false,
-        });
 
         process_fields(
             &mut root,
@@ -2552,7 +2540,7 @@ mod tests {
 
         assert!(ddl.contains("CREATE TABLE communities ("));
         assert!(ddl.contains("communities_id VARCHAR(20) NOT NULL"));
-        assert!(ddl.contains("key TEXT NOT NULL"));
+        assert!(!ddl.contains("key TEXT NOT NULL"));
         assert!(!ddl.contains("CREATE TABLE communities_dev ("));
         assert!(!ddl.contains("CREATE TABLE communities_prod ("));
     }

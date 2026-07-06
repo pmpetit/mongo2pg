@@ -25,7 +25,7 @@ group_id = "mongo2pg-sample_training_group"
 # ...or use only a Debezium topic prefix and let kafka-import parse db/collection from topics.
 topic_prefix = "mongo2pg.sample_supplies"
 schema_registry_url = "http://localhost:8081"
-batch_log_messages = 100
+batch_log_messages = 1000
 # schema_registry_username = ""
 # schema_registry_password = ""
 # offset = "latest"

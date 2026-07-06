@@ -463,7 +463,6 @@ async fn main() -> Result<()> {
             Some(args) => run_infer(args).await,
             None => {
                 Cli::command().print_help()?;
-                println!();
                 Ok(())
             }
         },
@@ -515,8 +514,12 @@ fn resolve_effective_log_level(cli: &Cli) -> Result<LevelFilter> {
     let cli_level = cli.log_level.as_deref();
 
     if let Some(conf_path) = config_path_from_cli(cli) {
-        let conf = read_conf(conf_path)
-            .with_context(|| format!("Failed to load logging configuration from {}", conf_path.display()))?;
+        let conf = read_conf(conf_path).with_context(|| {
+            format!(
+                "Failed to load logging configuration from {}",
+                conf_path.display()
+            )
+        })?;
         return resolve_log_level_precedence(cli_level, conf.log_level.as_deref());
     }
 
@@ -524,10 +527,10 @@ fn resolve_effective_log_level(cli: &Cli) -> Result<LevelFilter> {
 }
 
 fn format_runtime_log_line(level: Level, elapsed: Duration, message: &str) -> String {
-    let timestamp = Utc::now().to_rfc3339();
+    let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
     format!(
-        "{timestamp} +{:.3}s [{}] {}",
-        elapsed.as_secs_f64(),
+        "{timestamp} +{}s [{}] {}",
+        elapsed.as_secs(),
         level,
         message
     )
@@ -913,10 +916,7 @@ fn collection_field_signature(
 ///
 /// Grouped merge now tolerates sparse schemas (missing optional fields) and
 /// normalizes grouped mappings to the union of observed fields.
-fn validate_group_schema_compatibility(
-    collections_dir: &Path,
-    group: &CollectionGroup,
-) -> bool {
+fn validate_group_schema_compatibility(collections_dir: &Path, group: &CollectionGroup) -> bool {
     group
         .members
         .iter()
@@ -1301,7 +1301,7 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
     };
 
     if json_files.is_empty() {
-        eprintln!(
+        warn!(
             "No JSON schema files found in {}",
             collections_dir.display()
         );
@@ -1364,19 +1364,19 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
     }
 
     for (rel_sql, json_path) in &json_files {
-        let coll_stem = rel_sql
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
+        let coll_stem = rel_sql.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let grouped_prefix = grouped_table_for.get(coll_stem).map(String::as_str);
-        let is_non_representative_group_member = grouped_prefix.is_some()
-            && !group_representatives.contains(coll_stem);
+        let is_non_representative_group_member =
+            grouped_prefix.is_some() && !group_representatives.contains(coll_stem);
 
         if is_non_representative_group_member {
             let stale_sql_path = output_dir.join(rel_sql);
             if stale_sql_path.exists() {
                 std::fs::remove_file(&stale_sql_path).with_context(|| {
-                    format!("Failed to remove stale grouped SQL {}", stale_sql_path.display())
+                    format!(
+                        "Failed to remove stale grouped SQL {}",
+                        stale_sql_path.display()
+                    )
                 })?;
             }
             continue;
@@ -1422,8 +1422,8 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
         });
 
         if force_schema_inference_for_objectid && !quiet {
-            eprintln!(
-                "warning: mapping DDL for '{}' uses surrogate BIGSERIAL id while source _id is ObjectId; using schema-inferred DDL to preserve UUID mapping",
+            warn!(
+                "mapping DDL for '{}' uses surrogate BIGSERIAL id while source _id is ObjectId; using schema-inferred DDL to preserve UUID mapping",
                 table_name
             );
         }
@@ -1449,18 +1449,17 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
         std::fs::write(&sql_path, &ddl)
             .with_context(|| format!("Failed to write {}", sql_path.display()))?;
         if !quiet {
-            println!("SQL written to {}", sql_path.display());
+            info!("SQL written to {}", sql_path.display());
         }
     }
 
     if !quiet {
-        eprintln!(
-            "to-pg completed. Review the generated SQL files to confirm that schema names and table names suit your needs."
+        info!("to-pg completed. Review the generated SQL files to confirm that schema names and table names suit your needs."
         );
-        eprintln!(
+        info!(
             "Also check that table and column names do not exceed PostgreSQL's 63-byte identifier limit."
         );
-        eprintln!(
+        info!(
             "If you modify those SQL files, the next export and report commands will use them as their source of truth."
         );
     }
@@ -1612,8 +1611,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .await
                 .context("Failed to list databases")?;
             if !existing_dbs.iter().any(|d| d == db_name) {
-                eprintln!(
-                    "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
+                warn!(
+                    "database '{db_name}' does not exist on the server. Available databases: {}",
                     existing_dbs.join(", ")
                 );
             }
@@ -1623,8 +1622,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .await
                 .context("Failed to list collections")?;
             if !existing_colls.iter().any(|c| c == coll_name) {
-                eprintln!(
-                    "Warning: collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
+                warn!(
+                    "collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
                     existing_colls.join(", ")
                 );
             }
@@ -1635,7 +1634,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .map(|name| sanitize(name))
                 .collect::<HashSet<_>>();
             if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
-                eprintln!(
+                info!(
                     "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
                 );
                 return Ok(());
@@ -1657,7 +1656,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             )
             .await?;
             if args.print_json && !args.no_output {
-                println!("{}", serde_json::to_string_pretty(&schema)?);
+                info!("{}", serde_json::to_string_pretty(&schema)?);
             }
         }
         Some(ref ns) => {
@@ -1668,8 +1667,8 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .await
                 .context("Failed to list databases")?;
             if !existing_dbs.iter().any(|d| d == db_name) {
-                eprintln!(
-                    "Warning: database '{db_name}' does not exist on the server. Available databases: {}",
+                warn!(
+                    "database '{db_name}' does not exist on the server. Available databases: {}",
                     existing_dbs.join(", ")
                 );
             }
@@ -1711,11 +1710,11 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                     Ok(schema) => {
                         all_schemas.insert((*coll_name).clone(), schema);
                     }
-                    Err(e) => eprintln!("  [warn] skipping {db_name}.{coll_name}: {e:#}"),
+                    Err(e) => warn!(" skipping {db_name}.{coll_name}: {e:#}"),
                 }
             }
             if args.print_json && !args.no_output {
-                println!("{}", serde_json::to_string_pretty(&all_schemas)?);
+                info!("{}", serde_json::to_string_pretty(&all_schemas)?);
             }
         }
     }
@@ -1752,12 +1751,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 
     if chained_config.is_none() {
         if let Some(output_dir) = args.output_dir.as_deref() {
-            eprintln!(
+            info!(
                 "Inference completed. Collection schemas and statistics were written under {}.",
                 output_dir.display()
             );
             if chained_output_dir.is_some() {
-                eprintln!(
+                info!(
                 "If you need PostgreSQL DDL from this standalone output, run to-pg separately on the generated collection files."
             );
             }
@@ -1843,12 +1842,12 @@ fn print_infer_summary(conf: &Path) -> Result<()> {
         (score, rows.len(), table_count)
     };
 
-    println!("Inference summary");
-    println!("  Score: {:.2}", score);
-    println!("  Collections: {}", collection_count);
-    println!("  PostgreSQL tables: {}", table_count);
-    println!("  Detailed HTML report: {}", report_path.display());
-    println!(
+    info!("Inference summary");
+    info!("  Score: {:.2}", score);
+    info!("  Collections: {}", collection_count);
+    info!("  PostgreSQL tables: {}", table_count);
+    info!("  Detailed HTML report: {}", report_path.display());
+    info!(
         "  Next step: review the generated DDL files under {} and then run `mongo2pg export -c {}`",
         tables_root.display(),
         conf.display()
@@ -2297,8 +2296,8 @@ fn emit_infer_type_warnings(db_name: &str, coll_name: &str, schema: &CollectionS
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            eprintln!(
-                "  [warn] source {}.{} field {} mixes incompatible scalar types: dominant {} ({:.1}% of non-null values), minority {}. Normalize source values before import.",
+            info!(
+                " source {}.{} field {} mixes incompatible scalar types: dominant {} ({:.1}% of non-null values), minority {}. Normalize source values before import.",
                 db_name,
                 coll_name,
                 warning.field_path,
@@ -2311,17 +2310,16 @@ fn emit_infer_type_warnings(db_name: &str, coll_name: &str, schema: &CollectionS
 
     for warning in collect_identifier_warnings(schema) {
         if warning.kind == "pg_keyword" {
-            eprintln!(
-                "  [warn] source {}.{} field {} uses PostgreSQL keyword '{}'; it will be renamed to {}.",
+            info!(
+                "source {}.{} field {} uses PostgreSQL keyword '{}'. Consider renaming it.",
                 db_name,
                 coll_name,
                 warning.field_path,
                 warning.keyword.as_deref().unwrap_or(""),
-                warning.renamed_to.as_deref().unwrap_or(""),
             );
         } else {
-            eprintln!(
-                "  [warn] source {}.{} field {} matches type name '{}'; consider renaming it.",
+            info!(
+                "source {}.{} field {} matches type name '{}'. Consider renaming it.",
                 db_name,
                 coll_name,
                 warning.field_path,
@@ -2394,9 +2392,7 @@ async fn infer_all_databases(
         let coll_names = match db.list_collection_names().await {
             Ok(n) => n,
             Err(e) => {
-                eprintln!(
-                    "  [warn] skipping database '{db_name}' (cannot list collections): {e:#}"
-                );
+                warn!("skipping database '{db_name}' (cannot list collections): {e:#}");
                 continue;
             }
         };
@@ -2447,12 +2443,12 @@ async fn infer_all_databases(
                 Ok(schema) => {
                     db_schemas.insert(coll_name.clone(), schema);
                 }
-                Err(e) => eprintln!("  [warn] skipping {db_name}.{coll_name}: {e:#}"),
+                Err(e) => warn!("skipping {db_name}.{coll_name}: {e:#}"),
             }
         }
 
         if args.print_json && !args.no_output && args.output_dir.is_none() {
-            println!(
+            info!(
                 "{}",
                 serde_json::to_string_pretty(&IndexMap::from([(db_name.clone(), &db_schemas)]))?
             );
@@ -2629,13 +2625,7 @@ async fn infer_collection(
             let this_chunk = remaining.min(chunk_size);
             info!(
                 "chunk {}/{} size={} processed={}/{} collection={}.{}",
-                chunk_index,
-                total_chunks,
-                this_chunk,
-                processed,
-                sample_size,
-                db_name,
-                coll_name
+                chunk_index, total_chunks, this_chunk, processed, sample_size, db_name, coll_name
             );
 
             let mut auth_retry_attempt = 0_u32;
@@ -2860,10 +2850,10 @@ fn bson_as_u64(value: &Bson) -> Option<u64> {
 
 fn bson_as_timestamp_string(value: &Bson) -> Option<String> {
     match value {
-        Bson::DateTime(dt) => chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
-            dt.timestamp_millis(),
-        )
-        .map(|ts| ts.format("%Y-%m-%d %H:%M:%S UTC").to_string()),
+        Bson::DateTime(dt) => {
+            chrono::DateTime::<chrono::Utc>::from_timestamp_millis(dt.timestamp_millis())
+                .map(|ts| ts.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+        }
         Bson::String(text) if !text.trim().is_empty() => Some(text.trim().to_owned()),
         _ => None,
     }
@@ -2910,9 +2900,7 @@ async fn fetch_collection_read_ops_stats(
     let latency_stats = stats_doc.get_document("latencyStats").ok()?;
     let reads = latency_stats.get_document("reads").ok()?;
     let read_ops = reads.get("ops").and_then(bson_as_u64)?;
-    let mut since = reads
-        .get("since")
-        .and_then(bson_as_timestamp_string);
+    let mut since = reads.get("since").and_then(bson_as_timestamp_string);
     if since.is_none() {
         since = fetch_server_uptime_since(db).await;
     }
@@ -4979,16 +4967,30 @@ fn run_init(args: InitArgs) -> Result<()> {
     std::fs::write(&conf_path, conf_content)
         .with_context(|| format!("Failed to write {}", conf_path.display()))?;
 
-    println!(
+    info!(
         "Project '{}' initialised at {}",
         args.project_name,
         project_root.display()
     );
     for dir in &dirs {
-        println!("  {}", dir.display());
+        info!("{}", dir.display());
     }
-    println!("  {}", conf_path.display());
+    info!("{}", conf_path.display());
     Ok(())
+}
+
+fn import_table_name_from_csv_path(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?.to_str()?;
+    if let Some(table) = file_name.strip_suffix(".csv.gz") {
+        return Some(table.to_owned());
+    }
+    file_name.strip_suffix(".csv").map(str::to_owned)
+}
+
+fn is_supported_import_csv_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".csv.gz") || name.ends_with(".csv"))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -5107,14 +5109,14 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             .map(|(stem, _)| tables_dir.join(format!("{stem}.sql")));
 
         if let Some(closest_path) = closest_existing {
-            eprintln!(
-                "  warning: SQL schema not found for collection '{coll_name}': expected {}, closest existing file is {}",
+            warn!(
+                "SQL schema not found for collection '{coll_name}': expected {}, closest existing file is {}",
                 expected_path.display(),
                 closest_path.display()
             );
         } else {
-            eprintln!(
-                "  warning: SQL schema not found for collection '{coll_name}': expected {} – run `to-pg` first",
+            warn!(
+                "SQL schema not found for collection '{coll_name}': expected {} – run `to-pg` first",
                 expected_path.display()
             );
         }
@@ -5143,12 +5145,8 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 
     if let Some(name) = args.collection.clone() {
         let sanitized = sanitize_export_lookup_name(&name);
-        if let Some(sql_lookup_name) = resolve_export_sql_lookup_for_collection(
-            &name,
-            &tables_dir,
-            &collections_dir,
-            &sql_set,
-        )
+        if let Some(sql_lookup_name) =
+            resolve_export_sql_lookup_for_collection(&name, &tables_dir, &collections_dir, &sql_set)
         {
             export_jobs
                 .entry(sql_lookup_name)
@@ -5156,8 +5154,8 @@ async fn run_export(args: ExportArgs) -> Result<()> {
                 .push(name.clone());
         } else {
             let sql_path = tables_dir.join(format!("{sanitized}.sql"));
-            eprintln!(
-                "  warning: SQL schema not found: {} – run `to-pg` first",
+            warn!(
+                "SQL schema not found: {} – run `to-pg` first",
                 sql_path.display()
             );
         }
@@ -5172,11 +5170,18 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             .filter(|coll| should_infer_collection(coll, &conf_include, &conf_exclude));
 
         let mongo_colls_vec = mongo_colls.collect::<Vec<_>>();
-        export_jobs =
-            plan_export_jobs_for_collections(mongo_colls_vec.clone(), &tables_dir, &collections_dir, &sql_set);
+        export_jobs = plan_export_jobs_for_collections(
+            mongo_colls_vec.clone(),
+            &tables_dir,
+            &collections_dir,
+            &sql_set,
+        );
 
         for coll in mongo_colls_vec {
-            if !export_jobs.values().any(|members| members.iter().any(|member| member == &coll)) {
+            if !export_jobs
+                .values()
+                .any(|members| members.iter().any(|member| member == &coll))
+            {
                 let sanitized = sanitize_export_lookup_name(&coll);
                 warn_missing_sql_schema(&coll, &sanitized, &tables_dir, &sql_files);
             }
@@ -5184,7 +5189,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     }
 
     if export_jobs.is_empty() {
-        eprintln!("No SQL schema files found in {}", tables_dir.display());
+        warn!("No SQL schema files found in {}", tables_dir.display());
         return Ok(());
     }
 
@@ -5198,7 +5203,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 
     for (index, (sql_lookup_name, coll_names)) in jobs.iter().enumerate() {
         if coll_names.len() == 1 {
-            eprintln!(
+            info!(
                 "[{}/{}] Exporting {db_name}.{} via {}.sql",
                 index + 1,
                 total_jobs,
@@ -5206,7 +5211,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
                 sql_lookup_name
             );
         } else {
-            eprintln!(
+            info!(
                 "[{}/{}] Exporting grouped {} collections into {}.sql ({})",
                 index + 1,
                 total_jobs,
@@ -5215,7 +5220,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
                 coll_names.join(", ")
             );
             for (member_index, coll_name) in coll_names.iter().enumerate() {
-                eprintln!(
+                info!(
                     "      -> member [{}/{}]: {db_name}.{} -> {}.sql",
                     member_index + 1,
                     coll_names.len(),
@@ -5237,7 +5242,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .await
         {
             Ok(()) => {}
-            Err(e) => eprintln!("  warning: {e}"),
+            Err(e) => warn!("  warning: {e}"),
         }
     }
 
@@ -5389,10 +5394,10 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                 ));
             }
         }
-        println!("Created PostgreSQL objects from {}", sql_path.display());
+        info!("Created PostgreSQL objects from {}", sql_path.display());
     }
 
-    let mut csv_files: Vec<PathBuf> = std::fs::read_dir(&data_db_dir)
+    let mut csv_candidates: Vec<PathBuf> = std::fs::read_dir(&data_db_dir)
         .with_context(|| format!("Cannot read {}", data_db_dir.display()))?
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path())
@@ -5415,22 +5420,49 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                 .into_iter()
                 .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
                 .map(|entry| entry.path())
-                .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("gz"))
+                .filter(|path| is_supported_import_csv_path(path))
                 .filter(|path| {
-                    path.file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .and_then(|stem| stem.strip_suffix(".csv"))
-                        .map(|table_name| allowed_table_names.contains(table_name))
+                    import_table_name_from_csv_path(path)
+                        .map(|table_name| allowed_table_names.contains(&table_name))
                         .unwrap_or(false)
                 })
                 .collect::<Vec<_>>()
         })
         .collect();
+
+    csv_candidates.sort();
+    let mut csv_files_by_table: std::collections::HashMap<String, PathBuf> =
+        std::collections::HashMap::new();
+    for path in csv_candidates {
+        let Some(table_name) = import_table_name_from_csv_path(&path) else {
+            continue;
+        };
+        let is_gz = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".csv.gz"));
+        match csv_files_by_table.get(&table_name) {
+            Some(existing) => {
+                let existing_is_gz = existing
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with(".csv.gz"));
+                if is_gz && !existing_is_gz {
+                    csv_files_by_table.insert(table_name, path);
+                }
+            }
+            None => {
+                csv_files_by_table.insert(table_name, path);
+            }
+        }
+    }
+
+    let mut csv_files: Vec<PathBuf> = csv_files_by_table.into_values().collect();
     csv_files.sort();
 
     if csv_files.is_empty() {
         return Err(anyhow!(
-            "No .csv.gz files found in {}",
+            "No .csv or .csv.gz files found in {}",
             data_db_dir.display()
         ));
     }
@@ -5450,15 +5482,12 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                     .and_then(|name| name.to_str())
             })
             .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
-        let table = csv_path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .and_then(|stem| stem.strip_suffix(".csv"))
+        let table = import_table_name_from_csv_path(csv_path.as_path())
             .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
         let truncate_sql = format!(
             "TRUNCATE TABLE {}.{} CASCADE",
             quote_ident(schema),
-            quote_ident(table)
+            quote_ident(&table)
         );
         match transaction.batch_execute(&truncate_sql).await {
             Ok(()) => {}
@@ -5483,13 +5512,10 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                     .and_then(|name| name.to_str())
             })
             .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
-        let table = csv_path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .and_then(|stem| stem.strip_suffix(".csv"))
+        let table = import_table_name_from_csv_path(csv_path.as_path())
             .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
         let table_columns = table_columns_by_name
-            .get(table)
+            .get(&table)
             .ok_or_else(|| anyhow!("No DDL column metadata found for table {table}"))?;
         let copy_columns = table_columns
             .iter()
@@ -5499,15 +5525,24 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         let copy_sql = format!(
             "COPY {}.{} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)",
             quote_ident(schema),
-            quote_ident(table),
+            quote_ident(&table),
             copy_columns,
         );
-        let file = std::fs::File::open(csv_path)
-            .with_context(|| format!("Failed to open {}", csv_path.display()))?;
-        let mut decoder = GzDecoder::new(file);
         let mut contents = Vec::new();
-        std::io::Read::read_to_end(&mut decoder, &mut contents)
-            .with_context(|| format!("Failed to decompress {}", csv_path.display()))?;
+        let is_gz = csv_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".csv.gz"));
+        if is_gz {
+            let file = std::fs::File::open(csv_path)
+                .with_context(|| format!("Failed to open {}", csv_path.display()))?;
+            let mut decoder = GzDecoder::new(file);
+            std::io::Read::read_to_end(&mut decoder, &mut contents)
+                .with_context(|| format!("Failed to decompress {}", csv_path.display()))?;
+        } else {
+            contents = std::fs::read(csv_path)
+                .with_context(|| format!("Failed to read {}", csv_path.display()))?;
+        }
         let content_text = String::from_utf8_lossy(&contents).into_owned();
 
         let sink = match transaction.copy_in(&copy_sql).await {
@@ -5546,7 +5581,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                 ));
             }
         };
-        println!(
+        info!(
             "Imported {rows} row(s) into {}.{} from {}",
             schema,
             table,
@@ -5555,7 +5590,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     }
 
     transaction.commit().await?;
-    println!("Import completed for database '{target_database_name}'.");
+    info!("Import completed for database '{target_database_name}'.");
 
     let post_import_namespace = if namespace_collection.is_none() {
         args.collection
@@ -5854,6 +5889,32 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         raw.replace('\'', "''")
     }
 
+    fn unwrap_union_tagged_value(value: &Value) -> &Value {
+        const UNION_TAGS: [&str; 12] = [
+            "null", "string", "boolean", "int", "long", "float", "double", "bytes", "array", "map",
+            "record", "enum",
+        ];
+
+        let mut current = value;
+        loop {
+            let Value::Object(obj) = current else {
+                break;
+            };
+            if obj.len() != 1 {
+                break;
+            }
+            let Some((tag, inner)) = obj.iter().next() else {
+                break;
+            };
+            if UNION_TAGS.contains(&tag.as_str()) {
+                current = inner;
+            } else {
+                break;
+            }
+        }
+        current
+    }
+
     fn normalized_sql_type(sql_type: Option<&str>) -> Option<String> {
         let raw = sql_type?.trim();
         if raw.is_empty() {
@@ -5939,6 +6000,12 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         } else {
             value.to_string()
         };
+        cast_epoch_seconds_literal(&seconds_expr, sql_type)
+    }
+
+    fn temporal_literal_from_epoch_millis_i64(value_ms: i64, sql_type: Option<&str>) -> String {
+        // Value is milliseconds since epoch; convert to seconds with fractional part.
+        let seconds_expr = format!("{value_ms}::double precision / 1000.0");
         cast_epoch_seconds_literal(&seconds_expr, sql_type)
     }
 
@@ -6033,13 +6100,28 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         if let Some(date_value) = obj.get("$date") {
             return match date_value {
                 Value::String(raw) => Some(cast_string_literal(raw, sql_type)),
-                Value::Number(raw) => temporal_literal_from_number(raw, sql_type),
+                // Debezium / Mongo typically represent $date as milliseconds since epoch.
+                // Treat numeric $date values as milliseconds to avoid misclassification
+                // by heuristics and preserve historical (pre-1970) dates correctly.
+                Value::Number(raw) => {
+                    if let Some(ms) = raw.as_i64() {
+                        Some(temporal_literal_from_epoch_millis_i64(ms, sql_type))
+                    } else if let Some(msu) = raw.as_u64() {
+                        // safe cast for typical schema values
+                        Some(temporal_literal_from_epoch_millis_i64(msu as i64, sql_type))
+                    } else if let Some(msf) = raw.as_f64() {
+                        // fallback: treat float as milliseconds
+                        Some(temporal_literal_from_epoch_f64(msf, sql_type))
+                    } else {
+                        None
+                    }
+                }
                 Value::Object(inner) => {
                     if let Some(Value::String(ms_raw)) = inner.get("$numberLong") {
                         ms_raw
                             .parse::<i64>()
                             .ok()
-                            .map(|ms| temporal_literal_from_epoch_i64(ms, sql_type))
+                            .map(|ms| temporal_literal_from_epoch_millis_i64(ms, sql_type))
                     } else {
                         None
                     }
@@ -6069,6 +6151,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     fn is_object_id_wrapper(value: &Value) -> bool {
+        let value = unwrap_union_tagged_value(value);
         value
             .as_object()
             .and_then(|obj| obj.get("$oid"))
@@ -6083,7 +6166,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         target_field: &str,
         table_name: &str,
     ) -> Result<()> {
-        let Some(value) = value else {
+        let Some(value) = value.map(unwrap_union_tagged_value) else {
             return Ok(());
         };
         if is_object_id_wrapper(value) && sql_type_expects_numeric(sql_type) {
@@ -6181,7 +6264,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     fn sql_literal(value: Option<&Value>, sql_type: Option<&str>) -> String {
-        let Some(value) = value else {
+        let Some(value) = value.map(unwrap_union_tagged_value) else {
             return "NULL".to_owned();
         };
 
@@ -6289,6 +6372,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         target_field: &str,
         table_name: &str,
     ) -> Result<()> {
+        let value = value.map(unwrap_union_tagged_value);
         let Some(limit) = varchar_limit(sql_type) else {
             return Ok(());
         };
@@ -6318,6 +6402,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         target_field: &str,
         table_name: &str,
     ) -> Result<()> {
+        let value = value.map(unwrap_union_tagged_value);
         if nullable {
             return Ok(());
         }
@@ -6346,9 +6431,16 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             if let Some(value) = values_at_path(payload_doc, &segments).into_iter().next() {
                 return Some(value);
             }
+
+            // For dotted paths we still allow a nested fallback to support
+            // flattened payload variants from some connectors.
+            return find_value_in_nested_json_object(payload_obj, source_field);
         }
 
-        find_value_in_nested_json_object(payload_obj, source_field)
+        // For scalar root fields (for example `active`) do not recurse into nested
+        // objects: nested siblings can contain the same field name and cause wrong
+        // values to be applied to the root row.
+        None
     }
 
     fn resolve_source_field_value_from_map<'a>(
@@ -6403,32 +6495,6 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let Some(value) = value else {
             return Ok(None);
         };
-
-        fn unwrap_union_tagged_value(value: &Value) -> &Value {
-            const UNION_TAGS: [&str; 12] = [
-                "null", "string", "boolean", "int", "long", "float", "double", "bytes", "array",
-                "map", "record", "enum",
-            ];
-
-            let mut current = value;
-            loop {
-                let Value::Object(obj) = current else {
-                    break;
-                };
-                if obj.len() != 1 {
-                    break;
-                }
-                let Some((tag, inner)) = obj.iter().next() else {
-                    break;
-                };
-                if UNION_TAGS.contains(&tag.as_str()) {
-                    current = inner;
-                } else {
-                    break;
-                }
-            }
-            current
-        }
 
         let value = unwrap_union_tagged_value(value);
         match value {
@@ -7088,8 +7154,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
             if let Some(ddl_db_name) = extract_psql_database_name(&sql) {
                 if ddl_db_name != db_name {
-                    eprintln!(
-                        "warning: DDL file {} targets database '{}' while kafka-import target database is '{}'",
+                    warn!(
+                        "DDL file {} targets database '{}' while kafka-import target database is '{}'",
                         sql_path.display(),
                         ddl_db_name,
                         db_name
@@ -7131,7 +7197,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             }
 
             if all_tables_exist {
-                println!(
+                info!(
                     "Skipping DDL from {} (objects already exist)",
                     sql_path.display()
                 );
@@ -7140,13 +7206,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
             match pg_client.batch_execute(&executable_sql).await {
                 Ok(()) => {
-                    println!("Created PostgreSQL objects from {}", sql_path.display());
+                    info!("Created PostgreSQL objects from {}", sql_path.display());
                 }
                 Err(err) if is_missing_postgis_control_file(&err) => {
                     let fallback_sql = strip_postgis_extension_statement(&executable_sql);
                     match pg_client.batch_execute(&fallback_sql).await {
                         Ok(()) => {
-                            println!(
+                            info!(
                                 "Created PostgreSQL objects from {} (without PostGIS extension statement)",
                                 sql_path.display()
                             );
@@ -7167,7 +7233,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                         || err.code()
                             == Some(&tokio_postgres::error::SqlState::DUPLICATE_SCHEMA) =>
                 {
-                    println!(
+                    info!(
                         "Skipping existing PostgreSQL objects from {} ({})",
                         sql_path.display(),
                         format_postgres_error(&err)
@@ -7366,7 +7432,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .subscribe(&topic_refs)
         .with_context(|| format!("Failed to subscribe topics: {}", topics.join(", ")))?;
 
-    println!(
+    info!(
         "Kafka import started. group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
         effective_group_id,
         topics.join(","),
@@ -7376,7 +7442,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     );
 
     if snapshot_mode {
-        println!(
+        info!(
             "Snapshot mode enabled (offset=0): truncating mapped PostgreSQL tables before consuming Kafka messages"
         );
         let truncated = truncate_tables_for_snapshot(
@@ -7385,12 +7451,12 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             conf.target_schema.as_deref(),
         )
         .await?;
-        println!(
+        info!(
             "Snapshot mode: truncated {} mapped PostgreSQL table(s) before consuming",
             truncated
         );
     } else {
-        println!(
+        info!(
             "Snapshot mode disabled: PostgreSQL tables are not truncated (offset={})",
             auto_offset_reset
         );
@@ -7413,15 +7479,15 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let mut snapshot_inserted_rows = 0_u64;
     let mut table_insert_execs: HashMap<String, u64> = HashMap::new();
 
-    println!(
-        "Kafka import diagnostics enabled: fallback_auto_offset_reset={} (configured={}), used_only_when_no_valid_committed_offset=true, max_messages={}",
+    info!(
+        "Kafka consumer configuration: auto_offset_reset={}, configured_auto_offset_reset={}, max_messages={}",
         auto_offset_reset,
         configured_auto_offset_reset,
         max_messages
             .map(|value| value.to_string())
             .unwrap_or_else(|| "none".to_owned())
     );
-    println!(
+    info!(
         "Loaded mapping folders for {} collection(s)",
         mappings_by_collection.len()
     );
@@ -7432,7 +7498,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             match tokio::time::timeout(Duration::from_secs(10), stream.next()).await {
                 Ok(item) => item,
                 Err(_) => {
-                    println!(
+                    warn!(
                         "Snapshot mode: idle timeout reached (10s without new messages), stopping."
                     );
                     break;
@@ -7443,7 +7509,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         };
 
         let Some(message_result) = next_item else {
-            println!("Kafka stream ended by broker/consumer");
+            info!("Kafka stream ended by broker/consumer");
             break;
         };
 
@@ -7474,7 +7540,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let Some(mappings) = mappings_by_collection.get(&folder_name) else {
             skipped_mapping += 1;
             warn!(
-                "warning: no mapping folder for collection '{}' (expected '{}')",
+                "no mapping folder for collection '{}' (expected '{}')",
                 collection_name, folder_name
             );
             continue;
@@ -7497,7 +7563,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
-                warn!("warning: failed to decode message on topic {topic}: {err}");
+                warn!("failed to decode message on topic {topic}: {err}");
                 continue;
             }
         };
@@ -7508,32 +7574,6 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .map(|obj| Value::Object(obj.clone()))
             .unwrap_or(decoded);
 
-        fn unwrap_union_tagged_value(value: &Value) -> &Value {
-            const UNION_TAGS: [&str; 12] = [
-                "null", "string", "boolean", "int", "long", "float", "double", "bytes", "array",
-                "map", "record", "enum",
-            ];
-
-            let mut current = value;
-            loop {
-                let Value::Object(obj) = current else {
-                    break;
-                };
-                if obj.len() != 1 {
-                    break;
-                }
-                let Some((tag, inner)) = obj.iter().next() else {
-                    break;
-                };
-                if UNION_TAGS.contains(&tag.as_str()) {
-                    current = inner;
-                } else {
-                    break;
-                }
-            }
-            current
-        }
-
         let op = payload
             .get("op")
             .map(unwrap_union_tagged_value)
@@ -7543,7 +7583,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
-                warn!("warning: failed to parse Debezium 'after' for topic {topic}: {err:#}");
+                warn!("failed to parse Debezium 'after' for topic {topic}: {err:#}");
                 continue;
             }
         };
@@ -7551,7 +7591,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
-                warn!("warning: failed to parse Debezium 'before' for topic {topic}: {err:#}");
+                warn!("failed to parse Debezium 'before' for topic {topic}: {err:#}");
                 continue;
             }
         };
@@ -7591,8 +7631,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             Ok(rows) => rows,
             Err(err) => {
                 apply_failed += 1;
-                eprintln!(
-                    "warning: apply failed topic={} collection={} op={}: {:#}\n  hint: extend map_extended_json_literal() in src/bin/mongo2pg.rs to support this payload shape\n  hint: constraint errors include source_field and target_field in details",
+                warn!(
+                    "apply failed topic={} collection={} op={}: {:#}\n  hint: extend map_extended_json_literal() in src/bin/mongo2pg.rs to support this payload shape\n  hint: constraint errors include source_field and target_field in details",
                     topic, collection_name, op, err
                 );
 
@@ -7603,16 +7643,16 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     {
                         Ok(()) => {
                             dlq_published += 1;
-                            eprintln!("warning: message copied to DLQ topic=dlq_{}", topic);
+                            warn!("message copied to DLQ topic=dlq_{}", topic);
                         }
                         Err(dlq_err) => {
                             dlq_failed += 1;
-                            eprintln!("warning: failed to copy message to DLQ: {dlq_err:#}");
+                            warn!("failed to copy message to DLQ: {dlq_err:#}");
                         }
                     }
                 } else {
                     dlq_failed += 1;
-                    eprintln!("warning: failed to copy message to DLQ: message payload missing");
+                    warn!("failed to copy message to DLQ: message payload missing");
                 }
 
                 continue;
@@ -7624,14 +7664,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             snapshot_inserted_rows += applied_rows;
         }
         if processed <= 5 || processed % batch_log_messages == 0 {
-            println!(
+            info!(
                 "Kafka apply ok: processed={} topic={} collection={} op={} affected_rows={}",
                 processed, topic, collection_name, op, applied_rows
             );
         }
 
         if polled % batch_log_messages == 0 {
-            println!(
+            info!(
                 "Kafka progress: polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
                 polled,
                 processed,
@@ -7642,11 +7682,11 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 decode_failed,
                 apply_failed
             );
-            println!(
+            info!(
                 "Kafka progress DLQ: dlq_published={}, dlq_failed={}",
                 dlq_published, dlq_failed
             );
-            println!(
+            info!(
                 "Kafka progress tables: impacted_tables={}, insert_execs={}",
                 table_insert_execs.len(),
                 format_table_insert_exec_summary(&table_insert_execs)
@@ -7655,13 +7695,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
         if let Some(limit) = max_messages {
             if processed >= limit {
-                println!("Reached --max-messages limit ({limit}), stopping.");
+                info!("Reached --max-messages limit ({limit}), stopping.");
                 break;
             }
         }
     }
 
-    println!(
+    info!(
         "Kafka import finished. polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
         polled,
         processed,
@@ -7672,17 +7712,17 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         decode_failed,
         apply_failed
     );
-    println!(
+    info!(
         "Kafka import DLQ summary: dlq_published={}, dlq_failed={}",
         dlq_published, dlq_failed
     );
-    println!(
+    info!(
         "Kafka import table summary: impacted_tables={}, insert_execs={}",
         table_insert_execs.len(),
         format_table_insert_exec_summary(&table_insert_execs)
     );
     if snapshot_mode {
-        println!(
+        info!(
             "Snapshot summary: total affected rows applied to PostgreSQL={} (upserts + child inserts)",
             snapshot_inserted_rows
         );
@@ -7838,7 +7878,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
         if !quiet {
-            println!("Report written to {}", output_path.display());
+            info!("Report written to {}", output_path.display());
         }
     } else {
         // ── Flat / single-db layout ────────────────────────────────────────────
@@ -7860,7 +7900,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
         std::fs::write(&output_path, &html)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
         if !quiet {
-            println!("Report written to {}", output_path.display());
+            info!("Report written to {}", output_path.display());
         }
     }
 
@@ -7895,11 +7935,11 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
                             format!("Failed to write {}", schema_path.display())
                         })?;
                         if !quiet {
-                            println!("Schema diagram written to {}", schema_path.display());
+                            info!("Schema diagram written to {}", schema_path.display());
                         }
                     }
                 }
-                Err(e) => eprintln!("Warning: could not generate schema diagram: {e}"),
+                Err(e) => warn!("could not generate schema diagram: {e}"),
             }
         }
     }
@@ -7979,7 +8019,7 @@ async fn write_post_import_report(
     );
     std::fs::write(&output_path, html)
         .with_context(|| format!("Failed to write {}", output_path.display()))?;
-    println!("Post-import report written to {}", output_path.display());
+    info!("Post-import report written to {}", output_path.display());
 
     Ok(())
 }
@@ -8026,7 +8066,7 @@ fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
     let output_path = args.output.unwrap_or_else(|| PathBuf::from("cluster.html"));
     std::fs::write(&output_path, &html)
         .with_context(|| format!("Failed to write {}", output_path.display()))?;
-    println!("Cluster report written to {}", output_path.display());
+    info!("Cluster report written to {}", output_path.display());
 
     Ok(())
 }
@@ -8483,7 +8523,7 @@ async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
         .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
     tokio::spawn(async move {
         if let Err(err) = pg_connection.await {
-            eprintln!("warning: PostgreSQL connection error: {err}");
+            warn!("PostgreSQL connection error: {err}");
         }
     });
 
@@ -8494,7 +8534,7 @@ async fn ensure_pg_database(pg_client: &tokio_postgres::Client, db_name: &str) -
     let create_db_sql = format!("CREATE DATABASE {}", quote_ident(db_name));
     match pg_client.batch_execute(&create_db_sql).await {
         Ok(()) => {
-            println!("Created PostgreSQL database {}", quote_ident(db_name));
+            info!("Created PostgreSQL database {}", quote_ident(db_name));
             Ok(())
         }
         Err(err) if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_DATABASE) => {
@@ -8750,10 +8790,21 @@ async fn build_post_import_rows(
     }
 
     fn into_post_import_node(node: CountNode) -> PostImportNode {
+        let md5_confirms_match = node.md5_summary.as_ref().is_some_and(|summary| {
+            summary.mongo_md5 == summary.pg_md5 && summary.mismatches.is_empty()
+        });
+        let display_mongo_count = if md5_confirms_match {
+            node.pg_row_count
+                .and_then(|count| u64::try_from(count).ok())
+                .unwrap_or(node.mongo_count)
+        } else {
+            node.mongo_count
+        };
+
         PostImportNode {
             name: node.name,
             is_array: node.is_array,
-            mongo_count: node.mongo_count,
+            mongo_count: display_mongo_count,
             pg_table_name: node.pg_table_name,
             pg_row_count: node.pg_row_count,
             md5_summary: node.md5_summary,
@@ -8769,7 +8820,12 @@ async fn build_post_import_rows(
     fn collect_rowcount_mismatch_tables(node: &CountNode, out: &mut Vec<String>) {
         if let (Some(table_name), Some(pg_rows)) = (&node.pg_table_key, node.pg_row_count) {
             if pg_rows != node.mongo_count as i64 {
-                out.push(table_name.clone());
+                let md5_confirms_match = node.md5_summary.as_ref().is_some_and(|summary| {
+                    summary.mongo_md5 == summary.pg_md5 && summary.mismatches.is_empty()
+                });
+                if !md5_confirms_match {
+                    out.push(table_name.clone());
+                }
             }
         }
         for child in &node.children {
@@ -8829,7 +8885,7 @@ async fn build_post_import_rows(
         .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
     tokio::spawn(async move {
         if let Err(err) = pg_connection.await {
-            eprintln!("warning: PostgreSQL connection error: {err}");
+            warn!("PostgreSQL connection error: {err}");
         }
     });
 
@@ -8900,8 +8956,8 @@ async fn build_post_import_rows(
             }
             let root_ref = table_rows.get(&root_table_name);
             let md5_summaries = if include_md5 {
-                println!(
-                    "[{}/{}] Computing hash (md5) for {}.{}",
+                info!(
+                    "[{}/{}] ⚙️  compute hash (md5) for {}.{}",
                     index + 1,
                     total_collections,
                     db_name,
@@ -8942,8 +8998,8 @@ async fn build_post_import_rows(
                         })
                         .collect::<HashMap<_, _>>(),
                     Err(err) => {
-                        eprintln!(
-                            "warning: failed to compute md5 summary for {}.{}: {}",
+                        warn!(
+                            "failed to compute md5 summary for {}.{}: {}",
                             db_name, coll_name, err
                         );
                         HashMap::new()
@@ -8997,7 +9053,7 @@ async fn build_post_import_rows(
 
             if !mismatch_tables.is_empty() {
                 for table_name in &mismatch_tables {
-                    println!(
+                    info!(
                         "[{}/{}] Rowcount diff detected for {}.{} table {}: searching first 5 differences",
                         index + 1,
                         total_collections,
@@ -9051,8 +9107,8 @@ async fn build_post_import_rows(
                             }
                         }
                         Err(err) => {
-                            eprintln!(
-                                "warning: failed to collect count differences for {}.{}: {}",
+                            warn!(
+                                "failed to collect count differences for {}.{}: {}",
                                 db_name, coll_name, err
                             );
                         }
@@ -9091,24 +9147,21 @@ mod tests {
     use super::{
         apply_collection_property_filters, apply_config_overrides, build_collection_mappings,
         build_collection_mappings_with_timestamp_fields, child_row_objects_for_mapping,
-        collect_infer_type_warnings, collect_nullable_scalar_warnings, count_dynamic_map_entries,
-        detect_candidate_groups, dynamic_map_value_fields, format_runtime_log_line,
-        infer_query_max_time, is_unauthorized_cursor_error,
-        plan_export_jobs_for_collections, render_ddl_from_mapping_tables,
-        resolve_collections_dir, resolve_export_sql_lookup_for_collection,
-        resolve_log_level_precedence,
-        resolve_infer_auth_retry_max, resolve_infer_chunk_size, resolve_post_import_table_row,
-        resolve_root_table_name, sanitize_name,
-        should_infer_collection, strip_psql_preamble,
-        timeout_fallback_hint, classify_unauthorized_retry, validate_group_schema_compatibility,
-        ConfigOverrides, PostImportTableRow,
-        UnauthorizedRetryDecision, DEFAULT_INFER_AUTH_RETRY_MAX, DEFAULT_INFER_CHUNK_SIZE,
-        DEFAULT_SAMPLE_MAX_TIME,
+        classify_unauthorized_retry, collect_infer_type_warnings, collect_nullable_scalar_warnings,
+        count_dynamic_map_entries, detect_candidate_groups, dynamic_map_value_fields,
+        format_runtime_log_line, infer_query_max_time, is_unauthorized_cursor_error,
+        plan_export_jobs_for_collections, render_ddl_from_mapping_tables, resolve_collections_dir,
+        resolve_export_sql_lookup_for_collection, resolve_infer_auth_retry_max,
+        resolve_infer_chunk_size, resolve_log_level_precedence, resolve_post_import_table_row,
+        resolve_root_table_name, sanitize_name, should_infer_collection, strip_psql_preamble,
+        timeout_fallback_hint, validate_group_schema_compatibility, ConfigOverrides,
+        PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_INFER_AUTH_RETRY_MAX,
+        DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
     };
     use bson::doc;
+    use log::{Level, LevelFilter};
     use mongo2pg::analyzer::Analyzer;
     use mongo2pg::schema_diagram::Table;
-    use log::{Level, LevelFilter};
     use serde::Deserialize;
     use std::collections::{HashMap, HashSet};
     use std::io::Write;
@@ -9296,7 +9349,9 @@ mod tests {
             "Command failed: Error code 13 (Unauthorized): Command getMore requires authentication"
         ));
         assert!(is_unauthorized_cursor_error("error: unauthorized"));
-        assert!(!is_unauthorized_cursor_error("Error code 50 (MaxTimeMSExpired)"));
+        assert!(!is_unauthorized_cursor_error(
+            "Error code 50 (MaxTimeMSExpired)"
+        ));
     }
 
     #[test]
@@ -9346,8 +9401,8 @@ mod tests {
             resolve_log_level_precedence(None, Some("warn")).expect("config level should parse");
         assert_eq!(config_level, LevelFilter::Warn);
 
-        let default_level = resolve_log_level_precedence(None, None)
-            .expect("default level should resolve to info");
+        let default_level =
+            resolve_log_level_precedence(None, None).expect("default level should resolve to info");
         assert_eq!(default_level, LevelFilter::Info);
     }
 
@@ -9373,9 +9428,16 @@ mod tests {
 
     #[test]
     fn detect_candidate_groups_skips_singletons() {
-        let names = vec!["events_lmfr".to_owned(), "users".to_owned(), "orders".to_owned()];
+        let names = vec![
+            "events_lmfr".to_owned(),
+            "users".to_owned(),
+            "orders".to_owned(),
+        ];
         let groups = detect_candidate_groups(&names);
-        assert!(groups.is_empty(), "no group should form when prefix has only one member");
+        assert!(
+            groups.is_empty(),
+            "no group should form when prefix has only one member"
+        );
     }
 
     #[test]
@@ -9406,8 +9468,7 @@ mod tests {
         for coll in ["events_lmfr", "events_lmza"] {
             let coll_dir = dir.join(coll);
             std::fs::create_dir_all(&coll_dir).expect("create coll dir");
-            std::fs::write(coll_dir.join(format!("{coll}.json")), schema_a)
-                .expect("write schema");
+            std::fs::write(coll_dir.join(format!("{coll}.json")), schema_a).expect("write schema");
         }
 
         let group = super::CollectionGroup {
@@ -9436,8 +9497,7 @@ mod tests {
         for (coll, schema) in [("events_lmfr", schema_a), ("events_lmza", schema_b)] {
             let coll_dir = dir.join(coll);
             std::fs::create_dir_all(&coll_dir).expect("create coll dir");
-            std::fs::write(coll_dir.join(format!("{coll}.json")), schema)
-                .expect("write schema");
+            std::fs::write(coll_dir.join(format!("{coll}.json")), schema).expect("write schema");
         }
 
         let group = super::CollectionGroup {
@@ -9453,9 +9513,18 @@ mod tests {
     #[test]
     fn format_runtime_log_line_includes_timestamp_elapsed_and_level() {
         let line = format_runtime_log_line(Level::Info, Duration::from_millis(1250), "hello");
-        assert!(line.contains("+1.250s"));
+        assert!(line.contains("+1s"));
+        assert!(!line.contains(".250"));
         assert!(line.contains("[INFO]"));
         assert!(line.ends_with("hello"));
+        let timestamp = line
+            .split(' ')
+            .next()
+            .expect("line should include timestamp");
+        assert_eq!(timestamp.len(), 19);
+        assert!(!timestamp.contains('.'));
+        assert!(!timestamp.contains('+'));
+        assert!(!timestamp.contains('Z'));
     }
 
     #[test]
@@ -10172,7 +10241,7 @@ CREATE TABLE demo (
             .collect::<Vec<_>>();
 
         assert!(columns.contains(&("_id", "communities_id")));
-        assert!(columns.contains(&("key", "key")));
+        assert!(!columns.contains(&("key", "key")));
         assert!(columns.contains(&("provider", "provider")));
         assert!(!mappings.iter().any(|(stem, _)| stem == "communities_dev"));
         assert!(!mappings.iter().any(|(stem, _)| stem == "communities_prod"));
@@ -10218,7 +10287,9 @@ CREATE TABLE demo (
         assert!(columns.contains(&("provider", "provider")));
         // assert!(columns.contains(&("metadata.creation_date", "creation_date")));
         // assert!(columns.contains(&("metadata.status", "status")));
-        assert!(!mappings.iter().any(|(stem, _)| stem == "providers_metadata"));
+        assert!(!mappings
+            .iter()
+            .any(|(stem, _)| stem == "providers_metadata"));
     }
 
     #[test]
@@ -10262,7 +10333,6 @@ CREATE TABLE demo (
             .iter()
             .map(|column| (column.source_field.as_str(), column.target_field.as_str()))
             .collect::<Vec<_>>();
-
 
         assert_eq!(services.mongo_path.as_deref(), Some(".services"));
         assert!(columns.contains(&("created_from", "created_from")));
@@ -10865,8 +10935,11 @@ pg_mapping:
         std::fs::create_dir_all(collections_dir.join("events_a"))
             .expect("collections dir should be created");
 
-        std::fs::write(tables_dir.join("events.sql"), "CREATE TABLE events (id BIGINT);")
-            .expect("grouped sql should be written");
+        std::fs::write(
+            tables_dir.join("events.sql"),
+            "CREATE TABLE events (id BIGINT);",
+        )
+        .expect("grouped sql should be written");
         std::fs::write(
             collections_dir.join("events_a").join("mapping_events.yaml"),
             "mongo_path: .\npg_mapping:\n  table_name: events\n",
@@ -10901,10 +10974,16 @@ pg_mapping:
         std::fs::create_dir_all(collections_dir.join("events_a"))
             .expect("collections dir should be created");
 
-        std::fs::write(tables_dir.join("events_a.sql"), "CREATE TABLE events_a (id BIGINT);")
-            .expect("direct sql should be written");
-        std::fs::write(tables_dir.join("events.sql"), "CREATE TABLE events (id BIGINT);")
-            .expect("grouped sql should be written");
+        std::fs::write(
+            tables_dir.join("events_a.sql"),
+            "CREATE TABLE events_a (id BIGINT);",
+        )
+        .expect("direct sql should be written");
+        std::fs::write(
+            tables_dir.join("events.sql"),
+            "CREATE TABLE events (id BIGINT);",
+        )
+        .expect("grouped sql should be written");
         std::fs::write(
             collections_dir.join("events_a").join("mapping_events.yaml"),
             "mongo_path: .\npg_mapping:\n  table_name: events\n",
@@ -10942,10 +11021,16 @@ pg_mapping:
         std::fs::create_dir_all(collections_dir.join("events_b"))
             .expect("events_b dir should be created");
 
-        std::fs::write(tables_dir.join("events.sql"), "CREATE TABLE events (id BIGINT);")
-            .expect("events sql should be written");
-        std::fs::write(tables_dir.join("users.sql"), "CREATE TABLE users (id BIGINT);")
-            .expect("users sql should be written");
+        std::fs::write(
+            tables_dir.join("events.sql"),
+            "CREATE TABLE events (id BIGINT);",
+        )
+        .expect("events sql should be written");
+        std::fs::write(
+            tables_dir.join("users.sql"),
+            "CREATE TABLE users (id BIGINT);",
+        )
+        .expect("users sql should be written");
         std::fs::write(
             collections_dir.join("events_a").join("mapping_events.yaml"),
             "mongo_path: .\npg_mapping:\n  table_name: events\n",
@@ -10977,7 +11062,10 @@ pg_mapping:
             .cloned()
             .expect("events group should be present");
         events_members.sort();
-        assert_eq!(events_members, vec!["events_a".to_owned(), "events_b".to_owned()]);
+        assert_eq!(
+            events_members,
+            vec!["events_a".to_owned(), "events_b".to_owned()]
+        );
 
         let users_members = jobs
             .get("users")
@@ -11364,7 +11452,7 @@ pg_mapping:
 
         run_infer(infer_args).await?;
 
-        println!("Inserted employee into MongoDB: {:?}", new_employee.name);
+        log::info!("Inserted employee into MongoDB: {:?}", new_employee.name);
 
         let ddl_file_path = temp_dir
             .path()
@@ -11478,7 +11566,7 @@ pg_mapping:
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("PostgreSQL connection error: {}", e);
+                log::error!("PostgreSQL connection error: {}", e);
             }
         });
         let employee_name = "Jane Doe";

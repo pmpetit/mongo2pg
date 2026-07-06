@@ -234,14 +234,14 @@ fn escape_html(value: &str) -> String {
 fn render_documents_cell(stats: &CollectionStatsYaml) -> String {
   let doc_count = match &stats.documents_in_collection {
     serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
-    _ => "unknown".to_owned(),
+    _ => "startup".to_owned(),
   };
 
   let read_ops_hint = stats
     .read_ops
     .as_ref()
     .map(|read_ops| {
-      let since = read_ops.since.as_deref().unwrap_or("unknown");
+      let since = read_ops.since.as_deref().unwrap_or("startup");
       format!(
         r#"<div class="docs-extra" title="MongoDB collection read operations from $collStats latencyStats.reads">reads: {} since {}</div>"#,
         read_ops.read_ops,

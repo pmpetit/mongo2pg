@@ -7,7 +7,7 @@ pub struct TestHarness {
     pub mongo_collection: mongodb::Collection<bson::Document>,
     pub schema_name: Option<String>,
     pub table_name: String,
-    pub document: bson::Document, 
+    pub document: bson::Document,
 }
 
 #[cfg(test)]
@@ -49,7 +49,7 @@ impl TestHarness {
 
         tokio::spawn(async move {
             if let Err(err) = pg_connection.await {
-                eprintln!("warning: PostgreSQL connection error: {err}");
+                eprintln!("PostgreSQL connection error: {err}");
             }
         });
 
@@ -59,11 +59,10 @@ impl TestHarness {
         let schema_name = mapping_yaml.pg_mapping.schema_name.clone();
         let table_name = mapping_yaml.pg_mapping.table_name.clone();
 
-        // 5. Read JSON fixture document and save into MongoDB
+        // 5. Read JSON fixture document base
         let file = File::open(json_fixture)?;
         let json_val: serde_json::Value = serde_json::from_reader(BufReader::new(file))?;
-        let document: bson::Document = bson::to_document(&json_val)?;
-        mongo_collection.insert_one(document.clone()).await?;
+        let base_document: bson::Document = bson::to_document(&json_val)?;
 
         // 6. Execute DDL Schema creation script
         if let Some(ref schema) = schema_name {
@@ -81,44 +80,6 @@ impl TestHarness {
         );
         pg_client.batch_execute(&ddl_sql).await?;
 
-        // 7. Dynamic SQL binding mapper using dynamic field accessors instead of hardcoded variables
-        let id_val: i64 = document.get_str("_id")?.parse()?;
-        let extract_str = |key: &str| document.get_str(key).unwrap_or("").to_string();
-        let extract_int = |key: &str| -> i32 {
-            match document.get(key) {
-                Some(bson::Bson::Int32(v)) => *v,
-                Some(bson::Bson::Int64(v)) => *v as i32,
-                _ => 0,
-            }
-        };
-        let extract_opt_int = |key: &str| -> Option<i32> {
-            match document.get(key) {
-                Some(bson::Bson::Int32(v)) => Some(*v),
-                Some(bson::Bson::Int64(v)) => Some(*v as i32),
-                _ => None,
-            }
-        };
-        let extract_f64 = |key: &str| document.get_f64(key).ok();
-        let extract_ts = |key: &str| -> chrono::DateTime<chrono::Utc> {
-            chrono::DateTime::parse_from_rfc3339(&extract_str(key))
-                .unwrap()
-                .with_timezone(&chrono::Utc)
-        };
-        let extract_opt_ts = |key: &str| -> Option<chrono::DateTime<chrono::Utc>> {
-            document.get_str(key).ok().map(|val| {
-                chrono::DateTime::parse_from_rfc3339(val)
-                    .unwrap()
-                    .with_timezone(&chrono::Utc)
-            })
-        };
-
-        let amenities: Vec<String> = document
-            .get_array("amenities")
-            .unwrap_or(&vec![])
-            .iter()
-            .filter_map(|b| b.as_str().map(|s| s.to_string()))
-            .collect();
-
         // Target insertion matrix mapped exactly to your parameters sequence
         let insert_sql = format!(
             "INSERT INTO {qualified_table} (
@@ -134,50 +95,102 @@ impl TestHarness {
             );"
         );
 
-        let params: Vec<Box<dyn ToSql + Sync>> = vec![
-            Box::new(id_val),
-            Box::new(extract_str("access")),
-            Box::new(extract_int("accommodates")),
-            Box::new(amenities),
-            Box::new(extract_f64("bathrooms")),
-            Box::new(extract_str("bed_type")),
-            Box::new(extract_opt_int("bedrooms")),
-            Box::new(extract_opt_int("beds")),
-            Box::new(extract_ts("calendar_last_scraped")),
-            Box::new(extract_str("cancellation_policy")),
-            Box::new(extract_f64("cleaning_fee")),
-            Box::new(extract_str("description")),
-            Box::new(extract_f64("extra_people").unwrap_or(0.0)),
-            Box::new(extract_opt_ts("first_review")),
-            Box::new(extract_f64("guests_included").unwrap_or(0.0)),
-            Box::new(extract_str("house_rules")),
-            Box::new(extract_str("interaction")),
-            Box::new(extract_opt_ts("last_review")),
-            Box::new(extract_ts("last_scraped")),
-            Box::new(extract_str("listing_url")),
-            Box::new(extract_str("maximum_nights")),
-            Box::new(extract_str("minimum_nights")),
-            Box::new(extract_f64("monthly_price")),
-            Box::new(extract_str("name")),
-            Box::new(extract_str("neighborhood_overview")),
-            Box::new(extract_str("notes")),
-            Box::new(extract_int("number_of_reviews")),
-            Box::new(extract_f64("price").unwrap_or(0.0)),
-            Box::new(extract_str("property_type")),
-            Box::new(extract_opt_int("reviews_per_month")),
-            Box::new(extract_str("room_type")),
-            Box::new(extract_f64("security_deposit")),
-            Box::new(extract_str("space")),
-            Box::new(extract_str("summary")),
-            Box::new(extract_str("transit")),
-            Box::new(extract_f64("weekly_price")),
-        ];
-        let params_ref: Vec<&(dyn ToSql + Sync)> = params
-            .iter()
-            .map(|value| value.as_ref() as &(dyn ToSql + Sync))
-            .collect();
+        // Get the base ID from the fixture to increment off of
+        let base_id: i64 = base_document.get_str("_id")?.parse()?;
 
-        pg_client.execute(&insert_sql, &params_ref[..]).await?;
+        // Loop 20 times to insert 20 distinct items
+        for i in 0..20 {
+            let mut document = base_document.clone();
+            let id_val = base_id + i;
+
+            // Update the document ID to ensure uniqueness in MongoDB
+            document.insert("_id", id_val.to_string());
+
+            // Save into MongoDB
+            mongo_collection.insert_one(document.clone()).await?;
+
+            // 7. Dynamic SQL binding mapper
+            let extract_str = |key: &str| document.get_str(key).unwrap_or("").to_string();
+            let extract_int = |key: &str| -> i32 {
+                match document.get(key) {
+                    Some(bson::Bson::Int32(v)) => *v,
+                    Some(bson::Bson::Int64(v)) => *v as i32,
+                    _ => 0,
+                }
+            };
+            let extract_opt_int = |key: &str| -> Option<i32> {
+                match document.get(key) {
+                    Some(bson::Bson::Int32(v)) => Some(*v),
+                    Some(bson::Bson::Int64(v)) => Some(*v as i32),
+                    _ => None,
+                }
+            };
+            let extract_f64 = |key: &str| document.get_f64(key).ok();
+            let extract_ts = |key: &str| -> chrono::DateTime<chrono::Utc> {
+                chrono::DateTime::parse_from_rfc3339(&extract_str(key))
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            };
+            let extract_opt_ts = |key: &str| -> Option<chrono::DateTime<chrono::Utc>> {
+                document.get_str(key).ok().map(|val| {
+                    chrono::DateTime::parse_from_rfc3339(val)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc)
+                })
+            };
+
+            let amenities: Vec<String> = document
+                .get_array("amenities")
+                .unwrap_or(&vec![])
+                .iter()
+                .filter_map(|b| b.as_str().map(|s| s.to_string()))
+                .collect();
+
+            let params: Vec<Box<dyn ToSql + Sync>> = vec![
+                Box::new(id_val),
+                Box::new(extract_str("access")),
+                Box::new(extract_int("accommodates")),
+                Box::new(amenities),
+                Box::new(extract_f64("bathrooms")),
+                Box::new(extract_str("bed_type")),
+                Box::new(extract_opt_int("bedrooms")),
+                Box::new(extract_opt_int("beds")),
+                Box::new(extract_ts("calendar_last_scraped")),
+                Box::new(extract_str("cancellation_policy")),
+                Box::new(extract_f64("cleaning_fee")),
+                Box::new(extract_str("description")),
+                Box::new(extract_f64("extra_people").unwrap_or(0.0)),
+                Box::new(extract_opt_ts("first_review")),
+                Box::new(extract_f64("guests_included").unwrap_or(0.0)),
+                Box::new(extract_str("house_rules")),
+                Box::new(extract_str("interaction")),
+                Box::new(extract_opt_ts("last_review")),
+                Box::new(extract_ts("last_scraped")),
+                Box::new(extract_str("listing_url")),
+                Box::new(extract_str("maximum_nights")),
+                Box::new(extract_str("minimum_nights")),
+                Box::new(extract_f64("monthly_price")),
+                Box::new(extract_str("name")),
+                Box::new(extract_str("neighborhood_overview")),
+                Box::new(extract_str("notes")),
+                Box::new(extract_int("number_of_reviews")),
+                Box::new(extract_f64("price").unwrap_or(0.0)),
+                Box::new(extract_str("property_type")),
+                Box::new(extract_opt_int("reviews_per_month")),
+                Box::new(extract_str("room_type")),
+                Box::new(extract_f64("security_deposit")),
+                Box::new(extract_str("space")),
+                Box::new(extract_str("summary")),
+                Box::new(extract_str("transit")),
+                Box::new(extract_f64("weekly_price")),
+            ];
+            let params_ref: Vec<&(dyn ToSql + Sync)> = params
+                .iter()
+                .map(|value| value.as_ref() as &(dyn ToSql + Sync))
+                .collect();
+
+            pg_client.execute(&insert_sql, &params_ref[..]).await?;
+        }
 
         Ok(Self {
             _pg_container: Box::new(pg_container),
@@ -186,7 +199,7 @@ impl TestHarness {
             mongo_collection,
             schema_name,
             table_name,
-            document,
+            document: base_document,
         })
     }
 
