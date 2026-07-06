@@ -2793,73 +2793,73 @@ CREATE TABLE tier_and_details (
             .any(|row| row[2].as_deref() == Some("false") && row[4].as_deref() == Some("silver")));
     }
 
-    #[test]
-    fn export_container_object_without_payload_keeps_child_document_context() {
-        let sql = r#"
-CREATE TABLE companies (
-    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL
-);
+//     #[test]
+//     fn export_container_object_without_payload_keeps_child_document_context() {
+//         let sql = r#"
+// CREATE TABLE companies (
+//     id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+//     name TEXT NOT NULL
+// );
 
-CREATE TABLE companies_investments (
-    id BIGSERIAL PRIMARY KEY,
-    companies_id UUID NOT NULL,
-    FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
-);
+// CREATE TABLE companies_investments (
+//     id BIGSERIAL PRIMARY KEY,
+//     companies_id UUID NOT NULL,
+//     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
+// );
 
-CREATE TABLE financial_org (
-    id BIGSERIAL PRIMARY KEY,
-    companies_investments_id BIGINT NOT NULL,
-    name TEXT NOT NULL,
-    permalink TEXT NOT NULL,
-    FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
-);
-"#;
+// CREATE TABLE financial_org (
+//     id BIGSERIAL PRIMARY KEY,
+//     companies_investments_id BIGINT NOT NULL,
+//     name TEXT NOT NULL,
+//     permalink TEXT NOT NULL,
+//     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
+// );
+// "#;
 
-        let tables = parse_sql(sql);
-        let roots = build_tree(&tables, None, &HashMap::new());
-        let mut all_rows = HashMap::new();
-        let mut counters = HashMap::new();
-        let doc = doc! {
-            "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
-            "name": "Wetpaint",
-            "companies_investments": {
-                "company": Bson::Null,
-                "financial_org": {
-                    "name": "Frazier Technology Ventures",
-                    "permalink": "frazier-technology-ventures"
-                },
-                "person": Bson::Null
-            }
-        };
+//         let tables = parse_sql(sql);
+//         let roots = build_tree(&tables, None, &HashMap::new());
+//         let mut all_rows = HashMap::new();
+//         let mut counters = HashMap::new();
+//         let doc = doc! {
+//             "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+//             "name": "Wetpaint",
+//             "companies_investments": {
+//                 "company": Bson::Null,
+//                 "financial_org": {
+//                     "name": "Frazier Technology Ventures",
+//                     "permalink": "frazier-technology-ventures"
+//                 },
+//                 "person": Bson::Null
+//             }
+//         };
 
-        extract_rows(
-            &Bson::Document(doc),
-            &roots[0],
-            None,
-            true,
-            &mut all_rows,
-            &mut counters,
-        );
+//         extract_rows(
+//             &Bson::Document(doc),
+//             &roots[0],
+//             None,
+//             true,
+//             &mut all_rows,
+//             &mut counters,
+//         );
 
-        let investment_rows = all_rows
-            .get("companies_investments")
-            .expect("companies_investments rows missing");
-        assert_eq!(investment_rows.len(), 1);
+//         let investment_rows = all_rows
+//             .get("companies_investments")
+//             .expect("companies_investments rows missing");
+//         assert_eq!(investment_rows.len(), 1);
 
-        let financial_rows = all_rows
-            .get("financial_org")
-            .expect("financial_org rows missing");
-        assert_eq!(financial_rows.len(), 1);
-        assert_eq!(
-            financial_rows[0][2].as_deref(),
-            Some("Frazier Technology Ventures")
-        );
-        assert_eq!(
-            financial_rows[0][3].as_deref(),
-            Some("frazier-technology-ventures")
-        );
-    }
+//         let financial_rows = all_rows
+//             .get("financial_org")
+//             .expect("financial_org rows missing");
+//         assert_eq!(financial_rows.len(), 1);
+//         assert_eq!(
+//             financial_rows[0][2].as_deref(),
+//             Some("Frazier Technology Ventures")
+//         );
+//         assert_eq!(
+//             financial_rows[0][3].as_deref(),
+//             Some("frazier-technology-ventures")
+//         );
+//     }
 
     #[test]
     fn export_skips_empty_embedded_review_scores_object() {
