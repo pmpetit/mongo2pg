@@ -536,6 +536,10 @@ fn format_runtime_log_line(level: Level, elapsed: Duration, message: &str) -> St
     )
 }
 
+fn connection_failed_context(backend: &str, operation: &str) -> String {
+    format!("connection_failed backend={backend} operation={operation}")
+}
+
 fn init_runtime_logger(level_filter: LevelFilter) -> Result<()> {
     let start = Instant::now();
     let mut builder = EnvLoggerBuilder::new();
@@ -1560,10 +1564,18 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 
     let namespace = args.namespace.clone().or(conf_namespace);
 
-    let client_options = ClientOptions::parse(&resolved_source_uri)
-        .await
-        .context("Failed to parse MongoDB SOURCE_URI")?;
-    let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
+    let client_options = ClientOptions::parse(&resolved_source_uri).await.with_context(|| {
+        format!(
+            "{}: failed to parse MongoDB SOURCE_URI",
+            connection_failed_context("mongo", "connect")
+        )
+    })?;
+    let client = Client::with_options(client_options).with_context(|| {
+        format!(
+            "{}: failed to create MongoDB client",
+            connection_failed_context("mongo", "connect")
+        )
+    })?;
 
     // CLI takes priority over conf for number/percent/jsonb; then fall back to defaults
     let resolved_number = args.number.or(conf_number);
@@ -1609,7 +1621,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             let existing_dbs = client
                 .list_database_names()
                 .await
-                .context("Failed to list databases")?;
+                .with_context(|| {
+                    format!(
+                        "{}: failed to list databases",
+                        connection_failed_context("mongo", "query")
+                    )
+                })?;
             if !existing_dbs.iter().any(|d| d == db_name) {
                 warn!(
                     "database '{db_name}' does not exist on the server. Available databases: {}",
@@ -1620,7 +1637,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 .database(db_name)
                 .list_collection_names()
                 .await
-                .context("Failed to list collections")?;
+                .with_context(|| {
+                    format!(
+                        "{}: failed to list collections",
+                        connection_failed_context("mongo", "query")
+                    )
+                })?;
             if !existing_colls.iter().any(|c| c == coll_name) {
                 warn!(
                     "collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
@@ -1665,7 +1687,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             let existing_dbs = client
                 .list_database_names()
                 .await
-                .context("Failed to list databases")?;
+                .with_context(|| {
+                    format!(
+                        "{}: failed to list databases",
+                        connection_failed_context("mongo", "query")
+                    )
+                })?;
             if !existing_dbs.iter().any(|d| d == db_name) {
                 warn!(
                     "database '{db_name}' does not exist on the server. Available databases: {}",
@@ -1676,7 +1703,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             let coll_names = db
                 .list_collection_names()
                 .await
-                .context("Failed to list collections")?;
+                .with_context(|| {
+                    format!(
+                        "{}: failed to list collections",
+                        connection_failed_context("mongo", "query")
+                    )
+                })?;
             let filtered_coll_names: Vec<&String> = coll_names
                 .iter()
                 .filter(|n| !n.starts_with("system."))
@@ -2367,7 +2399,12 @@ async fn infer_all_databases(
     let all_dbs = client
         .list_database_names()
         .await
-        .context("Failed to list databases")?;
+        .with_context(|| {
+            format!(
+                "{}: failed to list databases",
+                connection_failed_context("mongo", "query")
+            )
+        })?;
 
     let user_dbs: Vec<String> = all_dbs
         .into_iter()
@@ -5089,10 +5126,18 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .clone()
         .unwrap_or_else(|| project_root.join("data"));
 
-    let client_options = ClientOptions::parse(&source_uri)
-        .await
-        .context("Failed to parse MongoDB SOURCE_URI")?;
-    let client = Client::with_options(client_options).context("Failed to create MongoDB client")?;
+    let client_options = ClientOptions::parse(&source_uri).await.with_context(|| {
+        format!(
+            "{}: failed to parse MongoDB SOURCE_URI",
+            connection_failed_context("mongo", "connect")
+        )
+    })?;
+    let client = Client::with_options(client_options).with_context(|| {
+        format!(
+            "{}: failed to create MongoDB client",
+            connection_failed_context("mongo", "connect")
+        )
+    })?;
 
     fn warn_missing_sql_schema(
         coll_name: &str,
@@ -5164,7 +5209,13 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         let mongo_colls = client
             .database(&db_name)
             .list_collection_names()
-            .await?
+            .await
+            .with_context(|| {
+                format!(
+                    "{}: failed to list collections for database {db_name}",
+                    connection_failed_context("mongo", "query")
+                )
+            })?
             .into_iter()
             .filter(|coll| !coll.starts_with("system."))
             .filter(|coll| should_infer_collection(coll, &conf_include, &conf_exclude));
@@ -7387,12 +7438,22 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .set("enable.auto.commit", "true")
         .set("auto.offset.reset", &auto_offset_reset)
         .create()
-        .with_context(|| "Failed to create Kafka consumer")?;
+        .with_context(|| {
+            format!(
+                "{}: failed to create Kafka consumer",
+                connection_failed_context("kafka", "connect")
+            )
+        })?;
     let dlq_producer: FutureProducer = ClientConfig::new()
         .set("bootstrap.servers", &bootstrap_servers)
         .set("message.timeout.ms", "5000")
         .create()
-        .with_context(|| "Failed to create Kafka DLQ producer")?;
+        .with_context(|| {
+            format!(
+                "{}: failed to create Kafka DLQ producer",
+                connection_failed_context("kafka", "connect")
+            )
+        })?;
 
     if topics.is_empty() {
         if let Some(prefix) = kafka_conf.topic_prefix.as_deref() {
@@ -7400,7 +7461,8 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 .fetch_metadata(None, Duration::from_secs(10))
                 .with_context(|| {
                     format!(
-                        "Failed to fetch Kafka metadata while resolving topic prefix '{}'",
+                        "{}: failed to fetch Kafka metadata while resolving topic prefix '{}'",
+                        connection_failed_context("kafka", "query"),
                         prefix
                     )
                 })?;
@@ -7430,7 +7492,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
     consumer
         .subscribe(&topic_refs)
-        .with_context(|| format!("Failed to subscribe topics: {}", topics.join(", ")))?;
+        .with_context(|| {
+            format!(
+                "{}: failed to subscribe topics: {}",
+                connection_failed_context("kafka", "consume"),
+                topics.join(", ")
+            )
+        })?;
 
     info!(
         "Kafka import started. group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
@@ -7517,7 +7585,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let message = match message_result {
             Ok(msg) => msg,
             Err(err) => {
-                warn!("warning: Kafka consume error: {err}");
+                warn!(
+                    "{} warning: Kafka consume error: {err}",
+                    connection_failed_context("kafka", "consume")
+                );
                 continue;
             }
         };
@@ -8515,15 +8586,28 @@ async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
     }
     let tls = tls_builder
         .build()
-        .with_context(|| "Failed to initialize PostgreSQL TLS connector")?;
+        .with_context(|| {
+            format!(
+                "{}: failed to initialize PostgreSQL TLS connector",
+                connection_failed_context("pg", "connect")
+            )
+        })?;
     let tls = MakeTlsConnector::new(tls);
 
     let (pg_client, pg_connection) = tokio_postgres::connect(target_uri, tls)
         .await
-        .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
+        .with_context(|| {
+            format!(
+                "{}: failed to connect to PostgreSQL using TARGET_URI",
+                connection_failed_context("pg", "connect")
+            )
+        })?;
     tokio::spawn(async move {
         if let Err(err) = pg_connection.await {
-            warn!("PostgreSQL connection error: {err}");
+            warn!(
+                "{} PostgreSQL connection error: {err}",
+                connection_failed_context("pg", "connect")
+            );
         }
     });
 
@@ -8851,12 +8935,22 @@ async fn build_post_import_rows(
 
     let mongo_client = Client::with_uri_str(source_uri)
         .await
-        .with_context(|| "Failed to connect to MongoDB using SOURCE_URI")?;
+        .with_context(|| {
+            format!(
+                "{}: failed to connect to MongoDB using SOURCE_URI",
+                connection_failed_context("mongo", "connect")
+            )
+        })?;
     let mongo_db = mongo_client.database(db_name);
     let mut collection_names = mongo_db
         .list_collection_names()
         .await
-        .with_context(|| format!("Failed to list collections for MongoDB database {db_name}"))?;
+        .with_context(|| {
+            format!(
+                "{}: failed to list collections for MongoDB database {db_name}",
+                connection_failed_context("mongo", "query")
+            )
+        })?;
     collection_names.retain(|name| !name.starts_with("system."));
     collection_names.retain(|name| should_infer_collection(&sanitize_name(name), include, exclude));
     if let Some(coll_name) = only_collection {
@@ -8870,24 +8964,12 @@ async fn build_post_import_rows(
         schema_tables_root.to_path_buf()
     };
 
-    let mut tls_builder = native_tls::TlsConnector::builder();
-    if matches!(pg_sslmode(target_uri), Some(mode) if mode.eq_ignore_ascii_case("require")) {
-        tls_builder.danger_accept_invalid_certs(true);
-        tls_builder.danger_accept_invalid_hostnames(true);
-    }
-    let tls = tls_builder
-        .build()
-        .with_context(|| "Failed to initialize PostgreSQL TLS connector")?;
-    let tls = MakeTlsConnector::new(tls);
-
-    let (pg_client, pg_connection) = tokio_postgres::connect(target_uri, tls)
-        .await
-        .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
-    tokio::spawn(async move {
-        if let Err(err) = pg_connection.await {
-            warn!("PostgreSQL connection error: {err}");
-        }
-    });
+    let pg_client = connect_pg_client(target_uri).await.with_context(|| {
+        format!(
+            "{}: failed during post-import PostgreSQL connection setup",
+            connection_failed_context("pg", "connect")
+        )
+    })?;
 
     let total_collections = collection_names.len();
     let mut global_table_rows: HashMap<String, PostImportTableRow> = HashMap::new();
@@ -9148,8 +9230,9 @@ mod tests {
         apply_collection_property_filters, apply_config_overrides, build_collection_mappings,
         build_collection_mappings_with_timestamp_fields, child_row_objects_for_mapping,
         classify_unauthorized_retry, collect_infer_type_warnings, collect_nullable_scalar_warnings,
-        count_dynamic_map_entries, detect_candidate_groups, dynamic_map_value_fields,
-        format_runtime_log_line, infer_query_max_time, is_unauthorized_cursor_error,
+        connection_failed_context, count_dynamic_map_entries, detect_candidate_groups,
+        dynamic_map_value_fields, format_runtime_log_line, infer_query_max_time,
+        is_unauthorized_cursor_error,
         plan_export_jobs_for_collections, render_ddl_from_mapping_tables, resolve_collections_dir,
         resolve_export_sql_lookup_for_collection, resolve_infer_auth_retry_max,
         resolve_infer_chunk_size, resolve_log_level_precedence, resolve_post_import_table_row,
@@ -9158,6 +9241,7 @@ mod tests {
         PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_INFER_AUTH_RETRY_MAX,
         DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
     };
+    use anyhow::{anyhow, Context as _};
     use bson::doc;
     use log::{Level, LevelFilter};
     use mongo2pg::analyzer::Analyzer;
@@ -9525,6 +9609,33 @@ mod tests {
         assert!(!timestamp.contains('.'));
         assert!(!timestamp.contains('+'));
         assert!(!timestamp.contains('Z'));
+    }
+
+    #[test]
+    fn connection_failed_context_has_stable_backend_token() {
+        let ctx = connection_failed_context("mongo", "connect");
+        assert_eq!(ctx, "connection_failed backend=mongo operation=connect");
+    }
+
+    #[test]
+    fn attributed_connection_context_preserves_root_cause_chain() {
+        let err = Err::<(), _>(anyhow!("driver refused connection"))
+            .with_context(|| connection_failed_context("pg", "connect"))
+            .expect_err("context wrap should return error");
+
+        let rendered = format!("{err:#}");
+        assert!(rendered.contains("connection_failed backend=pg operation=connect"));
+        assert!(rendered.contains("driver refused connection"));
+    }
+
+    #[test]
+    fn runtime_log_line_keeps_connection_failed_token_in_message() {
+        let line = format_runtime_log_line(
+            Level::Error,
+            Duration::from_secs(2),
+            "connection_failed backend=kafka operation=consume: timeout",
+        );
+        assert!(line.contains("connection_failed backend=kafka operation=consume"));
     }
 
     #[test]

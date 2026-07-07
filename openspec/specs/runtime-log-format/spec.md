@@ -23,3 +23,12 @@ The CLI runtime logger SHALL emit elapsed duration as whole seconds in `+<N>s` f
 
 - **WHEN** elapsed duration includes fractional seconds
 - **THEN** the formatted elapsed value contains only integer seconds with `s` suffix
+
+### Requirement: Runtime failures include backend attribution token
+
+Runtime failure log lines MUST include a stable backend attribution token when the failure is connection-related.
+
+#### Scenario: Connection-related runtime failure log
+
+- **WHEN** a runtime log line is emitted for a connection-related failure
+- **THEN** the log line includes backend attribution identifying one of `mongo`, `pg`, or `kafka`
