@@ -2655,37 +2655,57 @@ async fn infer_collection(
         let total_chunks = sample_size.div_ceil(chunk_size).max(1);
         let mut processed = 0_u64;
         let mut chunk_index = 0_u64;
+        let mut last_processed_id: Option<bson::Bson> = None;
 
         while processed < sample_size {
             chunk_index += 1;
             let remaining = sample_size - processed;
             let this_chunk = remaining.min(chunk_size);
+            let chunk_start_id = last_processed_id.clone();
             info!(
-                "chunk {}/{} size={} processed={}/{} collection={}.{}",
-                chunk_index, total_chunks, this_chunk, processed, sample_size, db_name, coll_name
+                "chunk {}/{} size={} processed={}/{} collection={}.{} start_after_id={}",
+                chunk_index,
+                total_chunks,
+                this_chunk,
+                processed,
+                sample_size,
+                db_name,
+                coll_name,
+                chunk_start_id
+                    .as_ref()
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "<begin>".to_owned())
             );
 
             let mut auth_retry_attempt = 0_u32;
 
             'retry_chunk: loop {
+                let filter = match chunk_start_id.as_ref() {
+                    Some(last_id) => doc! { "_id": { "$gt": last_id.clone() } },
+                    None => doc! {},
+                };
                 let cursor_result = collection
-                    .find(doc! {})
-                    .skip(processed)
+                    .find(filter)
+                    .sort(doc! { "_id": 1 })
                     .limit(this_chunk as i64)
                     .max_time(sample_max_time)
                     .await;
 
                 let mut chunk_docs = 0_u64;
+                let mut chunk_last_id: Option<bson::Bson> = None;
                 let mut cur = match cursor_result {
                     Ok(cur) => cur,
                     Err(e) => {
                         warn!(
-                            "  [warn] find() chunk failed for {}.{} at chunk {}/{} (skip={}, limit={}): {:#}",
+                            "  [warn] find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
                             db_name,
                             coll_name,
                             chunk_index,
                             total_chunks,
-                            processed,
+                            chunk_start_id
+                                .as_ref()
+                                .map(|id| id.to_string())
+                                .unwrap_or_else(|| "<begin>".to_owned()),
                             this_chunk,
                             e
                         );
@@ -2696,6 +2716,7 @@ async fn infer_collection(
                 loop {
                     match cur.try_next().await {
                         Ok(Some(d)) => {
+                            chunk_last_id = d.get("_id").cloned();
                             analyzer.process_document(&d);
                             chunk_docs += 1;
                         }
@@ -2764,6 +2785,7 @@ async fn infer_collection(
                     break;
                 }
 
+                last_processed_id = chunk_last_id.or(chunk_start_id);
                 processed = processed.saturating_add(chunk_docs);
                 if chunk_docs < this_chunk {
                     break;
@@ -5272,7 +5294,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             );
             for (member_index, coll_name) in coll_names.iter().enumerate() {
                 info!(
-                    "      -> member [{}/{}]: {db_name}.{} -> {}.sql",
+                    "-> member [{}/{}]: {db_name}.{} -> {}.sql",
                     member_index + 1,
                     coll_names.len(),
                     coll_name,
