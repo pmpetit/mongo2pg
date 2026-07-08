@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
+use std::fs::OpenOptions;
 
 use anyhow::{Context, Result};
 use bson::Bson;
@@ -26,6 +27,8 @@ use serde::Deserialize;
 use crate::schema_diagram::{parse_sql, Table as SqlTable};
 
 use crate::util::{objectid_hex_to_uuid, sanitize};
+
+pub const DEFAULT_EXPORT_CHUNK_ROWS: u64 = 50_000;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // BSON → CSV string
@@ -339,6 +342,63 @@ fn csv_cell_text(cell: Option<&str>) -> String {
         Some(text) => csv_escape(text),
         None => String::new(),
     }
+}
+
+fn csv_header_for_table(sql_t: &SqlTable) -> Vec<String> {
+    sql_t
+        .columns
+        .iter()
+        .map(|c| {
+            if c.name.starts_with('"') && c.name.ends_with('"') {
+                format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\""))
+            } else {
+                csv_escape(&unquote_sql_ident(&c.name))
+            }
+        })
+        .collect()
+}
+
+fn flush_chunk_buffers(
+    sql_tables: &[SqlTable],
+    out_dir: &Path,
+    all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
+    header_written: &mut HashSet<String>,
+) -> Result<()> {
+    for sql_t in sql_tables {
+        let Some(rows) = all_rows.get_mut(&sql_t.name) else {
+            continue;
+        };
+        if rows.is_empty() {
+            continue;
+        }
+
+        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&csv_path)
+            .with_context(|| format!("Cannot open {} for append", csv_path.display()))?;
+        let mut gz = GzEncoder::new(file, Compression::default());
+
+        if !header_written.contains(&sql_t.name) {
+            let header = csv_header_for_table(sql_t);
+            writeln!(gz, "{}", header.join(","))
+                .with_context(|| format!("Write error for {}", csv_path.display()))?;
+            header_written.insert(sql_t.name.clone());
+        }
+
+        for row in rows.drain(..) {
+            let line: Vec<String> = row.iter().map(|v| csv_cell_text(v.as_deref())).collect();
+            writeln!(gz, "{}", line.join(","))
+                .with_context(|| format!("Write error for {}", csv_path.display()))?;
+        }
+
+        gz.finish()
+            .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
+    }
+
+    all_rows.retain(|_, rows| !rows.is_empty());
+    Ok(())
 }
 
 fn unquote_sql_ident(ident: &str) -> String {
@@ -1985,11 +2045,15 @@ pub async fn export_collections_to_sql(
     tables_dir: &Path,
     collections_dir: &Path,
     data_dir: &Path,
+    chunk_size: u64,
 ) -> Result<()> {
     const PROGRESS_LOG_EVERY_DOCS: u64 = 10_000;
 
     if coll_names.is_empty() {
         return Ok(());
+    }
+    if chunk_size == 0 {
+        return Err(anyhow::anyhow!("export chunk_size must be greater than 0"));
     }
 
     let sql_lookup_name = sanitize(sql_lookup_name);
@@ -2015,8 +2079,82 @@ pub async fn export_collections_to_sql(
     let mut coll_names = coll_names.to_vec();
     coll_names.sort();
 
+    let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
+    std::fs::create_dir_all(&out_dir)
+        .with_context(|| format!("Cannot create {}", out_dir.display()))?;
+
+    fn split_numeric_suffix(name: &str) -> Option<(&str, usize)> {
+        let (base, suffix) = name.rsplit_once('_')?;
+        let parsed = suffix.parse::<usize>().ok()?;
+        Some((base, parsed))
+    }
+
+    let table_names = sql_tables
+        .iter()
+        .map(|table| table.name.clone())
+        .collect::<HashSet<_>>();
+    let mut alias_candidates: HashMap<String, Vec<(usize, String)>> = HashMap::new();
+    for table_name in &table_names {
+        if let Some((base, suffix)) = split_numeric_suffix(table_name) {
+            if !table_names.contains(base) {
+                alias_candidates
+                    .entry(base.to_owned())
+                    .or_default()
+                    .push((suffix, table_name.clone()));
+            }
+        }
+    }
+    let mut alias_for_table: HashMap<String, String> = HashMap::new();
+    for (base, mut candidates) in alias_candidates {
+        candidates.sort_by_key(|(suffix, _)| *suffix);
+        if let Some((_, table_name)) = candidates.into_iter().next() {
+            alias_for_table.insert(table_name, base);
+        }
+    }
+
+    let mut expected_files = sql_tables
+        .iter()
+        .flat_map(|table| {
+            [
+                format!("{}.csv", table.name),
+                format!("{}.csv.gz", table.name),
+            ]
+        })
+        .collect::<HashSet<_>>();
+    for alias in alias_for_table.values() {
+        expected_files.insert(format!("{alias}.csv"));
+        expected_files.insert(format!("{alias}.csv.gz"));
+    }
+
+    for entry in
+        std::fs::read_dir(&out_dir).with_context(|| format!("Cannot read {}", out_dir.display()))?
+    {
+        let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let is_export_file = file_name.ends_with(".csv") || file_name.ends_with(".csv.gz");
+        if is_export_file && !expected_files.contains(file_name) {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("Cannot remove stale export file {}", path.display()))?;
+        }
+    }
+
+    for expected in &expected_files {
+        let expected_path = out_dir.join(expected);
+        if expected_path.is_file() {
+            std::fs::remove_file(&expected_path)
+                .with_context(|| format!("Cannot reset export file {}", expected_path.display()))?;
+        }
+    }
+
     let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
+    let mut header_written: HashSet<String> = HashSet::new();
+    let mut flushed_rows_total = 0_u64;
 
     let total_sources = coll_names.len();
     for (source_index, coll_name) in coll_names.iter().enumerate() {
@@ -2089,6 +2227,12 @@ pub async fn export_collections_to_sql(
                     &root_target_to_literal,
                 );
             }
+
+            let emitted_rows_total: u64 = counters.values().copied().sum();
+            if emitted_rows_total.saturating_sub(flushed_rows_total) >= chunk_size {
+                flush_chunk_buffers(&sql_tables, &out_dir, &mut all_rows, &mut header_written)?;
+                flushed_rows_total = emitted_rows_total;
+            }
         }
 
         info!(
@@ -2097,102 +2241,11 @@ pub async fn export_collections_to_sql(
         );
     }
 
-    let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
-    std::fs::create_dir_all(&out_dir)
-        .with_context(|| format!("Cannot create {}", out_dir.display()))?;
-
-    fn split_numeric_suffix(name: &str) -> Option<(&str, usize)> {
-        let (base, suffix) = name.rsplit_once('_')?;
-        let parsed = suffix.parse::<usize>().ok()?;
-        Some((base, parsed))
-    }
-
-    let table_names = sql_tables
-        .iter()
-        .map(|table| table.name.clone())
-        .collect::<HashSet<_>>();
-    let mut alias_candidates: HashMap<String, Vec<(usize, String)>> = HashMap::new();
-    for table_name in &table_names {
-        if let Some((base, suffix)) = split_numeric_suffix(table_name) {
-            if !table_names.contains(base) {
-                alias_candidates
-                    .entry(base.to_owned())
-                    .or_default()
-                    .push((suffix, table_name.clone()));
-            }
-        }
-    }
-    let mut alias_for_table: HashMap<String, String> = HashMap::new();
-    for (base, mut candidates) in alias_candidates {
-        candidates.sort_by_key(|(suffix, _)| *suffix);
-        if let Some((_, table_name)) = candidates.into_iter().next() {
-            alias_for_table.insert(table_name, base);
-        }
-    }
-
-    let mut expected_files = sql_tables
-        .iter()
-        .flat_map(|table| {
-            [
-                format!("{}.csv", table.name),
-                format!("{}.csv.gz", table.name),
-            ]
-        })
-        .collect::<HashSet<_>>();
-    for alias in alias_for_table.values() {
-        expected_files.insert(format!("{alias}.csv"));
-        expected_files.insert(format!("{alias}.csv.gz"));
-    }
-
-    for entry in
-        std::fs::read_dir(&out_dir).with_context(|| format!("Cannot read {}", out_dir.display()))?
-    {
-        let path = entry?.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        let is_export_file = file_name.ends_with(".csv") || file_name.ends_with(".csv.gz");
-        if is_export_file && !expected_files.contains(file_name) {
-            std::fs::remove_file(&path)
-                .with_context(|| format!("Cannot remove stale export file {}", path.display()))?;
-        }
-    }
+    flush_chunk_buffers(&sql_tables, &out_dir, &mut all_rows, &mut header_written)?;
 
     for sql_t in &sql_tables {
-        let rows = all_rows.get(&sql_t.name).cloned().unwrap_or_default();
-
-        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
-        let file = std::fs::File::create(&csv_path)
-            .with_context(|| format!("Cannot create {}", csv_path.display()))?;
-        let mut gz = GzEncoder::new(file, Compression::default());
-
-        let header: Vec<String> = sql_t
-            .columns
-            .iter()
-            .map(|c| {
-                if c.name.starts_with('"') && c.name.ends_with('"') {
-                    format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\""))
-                } else {
-                    csv_escape(&unquote_sql_ident(&c.name))
-                }
-            })
-            .collect();
-        writeln!(gz, "{}", header.join(","))
-            .with_context(|| format!("Write error for {}", csv_path.display()))?;
-
-        for row in &rows {
-            let line: Vec<String> = row.iter().map(|v| csv_cell_text(v.as_deref())).collect();
-            writeln!(gz, "{}", line.join(","))
-                .with_context(|| format!("Write error for {}", csv_path.display()))?;
-        }
-
-        gz.finish()
-            .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
-
         if let Some(alias) = alias_for_table.get(&sql_t.name) {
+            let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
             let alias_path = out_dir.join(format!("{alias}.csv.gz"));
             std::fs::copy(&csv_path, &alias_path).with_context(|| {
                 format!(
@@ -2224,6 +2277,7 @@ pub async fn export_collection(
         tables_dir,
         collections_dir,
         data_dir,
+        DEFAULT_EXPORT_CHUNK_ROWS,
     )
     .await
 }
@@ -2232,11 +2286,14 @@ pub async fn export_collection(
 mod tests {
     use super::{
         build_tree, build_tree_with_grouped_root, extract_rows, flattened_grouped_root_for_export,
-        grouped_root_table_sources, unquote_sql_ident,
+        flush_chunk_buffers, grouped_root_table_sources, unquote_sql_ident,
     };
     use crate::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
     use bson::{doc, Bson};
+    use flate2::read::MultiGzDecoder;
+    use std::collections::HashSet;
+    use std::io::Read;
     use std::collections::HashMap;
 
     #[test]
@@ -2280,6 +2337,96 @@ CREATE TABLE security_logs (
         assert_eq!(rows[0][1].as_deref(), Some("FRAS-P-SAM-FRTERR2"));
         assert_eq!(rows[0][2].as_deref(), Some("atlas"));
         assert_eq!(rows[0][3].as_deref(), Some("2023-07-13T09:02:15.833170"));
+    }
+
+    #[test]
+    fn chunk_flush_writes_header_once_and_appends_rows() {
+        let sql = r#"
+CREATE TABLE customers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL
+);
+"#;
+        let sql_tables = parse_sql(sql);
+        let temp = tempfile::tempdir().expect("temp dir should be created");
+
+        let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
+        let mut header_written = HashSet::new();
+
+        all_rows.insert(
+            "customers".to_owned(),
+            vec![
+                vec![Some("1".to_owned()), Some("Alice".to_owned())],
+                vec![Some("2".to_owned()), Some("Bob".to_owned())],
+            ],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("first flush should succeed");
+
+        all_rows.insert(
+            "customers".to_owned(),
+            vec![vec![Some("3".to_owned()), Some("Carol".to_owned())]],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("second flush should succeed");
+
+        let mut content = String::new();
+        let file = std::fs::File::open(temp.path().join("customers.csv.gz"))
+            .expect("chunked output should exist");
+        let mut decoder = MultiGzDecoder::new(file);
+        decoder
+            .read_to_string(&mut content)
+            .expect("gzip content should decode");
+
+        let lines = content.lines().collect::<Vec<_>>();
+        assert_eq!(lines[0], "id,name");
+        assert_eq!(lines.len(), 4);
+        assert_eq!(lines[1], "1,Alice");
+        assert_eq!(lines[2], "2,Bob");
+        assert_eq!(lines[3], "3,Carol");
+    }
+
+    #[test]
+    fn chunk_flush_grouped_rows_append_without_truncation() {
+        let sql = r#"
+CREATE TABLE events (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL
+);
+"#;
+        let sql_tables = parse_sql(sql);
+        let temp = tempfile::tempdir().expect("temp dir should be created");
+
+        let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
+        let mut header_written = HashSet::new();
+
+        // First grouped source chunk.
+        all_rows.insert(
+            "events".to_owned(),
+            vec![vec![Some("e1".to_owned()), Some("events_bcit".to_owned())]],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("first grouped chunk should flush");
+
+        // Second grouped source chunk into same target table file.
+        all_rows.insert(
+            "events".to_owned(),
+            vec![vec![Some("e2".to_owned()), Some("events_lmza".to_owned())]],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("second grouped chunk should flush");
+
+        let mut content = String::new();
+        let file = std::fs::File::open(temp.path().join("events.csv.gz"))
+            .expect("grouped output should exist");
+        let mut decoder = MultiGzDecoder::new(file);
+        decoder
+            .read_to_string(&mut content)
+            .expect("gzip content should decode");
+
+        assert!(content.contains("id,source"));
+        assert!(content.contains("e1,events_bcit"));
+        assert!(content.contains("e2,events_lmza"));
     }
 
     #[test]

@@ -152,6 +152,8 @@ pub struct CollectionStatsYaml {
 pub struct CollectionRow {
     pub name: String,
     pub stats: CollectionStatsYaml,
+  /// Resolved PostgreSQL target table for this collection, when known.
+  pub pg_target_table: Option<String>,
     /// PostgreSQL tables generated for this collection: `(table_name, ddl)`.
     /// Empty when no `schema/tables/` directory was provided.
     pub table_names: Vec<(String, String)>,
@@ -306,9 +308,13 @@ pub fn collect_rows(base: &Path, tables_dir: Option<&Path>) -> Result<Vec<Collec
             })
             .unwrap_or_default();
 
+          let pg_target_table = crate::export::resolve_grouped_sql_lookup_name(base, &name)
+            .or_else(|| table_names.first().map(|(table_name, _)| table_name.clone()));
+
         rows.push(CollectionRow {
             name,
             stats,
+            pg_target_table,
             table_names,
         });
     }
@@ -381,7 +387,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     };
 
     // Number of columns (used for colspan on detail rows)
-    let col_count = 8 + if has_tables { 1 } else { 0 };
+    let col_count = 9 + if has_tables { 1 } else { 0 };
 
     let table_rows: String = rows
         .iter()
@@ -473,10 +479,18 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
             } else {
                 String::new()
             };
+            let pg_table_cell = format!(
+              r#"<td class="pg-table">{}</td>"#,
+              r.pg_target_table
+                .as_deref()
+                .map(escape_html)
+                .unwrap_or_else(|| "-".to_owned())
+            );
 
             format!(
                 r#"<tr class="collection-row">
           {name_cell}
+            {pg_table_cell}
           {docs_cell}
           <td class="num">{sampled}</td>
           <td class="num">{width_top}</td>
@@ -488,6 +502,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
         </tr>
         {detail_row}"#,
                 name_cell = name_cell,
+                pg_table_cell = pg_table_cell,
                 docs_cell = docs_cell,
                 sampled = r.stats.documents_sampled,
                 width_top = r.stats.width_top_level,
@@ -720,6 +735,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     <thead>
       <tr>
         <th>Collection</th>
+        <th>PG Table</th>
         <th class="num">Documents</th>
         <th class="num">Sampled</th>
         <th class="num" title="Number of top-level fields in the collection schema">Width (top)</th>
@@ -1652,6 +1668,7 @@ mod tests {
                     }],
                       read_ops: None,
                 },
+                pg_target_table: Some("advisors".to_owned()),
                 table_names: Vec::new(),
             }],
             "dbapi",
@@ -1701,6 +1718,7 @@ mod tests {
                     }],
                       read_ops: None,
                 },
+                pg_target_table: Some("scheduling_executions".to_owned()),
                 table_names: Vec::new(),
             }],
             "dbapi",
@@ -1747,6 +1765,7 @@ mod tests {
                     }],
                       read_ops: None,
                 },
+                pg_target_table: Some("sample".to_owned()),
                 table_names: Vec::new(),
             }],
             "dbapi",
@@ -1785,6 +1804,7 @@ mod tests {
                 since: Some("2026-07-03 10:00:00 UTC".to_owned()),
               }),
             },
+            pg_target_table: Some("customers".to_owned()),
             table_names: Vec::new(),
           }],
           "sample_analytics",
@@ -1794,6 +1814,92 @@ mod tests {
 
         assert!(html.contains("reads: 1234 since 2026-07-03 10:00:00 UTC"));
       }
+
+  #[test]
+  fn render_html_shows_grouped_pg_target_table() {
+    let html = render_html(
+      &[
+        CollectionRow {
+          name: "events_bcit".to_owned(),
+          stats: CollectionStatsYaml {
+            documents_in_collection: serde_yaml::Value::Number(10_u64.into()),
+            documents_sampled: 10,
+            width_top_level: 2,
+            width_max: 2.0,
+            width_max_level: 1,
+            depth_max: 1,
+            branch_total: 2.0,
+            branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
+            array_field_count: 0,
+            avg_fields_per_doc: 2.0,
+            migrability_score: 1.0,
+            infer_warnings: Vec::new(),
+            read_ops: None,
+          },
+          pg_target_table: Some("events".to_owned()),
+          table_names: Vec::new(),
+        },
+        CollectionRow {
+          name: "events_lmza".to_owned(),
+          stats: CollectionStatsYaml {
+            documents_in_collection: serde_yaml::Value::Number(20_u64.into()),
+            documents_sampled: 20,
+            width_top_level: 2,
+            width_max: 2.0,
+            width_max_level: 1,
+            depth_max: 1,
+            branch_total: 2.0,
+            branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
+            array_field_count: 0,
+            avg_fields_per_doc: 2.0,
+            migrability_score: 1.0,
+            infer_warnings: Vec::new(),
+            read_ops: None,
+          },
+          pg_target_table: Some("events".to_owned()),
+          table_names: Vec::new(),
+        },
+      ],
+      "sample",
+      "cluster0",
+      "Grouped PG Table",
+    );
+
+    assert!(html.contains("<th>PG Table</th>"));
+    assert!(html.contains(r#"class="pg-table">events</td>"#));
+  }
+
+  #[test]
+  fn render_html_is_backward_compatible_when_pg_target_table_missing() {
+    let html = render_html(
+      &[CollectionRow {
+        name: "legacy_collection".to_owned(),
+        stats: CollectionStatsYaml {
+          documents_in_collection: serde_yaml::Value::Number(3_u64.into()),
+          documents_sampled: 3,
+          width_top_level: 1,
+          width_max: 1.0,
+          width_max_level: 1,
+          depth_max: 1,
+          branch_total: 1.0,
+          branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 1.0)]),
+          array_field_count: 0,
+          avg_fields_per_doc: 1.0,
+          migrability_score: 0.5,
+          infer_warnings: Vec::new(),
+          read_ops: None,
+        },
+        pg_target_table: None,
+        table_names: Vec::new(),
+      }],
+      "legacy",
+      "cluster0",
+      "Legacy",
+    );
+
+    assert!(html.contains("legacy_collection"));
+    assert!(html.contains(r#"class="pg-table">-</td>"#));
+  }
 
     #[test]
     fn render_post_import_html_shows_clickable_md5_details() {
@@ -2001,7 +2107,7 @@ pub fn render_multi_db_html(
                 .fold(0.0_f64, f64::max);
 
             let has_tables = rows.iter().any(|r| !r.table_names.is_empty());
-            let col_count = 8 + if has_tables { 1 } else { 0 };
+            let col_count = 9 + if has_tables { 1 } else { 0 };
 
             let collection_rows: String = rows
                 .iter()
@@ -2088,9 +2194,17 @@ pub fn render_multi_db_html(
                     } else {
                         String::new()
                     };
+                    let pg_table_cell = format!(
+                      r#"<td class="pg-table">{}</td>"#,
+                      r.pg_target_table
+                        .as_deref()
+                        .map(escape_html)
+                        .unwrap_or_else(|| "-".to_owned())
+                    );
                     format!(
                         r#"<tr class="collection-row">
           {name_cell}
+                {pg_table_cell}
           {docs_cell}
           <td class="num">{sampled}</td>
           <td class="num">{width_top}</td>
@@ -2102,6 +2216,7 @@ pub fn render_multi_db_html(
         </tr>
         {detail_row}"#,
                         docs_cell = docs_cell,
+                        pg_table_cell = pg_table_cell,
                         sampled = r.stats.documents_sampled,
                         width_top = r.stats.width_top_level,
                         width_max = r.stats.width_max,
@@ -2151,6 +2266,7 @@ pub fn render_multi_db_html(
       <thead>
         <tr>
           <th>Collection</th>
+          <th>PG Table</th>
           <th class="num">Documents</th>
           <th class="num">Sampled</th>
           <th class="num" title="Number of top-level fields">Width (top)</th>

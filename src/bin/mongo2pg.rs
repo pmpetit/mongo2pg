@@ -36,7 +36,9 @@ use mongo2pg::analyzer::{
 };
 use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
 // use mongo2pg::checkmd5::run_check_md5;
-use mongo2pg::export::{export_collections_to_sql, resolve_grouped_sql_lookup_name};
+use mongo2pg::export::{
+    export_collections_to_sql, resolve_grouped_sql_lookup_name, DEFAULT_EXPORT_CHUNK_ROWS,
+};
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
@@ -351,6 +353,11 @@ struct ExportArgs {
     /// project.project_dir in the config file before running.
     #[arg(long = "project-dir")]
     project_dir: Option<String>,
+
+    /// Maximum buffered table rows before export flushes chunk data to CSV.gz.
+    /// Defaults to SOURCE.CHUNK_SIZE from config, then a safe built-in value.
+    #[arg(long = "chunk-size")]
+    chunk_size: Option<u64>,
 }
 
 #[derive(Parser, Debug)]
@@ -592,6 +599,11 @@ fn validate_command_and_args(command: &Option<Command>, infer: Option<&InferArgs
             }
             if let Some(ns) = args.namespace.as_deref() {
                 validate_namespace_arg(ns)?;
+            }
+            if let Some(chunk_size) = args.chunk_size {
+                if chunk_size == 0 {
+                    return Err(anyhow!("--chunk-size must be greater than 0"));
+                }
             }
             Ok(())
         }
@@ -2509,6 +2521,17 @@ fn infer_query_max_time(max_time_ms: Option<u64>) -> Duration {
 
 fn resolve_infer_chunk_size(chunk_size: Option<u64>) -> Result<u64> {
     let resolved = chunk_size.unwrap_or(DEFAULT_INFER_CHUNK_SIZE);
+    if resolved == 0 {
+        return Err(anyhow!("chunk_size must be greater than 0"));
+    }
+    if resolved > i64::MAX as u64 {
+        return Err(anyhow!("chunk_size must be <= {}", i64::MAX));
+    }
+    Ok(resolved)
+}
+
+fn resolve_export_chunk_size(chunk_size: Option<u64>) -> Result<u64> {
+    let resolved = chunk_size.unwrap_or(DEFAULT_EXPORT_CHUNK_ROWS);
     if resolved == 0 {
         return Err(anyhow!("chunk_size must be greater than 0"));
     }
@@ -5114,6 +5137,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             project_dir: args.project_dir.clone(),
             source_uri: args.mongo.source_uri.clone(),
             namespace: args.namespace.clone(),
+            chunk_size: args.chunk_size,
             target_database_name: args.database_name.clone(),
             target_schema_name: args.schema_name.clone(),
             ..ConfigOverrides::default()
@@ -5138,6 +5162,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     let db_name = args.namespace.clone().or(c.namespace).ok_or_else(|| {
         anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
     })?;
+    let export_chunk_size = resolve_export_chunk_size(args.chunk_size.or(c.chunk_size))?;
 
     let project_root = c.base_dir.join(&c.project_dir);
     // Use <project_root>/schema/tables/<db_name> for SQL files
@@ -5311,6 +5336,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             &tables_dir,
             &collections_dir,
             &data_dir,
+            export_chunk_size,
         )
         .await
         {
@@ -9257,11 +9283,12 @@ mod tests {
         is_unauthorized_cursor_error,
         plan_export_jobs_for_collections, render_ddl_from_mapping_tables, resolve_collections_dir,
         resolve_export_sql_lookup_for_collection, resolve_infer_auth_retry_max,
-        resolve_infer_chunk_size, resolve_log_level_precedence, resolve_post_import_table_row,
+        resolve_export_chunk_size, resolve_infer_chunk_size, resolve_log_level_precedence,
+        resolve_post_import_table_row,
         resolve_root_table_name, sanitize_name, should_infer_collection, strip_psql_preamble,
         timeout_fallback_hint, validate_group_schema_compatibility, ConfigOverrides,
         PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_INFER_AUTH_RETRY_MAX,
-        DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
+        DEFAULT_EXPORT_CHUNK_ROWS, DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
     };
     use anyhow::{anyhow, Context as _};
     use bson::doc;
@@ -9430,6 +9457,25 @@ mod tests {
     fn resolve_infer_chunk_size_rejects_invalid_values() {
         assert!(resolve_infer_chunk_size(Some(0)).is_err());
         assert!(resolve_infer_chunk_size(Some(i64::MAX as u64 + 1)).is_err());
+    }
+
+    #[test]
+    fn resolve_export_chunk_size_uses_default_or_configured_value() {
+        assert_eq!(
+            resolve_export_chunk_size(None).expect("default export chunk size should resolve"),
+            DEFAULT_EXPORT_CHUNK_ROWS
+        );
+        assert_eq!(
+            resolve_export_chunk_size(Some(100_000))
+                .expect("configured export chunk size should resolve"),
+            100_000
+        );
+    }
+
+    #[test]
+    fn resolve_export_chunk_size_rejects_invalid_values() {
+        assert!(resolve_export_chunk_size(Some(0)).is_err());
+        assert!(resolve_export_chunk_size(Some(i64::MAX as u64 + 1)).is_err());
     }
 
     #[test]
@@ -11398,6 +11444,7 @@ pg_mapping:
             database_name: None,
             schema_name: None,
             project_dir: None,
+            chunk_size: None,
             output_dir: None,
             config: Some(config),
         }
