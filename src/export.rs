@@ -10,13 +10,14 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
-use std::fs::OpenOptions;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bson::Bson;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+use cloud_storage::{Bucket, Object};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::TryStreamExt;
@@ -29,6 +30,183 @@ use crate::schema_diagram::{parse_sql, Table as SqlTable};
 use crate::util::{objectid_hex_to_uuid, sanitize};
 
 pub const DEFAULT_EXPORT_CHUNK_ROWS: u64 = 50_000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExportWriteBackend {
+    LocalFs,
+    Gcs { bucket: String, prefix: String },
+}
+
+pub fn resolve_export_write_backend(base_dir: &Path) -> Result<ExportWriteBackend> {
+    let raw = base_dir.to_string_lossy();
+    if let Some(remainder) = raw.strip_prefix("gs://") {
+        let trimmed = remainder.trim_matches('/');
+        let (bucket, prefix) = trimmed
+            .split_once('/')
+            .map_or((trimmed, ""), |(bucket, prefix)| (bucket, prefix));
+        if bucket.is_empty() {
+            return Err(anyhow!(
+                "Invalid GCS base_dir '{}': missing bucket name after gs://",
+                raw
+            ));
+        }
+        return Ok(ExportWriteBackend::Gcs {
+            bucket: bucket.to_owned(),
+            prefix: prefix.to_owned(),
+        });
+    }
+    Ok(ExportWriteBackend::LocalFs)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CloudWriteErrorCategory {
+    Authentication,
+    Authorization,
+    NotFound,
+    Transient,
+    Other,
+}
+
+fn categorize_cloud_error_message(message: &str) -> CloudWriteErrorCategory {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("unauthenticated")
+        || lower.contains("invalid authentication")
+        || lower.contains("no credentials")
+        || lower.contains("credential")
+        || lower.contains("token")
+    {
+        return CloudWriteErrorCategory::Authentication;
+    }
+    if lower.contains("permission denied")
+        || lower.contains("forbidden")
+        || lower.contains("access denied")
+        || lower.contains("status: 403")
+    {
+        return CloudWriteErrorCategory::Authorization;
+    }
+    if lower.contains("not found") || lower.contains("status: 404") {
+        return CloudWriteErrorCategory::NotFound;
+    }
+    if lower.contains("timed out")
+        || lower.contains("timeout")
+        || lower.contains("connection reset")
+        || lower.contains("temporar")
+        || lower.contains("unavailable")
+        || lower.contains("status: 429")
+        || lower.contains("status: 500")
+        || lower.contains("status: 502")
+        || lower.contains("status: 503")
+        || lower.contains("status: 504")
+    {
+        return CloudWriteErrorCategory::Transient;
+    }
+    CloudWriteErrorCategory::Other
+}
+
+fn format_categorized_cloud_error(
+    action: &str,
+    context: &str,
+    err: &anyhow::Error,
+) -> anyhow::Error {
+    let msg = err.to_string();
+    let category = categorize_cloud_error_message(&msg);
+    match category {
+        CloudWriteErrorCategory::Authentication => anyhow!(
+            "cloud write error [authentication] during {} for {}: {}. Check ADC/service account credentials",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::Authorization => anyhow!(
+            "cloud write error [authorization] during {} for {}: {}. Verify storage.objects permissions",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::NotFound => anyhow!(
+            "cloud write error [not_found] during {} for {}: {}. Verify bucket and path",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::Transient => anyhow!(
+            "cloud write error [transient] during {} for {}: {}. Retry may succeed",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::Other => anyhow!(
+            "cloud write error [other] during {} for {}: {}",
+            action,
+            context,
+            msg
+        ),
+    }
+}
+
+async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
+    Bucket::read(bucket).await.map_err(|err| {
+        format_categorized_cloud_error("preflight", &format!("bucket {bucket}"), &anyhow!(err))
+    })?;
+    Ok(())
+}
+
+fn gcs_object_key(prefix: &str, db_name: &str, sql_lookup_name: &str, file_name: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    let trimmed_prefix = prefix.trim_matches('/');
+    if !trimmed_prefix.is_empty() {
+        parts.push(trimmed_prefix);
+    }
+    parts.push(db_name);
+    parts.push(sql_lookup_name);
+    parts.push(file_name);
+    parts.join("/")
+}
+
+async fn upload_export_files_to_gcs(
+    out_dir: &Path,
+    db_name: &str,
+    sql_lookup_name: &str,
+    bucket: &str,
+    prefix: &str,
+) -> Result<()> {
+    for entry in std::fs::read_dir(out_dir)
+        .with_context(|| format!("Cannot read {} for GCS upload", out_dir.display()))?
+    {
+        let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !file_name.ends_with(".csv.gz") {
+            continue;
+        }
+
+        let object_name = gcs_object_key(prefix, db_name, sql_lookup_name, file_name);
+        let bytes = tokio::fs::read(&path)
+            .await
+            .with_context(|| format!("Cannot read staged export file {}", path.display()))?;
+
+        info!(
+            "-> gcs upload: {} -> gs://{}/{}",
+            path.display(),
+            bucket,
+            object_name
+        );
+        Object::create(bucket, bytes, &object_name, "application/gzip")
+            .await
+            .map_err(|err| {
+                format_categorized_cloud_error(
+                    "upload",
+                    &format!("gs://{bucket}/{object_name}"),
+                    &anyhow!(err),
+                )
+            })?;
+    }
+    Ok(())
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // BSON → CSV string
@@ -2046,6 +2224,7 @@ pub async fn export_collections_to_sql(
     collections_dir: &Path,
     data_dir: &Path,
     chunk_size: u64,
+    backend: &ExportWriteBackend,
 ) -> Result<()> {
     const PROGRESS_LOG_EVERY_DOCS: u64 = 10_000;
 
@@ -2054,6 +2233,14 @@ pub async fn export_collections_to_sql(
     }
     if chunk_size == 0 {
         return Err(anyhow::anyhow!("export chunk_size must be greater than 0"));
+    }
+
+    if let ExportWriteBackend::Gcs { bucket, .. } = backend {
+        info!(
+            "-> export preflight: validating GCS destination bucket '{}'",
+            bucket
+        );
+        preflight_gcs_destination(bucket).await?;
     }
 
     let sql_lookup_name = sanitize(sql_lookup_name);
@@ -2257,6 +2444,15 @@ pub async fn export_collections_to_sql(
         }
     }
 
+    if let ExportWriteBackend::Gcs { bucket, prefix } = backend {
+        info!(
+            "-> export finalize: uploading grouped artifacts to gs://{}/{}",
+            bucket,
+            prefix.trim_matches('/')
+        );
+        upload_export_files_to_gcs(&out_dir, db_name, &sql_lookup_name, bucket, prefix).await?;
+    }
+
     Ok(())
 }
 
@@ -2278,6 +2474,7 @@ pub async fn export_collection(
         collections_dir,
         data_dir,
         DEFAULT_EXPORT_CHUNK_ROWS,
+        &ExportWriteBackend::LocalFs,
     )
     .await
 }
@@ -2285,16 +2482,47 @@ pub async fn export_collection(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_tree, build_tree_with_grouped_root, extract_rows, flattened_grouped_root_for_export,
-        flush_chunk_buffers, grouped_root_table_sources, unquote_sql_ident,
+        build_tree, build_tree_with_grouped_root, categorize_cloud_error_message, extract_rows,
+        flattened_grouped_root_for_export, flush_chunk_buffers, gcs_object_key,
+        grouped_root_table_sources, unquote_sql_ident, CloudWriteErrorCategory,
     };
     use crate::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
     use bson::{doc, Bson};
     use flate2::read::MultiGzDecoder;
+    use std::collections::HashMap;
     use std::collections::HashSet;
     use std::io::Read;
-    use std::collections::HashMap;
+
+    #[test]
+    fn gcs_error_categorization_maps_auth_and_permission() {
+        assert_eq!(
+            categorize_cloud_error_message("Unauthenticated request, missing token"),
+            CloudWriteErrorCategory::Authentication
+        );
+        assert_eq!(
+            categorize_cloud_error_message("forbidden: status: 403"),
+            CloudWriteErrorCategory::Authorization
+        );
+    }
+
+    #[test]
+    fn gcs_error_categorization_maps_not_found_and_transient() {
+        assert_eq!(
+            categorize_cloud_error_message("bucket not found status: 404"),
+            CloudWriteErrorCategory::NotFound
+        );
+        assert_eq!(
+            categorize_cloud_error_message("service unavailable status: 503"),
+            CloudWriteErrorCategory::Transient
+        );
+    }
+
+    #[test]
+    fn gcs_object_key_keeps_grouped_export_layout() {
+        let key = gcs_object_key("team/prefix", "ciam_prep", "events", "events.csv.gz");
+        assert_eq!(key, "team/prefix/ciam_prep/events/events.csv.gz");
+    }
 
     #[test]
     fn export_root_rows_use_flattened_object_id_fields_and_skip_fake_primary_column() {
@@ -2940,73 +3168,73 @@ CREATE TABLE tier_and_details (
             .any(|row| row[2].as_deref() == Some("false") && row[4].as_deref() == Some("silver")));
     }
 
-//     #[test]
-//     fn export_container_object_without_payload_keeps_child_document_context() {
-//         let sql = r#"
-// CREATE TABLE companies (
-//     id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
-//     name TEXT NOT NULL
-// );
+    //     #[test]
+    //     fn export_container_object_without_payload_keeps_child_document_context() {
+    //         let sql = r#"
+    // CREATE TABLE companies (
+    //     id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    //     name TEXT NOT NULL
+    // );
 
-// CREATE TABLE companies_investments (
-//     id BIGSERIAL PRIMARY KEY,
-//     companies_id UUID NOT NULL,
-//     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
-// );
+    // CREATE TABLE companies_investments (
+    //     id BIGSERIAL PRIMARY KEY,
+    //     companies_id UUID NOT NULL,
+    //     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
+    // );
 
-// CREATE TABLE financial_org (
-//     id BIGSERIAL PRIMARY KEY,
-//     companies_investments_id BIGINT NOT NULL,
-//     name TEXT NOT NULL,
-//     permalink TEXT NOT NULL,
-//     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
-// );
-// "#;
+    // CREATE TABLE financial_org (
+    //     id BIGSERIAL PRIMARY KEY,
+    //     companies_investments_id BIGINT NOT NULL,
+    //     name TEXT NOT NULL,
+    //     permalink TEXT NOT NULL,
+    //     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
+    // );
+    // "#;
 
-//         let tables = parse_sql(sql);
-//         let roots = build_tree(&tables, None, &HashMap::new());
-//         let mut all_rows = HashMap::new();
-//         let mut counters = HashMap::new();
-//         let doc = doc! {
-//             "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
-//             "name": "Wetpaint",
-//             "companies_investments": {
-//                 "company": Bson::Null,
-//                 "financial_org": {
-//                     "name": "Frazier Technology Ventures",
-//                     "permalink": "frazier-technology-ventures"
-//                 },
-//                 "person": Bson::Null
-//             }
-//         };
+    //         let tables = parse_sql(sql);
+    //         let roots = build_tree(&tables, None, &HashMap::new());
+    //         let mut all_rows = HashMap::new();
+    //         let mut counters = HashMap::new();
+    //         let doc = doc! {
+    //             "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+    //             "name": "Wetpaint",
+    //             "companies_investments": {
+    //                 "company": Bson::Null,
+    //                 "financial_org": {
+    //                     "name": "Frazier Technology Ventures",
+    //                     "permalink": "frazier-technology-ventures"
+    //                 },
+    //                 "person": Bson::Null
+    //             }
+    //         };
 
-//         extract_rows(
-//             &Bson::Document(doc),
-//             &roots[0],
-//             None,
-//             true,
-//             &mut all_rows,
-//             &mut counters,
-//         );
+    //         extract_rows(
+    //             &Bson::Document(doc),
+    //             &roots[0],
+    //             None,
+    //             true,
+    //             &mut all_rows,
+    //             &mut counters,
+    //         );
 
-//         let investment_rows = all_rows
-//             .get("companies_investments")
-//             .expect("companies_investments rows missing");
-//         assert_eq!(investment_rows.len(), 1);
+    //         let investment_rows = all_rows
+    //             .get("companies_investments")
+    //             .expect("companies_investments rows missing");
+    //         assert_eq!(investment_rows.len(), 1);
 
-//         let financial_rows = all_rows
-//             .get("financial_org")
-//             .expect("financial_org rows missing");
-//         assert_eq!(financial_rows.len(), 1);
-//         assert_eq!(
-//             financial_rows[0][2].as_deref(),
-//             Some("Frazier Technology Ventures")
-//         );
-//         assert_eq!(
-//             financial_rows[0][3].as_deref(),
-//             Some("frazier-technology-ventures")
-//         );
-//     }
+    //         let financial_rows = all_rows
+    //             .get("financial_org")
+    //             .expect("financial_org rows missing");
+    //         assert_eq!(financial_rows.len(), 1);
+    //         assert_eq!(
+    //             financial_rows[0][2].as_deref(),
+    //             Some("Frazier Technology Ventures")
+    //         );
+    //         assert_eq!(
+    //             financial_rows[0][3].as_deref(),
+    //             Some("frazier-technology-ventures")
+    //         );
+    //     }
 
     #[test]
     fn export_skips_empty_embedded_review_scores_object() {

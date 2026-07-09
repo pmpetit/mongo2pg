@@ -718,6 +718,30 @@ them, so the CSV files can be loaded directly into PostgreSQL with `\COPY`.
 | `-c, --config <FILE>` | Project config file – derives SOURCE_URI, database name, `schema/tables/` and `data/` paths |
 | `-o, --output-dir <DIR>` | Override the output directory for CSV files (default: `<project>/data/`) |
 
+**GCS destination mode (`base_dir` starts with `gs://`)**
+
+- If `[project].base_dir` starts with `gs://`, export selects the GCS backend.
+- In that mode, generated `*.csv.gz` artifacts are uploaded to:
+  `gs://<bucket>/<prefix>/<db>/<sql_lookup_name>/<file>.csv.gz`
+- Local schema and mapping files are still read from the project path next to the config file.
+- Authentication uses Google Application Default Credentials (ADC), for example:
+  - `gcloud auth application-default login`
+  - or `GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json`
+
+Example:
+
+```toml
+[project]
+base_dir = "gs://my-migration-bucket/mongo2pg-exports"
+project_dir = "retail"
+```
+
+With namespace `ciam_prep` and grouped SQL lookup `events`, one uploaded object is:
+
+```text
+gs://my-migration-bucket/mongo2pg-exports/ciam_prep/events/events.csv.gz
+```
+
 **Output layout**
 
 ```

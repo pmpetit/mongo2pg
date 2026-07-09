@@ -37,7 +37,8 @@ use mongo2pg::analyzer::{
 use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
 // use mongo2pg::checkmd5::run_check_md5;
 use mongo2pg::export::{
-    export_collections_to_sql, resolve_grouped_sql_lookup_name, DEFAULT_EXPORT_CHUNK_ROWS,
+    export_collections_to_sql, resolve_export_write_backend, resolve_grouped_sql_lookup_name,
+    ExportWriteBackend, DEFAULT_EXPORT_CHUNK_ROWS,
 };
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
@@ -1576,12 +1577,14 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 
     let namespace = args.namespace.clone().or(conf_namespace);
 
-    let client_options = ClientOptions::parse(&resolved_source_uri).await.with_context(|| {
-        format!(
-            "{}: failed to parse MongoDB SOURCE_URI",
-            connection_failed_context("mongo", "connect")
-        )
-    })?;
+    let client_options = ClientOptions::parse(&resolved_source_uri)
+        .await
+        .with_context(|| {
+            format!(
+                "{}: failed to parse MongoDB SOURCE_URI",
+                connection_failed_context("mongo", "connect")
+            )
+        })?;
     let client = Client::with_options(client_options).with_context(|| {
         format!(
             "{}: failed to create MongoDB client",
@@ -1630,15 +1633,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         Some(ref ns) if ns.contains('.') => {
             // Single collection: <db>.<collection>
             let (db_name, coll_name) = parse_namespace(ns)?;
-            let existing_dbs = client
-                .list_database_names()
-                .await
-                .with_context(|| {
-                    format!(
-                        "{}: failed to list databases",
-                        connection_failed_context("mongo", "query")
-                    )
-                })?;
+            let existing_dbs = client.list_database_names().await.with_context(|| {
+                format!(
+                    "{}: failed to list databases",
+                    connection_failed_context("mongo", "query")
+                )
+            })?;
             if !existing_dbs.iter().any(|d| d == db_name) {
                 warn!(
                     "database '{db_name}' does not exist on the server. Available databases: {}",
@@ -1696,15 +1696,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         Some(ref ns) => {
             // Whole single database: infer every collection.
             let db_name = ns.as_str();
-            let existing_dbs = client
-                .list_database_names()
-                .await
-                .with_context(|| {
-                    format!(
-                        "{}: failed to list databases",
-                        connection_failed_context("mongo", "query")
-                    )
-                })?;
+            let existing_dbs = client.list_database_names().await.with_context(|| {
+                format!(
+                    "{}: failed to list databases",
+                    connection_failed_context("mongo", "query")
+                )
+            })?;
             if !existing_dbs.iter().any(|d| d == db_name) {
                 warn!(
                     "database '{db_name}' does not exist on the server. Available databases: {}",
@@ -1712,15 +1709,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 );
             }
             let db = client.database(db_name);
-            let coll_names = db
-                .list_collection_names()
-                .await
-                .with_context(|| {
-                    format!(
-                        "{}: failed to list collections",
-                        connection_failed_context("mongo", "query")
-                    )
-                })?;
+            let coll_names = db.list_collection_names().await.with_context(|| {
+                format!(
+                    "{}: failed to list collections",
+                    connection_failed_context("mongo", "query")
+                )
+            })?;
             let filtered_coll_names: Vec<&String> = coll_names
                 .iter()
                 .filter(|n| !n.starts_with("system."))
@@ -2408,15 +2402,12 @@ async fn infer_all_databases(
     timestamp_fields: &[String],
     emit_stats: bool,
 ) -> Result<()> {
-    let all_dbs = client
-        .list_database_names()
-        .await
-        .with_context(|| {
-            format!(
-                "{}: failed to list databases",
-                connection_failed_context("mongo", "query")
-            )
-        })?;
+    let all_dbs = client.list_database_names().await.with_context(|| {
+        format!(
+            "{}: failed to list databases",
+            connection_failed_context("mongo", "query")
+        )
+    })?;
 
     let user_dbs: Vec<String> = all_dbs
         .into_iter()
@@ -5163,8 +5154,30 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
     })?;
     let export_chunk_size = resolve_export_chunk_size(args.chunk_size.or(c.chunk_size))?;
+    let storage_backend = resolve_export_write_backend(&c.base_dir)?;
+    match &storage_backend {
+        ExportWriteBackend::LocalFs => info!("export backend: local filesystem"),
+        ExportWriteBackend::Gcs { bucket, prefix } => {
+            info!(
+                "export backend: gcs bucket='{}' prefix='{}'",
+                bucket, prefix
+            );
+        }
+    }
 
-    let project_root = c.base_dir.join(&c.project_dir);
+    let project_root = match &storage_backend {
+        ExportWriteBackend::LocalFs => c.base_dir.join(&c.project_dir),
+        ExportWriteBackend::Gcs { .. } => {
+            // base_dir is a cloud destination in this mode; local project artifacts remain next to config.
+            let local_root = conf
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+            info!("export metadata root (local): {}", local_root.display());
+            local_root
+        }
+    };
     // Use <project_root>/schema/tables/<db_name> for SQL files
     let tables_dir = project_root.join("schema").join("tables").join(&db_name);
     let collections_dir = resolve_collections_dir(&project_root, &db_name);
@@ -5337,6 +5350,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             &collections_dir,
             &data_dir,
             export_chunk_size,
+            &storage_backend,
         )
         .await
         {
@@ -7538,15 +7552,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
-    consumer
-        .subscribe(&topic_refs)
-        .with_context(|| {
-            format!(
-                "{}: failed to subscribe topics: {}",
-                connection_failed_context("kafka", "consume"),
-                topics.join(", ")
-            )
-        })?;
+    consumer.subscribe(&topic_refs).with_context(|| {
+        format!(
+            "{}: failed to subscribe topics: {}",
+            connection_failed_context("kafka", "consume"),
+            topics.join(", ")
+        )
+    })?;
 
     info!(
         "Kafka import started. group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
@@ -8632,14 +8644,12 @@ async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
         tls_builder.danger_accept_invalid_certs(true);
         tls_builder.danger_accept_invalid_hostnames(true);
     }
-    let tls = tls_builder
-        .build()
-        .with_context(|| {
-            format!(
-                "{}: failed to initialize PostgreSQL TLS connector",
-                connection_failed_context("pg", "connect")
-            )
-        })?;
+    let tls = tls_builder.build().with_context(|| {
+        format!(
+            "{}: failed to initialize PostgreSQL TLS connector",
+            connection_failed_context("pg", "connect")
+        )
+    })?;
     let tls = MakeTlsConnector::new(tls);
 
     let (pg_client, pg_connection) = tokio_postgres::connect(target_uri, tls)
@@ -8981,24 +8991,19 @@ async fn build_post_import_rows(
 
     let (db_name, only_collection) = split_namespace_scope(namespace);
 
-    let mongo_client = Client::with_uri_str(source_uri)
-        .await
-        .with_context(|| {
-            format!(
-                "{}: failed to connect to MongoDB using SOURCE_URI",
-                connection_failed_context("mongo", "connect")
-            )
-        })?;
+    let mongo_client = Client::with_uri_str(source_uri).await.with_context(|| {
+        format!(
+            "{}: failed to connect to MongoDB using SOURCE_URI",
+            connection_failed_context("mongo", "connect")
+        )
+    })?;
     let mongo_db = mongo_client.database(db_name);
-    let mut collection_names = mongo_db
-        .list_collection_names()
-        .await
-        .with_context(|| {
-            format!(
-                "{}: failed to list collections for MongoDB database {db_name}",
-                connection_failed_context("mongo", "query")
-            )
-        })?;
+    let mut collection_names = mongo_db.list_collection_names().await.with_context(|| {
+        format!(
+            "{}: failed to list collections for MongoDB database {db_name}",
+            connection_failed_context("mongo", "query")
+        )
+    })?;
     collection_names.retain(|name| !name.starts_with("system."));
     collection_names.retain(|name| should_infer_collection(&sanitize_name(name), include, exclude));
     if let Some(coll_name) = only_collection {
@@ -9280,24 +9285,25 @@ mod tests {
         classify_unauthorized_retry, collect_infer_type_warnings, collect_nullable_scalar_warnings,
         connection_failed_context, count_dynamic_map_entries, detect_candidate_groups,
         dynamic_map_value_fields, format_runtime_log_line, infer_query_max_time,
-        is_unauthorized_cursor_error,
-        plan_export_jobs_for_collections, render_ddl_from_mapping_tables, resolve_collections_dir,
+        is_unauthorized_cursor_error, plan_export_jobs_for_collections,
+        render_ddl_from_mapping_tables, resolve_collections_dir, resolve_export_chunk_size,
         resolve_export_sql_lookup_for_collection, resolve_infer_auth_retry_max,
-        resolve_export_chunk_size, resolve_infer_chunk_size, resolve_log_level_precedence,
-        resolve_post_import_table_row,
+        resolve_infer_chunk_size, resolve_log_level_precedence, resolve_post_import_table_row,
         resolve_root_table_name, sanitize_name, should_infer_collection, strip_psql_preamble,
         timeout_fallback_hint, validate_group_schema_compatibility, ConfigOverrides,
-        PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_INFER_AUTH_RETRY_MAX,
-        DEFAULT_EXPORT_CHUNK_ROWS, DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
+        PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_EXPORT_CHUNK_ROWS,
+        DEFAULT_INFER_AUTH_RETRY_MAX, DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
     };
     use anyhow::{anyhow, Context as _};
     use bson::doc;
     use log::{Level, LevelFilter};
     use mongo2pg::analyzer::Analyzer;
+    use mongo2pg::export::{resolve_export_write_backend, ExportWriteBackend};
     use mongo2pg::schema_diagram::Table;
     use serde::Deserialize;
     use std::collections::{HashMap, HashSet};
     use std::io::Write;
+    use std::path::Path;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use tempfile::NamedTempFile;
 
@@ -9476,6 +9482,36 @@ mod tests {
     fn resolve_export_chunk_size_rejects_invalid_values() {
         assert!(resolve_export_chunk_size(Some(0)).is_err());
         assert!(resolve_export_chunk_size(Some(i64::MAX as u64 + 1)).is_err());
+    }
+
+    #[test]
+    fn resolve_export_write_backend_uses_local_for_non_gs_base_dir() {
+        let backend = resolve_export_write_backend(Path::new("/tmp/work"))
+            .expect("local path should resolve to filesystem backend");
+        assert_eq!(backend, ExportWriteBackend::LocalFs);
+    }
+
+    #[test]
+    fn resolve_export_write_backend_uses_gcs_for_gs_prefix() {
+        let backend = resolve_export_write_backend(Path::new("gs://my-bucket/path/to/base"))
+            .expect("gs URI should resolve to gcs backend");
+        assert_eq!(
+            backend,
+            ExportWriteBackend::Gcs {
+                bucket: "my-bucket".to_owned(),
+                prefix: "path/to/base".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_export_write_backend_rejects_empty_gcs_bucket() {
+        let err =
+            resolve_export_write_backend(Path::new("gs://")).expect_err("empty bucket must fail");
+        assert!(
+            err.to_string().contains("missing bucket name"),
+            "unexpected error message: {err}"
+        );
     }
 
     #[test]
