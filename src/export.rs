@@ -22,7 +22,7 @@ use flate2::Compression;
 use futures::TryStreamExt;
 use google_cloud_auth::credentials::Builder as AuthBuilder;
 use google_cloud_storage::client::{Storage, StorageControl};
-use log::{info, warn};
+use log::{debug, info, warn};
 use mongodb::Client;
 use serde::Deserialize;
 
@@ -225,6 +225,14 @@ async fn upload_export_files_to_gcs(
     bucket: &str,
     prefix: &str,
 ) -> Result<()> {
+    debug!(
+        "[gcs-debug] export upload start: bucket='{}' prefix='{}' db='{}' sql='{}' local_dir='{}'",
+        bucket,
+        prefix.trim_matches('/'),
+        db_name,
+        sql_lookup_name,
+        out_dir.display()
+    );
     let storage = Storage::builder().build().await.map_err(|err| {
         format_categorized_cloud_error(
             "upload_init",
@@ -233,6 +241,7 @@ async fn upload_export_files_to_gcs(
         )
     })?;
     let bucket_resource = format!("projects/_/buckets/{bucket}");
+    let mut uploaded_files = 0usize;
 
     for entry in std::fs::read_dir(out_dir)
         .with_context(|| format!("Cannot read {} for GCS upload", out_dir.display()))?
@@ -253,8 +262,8 @@ async fn upload_export_files_to_gcs(
             .await
             .with_context(|| format!("Cannot read staged export file {}", path.display()))?;
 
-        info!(
-            "-> gcs upload: {} -> gs://{}/{}",
+        debug!(
+            "[gcs-debug] export upload object: {} -> gs://{}/{}",
             path.display(),
             bucket,
             object_name
@@ -274,7 +283,14 @@ async fn upload_export_files_to_gcs(
                     &anyhow!(err),
                 )
             })?;
+        uploaded_files += 1;
     }
+    debug!(
+        "[gcs-debug] export upload done: uploaded_files={} bucket='{}' prefix='{}'",
+        uploaded_files,
+        bucket,
+        prefix.trim_matches('/'),
+    );
     Ok(())
 }
 

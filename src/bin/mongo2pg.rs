@@ -31,7 +31,7 @@ use flate2::read::GzDecoder;
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use google_cloud_storage::client::{Storage, StorageControl};
 use indexmap::IndexMap;
-use log::{info, warn, Level, LevelFilter};
+use log::{debug, info, warn, Level, LevelFilter};
 use mongo2pg::analyzer::{
     Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
@@ -1491,6 +1491,17 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
+    if args.config.is_none() {
+        if let Some(output_dir) = args.output_dir.as_deref() {
+            let output_raw = output_dir.to_string_lossy();
+            if output_raw.starts_with("gs://") || output_raw.starts_with("gs:/") {
+                return Err(anyhow!(
+                    "infer does not support direct --output-dir to GCS ({output_raw}). Use -c <config> with [project].base_dir = \"gs://<bucket>/<prefix>\" to enable post-infer upload"
+                ));
+            }
+        }
+    }
+
     if let Some(conf) = args.config.as_deref() {
         apply_config_overrides(
             conf,
@@ -1934,9 +1945,23 @@ fn infer_object_mime_type(file_path: &Path) -> &'static str {
 async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
     let c = read_conf(conf)?;
     let backend = resolve_export_write_backend(&c.base_dir)?;
-    let ExportWriteBackend::Gcs { bucket, prefix } = backend else {
-        return Ok(());
+    let (bucket, prefix) = match backend {
+        ExportWriteBackend::Gcs { bucket, prefix } => (bucket, prefix),
+        ExportWriteBackend::LocalFs => {
+            info!(
+                "Infer GCS upload skipped: [project].base_dir is local filesystem ('{}'), not gs://",
+                c.base_dir.display()
+            );
+            return Ok(());
+        }
     };
+
+    info!(
+        "[gcs-debug] infer upload enabled: base_dir='{}' bucket='{}' prefix='{}'",
+        c.base_dir.display(),
+        bucket,
+        prefix.trim_matches('/'),
+    );
 
     ensure_gcs_authentication().await?;
     let storage = Storage::builder()
@@ -1967,6 +1992,7 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
         bucket,
         prefix.trim_matches('/')
     );
+    let mut uploaded_files = 0usize;
 
     for file_path in &files_to_move {
         let object_key = infer_object_key(&prefix, &c.project_dir, &project_root, file_path)?;
@@ -1975,6 +2001,12 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
             .await
             .with_context(|| format!("Cannot read infer artifact {}", file_path.display()))?;
         let _ = mime_type;
+        debug!(
+            "[gcs-debug] infer upload object: {} -> gs://{}/{}",
+            file_path.display(),
+            bucket,
+            object_key
+        );
         storage
             .write_object(
                 bucket_resource.clone(),
@@ -1991,7 +2023,15 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
                     object_key
                 )
             })?;
+        uploaded_files += 1;
     }
+
+    debug!(
+        "[gcs-debug] infer upload done: uploaded_files={} bucket='{}' prefix='{}'",
+        uploaded_files,
+        bucket,
+        prefix.trim_matches('/'),
+    );
 
     let purge_local = std::env::var("MONGO2PG_GCS_PURGE_LOCAL")
         .ok()
@@ -5604,6 +5644,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     for (_, collections) in &mut jobs {
         collections.sort();
     }
+    let mut failed_jobs: Vec<String> = Vec::new();
 
     let total_jobs = jobs.len();
 
@@ -5650,8 +5691,20 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .await
         {
             Ok(()) => {}
-            Err(e) => warn!("  warning: {e}"),
+            Err(e) => {
+                let job_label = format!("{}.{}", db_name, sql_lookup_name);
+                warn!("  warning: export failed for {}: {}", job_label, e);
+                failed_jobs.push(format!("{}: {}", job_label, e));
+            }
         }
+    }
+
+    if !failed_jobs.is_empty() {
+        return Err(anyhow!(
+            "Export failed for {} job(s): {}",
+            failed_jobs.len(),
+            failed_jobs.join(" | ")
+        ));
     }
 
     if cleanup_staging_after_export && data_dir.exists() {
@@ -5773,6 +5826,12 @@ async fn download_gcs_prefix_to_local_dir(
     object_prefix: &str,
     local_dir: &Path,
 ) -> Result<usize> {
+    debug!(
+        "[gcs-debug] metadata stage start: gs://{}/{} -> {}",
+        bucket,
+        object_prefix,
+        local_dir.display()
+    );
     let storage = Storage::builder()
         .build()
         .await
@@ -5841,6 +5900,13 @@ async fn download_gcs_prefix_to_local_dir(
         }
         page_token = page.next_page_token;
     }
+
+    debug!(
+        "[gcs-debug] metadata stage done: downloaded_files={} from gs://{}/{}",
+        downloaded,
+        bucket,
+        object_prefix
+    );
 
     Ok(downloaded)
 }
