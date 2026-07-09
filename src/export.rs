@@ -151,6 +151,16 @@ fn format_categorized_cloud_error(
 pub async fn ensure_gcs_authentication() -> Result<()> {
     const STORAGE_RW_SCOPE: &str = "https://www.googleapis.com/auth/devstorage.read_write";
 
+    match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
+        Ok(path) => debug!(
+            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS is set (adc_source=key_file path='{}')",
+            path
+        ),
+        Err(_) => debug!(
+            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS not set (adc_source=metadata_or_default)"
+        ),
+    }
+
     let credentials = AuthBuilder::default()
         .with_scopes([STORAGE_RW_SCOPE])
         .build_access_token_credentials()
