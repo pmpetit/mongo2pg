@@ -451,6 +451,8 @@ struct KafkaImportArgs {
 // ──────────────────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let cli = Cli::parse();
 
     let log_level = resolve_effective_log_level(&cli)?;
