@@ -21,6 +21,7 @@ use cloud_storage::{Bucket, Object};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::TryStreamExt;
+use google_cloud_auth::credentials::Builder as AuthBuilder;
 use log::{info, warn};
 use mongodb::Client;
 use serde::Deserialize;
@@ -144,7 +145,33 @@ fn format_categorized_cloud_error(
     }
 }
 
+pub async fn ensure_gcs_authentication() -> Result<()> {
+    const STORAGE_RW_SCOPE: &str = "https://www.googleapis.com/auth/devstorage.read_write";
+
+    let credentials = AuthBuilder::default()
+        .with_scopes([STORAGE_RW_SCOPE])
+        .build_access_token_credentials()
+        .map_err(|err| {
+            format_categorized_cloud_error(
+                "auth_preflight",
+                "google application default credentials",
+                &anyhow!(err),
+            )
+        })?;
+
+    credentials.access_token().await.map_err(|err| {
+        format_categorized_cloud_error(
+            "auth_preflight",
+            "google application default credentials",
+            &anyhow!(err),
+        )
+    })?;
+
+    Ok(())
+}
+
 async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
+    ensure_gcs_authentication().await?;
     Bucket::read(bucket).await.map_err(|err| {
         format_categorized_cloud_error("preflight", &format!("bucket {bucket}"), &anyhow!(err))
     })?;

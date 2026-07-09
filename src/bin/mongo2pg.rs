@@ -38,8 +38,8 @@ use mongo2pg::analyzer::{
 use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
 // use mongo2pg::checkmd5::run_check_md5;
 use mongo2pg::export::{
-    export_collections_to_sql, resolve_export_write_backend, resolve_grouped_sql_lookup_name,
-    ExportWriteBackend, DEFAULT_EXPORT_CHUNK_ROWS,
+    ensure_gcs_authentication, export_collections_to_sql, resolve_export_write_backend,
+    resolve_grouped_sql_lookup_name, ExportWriteBackend, DEFAULT_EXPORT_CHUNK_ROWS,
 };
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
@@ -1935,6 +1935,8 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
     let ExportWriteBackend::Gcs { bucket, prefix } = backend else {
         return Ok(());
     };
+
+    ensure_gcs_authentication().await?;
 
     let project_root = resolve_local_project_root_from_config(conf, &c);
     let artifact_dirs = infer_artifact_directories(&project_root);
@@ -5824,6 +5826,8 @@ async fn run_import(args: ImportArgs) -> Result<()> {
 
     if !data_db_dir.is_dir() {
         if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+            ensure_gcs_authentication().await?;
+
             let stage = tempfile::Builder::new()
                 .prefix("mongo2pg-gcs-import-stage-")
                 .tempdir()
