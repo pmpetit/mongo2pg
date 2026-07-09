@@ -26,10 +26,10 @@ use bson::{doc, Bson};
 use bytes::Bytes;
 use chrono::Utc;
 use clap::{Args, CommandFactory, Parser, Subcommand};
-use cloud_storage::Object;
 use env_logger::Builder as EnvLoggerBuilder;
 use flate2::read::GzDecoder;
 use futures::{SinkExt, StreamExt, TryStreamExt};
+use google_cloud_storage::client::{Storage, StorageControl};
 use indexmap::IndexMap;
 use log::{info, warn, Level, LevelFilter};
 use mongo2pg::analyzer::{
@@ -1937,6 +1937,11 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
     };
 
     ensure_gcs_authentication().await?;
+    let storage = Storage::builder()
+        .build()
+        .await
+        .context("Failed to initialize Google Cloud Storage client")?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
 
     let project_root = resolve_local_project_root_from_config(conf, &c);
     let artifact_dirs = infer_artifact_directories(&project_root);
@@ -1967,7 +1972,14 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
         let bytes = tokio::fs::read(file_path)
             .await
             .with_context(|| format!("Cannot read infer artifact {}", file_path.display()))?;
-        Object::create(&bucket, bytes, &object_key, mime_type)
+        let _ = mime_type;
+        storage
+            .write_object(
+                bucket_resource.clone(),
+                object_key.clone(),
+                Bytes::from(bytes),
+            )
+            .send_buffered()
             .await
             .with_context(|| {
                 format!(
@@ -5717,21 +5729,32 @@ async fn download_gcs_prefix_to_local_dir(
     object_prefix: &str,
     local_dir: &Path,
 ) -> Result<usize> {
-    let list_request = cloud_storage::ListRequest {
-        prefix: Some(object_prefix.to_owned()),
-        ..cloud_storage::ListRequest::default()
-    };
-
-    let stream = Object::list(bucket, list_request)
+    let storage = Storage::builder()
+        .build()
         .await
-        .with_context(|| format!("Failed to list gs://{}/{}", bucket, object_prefix))?;
-    futures::pin_mut!(stream);
+        .with_context(|| format!("Failed to initialize GCS data client for gs://{bucket}"))?;
+    let storage_control = StorageControl::builder().build().await.with_context(|| {
+        format!("Failed to initialize GCS control client for gs://{bucket}")
+    })?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
 
     let mut downloaded = 0usize;
-    while let Some(page) = stream.next().await {
-        let page =
-            page.with_context(|| format!("Failed while listing gs://{}/{}", bucket, object_prefix))?;
-        for object in page.items {
+    let mut page_token = String::new();
+    loop {
+        let mut request = storage_control
+            .list_objects()
+            .set_parent(bucket_resource.clone())
+            .set_prefix(object_prefix.to_owned());
+        if !page_token.is_empty() {
+            request = request.set_page_token(page_token.clone());
+        }
+
+        let page = request
+            .send()
+            .await
+            .with_context(|| format!("Failed while listing gs://{}/{}", bucket, object_prefix))?;
+
+        for object in page.objects {
             let Some(relative) = object
                 .name
                 .strip_prefix(object_prefix)
@@ -5750,14 +5773,29 @@ async fn download_gcs_prefix_to_local_dir(
                 })?;
             }
 
-            let bytes = Object::download(bucket, &object.name).await.with_context(|| {
-                format!("Failed to download gs://{}/{}", bucket, object.name)
-            })?;
+            let mut reader = storage
+                .read_object(bucket_resource.clone(), object.name.clone())
+                .send()
+                .await
+                .with_context(|| format!("Failed to open gs://{}/{}", bucket, object.name))?;
+            let mut bytes = Vec::new();
+            while let Some(chunk) = reader.next().await {
+                let chunk = chunk.with_context(|| {
+                    format!("Failed reading gs://{}/{}", bucket, object.name)
+                })?;
+                bytes.extend_from_slice(&chunk);
+            }
+
             tokio::fs::write(&destination, bytes).await.with_context(|| {
                 format!("Cannot write staged import file {}", destination.display())
             })?;
             downloaded += 1;
         }
+
+        if page.next_page_token.is_empty() {
+            break;
+        }
+        page_token = page.next_page_token;
     }
 
     Ok(downloaded)

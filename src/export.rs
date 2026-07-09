@@ -17,11 +17,11 @@ use std::path::Path;
 use anyhow::{anyhow, Context, Result};
 use bson::Bson;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
-use cloud_storage::{Bucket, Object};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::TryStreamExt;
 use google_cloud_auth::credentials::Builder as AuthBuilder;
+use google_cloud_storage::client::{Storage, StorageControl};
 use log::{info, warn};
 use mongodb::Client;
 use serde::Deserialize;
@@ -172,9 +172,26 @@ pub async fn ensure_gcs_authentication() -> Result<()> {
 
 async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
     ensure_gcs_authentication().await?;
-    Bucket::read(bucket).await.map_err(|err| {
-        format_categorized_cloud_error("preflight", &format!("bucket {bucket}"), &anyhow!(err))
+    let storage_control = StorageControl::builder().build().await.map_err(|err| {
+        format_categorized_cloud_error(
+            "preflight",
+            &format!("bucket {bucket}"),
+            &anyhow!(err),
+        )
     })?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
+    storage_control
+        .get_bucket()
+        .set_name(bucket_resource)
+        .send()
+        .await
+        .map_err(|err| {
+            format_categorized_cloud_error(
+                "preflight",
+                &format!("bucket {bucket}"),
+                &anyhow!(err),
+            )
+        })?;
     Ok(())
 }
 
@@ -205,6 +222,15 @@ async fn upload_export_files_to_gcs(
     bucket: &str,
     prefix: &str,
 ) -> Result<()> {
+    let storage = Storage::builder().build().await.map_err(|err| {
+        format_categorized_cloud_error(
+            "upload_init",
+            &format!("bucket {bucket}"),
+            &anyhow!(err),
+        )
+    })?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
+
     for entry in std::fs::read_dir(out_dir)
         .with_context(|| format!("Cannot read {} for GCS upload", out_dir.display()))?
     {
@@ -230,7 +256,13 @@ async fn upload_export_files_to_gcs(
             bucket,
             object_name
         );
-        Object::create(bucket, bytes, &object_name, "application/gzip")
+        storage
+            .write_object(
+                bucket_resource.clone(),
+                object_name.clone(),
+                bytes::Bytes::from(bytes),
+            )
+            .send_buffered()
             .await
             .map_err(|err| {
                 format_categorized_cloud_error(
