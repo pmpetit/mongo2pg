@@ -1810,6 +1810,9 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     }
 
     if chained_config.is_none() {
+        debug!(
+            "[gcs-debug] infer upload hook skipped: infer ran without -c config"
+        );
         if let Some(output_dir) = args.output_dir.as_deref() {
             info!(
                 "Inference completed. Collection schemas and statistics were written under {}.",
@@ -1943,12 +1946,16 @@ fn infer_object_mime_type(file_path: &Path) -> &'static str {
 }
 
 async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
+    debug!(
+        "[gcs-debug] infer upload hook entered: config='{}'",
+        conf.display()
+    );
     let c = read_conf(conf)?;
     let backend = resolve_export_write_backend(&c.base_dir)?;
     let (bucket, prefix) = match backend {
         ExportWriteBackend::Gcs { bucket, prefix } => (bucket, prefix),
         ExportWriteBackend::LocalFs => {
-            info!(
+            debug!(
                 "Infer GCS upload skipped: [project].base_dir is local filesystem ('{}'), not gs://",
                 c.base_dir.display()
             );
@@ -1956,7 +1963,7 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
         }
     };
 
-    info!(
+    debug!(
         "[gcs-debug] infer upload enabled: base_dir='{}' bucket='{}' prefix='{}'",
         c.base_dir.display(),
         bucket,
@@ -1971,14 +1978,30 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
     let bucket_resource = format!("projects/_/buckets/{bucket}");
 
     let project_root = resolve_local_project_root_from_config(conf, &c);
+    debug!(
+        "[gcs-debug] infer upload project root resolved: {}",
+        project_root.display()
+    );
     let artifact_dirs = infer_artifact_directories(&project_root);
+    for dir in &artifact_dirs {
+        debug!(
+            "[gcs-debug] infer upload scan dir: {} exists={} is_dir={}",
+            dir.display(),
+            dir.exists(),
+            dir.is_dir()
+        );
+    }
     let mut files_to_move = Vec::new();
     for dir in &artifact_dirs {
         files_to_move.extend(collect_files_recursive(dir)?);
     }
+    debug!(
+        "[gcs-debug] infer upload candidate files: {}",
+        files_to_move.len()
+    );
 
     if files_to_move.is_empty() {
-        info!(
+        debug!(
             "No infer artifacts found to move to gs://{}/{}",
             bucket,
             prefix.trim_matches('/')
