@@ -40,7 +40,10 @@ pub enum ExportWriteBackend {
 
 pub fn resolve_export_write_backend(base_dir: &Path) -> Result<ExportWriteBackend> {
     let raw = base_dir.to_string_lossy();
-    if let Some(remainder) = raw.strip_prefix("gs://") {
+    if let Some(remainder) = raw
+        .strip_prefix("gs://")
+        .or_else(|| raw.strip_prefix("gs:/"))
+    {
         let trimmed = remainder.trim_matches('/');
         let (bucket, prefix) = trimmed
             .split_once('/')

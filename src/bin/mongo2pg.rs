@@ -5408,20 +5408,62 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         }
     }
 
-    let project_root = match &storage_backend {
-        ExportWriteBackend::LocalFs => c.base_dir.join(&c.project_dir),
-        ExportWriteBackend::Gcs { .. } => {
-            let local_root = resolve_local_project_root_from_config(conf, &c);
-            info!(
-                "export metadata root (local, read-only): {}",
-                local_root.display()
-            );
-            local_root
-        }
-    };
+    let mut export_metadata_stage: Option<tempfile::TempDir> = None;
+    let project_root: PathBuf;
     // Use <project_root>/schema/tables/<db_name> for SQL files
-    let tables_dir = project_root.join("schema").join("tables").join(&db_name);
-    let collections_dir = resolve_collections_dir(&project_root, &db_name);
+    let tables_dir: PathBuf;
+    let collections_dir: PathBuf;
+
+    match &storage_backend {
+        ExportWriteBackend::LocalFs => {
+            project_root = c.base_dir.join(&c.project_dir);
+            tables_dir = project_root.join("schema").join("tables").join(&db_name);
+            collections_dir = resolve_collections_dir(&project_root, &db_name);
+        }
+        ExportWriteBackend::Gcs { bucket, prefix } => {
+            let Some(stage) =
+                stage_export_metadata_from_gcs(bucket, prefix, &c.project_dir, &db_name).await?
+            else {
+                return Err(anyhow!(
+                    "Cannot stage export metadata from gs://{}/{}/schema/tables/{}",
+                    bucket,
+                    prefix.trim_matches('/'),
+                    db_name
+                ));
+            };
+
+            project_root = stage.path().to_path_buf();
+            tables_dir = project_root.join("schema").join("tables").join(&db_name);
+            collections_dir = resolve_collections_dir(&project_root, &db_name);
+            info!(
+                "export metadata staged from GCS into temporary directory {}",
+                project_root.display()
+            );
+            export_metadata_stage = Some(stage);
+        }
+    }
+
+    if !tables_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read SQL tables directory {}",
+            tables_dir.display()
+        ));
+    }
+
+    if !collections_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read collections directory {}",
+            collections_dir.display()
+        ));
+    }
+
+    if let Some(stage) = &export_metadata_stage {
+        info!(
+            "export metadata staging dir (temporary): {}",
+            stage.path().display()
+        );
+    }
+
     let (data_dir, cleanup_staging_after_export) = match (&storage_backend, args.output_dir.clone()) {
         (_, Some(dir)) => (dir, false),
         (ExportWriteBackend::LocalFs, None) => (project_root.join("data"), false),
@@ -5801,6 +5843,134 @@ async fn download_gcs_prefix_to_local_dir(
     }
 
     Ok(downloaded)
+}
+
+fn gcs_prefix_candidates_for_project_subdir(prefix: &str, project_dir: &str, subdir: &str) -> Vec<String> {
+    let trimmed_prefix = prefix.trim_matches('/');
+    let project_segment = project_dir.trim_matches('/');
+    let subdir_segment = subdir.trim_matches('/');
+    let mut candidates = Vec::new();
+
+    if trimmed_prefix.is_empty() {
+        candidates.push(format!("{subdir_segment}/"));
+        if !project_segment.is_empty() {
+            candidates.push(format!("{project_segment}/{subdir_segment}/"));
+        }
+    } else {
+        candidates.push(format!("{trimmed_prefix}/{subdir_segment}/"));
+        if !project_segment.is_empty() {
+            let ends_with_project = trimmed_prefix
+                .split('/')
+                .next_back()
+                .is_some_and(|last| last == project_segment);
+            if !ends_with_project {
+                candidates.push(format!("{trimmed_prefix}/{project_segment}/{subdir_segment}/"));
+            }
+        }
+    }
+
+    candidates.sort();
+    candidates.dedup();
+    candidates
+}
+
+async fn stage_export_metadata_from_gcs(
+    bucket: &str,
+    prefix: &str,
+    project_dir: &str,
+    db_name: &str,
+) -> Result<Option<tempfile::TempDir>> {
+    ensure_gcs_authentication().await?;
+
+    let stage = tempfile::Builder::new()
+        .prefix("mongo2pg-gcs-export-meta-")
+        .tempdir()
+        .context("Cannot create temporary export metadata staging directory")?;
+
+    let staged_tables_dir = stage
+        .path()
+        .join("schema")
+        .join("tables")
+        .join(db_name);
+    std::fs::create_dir_all(&staged_tables_dir).with_context(|| {
+        format!(
+            "Cannot create staged schema directory {}",
+            staged_tables_dir.display()
+        )
+    })?;
+
+    let mut staged_tables = 0usize;
+    for candidate in gcs_prefix_candidates_for_project_subdir(
+        prefix,
+        project_dir,
+        &format!("schema/tables/{db_name}"),
+    ) {
+        let count = download_gcs_prefix_to_local_dir(bucket, &candidate, &staged_tables_dir)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to stage schema metadata from gs://{}/{}",
+                    bucket, candidate
+                )
+            })?;
+        if count > 0 {
+            staged_tables = count;
+            info!(
+                "staged {} schema files from gs://{}/{} into {}",
+                count,
+                bucket,
+                candidate,
+                staged_tables_dir.display()
+            );
+            break;
+        }
+    }
+
+    if staged_tables == 0 {
+        return Ok(None);
+    }
+
+    let staged_collections_root = stage.path().join("source").join("collections");
+    std::fs::create_dir_all(&staged_collections_root).with_context(|| {
+        format!(
+            "Cannot create staged collections directory {}",
+            staged_collections_root.display()
+        )
+    })?;
+
+    let collection_candidates = [
+        format!("source/collections/{db_name}"),
+        "source/collections".to_owned(),
+    ];
+    for subdir in collection_candidates {
+        for candidate in gcs_prefix_candidates_for_project_subdir(prefix, project_dir, &subdir) {
+            let target_dir = if subdir.ends_with(&format!("/{db_name}")) {
+                staged_collections_root.join(db_name)
+            } else {
+                staged_collections_root.clone()
+            };
+            let count = download_gcs_prefix_to_local_dir(bucket, &candidate, &target_dir)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to stage collection mappings from gs://{}/{}",
+                        bucket, candidate
+                    )
+                })?;
+            if count > 0 {
+                info!(
+                    "staged {} collection mapping files from gs://{}/{} into {}",
+                    count,
+                    bucket,
+                    candidate,
+                    target_dir.display()
+                );
+                break;
+            }
+        }
+    }
+
+    Ok(Some(stage))
 }
 
 async fn run_import(args: ImportArgs) -> Result<()> {
