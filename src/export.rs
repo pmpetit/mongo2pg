@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
@@ -151,12 +151,20 @@ async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
     Ok(())
 }
 
+fn gcs_preflight_enabled() -> bool {
+    std::env::var("MONGO2PG_GCS_PREFLIGHT")
+        .ok()
+        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 fn gcs_object_key(prefix: &str, db_name: &str, sql_lookup_name: &str, file_name: &str) -> String {
     let mut parts: Vec<&str> = Vec::new();
     let trimmed_prefix = prefix.trim_matches('/');
     if !trimmed_prefix.is_empty() {
         parts.push(trimmed_prefix);
     }
+    parts.push("data");
     parts.push(db_name);
     parts.push(sql_lookup_name);
     parts.push(file_name);
@@ -536,6 +544,7 @@ fn csv_header_for_table(sql_t: &SqlTable) -> Vec<String> {
         .collect()
 }
 
+#[cfg(test)]
 fn flush_chunk_buffers(
     sql_tables: &[SqlTable],
     out_dir: &Path,
@@ -2236,11 +2245,23 @@ pub async fn export_collections_to_sql(
     }
 
     if let ExportWriteBackend::Gcs { bucket, .. } = backend {
-        info!(
-            "-> export preflight: validating GCS destination bucket '{}'",
-            bucket
-        );
-        preflight_gcs_destination(bucket).await?;
+        if gcs_preflight_enabled() {
+            info!(
+                "-> export preflight: validating GCS destination bucket '{}'",
+                bucket
+            );
+            if let Err(err) = preflight_gcs_destination(bucket).await {
+                warn!(
+                    "GCS preflight failed for bucket '{}': {}. Continuing and attempting direct upload",
+                    bucket,
+                    err
+                );
+            }
+        } else {
+            info!(
+                "-> export preflight: skipped (set MONGO2PG_GCS_PREFLIGHT=1 to enable)"
+            );
+        }
     }
 
     let sql_lookup_name = sanitize(sql_lookup_name);
@@ -2338,10 +2359,24 @@ pub async fn export_collections_to_sql(
         }
     }
 
+    let mut writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>> = HashMap::new();
+    for sql_t in &sql_tables {
+        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&csv_path)
+            .with_context(|| format!("Cannot open {} for write", csv_path.display()))?;
+        let mut gz = GzEncoder::new(BufWriter::new(file), Compression::default());
+        let header = csv_header_for_table(sql_t).join(",");
+        writeln!(gz, "{header}")
+            .with_context(|| format!("Cannot write CSV header to {}", csv_path.display()))?;
+        writers.insert(sql_t.name.clone(), gz);
+    }
+
     let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
-    let mut header_written: HashSet<String> = HashSet::new();
-    let mut flushed_rows_total = 0_u64;
 
     let total_sources = coll_names.len();
     for (source_index, coll_name) in coll_names.iter().enumerate() {
@@ -2415,10 +2450,28 @@ pub async fn export_collections_to_sql(
                 );
             }
 
-            let emitted_rows_total: u64 = counters.values().copied().sum();
-            if emitted_rows_total.saturating_sub(flushed_rows_total) >= chunk_size {
-                flush_chunk_buffers(&sql_tables, &out_dir, &mut all_rows, &mut header_written)?;
-                flushed_rows_total = emitted_rows_total;
+            for (table_name, rows) in all_rows.drain() {
+                let Some(writer) = writers.get_mut(&table_name) else {
+                    warn!(
+                        "Skipping {} rows for unknown table '{}'",
+                        rows.len(),
+                        table_name
+                    );
+                    continue;
+                };
+                for row in rows {
+                    let line: Vec<String> = row
+                        .iter()
+                        .map(|value| csv_cell_text(value.as_deref()))
+                        .collect();
+                    writeln!(writer, "{}", line.join(",")).with_context(|| {
+                        format!(
+                            "Cannot append CSV row for table '{}' in {}",
+                            table_name,
+                            out_dir.display()
+                        )
+                    })?;
+                }
             }
         }
 
@@ -2428,7 +2481,35 @@ pub async fn export_collections_to_sql(
         );
     }
 
-    flush_chunk_buffers(&sql_tables, &out_dir, &mut all_rows, &mut header_written)?;
+    for (table_name, rows) in all_rows.drain() {
+        let Some(writer) = writers.get_mut(&table_name) else {
+            warn!(
+                "Skipping {} rows for unknown table '{}'",
+                rows.len(),
+                table_name
+            );
+            continue;
+        };
+        for row in rows {
+            let line: Vec<String> = row
+                .iter()
+                .map(|value| csv_cell_text(value.as_deref()))
+                .collect();
+            writeln!(writer, "{}", line.join(",")).with_context(|| {
+                format!(
+                    "Cannot append CSV row for table '{}' in {}",
+                    table_name,
+                    out_dir.display()
+                )
+            })?;
+        }
+    }
+
+    for (table_name, writer) in writers {
+        writer
+            .finish()
+            .with_context(|| format!("Cannot finish gzip stream for table '{}'", table_name))?;
+    }
 
     for sql_t in &sql_tables {
         if let Some(alias) = alias_for_table.get(&sql_t.name) {
@@ -2521,7 +2602,7 @@ mod tests {
     #[test]
     fn gcs_object_key_keeps_grouped_export_layout() {
         let key = gcs_object_key("team/prefix", "ciam_prep", "events", "events.csv.gz");
-        assert_eq!(key, "team/prefix/ciam_prep/events/events.csv.gz");
+        assert_eq!(key, "team/prefix/data/ciam_prep/events/events.csv.gz");
     }
 
     #[test]

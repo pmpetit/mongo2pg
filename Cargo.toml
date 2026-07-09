@@ -42,6 +42,7 @@ apache-avro = "0.17"
 env_logger = "0.11"
 log = "0.4"
 cloud-storage = { version = "0.11", features = ["global-client"] }
+tempfile = "3.27.0"
 
 md5 = "0.7"
 
@@ -49,7 +50,6 @@ md5 = "0.7"
 indoc = "2.0.7"
 postgres = "0.19.14"
 rstest = "0.26.1"
-tempfile = "3.27.0"
 testcontainers = "0.27.1"
 testcontainers-modules = { version = "0.15.0", features = [
     "postgres",
