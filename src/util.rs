@@ -74,7 +74,7 @@ struct TomlProjectSection {
 }
 
 pub fn configured_project_root(conf: &ConfData) -> PathBuf {
-    let mut root = conf.base_dir.clone();
+    let mut root = conf.base_dir.join(&conf.project_dir);
     if let Some(cluster_name) = conf
         .cluster_name
         .as_deref()
@@ -83,7 +83,7 @@ pub fn configured_project_root(conf: &ConfData) -> PathBuf {
     {
         root = root.join(cluster_name);
     }
-    root.join(&conf.project_dir)
+    root
 }
 
 #[derive(Debug, Deserialize, Default)]

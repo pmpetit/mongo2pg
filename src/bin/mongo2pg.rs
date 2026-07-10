@@ -254,7 +254,7 @@ struct InitArgs {
     #[arg(long = "namespace")]
     namespace: Option<String>,
 
-    /// Optional cluster segment inserted between base_dir and project_dir for all outputs
+    /// Optional cluster segment appended under project_dir for all outputs
     #[arg(long = "cluster-name", visible_alias = "cluster-naem")]
     cluster_name: Option<String>,
 }
@@ -5284,7 +5284,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        args.project_base.join(cluster_name).join(&args.project_name)
+        args.project_base.join(&args.project_name).join(cluster_name)
     } else {
         args.project_base.join(&args.project_name)
     };
@@ -5304,7 +5304,24 @@ fn run_init(args: InitArgs) -> Result<()> {
 
     let conf_path = project_root
         .join("config")
-        .join(format!("{}.toml", args.project_name));
+        .join(format!(
+            "{}.toml",
+            args.cluster_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(&args.project_name)
+        ));
+    let project_title = if let Some(cluster_name) = args
+        .cluster_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        format!("Mongo2Pg Project migration ({cluster_name})")
+    } else {
+        "Mongo2Pg Project migration".to_owned()
+    };
     let target_database_name = args
         .namespace
         .as_deref()
@@ -5322,7 +5339,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .unwrap_or_else(|| "# cluster_name = \"cluster-a\"".to_owned());
     let conf_content = format!(
         "[project]\ntitle = \"{}\"\nbase_dir = \"{}\"\n{}\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\n# chunk_size = 1000000\n# auth_retry_max = 3\n# log_level = \"info\"\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
-        "Mongo2Pg Project migration",
+        project_title.replace('"', "\\\""),
         args.project_base.display(),
         cluster_line,
         args.project_name,
@@ -5367,20 +5384,6 @@ fn append_non_empty_segment(path: &mut String, segment: Option<&str>) {
 fn ensure_output_prefix_segments(prefix: &str, cluster_name: Option<&str>, project_dir: &str) -> String {
     let mut normalized = prefix.trim_matches('/').to_owned();
 
-    let cluster_segment = cluster_name
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    if let Some(cluster) = cluster_segment {
-        let already_has_cluster = normalized.rsplit('/').next().is_some_and(|segment| segment == cluster)
-            || normalized
-                .rsplit('/')
-                .nth(1)
-                .is_some_and(|segment| segment == cluster);
-        if !already_has_cluster {
-            append_non_empty_segment(&mut normalized, Some(cluster));
-        }
-    }
-
     let project_segment = project_dir.trim_matches('/');
     if !project_segment.is_empty() {
         let already_has_project = normalized
@@ -5389,6 +5392,16 @@ fn ensure_output_prefix_segments(prefix: &str, cluster_name: Option<&str>, proje
             .is_some_and(|segment| segment == project_segment);
         if !already_has_project {
             append_non_empty_segment(&mut normalized, Some(project_segment));
+        }
+    }
+
+    let cluster_segment = cluster_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(cluster) = cluster_segment {
+        let already_has_cluster = normalized.rsplit('/').next().is_some_and(|segment| segment == cluster);
+        if !already_has_cluster {
+            append_non_empty_segment(&mut normalized, Some(cluster));
         }
     }
 
@@ -5836,7 +5849,7 @@ fn resolve_local_project_root_from_config(
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
             {
-                current_dir.join(cluster_name).join(&conf_data.project_dir)
+                current_dir.join(&conf_data.project_dir).join(cluster_name)
             } else {
                 current_dir.join(&conf_data.project_dir)
             };
