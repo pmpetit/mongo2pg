@@ -12152,6 +12152,7 @@ pg_mapping:
             source_uri: None,
             target_uri: None,
             namespace: Some("dbapi".to_owned()),
+            cluster_name: None,
         })
         .expect("init should succeed");
 
@@ -12298,6 +12299,7 @@ pg_mapping:
             source_uri,
             target_uri,
             namespace,
+            cluster_name: None,
         }
     }
     fn create_default_infer_args(config: PathBuf) -> InferArgs {
