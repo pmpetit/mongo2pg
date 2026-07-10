@@ -12,6 +12,7 @@ Use `mongo2pg init` to create a repeatable project directory:
 mongo2pg init \
   --project-base ./projects \
   --project-name airbnb \
+  --cluster-name dev-cluster \
   --source-uri mongodb://localhost:27017 \
   --target-uri postgres://postgres:x@localhost:5432/postgres?sslmode=disable \
   --namespace sample_airbnb
@@ -21,18 +22,22 @@ This creates:
 
 ```text
 projects/airbnb/
-  config/
-    airbnb.toml
-  source/
-    collections/
-  schema/
-    tables/
-  data/
-  reports/
+  dev-cluster/
+    config/
+      dev-cluster.toml
+    source/
+      collections/
+    schema/
+      tables/
+    data/
+    reports/
 ```
 
-You can then pass `-c projects/airbnb/config/airbnb.toml` to subsequent
+You can then pass `-c projects/airbnb/dev-cluster/config/dev-cluster.toml` to subsequent
 commands instead of repeating all flags.
+
+If you omit `--cluster-name`, layout stays `projects/<project-name>/...` and config file is
+`config/<project-name>.toml`.
 
 ---
 
