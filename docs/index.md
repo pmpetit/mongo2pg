@@ -48,22 +48,23 @@ PostgreSQL.
 mongo2pg init \
   --project-base ./projects \
   --project-name sample_airbnb \
+  --cluster-name dev-cluster \
   --source-uri 'mongodb://user:pass@localhost:27017/?authSource=admin' \
   --target-uri 'postgres://postgres:x@localhost:5432/postgres?sslmode=disable' \
   --namespace sample_airbnb
 
 # 2. Infer schemas, generate PostgreSQL DDL, and write the main reports
-mongo2pg infer -c ./projects/sample_airbnb/config/sample_airbnb.toml
+mongo2pg infer -c ./projects/sample_airbnb/dev-cluster/config/dev-cluster.toml
 
 # 3. Export relational CSV files
-mongo2pg export -c ./projects/sample_airbnb/config/sample_airbnb.toml
+mongo2pg export -c ./projects/sample_airbnb/dev-cluster/config/dev-cluster.toml
 
 # 4. Create PostgreSQL objects and import the exported CSV files
-mongo2pg import -c ./projects/sample_airbnb/config/sample_airbnb.toml
+mongo2pg import -c ./projects/sample_airbnb/dev-cluster/config/dev-cluster.toml
 
 # 5. `import` already generated reports/post_report.html.
 #    Run this only if you want to regenerate it.
-mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.toml --post-import
+mongo2pg report -c ./projects/sample_airbnb/dev-cluster/config/dev-cluster.toml --post-import
 ```
 
 ---
@@ -80,6 +81,9 @@ mongo2pg report -c ./projects/sample_airbnb/config/sample_airbnb.toml --post-imp
   data/                  exported `.csv.gz` files
   reports/               HTML reports and schema diagrams
 ```
+
+With `--cluster-name`, the resolved root is `<project-base>/<project-name>/<cluster-name>/`
+and the config file name is `<cluster-name>.toml`.
 
 ---
 

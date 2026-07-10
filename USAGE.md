@@ -461,20 +461,29 @@ report → generate HTML stats report and ERD diagram
 ## `init` – create a migration project
 
 ```
-mongo2pg init --project-base <DIR> --project-name <NAME> [--source-uri <SOURCE_URI>] [--target-uri <TARGET_URI>]
+mongo2pg init --project-base <DIR> --project-name <NAME> [--cluster-name <CLUSTER_NAME>] [--source-uri <SOURCE_URI>] [--target-uri <TARGET_URI>]
 ```
 
 Creates the project directory tree and writes a config file:
 
 ```
+<project-base>/<project-name>/<cluster-name>/
+  config/<cluster-name>.toml   ← [project], [source], [target]
+  schema/
+    tables/                  ← generated SQL DDL files go here
+  source/
+    collections/             ← inferred JSON schemas + stats go here
+  data/
+  reports/                     ← HTML reports go here
+
+If `--cluster-name` is omitted, layout remains:
+
 <project-base>/<project-name>/
-    config/<project-name>.toml   ← [project], [source], [target]
-    schema/
-        tables/                  ← generated SQL DDL files go here
-    source/
-        collections/             ← inferred JSON schemas + stats go here
-    data/
-    reports/                     ← HTML reports go here
+  config/<project-name>.toml
+  schema/tables/
+  source/collections/
+  data/
+  reports/
 ```
 
 **Options**
@@ -483,6 +492,7 @@ Creates the project directory tree and writes a config file:
 |---|---|
 | `--project-base <DIR>` | Parent directory that will contain the project folder |
 | `--project-name <NAME>` | Name of the project (becomes the sub-directory name) |
+| `--cluster-name <CLUSTER_NAME>` | Optional cluster segment appended under the project folder |
 | `--source-uri <SOURCE_URI>` | MongoDB source connection URI – written into the config file |
 | `--target-uri <TARGET_URI>` | PostgreSQL target connection URI – written into the config file |
 

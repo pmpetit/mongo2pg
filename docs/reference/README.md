@@ -11,6 +11,7 @@ Creates a project directory structure and a TOML config file for repeatable runs
 ```text
 mongo2pg init --project-base <dir>
               --project-name <name>
+              [--cluster-name <cluster-name>]
               [--source-uri <mongodb-uri>]
               [--target-uri <postgres-uri>]
               [--namespace <db-or-db.collection>]
@@ -20,9 +21,32 @@ mongo2pg init --project-base <dir>
 |---|---|
 | `--project-base` | Base directory where the project folder will be created |
 | `--project-name` | Project name |
+| `--cluster-name` | Optional cluster segment appended after project name in generated paths |
 | `--source-uri` | MongoDB source connection URI stored in the config file |
 | `--target-uri` | PostgreSQL target connection URI stored in the config file |
 | `--namespace` | Default namespace stored in the config file |
+
+When `--cluster-name` is provided, `init` creates:
+
+```text
+<project-base>/<project-name>/<cluster-name>/
+    config/<cluster-name>.toml
+    source/collections/
+    schema/tables/
+    data/
+    reports/
+```
+
+Without `--cluster-name`, layout remains:
+
+```text
+<project-base>/<project-name>/
+    config/<project-name>.toml
+    source/collections/
+    schema/tables/
+    data/
+    reports/
+```
 
 ---
 
