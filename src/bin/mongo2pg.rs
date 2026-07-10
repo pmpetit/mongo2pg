@@ -57,6 +57,7 @@ use mongo2pg::to_pg::schema_to_ddl_with_timestamp_fields;
 use mongo2pg::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
+    configured_project_root,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
     inline_object_leaf_fields_with_prefix, is_pg_reserved, objectid_hex_to_uuid,
     property_filter_entries_for_collection, read_conf, sanitize, scalar_type_family,
@@ -252,6 +253,10 @@ struct InitArgs {
     /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
     #[arg(long = "namespace")]
     namespace: Option<String>,
+
+    /// Optional cluster segment inserted between base_dir and project_dir for all outputs
+    #[arg(long = "cluster-name", visible_alias = "cluster-naem")]
+    cluster_name: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -1901,6 +1906,7 @@ fn collect_files_recursive(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn infer_object_key(
     prefix: &str,
+    cluster_name: Option<&str>,
     project_dir: &str,
     project_root: &Path,
     file_path: &Path,
@@ -1917,20 +1923,16 @@ fn infer_object_key(
         .to_string_lossy()
         .replace('\\', "/");
 
-    let trimmed_prefix = prefix.trim_matches('/');
-    let project_segment = project_dir.trim_matches('/');
-    if trimmed_prefix.is_empty() {
+    let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
+    if effective_prefix.is_empty() {
+        let project_segment = project_dir.trim_matches('/');
         if project_segment.is_empty() {
             Ok(relative)
         } else {
             Ok(format!("{project_segment}/{relative}"))
         }
     } else {
-        if project_segment.is_empty() {
-            Ok(format!("{trimmed_prefix}/{relative}"))
-        } else {
-            Ok(format!("{trimmed_prefix}/{project_segment}/{relative}"))
-        }
+        Ok(format!("{effective_prefix}/{relative}"))
     }
 }
 
@@ -2018,7 +2020,13 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
     let mut uploaded_files = 0usize;
 
     for file_path in &files_to_move {
-        let object_key = infer_object_key(&prefix, &c.project_dir, &project_root, file_path)?;
+        let object_key = infer_object_key(
+            &prefix,
+            c.cluster_name.as_deref(),
+            &c.project_dir,
+            &project_root,
+            file_path,
+        )?;
         let mime_type = infer_object_mime_type(file_path);
         let bytes = tokio::fs::read(file_path)
             .await
@@ -5270,7 +5278,16 @@ fn write_collection_files(
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn run_init(args: InitArgs) -> Result<()> {
-    let project_root = args.project_base.join(&args.project_name);
+    let project_root = if let Some(cluster_name) = args
+        .cluster_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        args.project_base.join(cluster_name).join(&args.project_name)
+    } else {
+        args.project_base.join(&args.project_name)
+    };
 
     let dirs = [
         project_root.join("schema").join("tables"),
@@ -5298,10 +5315,16 @@ fn run_init(args: InitArgs) -> Result<()> {
         .as_deref()
         .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
         .unwrap_or_else(|| "#namespace = my_db".to_owned());
+    let cluster_line = args
+        .cluster_name
+        .as_deref()
+        .map(|name| format!("cluster_name = \"{}\"", name.replace('"', "\\\"")))
+        .unwrap_or_else(|| "# cluster_name = \"cluster-a\"".to_owned());
     let conf_content = format!(
-        "[project]\ntitle = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\n# chunk_size = 1000000\n# auth_retry_max = 3\n# log_level = \"info\"\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
+        "[project]\ntitle = \"{}\"\nbase_dir = \"{}\"\n{}\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\n# chunk_size = 1000000\n# auth_retry_max = 3\n# log_level = \"info\"\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
         "Mongo2Pg Project migration",
         args.project_base.display(),
+        cluster_line,
         args.project_name,
         args.source_uri
             .as_deref()
@@ -5330,6 +5353,46 @@ fn run_init(args: InitArgs) -> Result<()> {
     }
     info!("{}", conf_path.display());
     Ok(())
+}
+
+fn append_non_empty_segment(path: &mut String, segment: Option<&str>) {
+    if let Some(value) = segment.map(str::trim).filter(|value| !value.is_empty()) {
+        if !path.is_empty() {
+            path.push('/');
+        }
+        path.push_str(value);
+    }
+}
+
+fn ensure_output_prefix_segments(prefix: &str, cluster_name: Option<&str>, project_dir: &str) -> String {
+    let mut normalized = prefix.trim_matches('/').to_owned();
+
+    let cluster_segment = cluster_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(cluster) = cluster_segment {
+        let already_has_cluster = normalized.rsplit('/').next().is_some_and(|segment| segment == cluster)
+            || normalized
+                .rsplit('/')
+                .nth(1)
+                .is_some_and(|segment| segment == cluster);
+        if !already_has_cluster {
+            append_non_empty_segment(&mut normalized, Some(cluster));
+        }
+    }
+
+    let project_segment = project_dir.trim_matches('/');
+    if !project_segment.is_empty() {
+        let already_has_project = normalized
+            .rsplit('/')
+            .next()
+            .is_some_and(|segment| segment == project_segment);
+        if !already_has_project {
+            append_non_empty_segment(&mut normalized, Some(project_segment));
+        }
+    }
+
+    normalized
 }
 
 fn import_table_name_from_csv_path(path: &Path) -> Option<String> {
@@ -5434,31 +5497,11 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
     })?;
     let export_chunk_size = resolve_export_chunk_size(args.chunk_size.or(c.chunk_size))?;
-    fn ensure_project_segment(prefix: &str, project_dir: &str) -> String {
-        let trimmed_prefix = prefix.trim_matches('/');
-        let project_segment = project_dir.trim_matches('/');
-        if project_segment.is_empty() {
-            return trimmed_prefix.to_owned();
-        }
-        if trimmed_prefix.is_empty() {
-            return project_segment.to_owned();
-        }
-        let already_has_project = trimmed_prefix
-            .rsplit('/')
-            .next()
-            .is_some_and(|segment| segment == project_segment);
-        if already_has_project {
-            trimmed_prefix.to_owned()
-        } else {
-            format!("{trimmed_prefix}/{project_segment}")
-        }
-    }
-
     let storage_backend = match resolve_export_write_backend(&c.base_dir)? {
         ExportWriteBackend::LocalFs => ExportWriteBackend::LocalFs,
         ExportWriteBackend::Gcs { bucket, prefix } => ExportWriteBackend::Gcs {
             bucket,
-            prefix: ensure_project_segment(&prefix, &c.project_dir),
+            prefix: ensure_output_prefix_segments(&prefix, c.cluster_name.as_deref(), &c.project_dir),
         },
     };
     match &storage_backend {
@@ -5479,13 +5522,20 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 
     match &storage_backend {
         ExportWriteBackend::LocalFs => {
-            project_root = c.base_dir.join(&c.project_dir);
+            project_root = configured_project_root(&c);
             tables_dir = project_root.join("schema").join("tables").join(&db_name);
             collections_dir = resolve_collections_dir(&project_root, &db_name);
         }
         ExportWriteBackend::Gcs { bucket, prefix } => {
             let Some(stage) =
-                stage_export_metadata_from_gcs(bucket, prefix, &c.project_dir, &db_name).await?
+                stage_export_metadata_from_gcs(
+                    bucket,
+                    prefix,
+                    c.cluster_name.as_deref(),
+                    &c.project_dir,
+                    &db_name,
+                )
+                .await?
             else {
                 return Err(anyhow!(
                     "Cannot stage export metadata from gs://{}/{}/schema/tables/{}",
@@ -5765,7 +5815,7 @@ fn resolve_local_project_root_from_config(
         resolve_export_write_backend(&conf_data.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
 
     match storage_backend {
-        ExportWriteBackend::LocalFs => conf_data.base_dir.join(&conf_data.project_dir),
+        ExportWriteBackend::LocalFs => configured_project_root(conf_data),
         ExportWriteBackend::Gcs { prefix, .. } => {
             let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let conf_abs = std::fs::canonicalize(conf_path).unwrap_or_else(|_| {
@@ -5780,20 +5830,24 @@ fn resolve_local_project_root_from_config(
                 .parent()
                 .and_then(|p| p.parent())
                 .map(|p| p.to_path_buf());
-            let from_cwd_project = current_dir.join(&conf_data.project_dir);
+            let from_cwd_project = if let Some(cluster_name) = conf_data
+                .cluster_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                current_dir.join(cluster_name).join(&conf_data.project_dir)
+            } else {
+                current_dir.join(&conf_data.project_dir)
+            };
             let from_config_parent_with_prefix = from_config.as_ref().and_then(|root| {
                 root.parent().map(|p| {
-                    let prefixed = p.join(prefix.trim_matches('/'));
-                    let project_segment = conf_data.project_dir.trim_matches('/');
-                    let already_has_project = prefixed
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .is_some_and(|name| name == project_segment);
-                    if project_segment.is_empty() || already_has_project {
-                        prefixed
-                    } else {
-                        prefixed.join(project_segment)
-                    }
+                    let effective_prefix = ensure_output_prefix_segments(
+                        &prefix,
+                        conf_data.cluster_name.as_deref(),
+                        &conf_data.project_dir,
+                    );
+                    p.join(effective_prefix)
                 })
             });
 
@@ -5816,13 +5870,29 @@ fn resolve_local_project_root_from_config(
     }
 }
 
-fn gcs_prefix_candidates_for_import_data(prefix: &str, project_dir: &str, db_name: &str) -> Vec<String> {
+fn gcs_prefix_candidates_for_import_data(
+    prefix: &str,
+    cluster_name: Option<&str>,
+    project_dir: &str,
+    db_name: &str,
+) -> Vec<String> {
     let trimmed_prefix = prefix.trim_matches('/');
+    let cluster_segment = cluster_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     let project_segment = project_dir.trim_matches('/');
     let mut candidates = Vec::new();
+    let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
+
+    if !effective_prefix.is_empty() {
+        candidates.push(format!("{effective_prefix}/data/{db_name}/"));
+    }
 
     if trimmed_prefix.is_empty() {
         candidates.push(format!("data/{db_name}/"));
+        if let Some(cluster_name) = cluster_segment {
+            candidates.push(format!("{cluster_name}/data/{db_name}/"));
+        }
         if !project_segment.is_empty() {
             candidates.push(format!("{project_segment}/data/{db_name}/"));
         }
@@ -5940,6 +6010,11 @@ fn gcs_prefix_candidates_for_project_subdir(prefix: &str, project_dir: &str, sub
     let subdir_segment = subdir.trim_matches('/');
     let mut candidates = Vec::new();
 
+    let effective_prefix = ensure_output_prefix_segments(prefix, None, project_dir);
+    if !effective_prefix.is_empty() {
+        candidates.push(format!("{effective_prefix}/{subdir_segment}/"));
+    }
+
     if trimmed_prefix.is_empty() {
         candidates.push(format!("{subdir_segment}/"));
         if !project_segment.is_empty() {
@@ -5966,6 +6041,7 @@ fn gcs_prefix_candidates_for_project_subdir(prefix: &str, project_dir: &str, sub
 async fn stage_export_metadata_from_gcs(
     bucket: &str,
     prefix: &str,
+    cluster_name: Option<&str>,
     project_dir: &str,
     db_name: &str,
 ) -> Result<Option<tempfile::TempDir>> {
@@ -5990,7 +6066,7 @@ async fn stage_export_metadata_from_gcs(
 
     let mut staged_tables = 0usize;
     for candidate in gcs_prefix_candidates_for_project_subdir(
-        prefix,
+        &ensure_output_prefix_segments(prefix, cluster_name, project_dir),
         project_dir,
         &format!("schema/tables/{db_name}"),
     ) {
@@ -6032,7 +6108,11 @@ async fn stage_export_metadata_from_gcs(
         "source/collections".to_owned(),
     ];
     for subdir in collection_candidates {
-        for candidate in gcs_prefix_candidates_for_project_subdir(prefix, project_dir, &subdir) {
+        for candidate in gcs_prefix_candidates_for_project_subdir(
+            &ensure_output_prefix_segments(prefix, cluster_name, project_dir),
+            project_dir,
+            &subdir,
+        ) {
             let target_dir = if subdir.ends_with(&format!("/{db_name}")) {
                 staged_collections_root.join(db_name)
             } else {
@@ -6099,7 +6179,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     let storage_backend =
         resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
     let project_root = match &storage_backend {
-        ExportWriteBackend::LocalFs => c.base_dir.join(&c.project_dir),
+        ExportWriteBackend::LocalFs => configured_project_root(&c),
         ExportWriteBackend::Gcs { .. } => {
             let local_root = resolve_local_project_root_from_config(&args.config, &c);
             info!(
@@ -6140,7 +6220,12 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                 .as_deref()
                 .map(|name| format!("{name}/"));
             let mut downloaded = 0usize;
-            let candidates = gcs_prefix_candidates_for_import_data(prefix, &c.project_dir, db_name);
+            let candidates = gcs_prefix_candidates_for_import_data(
+                prefix,
+                c.cluster_name.as_deref(),
+                &c.project_dir,
+                db_name,
+            );
             for candidate in candidates {
                 let effective_prefix = if let Some(suffix) = &requested_suffix {
                     format!("{candidate}{suffix}")
@@ -8847,7 +8932,8 @@ async fn write_post_import_report(
     let c = read_conf(conf)?;
     let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
     let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
-    let reports_dir = c.base_dir.join(&c.project_dir).join("reports");
+    let project_root = configured_project_root(&c);
+    let reports_dir = project_root.join("reports");
     std::fs::create_dir_all(&reports_dir)
         .with_context(|| format!("Failed to create reports dir {}", reports_dir.display()))?;
 
@@ -8872,16 +8958,8 @@ async fn write_post_import_report(
         .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
     let target_database_name = c.target_database_name.as_deref();
 
-    let collections_dir = c
-        .base_dir
-        .join(&c.project_dir)
-        .join("source")
-        .join("collections");
-    let schema_tables_root = c
-        .base_dir
-        .join(&c.project_dir)
-        .join("schema")
-        .join("tables");
+    let collections_dir = project_root.join("source").join("collections");
+    let schema_tables_root = project_root.join("schema").join("tables");
     let output_path = reports_dir.join("post_report.html");
 
     let rows = build_post_import_rows(
@@ -8940,11 +9018,7 @@ fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
             }
         }
 
-        let collections_dir = c
-            .base_dir
-            .join(&c.project_dir)
-            .join("source")
-            .join("collections");
+        let collections_dir = configured_project_root(&c).join("source").join("collections");
 
         let rows = collect_rows(&collections_dir, None)
             .with_context(|| format!("Failed to read collections for {db_name}"))?;

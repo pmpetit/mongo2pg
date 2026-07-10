@@ -1694,9 +1694,7 @@ fn collection_paths_from_conf(conf: &crate::util::ConfData) -> Result<(String, P
         .map(|(db_name, _)| db_name)
         .unwrap_or(namespace)
         .to_owned();
-    let collections_root = conf
-        .base_dir
-        .join(&conf.project_dir)
+    let collections_root = crate::util::configured_project_root(conf)
         .join("source")
         .join("collections");
     let collections_dir = if collections_root.join(&db_name).is_dir() {

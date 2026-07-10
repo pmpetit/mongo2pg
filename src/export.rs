@@ -304,6 +304,88 @@ async fn upload_export_files_to_gcs(
     Ok(())
 }
 
+fn flush_pending_rows_to_writers(
+    out_dir: &Path,
+    all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
+    writers: &mut HashMap<String, GzEncoder<BufWriter<std::fs::File>>>,
+) -> Result<()> {
+    for (table_name, rows) in all_rows.drain() {
+        let Some(writer) = writers.get_mut(&table_name) else {
+            warn!(
+                "Skipping {} rows for unknown table '{}'",
+                rows.len(),
+                table_name
+            );
+            continue;
+        };
+        for row in rows {
+            let line: Vec<String> = row
+                .iter()
+                .map(|value| csv_cell_text(value.as_deref()))
+                .collect();
+            writeln!(writer, "{}", line.join(",")).with_context(|| {
+                format!(
+                    "Cannot append CSV row for table '{}' in {}",
+                    table_name,
+                    out_dir.display()
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn finish_writers(
+    writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>>,
+) -> Result<()> {
+    for (table_name, writer) in writers {
+        writer
+            .finish()
+            .with_context(|| format!("Cannot finish gzip stream for table '{}'", table_name))?;
+    }
+    Ok(())
+}
+
+fn reopen_writers_for_append(
+    sql_tables: &[SqlTable],
+    out_dir: &Path,
+) -> Result<HashMap<String, GzEncoder<BufWriter<std::fs::File>>>> {
+    let mut writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>> = HashMap::new();
+    for sql_t in sql_tables {
+        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&csv_path)
+            .with_context(|| format!("Cannot reopen {} for append", csv_path.display()))?;
+        let gz = GzEncoder::new(BufWriter::new(file), Compression::default());
+        writers.insert(sql_t.name.clone(), gz);
+    }
+    Ok(writers)
+}
+
+fn sync_alias_export_files(
+    sql_tables: &[SqlTable],
+    alias_for_table: &HashMap<String, String>,
+    out_dir: &Path,
+) -> Result<()> {
+    for sql_t in sql_tables {
+        if let Some(alias) = alias_for_table.get(&sql_t.name) {
+            let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+            let alias_path = out_dir.join(format!("{alias}.csv.gz"));
+            std::fs::copy(&csv_path, &alias_path).with_context(|| {
+                format!(
+                    "Cannot create alias export file {} from {}",
+                    alias_path.display(),
+                    csv_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // BSON → CSV string
 // ──────────────────────────────────────────────────────────────────────────────
@@ -2567,60 +2649,33 @@ pub async fn export_collections_to_sql(
             "-> completed {}.{}: {} docs exported",
             db_name, coll_name, source_docs_exported
         );
-    }
 
-    for (table_name, rows) in all_rows.drain() {
-        let Some(writer) = writers.get_mut(&table_name) else {
-            warn!(
-                "Skipping {} rows for unknown table '{}'",
-                rows.len(),
-                table_name
+        flush_pending_rows_to_writers(&out_dir, &mut all_rows, &mut writers)?;
+
+        if let ExportWriteBackend::Gcs { bucket, prefix } = backend {
+            finish_writers(std::mem::take(&mut writers))?;
+            sync_alias_export_files(&sql_tables, &alias_for_table, &out_dir)?;
+
+            info!(
+                "-> export source [{} / {}] upload: {}.{} -> gs://{}/{}",
+                source_index + 1,
+                total_sources,
+                db_name,
+                coll_name,
+                bucket,
+                prefix.trim_matches('/'),
             );
-            continue;
-        };
-        for row in rows {
-            let line: Vec<String> = row
-                .iter()
-                .map(|value| csv_cell_text(value.as_deref()))
-                .collect();
-            writeln!(writer, "{}", line.join(",")).with_context(|| {
-                format!(
-                    "Cannot append CSV row for table '{}' in {}",
-                    table_name,
-                    out_dir.display()
-                )
-            })?;
+            upload_export_files_to_gcs(&out_dir, db_name, &sql_lookup_name, bucket, prefix).await?;
+
+            if source_index + 1 < total_sources {
+                writers = reopen_writers_for_append(&sql_tables, &out_dir)?;
+            }
         }
     }
 
-    for (table_name, writer) in writers {
-        writer
-            .finish()
-            .with_context(|| format!("Cannot finish gzip stream for table '{}'", table_name))?;
-    }
-
-    for sql_t in &sql_tables {
-        if let Some(alias) = alias_for_table.get(&sql_t.name) {
-            let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
-            let alias_path = out_dir.join(format!("{alias}.csv.gz"));
-            std::fs::copy(&csv_path, &alias_path).with_context(|| {
-                format!(
-                    "Cannot create alias export file {} from {}",
-                    alias_path.display(),
-                    csv_path.display()
-                )
-            })?;
-        }
-    }
-
-    if let ExportWriteBackend::Gcs { bucket, prefix } = backend {
-        info!(
-            "-> export finalize: uploading grouped artifacts to gs://{}/{}",
-            bucket,
-            prefix.trim_matches('/')
-        );
-        upload_export_files_to_gcs(&out_dir, db_name, &sql_lookup_name, bucket, prefix).await?;
-    }
+    flush_pending_rows_to_writers(&out_dir, &mut all_rows, &mut writers)?;
+    finish_writers(std::mem::take(&mut writers))?;
+    sync_alias_export_files(&sql_tables, &alias_for_table, &out_dir)?;
 
     Ok(())
 }
