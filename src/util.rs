@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConfData {
     pub base_dir: PathBuf,
+    pub cluster_name: Option<String>,
     pub title: String,
     pub project_dir: String,
     pub source_uri: Option<String>,
@@ -46,39 +47,80 @@ pub struct KafkaConfData {
 
 #[derive(Debug, Deserialize)]
 struct TomlProjectConfig {
+    #[serde(alias = "Project", alias = "PROJECT")]
     project: TomlProjectSection,
     #[serde(default)]
+    #[serde(alias = "Source", alias = "SOURCE")]
     source: Option<TomlSourceSection>,
     #[serde(default)]
+    #[serde(alias = "Target", alias = "TARGET")]
     target: Option<TomlTargetSection>,
     #[serde(default)]
+    #[serde(alias = "Kafka", alias = "KAFKA")]
     kafka: Option<TomlKafkaSection>,
 }
 
 #[derive(Debug, Deserialize)]
 struct TomlProjectSection {
+    #[serde(alias = "TITLE", alias = "Title")]
     title: String,
+    #[serde(alias = "BASE_DIR", alias = "BaseDir", alias = "baseDir")]
     base_dir: PathBuf,
+    #[serde(default)]
+    #[serde(alias = "CLUSTER_NAME", alias = "ClusterName", alias = "clusterName")]
+    cluster_name: Option<String>,
+    #[serde(alias = "PROJECT_DIR", alias = "ProjectDir", alias = "projectDir")]
     project_dir: String,
+}
+
+pub fn configured_project_root(conf: &ConfData) -> PathBuf {
+    let mut root = conf.base_dir.join(&conf.project_dir);
+    if let Some(cluster_name) = conf
+        .cluster_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        root = root.join(cluster_name);
+    }
+    root
 }
 
 #[derive(Debug, Deserialize, Default)]
 struct TomlSourceSection {
+    #[serde(alias = "SOURCE_URI", alias = "URI", alias = "Uri")]
     uri: Option<String>,
+    #[serde(alias = "NAMESPACE", alias = "Namespace")]
     namespace: Option<String>,
+    #[serde(alias = "NUMBER", alias = "Number")]
     number: Option<u64>,
+    #[serde(alias = "PERCENT", alias = "Percent")]
     percent: Option<f64>,
+    #[serde(alias = "MAX_TIME_MS", alias = "MaxTimeMs", alias = "maxTimeMs")]
     max_time_ms: Option<u64>,
+    #[serde(alias = "CHUNK_SIZE", alias = "ChunkSize", alias = "chunkSize")]
     chunk_size: Option<u64>,
+    #[serde(alias = "AUTH_RETRY_MAX", alias = "AuthRetryMax", alias = "authRetryMax")]
     auth_retry_max: Option<u32>,
+    #[serde(alias = "LOG_LEVEL", alias = "LogLevel", alias = "logLevel")]
     log_level: Option<String>,
+    #[serde(alias = "ADD_GROUPED_KEY", alias = "AddGroupedKey", alias = "addGroupedKey")]
     add_grouped_key: Option<bool>,
+    #[serde(alias = "JSONB", alias = "Jsonb")]
     jsonb: Option<bool>,
-    #[serde(default = "default_timestamp_fields", alias = "timestamp_field")]
+    #[serde(
+        default = "default_timestamp_fields",
+        alias = "timestamp_field",
+        alias = "TIMESTAMP_FIELD",
+        alias = "DATETIME_FIELD",
+        alias = "datetimeField"
+    )]
     datetime_field: Vec<String>,
     #[serde(default)]
+    #[serde(alias = "INCLUDE", alias = "Include")]
     include: Vec<String>,
     #[serde(default)]
+    #[serde(alias = "EXCLUDE", alias = "Exclude")]
     exclude: Vec<String>,
 }
 
@@ -94,24 +136,38 @@ pub fn default_timestamp_fields() -> Vec<String> {
 
 #[derive(Debug, Deserialize, Default)]
 struct TomlTargetSection {
+    #[serde(alias = "TARGET_URI", alias = "URI", alias = "Uri")]
     uri: Option<String>,
+    #[serde(alias = "TARGET_DATABASE_NAME", alias = "DATABASE_NAME", alias = "databaseName")]
     database_name: Option<String>,
+    #[serde(alias = "TARGET_SCHEMA", alias = "SCHEMA_NAME", alias = "schemaName")]
     schema_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 struct TomlKafkaSection {
+    #[serde(alias = "BOOTSTRAP_SERVERS", alias = "bootstrapServers")]
     bootstrap_servers: Option<String>,
+    #[serde(alias = "GROUP_ID", alias = "groupId")]
     group_id: Option<String>,
     #[serde(default)]
+    #[serde(alias = "TOPICS")]
     topics: Vec<String>,
+    #[serde(alias = "TOPIC_PREFIX", alias = "topicPrefix")]
     topic_prefix: Option<String>,
+    #[serde(alias = "SCHEMA_REGISTRY_URL", alias = "schemaRegistryUrl")]
     schema_registry_url: Option<String>,
+    #[serde(alias = "SCHEMA_REGISTRY_USERNAME", alias = "schemaRegistryUsername")]
     schema_registry_username: Option<String>,
+    #[serde(alias = "SCHEMA_REGISTRY_PASSWORD", alias = "schemaRegistryPassword")]
     schema_registry_password: Option<String>,
+    #[serde(alias = "OFFSET")]
     offset: Option<String>,
+    #[serde(alias = "AUTO_OFFSET_RESET", alias = "autoOffsetReset")]
     auto_offset_reset: Option<String>,
+    #[serde(alias = "MAX_MESSAGES", alias = "maxMessages")]
     max_messages: Option<usize>,
+    #[serde(alias = "BATCH_LOG_MESSAGES", alias = "batchLogMessages")]
     batch_log_messages: Option<usize>,
 }
 
@@ -137,6 +193,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
 
         Ok(ConfData {
             base_dir: parsed.project.base_dir,
+            cluster_name: parsed.project.cluster_name,
             title: parsed.project.title,
             project_dir: parsed.project.project_dir,
             source_uri: source.uri,
@@ -174,6 +231,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
 
         let mut base_dir: Option<PathBuf> = None;
         let mut title: String = "mongo2pg Project Title".to_owned();
+        let mut cluster_name: Option<String> = None;
         let mut project_dir: Option<String> = None;
         let mut source_uri: Option<String> = None;
         let mut target_uri: Option<String> = None;
@@ -195,6 +253,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
                 match key.trim() {
                     "BASE_DIR" => base_dir = Some(PathBuf::from(&parsed)),
                     "TITLE" => title = parsed,
+                    "CLUSTER_NAME" => cluster_name = Some(parsed),
                     "PROJECT_DIR" => project_dir = Some(parsed),
                     "SOURCE_URI" => source_uri = Some(parsed),
                     "TARGET_URI" => target_uri = Some(parsed),
@@ -226,6 +285,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
 
         Ok(ConfData {
             base_dir,
+            cluster_name,
             title,
             project_dir,
             source_uri,
@@ -251,9 +311,30 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file {}", path.display()))?;
 
-    match parse_toml_conf(path, &content) {
+    let toml_result = parse_toml_conf(path, &content);
+
+    // .toml files should report TOML parsing issues directly.
+    // Legacy fallback is kept for older env-style key=value configs.
+    let is_toml_path = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("toml"))
+        .unwrap_or(false);
+
+    if is_toml_path {
+        return toml_result;
+    }
+
+    match toml_result {
         Ok(conf) => Ok(conf),
-        Err(_) => parse_legacy_conf(path, &content),
+        Err(toml_err) => parse_legacy_conf(path, &content).map_err(|legacy_err| {
+            anyhow!(
+                "Failed to parse config {} as TOML ({}) or legacy format ({})",
+                path.display(),
+                toml_err,
+                legacy_err
+            )
+        }),
     }
 }
 

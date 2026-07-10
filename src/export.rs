@@ -10,22 +10,381 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::io::Write;
+use std::fs::OpenOptions;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bson::Bson;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::TryStreamExt;
-use log::{info, warn};
+use google_cloud_auth::credentials::Builder as AuthBuilder;
+use google_cloud_storage::client::{Storage, StorageControl};
+use log::{debug, info, warn};
 use mongodb::Client;
 use serde::Deserialize;
 
 use crate::schema_diagram::{parse_sql, Table as SqlTable};
 
 use crate::util::{objectid_hex_to_uuid, sanitize};
+
+pub const DEFAULT_EXPORT_CHUNK_ROWS: u64 = 50_000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExportWriteBackend {
+    LocalFs,
+    Gcs { bucket: String, prefix: String },
+}
+
+pub fn resolve_export_write_backend(base_dir: &Path) -> Result<ExportWriteBackend> {
+    let raw = base_dir.to_string_lossy();
+    if let Some(remainder) = raw
+        .strip_prefix("gs://")
+        .or_else(|| raw.strip_prefix("gs:/"))
+    {
+        let trimmed = remainder.trim_matches('/');
+        let (bucket, prefix) = trimmed
+            .split_once('/')
+            .map_or((trimmed, ""), |(bucket, prefix)| (bucket, prefix));
+        if bucket.is_empty() {
+            return Err(anyhow!(
+                "Invalid GCS base_dir '{}': missing bucket name after gs://",
+                raw
+            ));
+        }
+        return Ok(ExportWriteBackend::Gcs {
+            bucket: bucket.to_owned(),
+            prefix: prefix.to_owned(),
+        });
+    }
+    Ok(ExportWriteBackend::LocalFs)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CloudWriteErrorCategory {
+    Authentication,
+    Authorization,
+    NotFound,
+    Transient,
+    Other,
+}
+
+fn categorize_cloud_error_message(message: &str) -> CloudWriteErrorCategory {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("unauthenticated")
+        || lower.contains("invalid authentication")
+        || lower.contains("no credentials")
+        || lower.contains("credential")
+        || lower.contains("token")
+    {
+        return CloudWriteErrorCategory::Authentication;
+    }
+    if lower.contains("permission denied")
+        || lower.contains("forbidden")
+        || lower.contains("access denied")
+        || lower.contains("status: 403")
+    {
+        return CloudWriteErrorCategory::Authorization;
+    }
+    if lower.contains("not found") || lower.contains("status: 404") {
+        return CloudWriteErrorCategory::NotFound;
+    }
+    if lower.contains("timed out")
+        || lower.contains("timeout")
+        || lower.contains("connection reset")
+        || lower.contains("temporar")
+        || lower.contains("unavailable")
+        || lower.contains("status: 429")
+        || lower.contains("status: 500")
+        || lower.contains("status: 502")
+        || lower.contains("status: 503")
+        || lower.contains("status: 504")
+    {
+        return CloudWriteErrorCategory::Transient;
+    }
+    CloudWriteErrorCategory::Other
+}
+
+fn format_categorized_cloud_error(
+    action: &str,
+    context: &str,
+    err: &anyhow::Error,
+) -> anyhow::Error {
+    let msg = err.to_string();
+    let category = categorize_cloud_error_message(&msg);
+    match category {
+        CloudWriteErrorCategory::Authentication => anyhow!(
+            "cloud write error [authentication] during {} for {}: {}. Check ADC/service account credentials",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::Authorization => anyhow!(
+            "cloud write error [authorization] during {} for {}: {}. Verify storage.objects permissions",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::NotFound => anyhow!(
+            "cloud write error [not_found] during {} for {}: {}. Verify bucket and path",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::Transient => anyhow!(
+            "cloud write error [transient] during {} for {}: {}. Retry may succeed",
+            action,
+            context,
+            msg
+        ),
+        CloudWriteErrorCategory::Other => anyhow!(
+            "cloud write error [other] during {} for {}: {}",
+            action,
+            context,
+            msg
+        ),
+    }
+}
+
+pub async fn ensure_gcs_authentication() -> Result<()> {
+    const STORAGE_RW_SCOPE: &str = "https://www.googleapis.com/auth/devstorage.read_write";
+
+    match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
+        Ok(path) => debug!(
+            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS is set (adc_source=key_file path='{}')",
+            path
+        ),
+        Err(_) => debug!(
+            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS not set (adc_source=metadata_or_default)"
+        ),
+    }
+
+    let credentials = AuthBuilder::default()
+        .with_scopes([STORAGE_RW_SCOPE])
+        .build_access_token_credentials()
+        .map_err(|err| {
+            format_categorized_cloud_error(
+                "auth_preflight",
+                "google application default credentials",
+                &anyhow!(err),
+            )
+        })?;
+
+    credentials.access_token().await.map_err(|err| {
+        format_categorized_cloud_error(
+            "auth_preflight",
+            "google application default credentials",
+            &anyhow!(err),
+        )
+    })?;
+
+    Ok(())
+}
+
+async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
+    ensure_gcs_authentication().await?;
+    let storage_control = StorageControl::builder().build().await.map_err(|err| {
+        format_categorized_cloud_error(
+            "preflight",
+            &format!("bucket {bucket}"),
+            &anyhow!(err),
+        )
+    })?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
+    storage_control
+        .get_bucket()
+        .set_name(bucket_resource)
+        .send()
+        .await
+        .map_err(|err| {
+            format_categorized_cloud_error(
+                "preflight",
+                &format!("bucket {bucket}"),
+                &anyhow!(err),
+            )
+        })?;
+    Ok(())
+}
+
+fn gcs_preflight_enabled() -> bool {
+    std::env::var("MONGO2PG_GCS_PREFLIGHT")
+        .ok()
+        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+fn gcs_object_key(prefix: &str, db_name: &str, sql_lookup_name: &str, file_name: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    let trimmed_prefix = prefix.trim_matches('/');
+    if !trimmed_prefix.is_empty() {
+        parts.push(trimmed_prefix);
+    }
+    parts.push("data");
+    parts.push(db_name);
+    parts.push(sql_lookup_name);
+    parts.push(file_name);
+    parts.join("/")
+}
+
+async fn upload_export_files_to_gcs(
+    out_dir: &Path,
+    db_name: &str,
+    sql_lookup_name: &str,
+    bucket: &str,
+    prefix: &str,
+) -> Result<()> {
+    debug!(
+        "[gcs-debug] export upload start: bucket='{}' prefix='{}' db='{}' sql='{}' local_dir='{}'",
+        bucket,
+        prefix.trim_matches('/'),
+        db_name,
+        sql_lookup_name,
+        out_dir.display()
+    );
+    let storage = Storage::builder().build().await.map_err(|err| {
+        format_categorized_cloud_error(
+            "upload_init",
+            &format!("bucket {bucket}"),
+            &anyhow!(err),
+        )
+    })?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
+    let mut uploaded_files = 0usize;
+
+    for entry in std::fs::read_dir(out_dir)
+        .with_context(|| format!("Cannot read {} for GCS upload", out_dir.display()))?
+    {
+        let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !file_name.ends_with(".csv.gz") {
+            continue;
+        }
+
+        let object_name = gcs_object_key(prefix, db_name, sql_lookup_name, file_name);
+        let bytes = tokio::fs::read(&path)
+            .await
+            .with_context(|| format!("Cannot read staged export file {}", path.display()))?;
+
+        debug!(
+            "[gcs-debug] export upload object: {} -> gs://{}/{}",
+            path.display(),
+            bucket,
+            object_name
+        );
+        storage
+            .write_object(
+                bucket_resource.clone(),
+                object_name.clone(),
+                bytes::Bytes::from(bytes),
+            )
+            .send_buffered()
+            .await
+            .map_err(|err| {
+                format_categorized_cloud_error(
+                    "upload",
+                    &format!("gs://{bucket}/{object_name}"),
+                    &anyhow!(err),
+                )
+            })?;
+        uploaded_files += 1;
+    }
+    debug!(
+        "[gcs-debug] export upload done: uploaded_files={} bucket='{}' prefix='{}'",
+        uploaded_files,
+        bucket,
+        prefix.trim_matches('/'),
+    );
+    Ok(())
+}
+
+fn flush_pending_rows_to_writers(
+    out_dir: &Path,
+    all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
+    writers: &mut HashMap<String, GzEncoder<BufWriter<std::fs::File>>>,
+) -> Result<()> {
+    for (table_name, rows) in all_rows.drain() {
+        let Some(writer) = writers.get_mut(&table_name) else {
+            warn!(
+                "Skipping {} rows for unknown table '{}'",
+                rows.len(),
+                table_name
+            );
+            continue;
+        };
+        for row in rows {
+            let line: Vec<String> = row
+                .iter()
+                .map(|value| csv_cell_text(value.as_deref()))
+                .collect();
+            writeln!(writer, "{}", line.join(",")).with_context(|| {
+                format!(
+                    "Cannot append CSV row for table '{}' in {}",
+                    table_name,
+                    out_dir.display()
+                )
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
+fn finish_writers(
+    writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>>,
+) -> Result<()> {
+    for (table_name, writer) in writers {
+        writer
+            .finish()
+            .with_context(|| format!("Cannot finish gzip stream for table '{}'", table_name))?;
+    }
+    Ok(())
+}
+
+fn reopen_writers_for_append(
+    sql_tables: &[SqlTable],
+    out_dir: &Path,
+) -> Result<HashMap<String, GzEncoder<BufWriter<std::fs::File>>>> {
+    let mut writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>> = HashMap::new();
+    for sql_t in sql_tables {
+        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&csv_path)
+            .with_context(|| format!("Cannot reopen {} for append", csv_path.display()))?;
+        let gz = GzEncoder::new(BufWriter::new(file), Compression::default());
+        writers.insert(sql_t.name.clone(), gz);
+    }
+    Ok(writers)
+}
+
+fn sync_alias_export_files(
+    sql_tables: &[SqlTable],
+    alias_for_table: &HashMap<String, String>,
+    out_dir: &Path,
+) -> Result<()> {
+    for sql_t in sql_tables {
+        if let Some(alias) = alias_for_table.get(&sql_t.name) {
+            let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+            let alias_path = out_dir.join(format!("{alias}.csv.gz"));
+            std::fs::copy(&csv_path, &alias_path).with_context(|| {
+                format!(
+                    "Cannot create alias export file {} from {}",
+                    alias_path.display(),
+                    csv_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // BSON → CSV string
@@ -339,6 +698,64 @@ fn csv_cell_text(cell: Option<&str>) -> String {
         Some(text) => csv_escape(text),
         None => String::new(),
     }
+}
+
+fn csv_header_for_table(sql_t: &SqlTable) -> Vec<String> {
+    sql_t
+        .columns
+        .iter()
+        .map(|c| {
+            if c.name.starts_with('"') && c.name.ends_with('"') {
+                format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\""))
+            } else {
+                csv_escape(&unquote_sql_ident(&c.name))
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+fn flush_chunk_buffers(
+    sql_tables: &[SqlTable],
+    out_dir: &Path,
+    all_rows: &mut HashMap<String, Vec<Vec<Option<String>>>>,
+    header_written: &mut HashSet<String>,
+) -> Result<()> {
+    for sql_t in sql_tables {
+        let Some(rows) = all_rows.get_mut(&sql_t.name) else {
+            continue;
+        };
+        if rows.is_empty() {
+            continue;
+        }
+
+        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&csv_path)
+            .with_context(|| format!("Cannot open {} for append", csv_path.display()))?;
+        let mut gz = GzEncoder::new(file, Compression::default());
+
+        if !header_written.contains(&sql_t.name) {
+            let header = csv_header_for_table(sql_t);
+            writeln!(gz, "{}", header.join(","))
+                .with_context(|| format!("Write error for {}", csv_path.display()))?;
+            header_written.insert(sql_t.name.clone());
+        }
+
+        for row in rows.drain(..) {
+            let line: Vec<String> = row.iter().map(|v| csv_cell_text(v.as_deref())).collect();
+            writeln!(gz, "{}", line.join(","))
+                .with_context(|| format!("Write error for {}", csv_path.display()))?;
+        }
+
+        gz.finish()
+            .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
+    }
+
+    all_rows.retain(|_, rows| !rows.is_empty());
+    Ok(())
 }
 
 fn unquote_sql_ident(ident: &str) -> String {
@@ -1985,11 +2402,36 @@ pub async fn export_collections_to_sql(
     tables_dir: &Path,
     collections_dir: &Path,
     data_dir: &Path,
+    chunk_size: u64,
+    backend: &ExportWriteBackend,
 ) -> Result<()> {
     const PROGRESS_LOG_EVERY_DOCS: u64 = 10_000;
 
     if coll_names.is_empty() {
         return Ok(());
+    }
+    if chunk_size == 0 {
+        return Err(anyhow::anyhow!("export chunk_size must be greater than 0"));
+    }
+
+    if let ExportWriteBackend::Gcs { bucket, .. } = backend {
+        if gcs_preflight_enabled() {
+            info!(
+                "-> export preflight: validating GCS destination bucket '{}'",
+                bucket
+            );
+            if let Err(err) = preflight_gcs_destination(bucket).await {
+                warn!(
+                    "GCS preflight failed for bucket '{}': {}. Continuing and attempting direct upload",
+                    bucket,
+                    err
+                );
+            }
+        } else {
+            info!(
+                "-> export preflight: skipped (set MONGO2PG_GCS_PREFLIGHT=1 to enable)"
+            );
+        }
     }
 
     let sql_lookup_name = sanitize(sql_lookup_name);
@@ -2014,6 +2456,94 @@ pub async fn export_collections_to_sql(
 
     let mut coll_names = coll_names.to_vec();
     coll_names.sort();
+
+    let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
+    std::fs::create_dir_all(&out_dir)
+        .with_context(|| format!("Cannot create {}", out_dir.display()))?;
+
+    fn split_numeric_suffix(name: &str) -> Option<(&str, usize)> {
+        let (base, suffix) = name.rsplit_once('_')?;
+        let parsed = suffix.parse::<usize>().ok()?;
+        Some((base, parsed))
+    }
+
+    let table_names = sql_tables
+        .iter()
+        .map(|table| table.name.clone())
+        .collect::<HashSet<_>>();
+    let mut alias_candidates: HashMap<String, Vec<(usize, String)>> = HashMap::new();
+    for table_name in &table_names {
+        if let Some((base, suffix)) = split_numeric_suffix(table_name) {
+            if !table_names.contains(base) {
+                alias_candidates
+                    .entry(base.to_owned())
+                    .or_default()
+                    .push((suffix, table_name.clone()));
+            }
+        }
+    }
+    let mut alias_for_table: HashMap<String, String> = HashMap::new();
+    for (base, mut candidates) in alias_candidates {
+        candidates.sort_by_key(|(suffix, _)| *suffix);
+        if let Some((_, table_name)) = candidates.into_iter().next() {
+            alias_for_table.insert(table_name, base);
+        }
+    }
+
+    let mut expected_files = sql_tables
+        .iter()
+        .flat_map(|table| {
+            [
+                format!("{}.csv", table.name),
+                format!("{}.csv.gz", table.name),
+            ]
+        })
+        .collect::<HashSet<_>>();
+    for alias in alias_for_table.values() {
+        expected_files.insert(format!("{alias}.csv"));
+        expected_files.insert(format!("{alias}.csv.gz"));
+    }
+
+    for entry in
+        std::fs::read_dir(&out_dir).with_context(|| format!("Cannot read {}", out_dir.display()))?
+    {
+        let path = entry?.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let is_export_file = file_name.ends_with(".csv") || file_name.ends_with(".csv.gz");
+        if is_export_file && !expected_files.contains(file_name) {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("Cannot remove stale export file {}", path.display()))?;
+        }
+    }
+
+    for expected in &expected_files {
+        let expected_path = out_dir.join(expected);
+        if expected_path.is_file() {
+            std::fs::remove_file(&expected_path)
+                .with_context(|| format!("Cannot reset export file {}", expected_path.display()))?;
+        }
+    }
+
+    let mut writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>> = HashMap::new();
+    for sql_t in &sql_tables {
+        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&csv_path)
+            .with_context(|| format!("Cannot open {} for write", csv_path.display()))?;
+        let mut gz = GzEncoder::new(BufWriter::new(file), Compression::default());
+        let header = csv_header_for_table(sql_t).join(",");
+        writeln!(gz, "{header}")
+            .with_context(|| format!("Cannot write CSV header to {}", csv_path.display()))?;
+        writers.insert(sql_t.name.clone(), gz);
+    }
 
     let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
@@ -2089,120 +2619,63 @@ pub async fn export_collections_to_sql(
                     &root_target_to_literal,
                 );
             }
+
+            for (table_name, rows) in all_rows.drain() {
+                let Some(writer) = writers.get_mut(&table_name) else {
+                    warn!(
+                        "Skipping {} rows for unknown table '{}'",
+                        rows.len(),
+                        table_name
+                    );
+                    continue;
+                };
+                for row in rows {
+                    let line: Vec<String> = row
+                        .iter()
+                        .map(|value| csv_cell_text(value.as_deref()))
+                        .collect();
+                    writeln!(writer, "{}", line.join(",")).with_context(|| {
+                        format!(
+                            "Cannot append CSV row for table '{}' in {}",
+                            table_name,
+                            out_dir.display()
+                        )
+                    })?;
+                }
+            }
         }
 
         info!(
             "-> completed {}.{}: {} docs exported",
             db_name, coll_name, source_docs_exported
         );
-    }
 
-    let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
-    std::fs::create_dir_all(&out_dir)
-        .with_context(|| format!("Cannot create {}", out_dir.display()))?;
+        flush_pending_rows_to_writers(&out_dir, &mut all_rows, &mut writers)?;
 
-    fn split_numeric_suffix(name: &str) -> Option<(&str, usize)> {
-        let (base, suffix) = name.rsplit_once('_')?;
-        let parsed = suffix.parse::<usize>().ok()?;
-        Some((base, parsed))
-    }
+        if let ExportWriteBackend::Gcs { bucket, prefix } = backend {
+            finish_writers(std::mem::take(&mut writers))?;
+            sync_alias_export_files(&sql_tables, &alias_for_table, &out_dir)?;
 
-    let table_names = sql_tables
-        .iter()
-        .map(|table| table.name.clone())
-        .collect::<HashSet<_>>();
-    let mut alias_candidates: HashMap<String, Vec<(usize, String)>> = HashMap::new();
-    for table_name in &table_names {
-        if let Some((base, suffix)) = split_numeric_suffix(table_name) {
-            if !table_names.contains(base) {
-                alias_candidates
-                    .entry(base.to_owned())
-                    .or_default()
-                    .push((suffix, table_name.clone()));
+            info!(
+                "-> export source [{} / {}] upload: {}.{} -> gs://{}/{}",
+                source_index + 1,
+                total_sources,
+                db_name,
+                coll_name,
+                bucket,
+                prefix.trim_matches('/'),
+            );
+            upload_export_files_to_gcs(&out_dir, db_name, &sql_lookup_name, bucket, prefix).await?;
+
+            if source_index + 1 < total_sources {
+                writers = reopen_writers_for_append(&sql_tables, &out_dir)?;
             }
         }
     }
-    let mut alias_for_table: HashMap<String, String> = HashMap::new();
-    for (base, mut candidates) in alias_candidates {
-        candidates.sort_by_key(|(suffix, _)| *suffix);
-        if let Some((_, table_name)) = candidates.into_iter().next() {
-            alias_for_table.insert(table_name, base);
-        }
-    }
 
-    let mut expected_files = sql_tables
-        .iter()
-        .flat_map(|table| {
-            [
-                format!("{}.csv", table.name),
-                format!("{}.csv.gz", table.name),
-            ]
-        })
-        .collect::<HashSet<_>>();
-    for alias in alias_for_table.values() {
-        expected_files.insert(format!("{alias}.csv"));
-        expected_files.insert(format!("{alias}.csv.gz"));
-    }
-
-    for entry in
-        std::fs::read_dir(&out_dir).with_context(|| format!("Cannot read {}", out_dir.display()))?
-    {
-        let path = entry?.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        let is_export_file = file_name.ends_with(".csv") || file_name.ends_with(".csv.gz");
-        if is_export_file && !expected_files.contains(file_name) {
-            std::fs::remove_file(&path)
-                .with_context(|| format!("Cannot remove stale export file {}", path.display()))?;
-        }
-    }
-
-    for sql_t in &sql_tables {
-        let rows = all_rows.get(&sql_t.name).cloned().unwrap_or_default();
-
-        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
-        let file = std::fs::File::create(&csv_path)
-            .with_context(|| format!("Cannot create {}", csv_path.display()))?;
-        let mut gz = GzEncoder::new(file, Compression::default());
-
-        let header: Vec<String> = sql_t
-            .columns
-            .iter()
-            .map(|c| {
-                if c.name.starts_with('"') && c.name.ends_with('"') {
-                    format!("\"{}\"", unquote_sql_ident(&c.name).replace('"', "\"\""))
-                } else {
-                    csv_escape(&unquote_sql_ident(&c.name))
-                }
-            })
-            .collect();
-        writeln!(gz, "{}", header.join(","))
-            .with_context(|| format!("Write error for {}", csv_path.display()))?;
-
-        for row in &rows {
-            let line: Vec<String> = row.iter().map(|v| csv_cell_text(v.as_deref())).collect();
-            writeln!(gz, "{}", line.join(","))
-                .with_context(|| format!("Write error for {}", csv_path.display()))?;
-        }
-
-        gz.finish()
-            .with_context(|| format!("GZ flush error for {}", csv_path.display()))?;
-
-        if let Some(alias) = alias_for_table.get(&sql_t.name) {
-            let alias_path = out_dir.join(format!("{alias}.csv.gz"));
-            std::fs::copy(&csv_path, &alias_path).with_context(|| {
-                format!(
-                    "Cannot create alias export file {} from {}",
-                    alias_path.display(),
-                    csv_path.display()
-                )
-            })?;
-        }
-    }
+    flush_pending_rows_to_writers(&out_dir, &mut all_rows, &mut writers)?;
+    finish_writers(std::mem::take(&mut writers))?;
+    sync_alias_export_files(&sql_tables, &alias_for_table, &out_dir)?;
 
     Ok(())
 }
@@ -2224,6 +2697,8 @@ pub async fn export_collection(
         tables_dir,
         collections_dir,
         data_dir,
+        DEFAULT_EXPORT_CHUNK_ROWS,
+        &ExportWriteBackend::LocalFs,
     )
     .await
 }
@@ -2231,13 +2706,47 @@ pub async fn export_collection(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_tree, build_tree_with_grouped_root, extract_rows, flattened_grouped_root_for_export,
-        grouped_root_table_sources, unquote_sql_ident,
+        build_tree, build_tree_with_grouped_root, categorize_cloud_error_message, extract_rows,
+        flattened_grouped_root_for_export, flush_chunk_buffers, gcs_object_key,
+        grouped_root_table_sources, unquote_sql_ident, CloudWriteErrorCategory,
     };
     use crate::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
     use bson::{doc, Bson};
+    use flate2::read::MultiGzDecoder;
     use std::collections::HashMap;
+    use std::collections::HashSet;
+    use std::io::Read;
+
+    #[test]
+    fn gcs_error_categorization_maps_auth_and_permission() {
+        assert_eq!(
+            categorize_cloud_error_message("Unauthenticated request, missing token"),
+            CloudWriteErrorCategory::Authentication
+        );
+        assert_eq!(
+            categorize_cloud_error_message("forbidden: status: 403"),
+            CloudWriteErrorCategory::Authorization
+        );
+    }
+
+    #[test]
+    fn gcs_error_categorization_maps_not_found_and_transient() {
+        assert_eq!(
+            categorize_cloud_error_message("bucket not found status: 404"),
+            CloudWriteErrorCategory::NotFound
+        );
+        assert_eq!(
+            categorize_cloud_error_message("service unavailable status: 503"),
+            CloudWriteErrorCategory::Transient
+        );
+    }
+
+    #[test]
+    fn gcs_object_key_keeps_grouped_export_layout() {
+        let key = gcs_object_key("team/prefix", "ciam_prep", "events", "events.csv.gz");
+        assert_eq!(key, "team/prefix/data/ciam_prep/events/events.csv.gz");
+    }
 
     #[test]
     fn export_root_rows_use_flattened_object_id_fields_and_skip_fake_primary_column() {
@@ -2280,6 +2789,96 @@ CREATE TABLE security_logs (
         assert_eq!(rows[0][1].as_deref(), Some("FRAS-P-SAM-FRTERR2"));
         assert_eq!(rows[0][2].as_deref(), Some("atlas"));
         assert_eq!(rows[0][3].as_deref(), Some("2023-07-13T09:02:15.833170"));
+    }
+
+    #[test]
+    fn chunk_flush_writes_header_once_and_appends_rows() {
+        let sql = r#"
+CREATE TABLE customers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL
+);
+"#;
+        let sql_tables = parse_sql(sql);
+        let temp = tempfile::tempdir().expect("temp dir should be created");
+
+        let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
+        let mut header_written = HashSet::new();
+
+        all_rows.insert(
+            "customers".to_owned(),
+            vec![
+                vec![Some("1".to_owned()), Some("Alice".to_owned())],
+                vec![Some("2".to_owned()), Some("Bob".to_owned())],
+            ],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("first flush should succeed");
+
+        all_rows.insert(
+            "customers".to_owned(),
+            vec![vec![Some("3".to_owned()), Some("Carol".to_owned())]],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("second flush should succeed");
+
+        let mut content = String::new();
+        let file = std::fs::File::open(temp.path().join("customers.csv.gz"))
+            .expect("chunked output should exist");
+        let mut decoder = MultiGzDecoder::new(file);
+        decoder
+            .read_to_string(&mut content)
+            .expect("gzip content should decode");
+
+        let lines = content.lines().collect::<Vec<_>>();
+        assert_eq!(lines[0], "id,name");
+        assert_eq!(lines.len(), 4);
+        assert_eq!(lines[1], "1,Alice");
+        assert_eq!(lines[2], "2,Bob");
+        assert_eq!(lines[3], "3,Carol");
+    }
+
+    #[test]
+    fn chunk_flush_grouped_rows_append_without_truncation() {
+        let sql = r#"
+CREATE TABLE events (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL
+);
+"#;
+        let sql_tables = parse_sql(sql);
+        let temp = tempfile::tempdir().expect("temp dir should be created");
+
+        let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
+        let mut header_written = HashSet::new();
+
+        // First grouped source chunk.
+        all_rows.insert(
+            "events".to_owned(),
+            vec![vec![Some("e1".to_owned()), Some("events_bcit".to_owned())]],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("first grouped chunk should flush");
+
+        // Second grouped source chunk into same target table file.
+        all_rows.insert(
+            "events".to_owned(),
+            vec![vec![Some("e2".to_owned()), Some("events_lmza".to_owned())]],
+        );
+        flush_chunk_buffers(&sql_tables, temp.path(), &mut all_rows, &mut header_written)
+            .expect("second grouped chunk should flush");
+
+        let mut content = String::new();
+        let file = std::fs::File::open(temp.path().join("events.csv.gz"))
+            .expect("grouped output should exist");
+        let mut decoder = MultiGzDecoder::new(file);
+        decoder
+            .read_to_string(&mut content)
+            .expect("gzip content should decode");
+
+        assert!(content.contains("id,source"));
+        assert!(content.contains("e1,events_bcit"));
+        assert!(content.contains("e2,events_lmza"));
     }
 
     #[test]
@@ -2793,73 +3392,73 @@ CREATE TABLE tier_and_details (
             .any(|row| row[2].as_deref() == Some("false") && row[4].as_deref() == Some("silver")));
     }
 
-//     #[test]
-//     fn export_container_object_without_payload_keeps_child_document_context() {
-//         let sql = r#"
-// CREATE TABLE companies (
-//     id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
-//     name TEXT NOT NULL
-// );
+    //     #[test]
+    //     fn export_container_object_without_payload_keeps_child_document_context() {
+    //         let sql = r#"
+    // CREATE TABLE companies (
+    //     id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    //     name TEXT NOT NULL
+    // );
 
-// CREATE TABLE companies_investments (
-//     id BIGSERIAL PRIMARY KEY,
-//     companies_id UUID NOT NULL,
-//     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
-// );
+    // CREATE TABLE companies_investments (
+    //     id BIGSERIAL PRIMARY KEY,
+    //     companies_id UUID NOT NULL,
+    //     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
+    // );
 
-// CREATE TABLE financial_org (
-//     id BIGSERIAL PRIMARY KEY,
-//     companies_investments_id BIGINT NOT NULL,
-//     name TEXT NOT NULL,
-//     permalink TEXT NOT NULL,
-//     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
-// );
-// "#;
+    // CREATE TABLE financial_org (
+    //     id BIGSERIAL PRIMARY KEY,
+    //     companies_investments_id BIGINT NOT NULL,
+    //     name TEXT NOT NULL,
+    //     permalink TEXT NOT NULL,
+    //     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
+    // );
+    // "#;
 
-//         let tables = parse_sql(sql);
-//         let roots = build_tree(&tables, None, &HashMap::new());
-//         let mut all_rows = HashMap::new();
-//         let mut counters = HashMap::new();
-//         let doc = doc! {
-//             "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
-//             "name": "Wetpaint",
-//             "companies_investments": {
-//                 "company": Bson::Null,
-//                 "financial_org": {
-//                     "name": "Frazier Technology Ventures",
-//                     "permalink": "frazier-technology-ventures"
-//                 },
-//                 "person": Bson::Null
-//             }
-//         };
+    //         let tables = parse_sql(sql);
+    //         let roots = build_tree(&tables, None, &HashMap::new());
+    //         let mut all_rows = HashMap::new();
+    //         let mut counters = HashMap::new();
+    //         let doc = doc! {
+    //             "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+    //             "name": "Wetpaint",
+    //             "companies_investments": {
+    //                 "company": Bson::Null,
+    //                 "financial_org": {
+    //                     "name": "Frazier Technology Ventures",
+    //                     "permalink": "frazier-technology-ventures"
+    //                 },
+    //                 "person": Bson::Null
+    //             }
+    //         };
 
-//         extract_rows(
-//             &Bson::Document(doc),
-//             &roots[0],
-//             None,
-//             true,
-//             &mut all_rows,
-//             &mut counters,
-//         );
+    //         extract_rows(
+    //             &Bson::Document(doc),
+    //             &roots[0],
+    //             None,
+    //             true,
+    //             &mut all_rows,
+    //             &mut counters,
+    //         );
 
-//         let investment_rows = all_rows
-//             .get("companies_investments")
-//             .expect("companies_investments rows missing");
-//         assert_eq!(investment_rows.len(), 1);
+    //         let investment_rows = all_rows
+    //             .get("companies_investments")
+    //             .expect("companies_investments rows missing");
+    //         assert_eq!(investment_rows.len(), 1);
 
-//         let financial_rows = all_rows
-//             .get("financial_org")
-//             .expect("financial_org rows missing");
-//         assert_eq!(financial_rows.len(), 1);
-//         assert_eq!(
-//             financial_rows[0][2].as_deref(),
-//             Some("Frazier Technology Ventures")
-//         );
-//         assert_eq!(
-//             financial_rows[0][3].as_deref(),
-//             Some("frazier-technology-ventures")
-//         );
-//     }
+    //         let financial_rows = all_rows
+    //             .get("financial_org")
+    //             .expect("financial_org rows missing");
+    //         assert_eq!(financial_rows.len(), 1);
+    //         assert_eq!(
+    //             financial_rows[0][2].as_deref(),
+    //             Some("Frazier Technology Ventures")
+    //         );
+    //         assert_eq!(
+    //             financial_rows[0][3].as_deref(),
+    //             Some("frazier-technology-ventures")
+    //         );
+    //     }
 
     #[test]
     fn export_skips_empty_embedded_review_scores_object() {

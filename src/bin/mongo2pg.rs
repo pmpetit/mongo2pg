@@ -29,14 +29,18 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use env_logger::Builder as EnvLoggerBuilder;
 use flate2::read::GzDecoder;
 use futures::{SinkExt, StreamExt, TryStreamExt};
+use google_cloud_storage::client::{Storage, StorageControl};
 use indexmap::IndexMap;
-use log::{info, warn, Level, LevelFilter};
+use log::{debug, info, warn, Level, LevelFilter};
 use mongo2pg::analyzer::{
     Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
 use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
 // use mongo2pg::checkmd5::run_check_md5;
-use mongo2pg::export::{export_collections_to_sql, resolve_grouped_sql_lookup_name};
+use mongo2pg::export::{
+    ensure_gcs_authentication, export_collections_to_sql, resolve_export_write_backend,
+    resolve_grouped_sql_lookup_name, ExportWriteBackend, DEFAULT_EXPORT_CHUNK_ROWS,
+};
 use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     collect_rows, compute_cluster_score, compute_db_score, render_cluster_html, render_html,
@@ -53,6 +57,7 @@ use mongo2pg::to_pg::schema_to_ddl_with_timestamp_fields;
 use mongo2pg::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
+    configured_project_root,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
     inline_object_leaf_fields_with_prefix, is_pg_reserved, objectid_hex_to_uuid,
     property_filter_entries_for_collection, read_conf, sanitize, scalar_type_family,
@@ -248,6 +253,10 @@ struct InitArgs {
     /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
     #[arg(long = "namespace")]
     namespace: Option<String>,
+
+    /// Optional cluster segment appended under project_dir for all outputs
+    #[arg(long = "cluster-name", visible_alias = "cluster-naem")]
+    cluster_name: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -351,6 +360,11 @@ struct ExportArgs {
     /// project.project_dir in the config file before running.
     #[arg(long = "project-dir")]
     project_dir: Option<String>,
+
+    /// Maximum buffered table rows before export flushes chunk data to CSV.gz.
+    /// Defaults to SOURCE.CHUNK_SIZE from config, then a safe built-in value.
+    #[arg(long = "chunk-size")]
+    chunk_size: Option<u64>,
 }
 
 #[derive(Parser, Debug)]
@@ -442,6 +456,8 @@ struct KafkaImportArgs {
 // ──────────────────────────────────────────────────────────────────────────────
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let cli = Cli::parse();
 
     let log_level = resolve_effective_log_level(&cli)?;
@@ -592,6 +608,11 @@ fn validate_command_and_args(command: &Option<Command>, infer: Option<&InferArgs
             }
             if let Some(ns) = args.namespace.as_deref() {
                 validate_namespace_arg(ns)?;
+            }
+            if let Some(chunk_size) = args.chunk_size {
+                if chunk_size == 0 {
+                    return Err(anyhow!("--chunk-size must be greater than 0"));
+                }
             }
             Ok(())
         }
@@ -1204,12 +1225,11 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
 
     let (collections_dir, output_dir) = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
-        let (base_dir, project_dir) = (c.base_dir, c.project_dir);
-        let cols = base_dir
-            .join(&project_dir)
+        let local_project_root = resolve_local_project_root_from_config(conf, &c);
+        let cols = local_project_root
             .join("source")
             .join("collections");
-        let sql_out = base_dir.join(&project_dir).join("schema").join("tables");
+        let sql_out = local_project_root.join("schema").join("tables");
         (cols, sql_out)
     } else {
         let dir = args
@@ -1476,6 +1496,17 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
 // ──────────────────────────────────────────────────────────────────────────────
 
 async fn run_infer(args: InferArgs) -> Result<()> {
+    if args.config.is_none() {
+        if let Some(output_dir) = args.output_dir.as_deref() {
+            let output_raw = output_dir.to_string_lossy();
+            if output_raw.starts_with("gs://") || output_raw.starts_with("gs:/") {
+                return Err(anyhow!(
+                    "infer does not support direct --output-dir to GCS ({output_raw}). Use -c <config> with [project].base_dir = \"gs://<bucket>/<prefix>\" to enable post-infer upload"
+                ));
+            }
+        }
+    }
+
     if let Some(conf) = args.config.as_deref() {
         apply_config_overrides(
             conf,
@@ -1516,15 +1547,22 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         conf_exclude,
     ) = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
-        let source_uri = args.mongo.source_uri.clone().or(c.source_uri).ok_or_else(|| {
+        let source_uri = args
+            .mongo
+            .source_uri
+            .clone()
+            .or(c.source_uri.clone())
+            .ok_or_else(|| {
                 anyhow!("No SOURCE_URI provided: pass --source-uri or add SOURCE_URI to the config file")
             })?;
-        let out_dir = args.output_dir.clone().unwrap_or_else(|| {
-            c.base_dir
-                .join(&c.project_dir)
-                .join("source")
-                .join("collections")
-        });
+        if args.output_dir.is_some() {
+            warn!(
+                "--output-dir is ignored when --config is set; infer outputs are written under base_dir/project_dir/source/collections"
+            );
+        }
+        let local_project_root = resolve_local_project_root_from_config(conf, &c);
+        let out_dir = local_project_root.join("source").join("collections");
+        info!("infer output root (local): {}", local_project_root.display());
         (
             source_uri,
             Some(out_dir),
@@ -1564,12 +1602,14 @@ async fn run_infer(args: InferArgs) -> Result<()> {
 
     let namespace = args.namespace.clone().or(conf_namespace);
 
-    let client_options = ClientOptions::parse(&resolved_source_uri).await.with_context(|| {
-        format!(
-            "{}: failed to parse MongoDB SOURCE_URI",
-            connection_failed_context("mongo", "connect")
-        )
-    })?;
+    let client_options = ClientOptions::parse(&resolved_source_uri)
+        .await
+        .with_context(|| {
+            format!(
+                "{}: failed to parse MongoDB SOURCE_URI",
+                connection_failed_context("mongo", "connect")
+            )
+        })?;
     let client = Client::with_options(client_options).with_context(|| {
         format!(
             "{}: failed to create MongoDB client",
@@ -1618,15 +1658,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         Some(ref ns) if ns.contains('.') => {
             // Single collection: <db>.<collection>
             let (db_name, coll_name) = parse_namespace(ns)?;
-            let existing_dbs = client
-                .list_database_names()
-                .await
-                .with_context(|| {
-                    format!(
-                        "{}: failed to list databases",
-                        connection_failed_context("mongo", "query")
-                    )
-                })?;
+            let existing_dbs = client.list_database_names().await.with_context(|| {
+                format!(
+                    "{}: failed to list databases",
+                    connection_failed_context("mongo", "query")
+                )
+            })?;
             if !existing_dbs.iter().any(|d| d == db_name) {
                 warn!(
                     "database '{db_name}' does not exist on the server. Available databases: {}",
@@ -1684,15 +1721,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         Some(ref ns) => {
             // Whole single database: infer every collection.
             let db_name = ns.as_str();
-            let existing_dbs = client
-                .list_database_names()
-                .await
-                .with_context(|| {
-                    format!(
-                        "{}: failed to list databases",
-                        connection_failed_context("mongo", "query")
-                    )
-                })?;
+            let existing_dbs = client.list_database_names().await.with_context(|| {
+                format!(
+                    "{}: failed to list databases",
+                    connection_failed_context("mongo", "query")
+                )
+            })?;
             if !existing_dbs.iter().any(|d| d == db_name) {
                 warn!(
                     "database '{db_name}' does not exist on the server. Available databases: {}",
@@ -1700,15 +1734,12 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 );
             }
             let db = client.database(db_name);
-            let coll_names = db
-                .list_collection_names()
-                .await
-                .with_context(|| {
-                    format!(
-                        "{}: failed to list collections",
-                        connection_failed_context("mongo", "query")
-                    )
-                })?;
+            let coll_names = db.list_collection_names().await.with_context(|| {
+                format!(
+                    "{}: failed to list collections",
+                    connection_failed_context("mongo", "query")
+                )
+            })?;
             let filtered_coll_names: Vec<&String> = coll_names
                 .iter()
                 .filter(|n| !n.starts_with("system."))
@@ -1778,10 +1809,15 @@ async fn run_infer(args: InferArgs) -> Result<()> {
             true,
         )
         .await?;
+        validate_infer_artifacts_use_base_dir(conf)?;
+        move_infer_artifacts_to_gcs_if_needed(conf).await?;
         print_infer_summary(conf)?;
     }
 
     if chained_config.is_none() {
+        debug!(
+            "[gcs-debug] infer upload hook skipped: infer ran without -c config"
+        );
         if let Some(output_dir) = args.output_dir.as_deref() {
             info!(
                 "Inference completed. Collection schemas and statistics were written under {}.",
@@ -1798,9 +1834,267 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     Ok(())
 }
 
+fn validate_infer_artifacts_use_base_dir(conf: &Path) -> Result<()> {
+    let c = read_conf(conf)?;
+    let project_root = resolve_local_project_root_from_config(conf, &c);
+    let source_collections_dir = project_root.join("source").join("collections");
+    let schema_tables_dir = project_root.join("schema").join("tables");
+    let reports_main = project_root.join("reports").join("main.html");
+
+    if !source_collections_dir.is_dir() {
+        return Err(anyhow!(
+            "Infer output validation failed: source collections directory not found at {} (derived from base_dir='{}', project_dir='{}')",
+            source_collections_dir.display(),
+            c.base_dir.display(),
+            c.project_dir
+        ));
+    }
+    if !schema_tables_dir.is_dir() {
+        return Err(anyhow!(
+            "Infer output validation failed: schema tables directory not found at {} (derived from base_dir='{}', project_dir='{}')",
+            schema_tables_dir.display(),
+            c.base_dir.display(),
+            c.project_dir
+        ));
+    }
+    if !reports_main.is_file() {
+        return Err(anyhow!(
+            "Infer output validation failed: report file not found at {} (derived from base_dir='{}', project_dir='{}')",
+            reports_main.display(),
+            c.base_dir.display(),
+            c.project_dir
+        ));
+    }
+
+    info!(
+        "Infer artifact validation succeeded under base_dir/project_dir: source={}, schema={}, report={}",
+        source_collections_dir.display(),
+        schema_tables_dir.display(),
+        reports_main.display()
+    );
+    Ok(())
+}
+
+fn infer_artifact_directories(project_root: &Path) -> Vec<PathBuf> {
+    vec![
+        project_root.join("source"),
+        project_root.join("schema"),
+        project_root.join("reports"),
+    ]
+}
+
+fn collect_files_recursive(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    if !root.exists() {
+        return Ok(files);
+    }
+
+    for entry in
+        std::fs::read_dir(root).with_context(|| format!("Cannot read directory {}", root.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            files.extend(collect_files_recursive(&path)?);
+        } else if path.is_file() {
+            files.push(path);
+        }
+    }
+
+    Ok(files)
+}
+
+fn infer_object_key(
+    prefix: &str,
+    cluster_name: Option<&str>,
+    project_dir: &str,
+    project_root: &Path,
+    file_path: &Path,
+) -> Result<String> {
+    let relative = file_path
+        .strip_prefix(project_root)
+        .with_context(|| {
+            format!(
+                "Cannot build infer object key: {} is not under {}",
+                file_path.display(),
+                project_root.display()
+            )
+        })?
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
+    if effective_prefix.is_empty() {
+        let project_segment = project_dir.trim_matches('/');
+        if project_segment.is_empty() {
+            Ok(relative)
+        } else {
+            Ok(format!("{project_segment}/{relative}"))
+        }
+    } else {
+        Ok(format!("{effective_prefix}/{relative}"))
+    }
+}
+
+fn infer_object_mime_type(file_path: &Path) -> &'static str {
+    match file_path.extension().and_then(|ext| ext.to_str()) {
+        Some("json") => "application/json",
+        Some("yaml") | Some("yml") => "application/x-yaml",
+        Some("sql") => "application/sql",
+        Some("html") => "text/html",
+        Some("txt") => "text/plain",
+        _ => "application/octet-stream",
+    }
+}
+
+async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
+    debug!(
+        "[gcs-debug] infer upload hook entered: config='{}'",
+        conf.display()
+    );
+    let c = read_conf(conf)?;
+    let backend = resolve_export_write_backend(&c.base_dir)?;
+    let (bucket, prefix) = match backend {
+        ExportWriteBackend::Gcs { bucket, prefix } => (bucket, prefix),
+        ExportWriteBackend::LocalFs => {
+            debug!(
+                "Infer GCS upload skipped: [project].base_dir is local filesystem ('{}'), not gs://",
+                c.base_dir.display()
+            );
+            return Ok(());
+        }
+    };
+
+    debug!(
+        "[gcs-debug] infer upload enabled: base_dir='{}' bucket='{}' prefix='{}'",
+        c.base_dir.display(),
+        bucket,
+        prefix.trim_matches('/'),
+    );
+
+    ensure_gcs_authentication().await?;
+    let storage = Storage::builder()
+        .build()
+        .await
+        .context("Failed to initialize Google Cloud Storage client")?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
+
+    let project_root = resolve_local_project_root_from_config(conf, &c);
+    debug!(
+        "[gcs-debug] infer upload project root resolved: {}",
+        project_root.display()
+    );
+    let artifact_dirs = infer_artifact_directories(&project_root);
+    for dir in &artifact_dirs {
+        debug!(
+            "[gcs-debug] infer upload scan dir: {} exists={} is_dir={}",
+            dir.display(),
+            dir.exists(),
+            dir.is_dir()
+        );
+    }
+    let mut files_to_move = Vec::new();
+    for dir in &artifact_dirs {
+        files_to_move.extend(collect_files_recursive(dir)?);
+    }
+    debug!(
+        "[gcs-debug] infer upload candidate files: {}",
+        files_to_move.len()
+    );
+
+    if files_to_move.is_empty() {
+        debug!(
+            "No infer artifacts found to move to gs://{}/{}",
+            bucket,
+            prefix.trim_matches('/')
+        );
+        return Ok(());
+    }
+
+    info!(
+        "Moving {} infer artifact files to gs://{}/{}",
+        files_to_move.len(),
+        bucket,
+        prefix.trim_matches('/')
+    );
+    let mut uploaded_files = 0usize;
+
+    for file_path in &files_to_move {
+        let object_key = infer_object_key(
+            &prefix,
+            c.cluster_name.as_deref(),
+            &c.project_dir,
+            &project_root,
+            file_path,
+        )?;
+        let mime_type = infer_object_mime_type(file_path);
+        let bytes = tokio::fs::read(file_path)
+            .await
+            .with_context(|| format!("Cannot read infer artifact {}", file_path.display()))?;
+        let _ = mime_type;
+        debug!(
+            "[gcs-debug] infer upload object: {} -> gs://{}/{}",
+            file_path.display(),
+            bucket,
+            object_key
+        );
+        storage
+            .write_object(
+                bucket_resource.clone(),
+                object_key.clone(),
+                Bytes::from(bytes),
+            )
+            .send_buffered()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to upload infer artifact {} to gs://{}/{}",
+                    file_path.display(),
+                    bucket,
+                    object_key
+                )
+            })?;
+        uploaded_files += 1;
+    }
+
+    debug!(
+        "[gcs-debug] infer upload done: uploaded_files={} bucket='{}' prefix='{}'",
+        uploaded_files,
+        bucket,
+        prefix.trim_matches('/'),
+    );
+
+    let purge_local = std::env::var("MONGO2PG_GCS_PURGE_LOCAL")
+        .ok()
+        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+
+    if purge_local {
+        for file_path in &files_to_move {
+            std::fs::remove_file(file_path).with_context(|| {
+                format!("Failed to remove local infer artifact {}", file_path.display())
+            })?;
+        }
+        info!(
+            "Uploaded infer artifacts to gs://{}/{} and removed local copies under {}",
+            bucket,
+            prefix.trim_matches('/'),
+            project_root.display()
+        );
+    } else {
+        info!(
+            "Uploaded infer artifacts to gs://{}/{} and kept local copies under {} (set MONGO2PG_GCS_PURGE_LOCAL=1 to remove local files)",
+            bucket,
+            prefix.trim_matches('/'),
+            project_root.display()
+        );
+    }
+    Ok(())
+}
+
 fn print_infer_summary(conf: &Path) -> Result<()> {
     let c = read_conf(conf)?;
-    let project_root = c.base_dir.join(&c.project_dir);
+    let project_root = resolve_local_project_root_from_config(conf, &c);
     let collections_dir = project_root.join("source").join("collections");
     let tables_root = project_root.join("schema").join("tables");
     let report_path = project_root.join("reports").join("main.html");
@@ -2396,15 +2690,12 @@ async fn infer_all_databases(
     timestamp_fields: &[String],
     emit_stats: bool,
 ) -> Result<()> {
-    let all_dbs = client
-        .list_database_names()
-        .await
-        .with_context(|| {
-            format!(
-                "{}: failed to list databases",
-                connection_failed_context("mongo", "query")
-            )
-        })?;
+    let all_dbs = client.list_database_names().await.with_context(|| {
+        format!(
+            "{}: failed to list databases",
+            connection_failed_context("mongo", "query")
+        )
+    })?;
 
     let user_dbs: Vec<String> = all_dbs
         .into_iter()
@@ -2509,6 +2800,17 @@ fn infer_query_max_time(max_time_ms: Option<u64>) -> Duration {
 
 fn resolve_infer_chunk_size(chunk_size: Option<u64>) -> Result<u64> {
     let resolved = chunk_size.unwrap_or(DEFAULT_INFER_CHUNK_SIZE);
+    if resolved == 0 {
+        return Err(anyhow!("chunk_size must be greater than 0"));
+    }
+    if resolved > i64::MAX as u64 {
+        return Err(anyhow!("chunk_size must be <= {}", i64::MAX));
+    }
+    Ok(resolved)
+}
+
+fn resolve_export_chunk_size(chunk_size: Option<u64>) -> Result<u64> {
+    let resolved = chunk_size.unwrap_or(DEFAULT_EXPORT_CHUNK_ROWS);
     if resolved == 0 {
         return Err(anyhow!("chunk_size must be greater than 0"));
     }
@@ -2655,37 +2957,57 @@ async fn infer_collection(
         let total_chunks = sample_size.div_ceil(chunk_size).max(1);
         let mut processed = 0_u64;
         let mut chunk_index = 0_u64;
+        let mut last_processed_id: Option<bson::Bson> = None;
 
         while processed < sample_size {
             chunk_index += 1;
             let remaining = sample_size - processed;
             let this_chunk = remaining.min(chunk_size);
+            let chunk_start_id = last_processed_id.clone();
             info!(
-                "chunk {}/{} size={} processed={}/{} collection={}.{}",
-                chunk_index, total_chunks, this_chunk, processed, sample_size, db_name, coll_name
+                "chunk {}/{} size={} processed={}/{} collection={}.{} start_after_id={}",
+                chunk_index,
+                total_chunks,
+                this_chunk,
+                processed,
+                sample_size,
+                db_name,
+                coll_name,
+                chunk_start_id
+                    .as_ref()
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "<begin>".to_owned())
             );
 
             let mut auth_retry_attempt = 0_u32;
 
             'retry_chunk: loop {
+                let filter = match chunk_start_id.as_ref() {
+                    Some(last_id) => doc! { "_id": { "$gt": last_id.clone() } },
+                    None => doc! {},
+                };
                 let cursor_result = collection
-                    .find(doc! {})
-                    .skip(processed)
+                    .find(filter)
+                    .sort(doc! { "_id": 1 })
                     .limit(this_chunk as i64)
                     .max_time(sample_max_time)
                     .await;
 
                 let mut chunk_docs = 0_u64;
+                let mut chunk_last_id: Option<bson::Bson> = None;
                 let mut cur = match cursor_result {
                     Ok(cur) => cur,
                     Err(e) => {
                         warn!(
-                            "  [warn] find() chunk failed for {}.{} at chunk {}/{} (skip={}, limit={}): {:#}",
+                            "  [warn] find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
                             db_name,
                             coll_name,
                             chunk_index,
                             total_chunks,
-                            processed,
+                            chunk_start_id
+                                .as_ref()
+                                .map(|id| id.to_string())
+                                .unwrap_or_else(|| "<begin>".to_owned()),
                             this_chunk,
                             e
                         );
@@ -2696,6 +3018,7 @@ async fn infer_collection(
                 loop {
                     match cur.try_next().await {
                         Ok(Some(d)) => {
+                            chunk_last_id = d.get("_id").cloned();
                             analyzer.process_document(&d);
                             chunk_docs += 1;
                         }
@@ -2764,6 +3087,7 @@ async fn infer_collection(
                     break;
                 }
 
+                last_processed_id = chunk_last_id.or(chunk_start_id);
                 processed = processed.saturating_add(chunk_docs);
                 if chunk_docs < this_chunk {
                     break;
@@ -4954,7 +5278,16 @@ fn write_collection_files(
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn run_init(args: InitArgs) -> Result<()> {
-    let project_root = args.project_base.join(&args.project_name);
+    let project_root = if let Some(cluster_name) = args
+        .cluster_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        args.project_base.join(&args.project_name).join(cluster_name)
+    } else {
+        args.project_base.join(&args.project_name)
+    };
 
     let dirs = [
         project_root.join("schema").join("tables"),
@@ -4971,7 +5304,24 @@ fn run_init(args: InitArgs) -> Result<()> {
 
     let conf_path = project_root
         .join("config")
-        .join(format!("{}.toml", args.project_name));
+        .join(format!(
+            "{}.toml",
+            args.cluster_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(&args.project_name)
+        ));
+    let project_title = if let Some(cluster_name) = args
+        .cluster_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        format!("Mongo2Pg Project migration ({cluster_name})")
+    } else {
+        "Mongo2Pg Project migration".to_owned()
+    };
     let target_database_name = args
         .namespace
         .as_deref()
@@ -4982,10 +5332,16 @@ fn run_init(args: InitArgs) -> Result<()> {
         .as_deref()
         .map(|ns| format!("namespace = \"{}\"", ns.replace('"', "\\\"")))
         .unwrap_or_else(|| "#namespace = my_db".to_owned());
+    let cluster_line = args
+        .cluster_name
+        .as_deref()
+        .map(|name| format!("cluster_name = \"{}\"", name.replace('"', "\\\"")))
+        .unwrap_or_else(|| "# cluster_name = \"cluster-a\"".to_owned());
     let conf_content = format!(
-        "[project]\ntitle = \"{}\"\nbase_dir = \"{}\"\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\n# chunk_size = 1000000\n# auth_retry_max = 3\n# log_level = \"info\"\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
-        "Mongo2Pg Project migration",
+        "[project]\ntitle = \"{}\"\nbase_dir = \"{}\"\n{}\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\n# chunk_size = 1000000\n# auth_retry_max = 3\n# log_level = \"info\"\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
+        project_title.replace('"', "\\\""),
         args.project_base.display(),
+        cluster_line,
         args.project_name,
         args.source_uri
             .as_deref()
@@ -5014,6 +5370,42 @@ fn run_init(args: InitArgs) -> Result<()> {
     }
     info!("{}", conf_path.display());
     Ok(())
+}
+
+fn append_non_empty_segment(path: &mut String, segment: Option<&str>) {
+    if let Some(value) = segment.map(str::trim).filter(|value| !value.is_empty()) {
+        if !path.is_empty() {
+            path.push('/');
+        }
+        path.push_str(value);
+    }
+}
+
+fn ensure_output_prefix_segments(prefix: &str, cluster_name: Option<&str>, project_dir: &str) -> String {
+    let mut normalized = prefix.trim_matches('/').to_owned();
+
+    let project_segment = project_dir.trim_matches('/');
+    if !project_segment.is_empty() {
+        let already_has_project = normalized
+            .rsplit('/')
+            .next()
+            .is_some_and(|segment| segment == project_segment);
+        if !already_has_project {
+            append_non_empty_segment(&mut normalized, Some(project_segment));
+        }
+    }
+
+    let cluster_segment = cluster_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(cluster) = cluster_segment {
+        let already_has_cluster = normalized.rsplit('/').next().is_some_and(|segment| segment == cluster);
+        if !already_has_cluster {
+            append_non_empty_segment(&mut normalized, Some(cluster));
+        }
+    }
+
+    normalized
 }
 
 fn import_table_name_from_csv_path(path: &Path) -> Option<String> {
@@ -5092,6 +5484,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             project_dir: args.project_dir.clone(),
             source_uri: args.mongo.source_uri.clone(),
             namespace: args.namespace.clone(),
+            chunk_size: args.chunk_size,
             target_database_name: args.database_name.clone(),
             target_schema_name: args.schema_name.clone(),
             ..ConfigOverrides::default()
@@ -5105,7 +5498,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         .mongo
         .source_uri
         .clone()
-        .or(c.source_uri)
+        .or(c.source_uri.clone())
         .ok_or_else(|| {
             anyhow!(
                 "No SOURCE_URI provided: pass --source-uri or add SOURCE_URI to the config file"
@@ -5113,18 +5506,106 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         })?;
 
     // Use args.namespace if provided, else fall back to config file
-    let db_name = args.namespace.clone().or(c.namespace).ok_or_else(|| {
+    let db_name = args.namespace.clone().or(c.namespace.clone()).ok_or_else(|| {
         anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
     })?;
+    let export_chunk_size = resolve_export_chunk_size(args.chunk_size.or(c.chunk_size))?;
+    let storage_backend = match resolve_export_write_backend(&c.base_dir)? {
+        ExportWriteBackend::LocalFs => ExportWriteBackend::LocalFs,
+        ExportWriteBackend::Gcs { bucket, prefix } => ExportWriteBackend::Gcs {
+            bucket,
+            prefix: ensure_output_prefix_segments(&prefix, c.cluster_name.as_deref(), &c.project_dir),
+        },
+    };
+    match &storage_backend {
+        ExportWriteBackend::LocalFs => info!("export backend: local filesystem"),
+        ExportWriteBackend::Gcs { bucket, prefix } => {
+            info!(
+                "export backend: gcs bucket='{}' prefix='{}'",
+                bucket, prefix
+            );
+        }
+    }
 
-    let project_root = c.base_dir.join(&c.project_dir);
+    let mut export_metadata_stage: Option<tempfile::TempDir> = None;
+    let project_root: PathBuf;
     // Use <project_root>/schema/tables/<db_name> for SQL files
-    let tables_dir = project_root.join("schema").join("tables").join(&db_name);
-    let collections_dir = resolve_collections_dir(&project_root, &db_name);
-    let data_dir = args
-        .output_dir
-        .clone()
-        .unwrap_or_else(|| project_root.join("data"));
+    let tables_dir: PathBuf;
+    let collections_dir: PathBuf;
+
+    match &storage_backend {
+        ExportWriteBackend::LocalFs => {
+            project_root = configured_project_root(&c);
+            tables_dir = project_root.join("schema").join("tables").join(&db_name);
+            collections_dir = resolve_collections_dir(&project_root, &db_name);
+        }
+        ExportWriteBackend::Gcs { bucket, prefix } => {
+            let Some(stage) =
+                stage_export_metadata_from_gcs(
+                    bucket,
+                    prefix,
+                    c.cluster_name.as_deref(),
+                    &c.project_dir,
+                    &db_name,
+                )
+                .await?
+            else {
+                return Err(anyhow!(
+                    "Cannot stage export metadata from gs://{}/{}/schema/tables/{}",
+                    bucket,
+                    prefix.trim_matches('/'),
+                    db_name
+                ));
+            };
+
+            project_root = stage.path().to_path_buf();
+            tables_dir = project_root.join("schema").join("tables").join(&db_name);
+            collections_dir = resolve_collections_dir(&project_root, &db_name);
+            info!(
+                "export metadata staged from GCS into temporary directory {}",
+                project_root.display()
+            );
+            export_metadata_stage = Some(stage);
+        }
+    }
+
+    if !tables_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read SQL tables directory {}",
+            tables_dir.display()
+        ));
+    }
+
+    if !collections_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read collections directory {}",
+            collections_dir.display()
+        ));
+    }
+
+    if let Some(stage) = &export_metadata_stage {
+        info!(
+            "export metadata staging dir (temporary): {}",
+            stage.path().display()
+        );
+    }
+
+    let (data_dir, cleanup_staging_after_export) = match (&storage_backend, args.output_dir.clone()) {
+        (_, Some(dir)) => (dir, false),
+        (ExportWriteBackend::LocalFs, None) => (project_root.join("data"), false),
+        (ExportWriteBackend::Gcs { .. }, None) => {
+            let staging_dir = std::env::temp_dir().join(format!(
+                "mongo2pg-gcs-stage-{}-{}",
+                std::process::id(),
+                Utc::now().timestamp_millis()
+            ));
+            info!(
+                "export staging dir (temporary): {}",
+                staging_dir.display()
+            );
+            (staging_dir, true)
+        }
+    };
 
     let client_options = ClientOptions::parse(&source_uri).await.with_context(|| {
         format!(
@@ -5249,6 +5730,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     for (_, collections) in &mut jobs {
         collections.sort();
     }
+    let mut failed_jobs: Vec<String> = Vec::new();
 
     let total_jobs = jobs.len();
 
@@ -5272,7 +5754,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             );
             for (member_index, coll_name) in coll_names.iter().enumerate() {
                 info!(
-                    "      -> member [{}/{}]: {db_name}.{} -> {}.sql",
+                    "-> member [{}/{}]: {db_name}.{} -> {}.sql",
                     member_index + 1,
                     coll_names.len(),
                     coll_name,
@@ -5289,11 +5771,40 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             &tables_dir,
             &collections_dir,
             &data_dir,
+            export_chunk_size,
+            &storage_backend,
         )
         .await
         {
             Ok(()) => {}
-            Err(e) => warn!("  warning: {e}"),
+            Err(e) => {
+                let job_label = format!("{}.{}", db_name, sql_lookup_name);
+                warn!("  warning: export failed for {}: {}", job_label, e);
+                failed_jobs.push(format!("{}: {}", job_label, e));
+            }
+        }
+    }
+
+    if !failed_jobs.is_empty() {
+        return Err(anyhow!(
+            "Export failed for {} job(s): {}",
+            failed_jobs.len(),
+            failed_jobs.join(" | ")
+        ));
+    }
+
+    if cleanup_staging_after_export && data_dir.exists() {
+        if let Err(err) = std::fs::remove_dir_all(&data_dir) {
+            warn!(
+                "Failed to clean temporary export staging directory {}: {}",
+                data_dir.display(),
+                err
+            );
+        } else {
+            info!(
+                "Cleaned temporary export staging directory {}",
+                data_dir.display()
+            );
         }
     }
 
@@ -5307,6 +5818,341 @@ fn resolve_collections_dir(project_root: &Path, db_name: &str) -> std::path::Pat
     } else {
         collections_root
     }
+}
+
+fn resolve_local_project_root_from_config(
+    conf_path: &Path,
+    conf_data: &mongo2pg::util::ConfData,
+) -> PathBuf {
+    let storage_backend =
+        resolve_export_write_backend(&conf_data.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
+
+    match storage_backend {
+        ExportWriteBackend::LocalFs => configured_project_root(conf_data),
+        ExportWriteBackend::Gcs { prefix, .. } => {
+            let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let conf_abs = std::fs::canonicalize(conf_path).unwrap_or_else(|_| {
+                if conf_path.is_absolute() {
+                    conf_path.to_path_buf()
+                } else {
+                    current_dir.join(conf_path)
+                }
+            });
+
+            let from_config = conf_abs
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.to_path_buf());
+            let from_cwd_project = if let Some(cluster_name) = conf_data
+                .cluster_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                current_dir.join(&conf_data.project_dir).join(cluster_name)
+            } else {
+                current_dir.join(&conf_data.project_dir)
+            };
+            let from_config_parent_with_prefix = from_config.as_ref().and_then(|root| {
+                root.parent().map(|p| {
+                    let effective_prefix = ensure_output_prefix_segments(
+                        &prefix,
+                        conf_data.cluster_name.as_deref(),
+                        &conf_data.project_dir,
+                    );
+                    p.join(effective_prefix)
+                })
+            });
+
+            let has_project_layout = |root: &PathBuf| {
+                root.join("source").is_dir()
+                    || root.join("schema").is_dir()
+                    || root.join("reports").is_dir()
+            };
+
+            from_config_parent_with_prefix
+                .iter()
+                .chain(from_config.iter())
+                .chain(std::iter::once(&from_cwd_project))
+                .find(|root| has_project_layout(root))
+                .cloned()
+                .or(from_config_parent_with_prefix)
+                .or(from_config)
+                .unwrap_or(from_cwd_project)
+        }
+    }
+}
+
+fn gcs_prefix_candidates_for_import_data(
+    prefix: &str,
+    cluster_name: Option<&str>,
+    project_dir: &str,
+    db_name: &str,
+) -> Vec<String> {
+    let trimmed_prefix = prefix.trim_matches('/');
+    let cluster_segment = cluster_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let project_segment = project_dir.trim_matches('/');
+    let mut candidates = Vec::new();
+    let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
+
+    if !effective_prefix.is_empty() {
+        candidates.push(format!("{effective_prefix}/data/{db_name}/"));
+    }
+
+    if trimmed_prefix.is_empty() {
+        candidates.push(format!("data/{db_name}/"));
+        if let Some(cluster_name) = cluster_segment {
+            candidates.push(format!("{cluster_name}/data/{db_name}/"));
+        }
+        if !project_segment.is_empty() {
+            candidates.push(format!("{project_segment}/data/{db_name}/"));
+        }
+    } else {
+        candidates.push(format!("{trimmed_prefix}/data/{db_name}/"));
+        if !project_segment.is_empty() {
+            let ends_with_project = trimmed_prefix
+                .split('/')
+                .next_back()
+                .is_some_and(|last| last == project_segment);
+            if !ends_with_project {
+                candidates.push(format!("{trimmed_prefix}/{project_segment}/data/{db_name}/"));
+            }
+        }
+    }
+
+    candidates.sort();
+    candidates.dedup();
+    candidates
+}
+
+async fn download_gcs_prefix_to_local_dir(
+    bucket: &str,
+    object_prefix: &str,
+    local_dir: &Path,
+) -> Result<usize> {
+    debug!(
+        "[gcs-debug] metadata stage start: gs://{}/{} -> {}",
+        bucket,
+        object_prefix,
+        local_dir.display()
+    );
+    let storage = Storage::builder()
+        .build()
+        .await
+        .with_context(|| format!("Failed to initialize GCS data client for gs://{bucket}"))?;
+    let storage_control = StorageControl::builder().build().await.with_context(|| {
+        format!("Failed to initialize GCS control client for gs://{bucket}")
+    })?;
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
+
+    let mut downloaded = 0usize;
+    let mut page_token = String::new();
+    loop {
+        let mut request = storage_control
+            .list_objects()
+            .set_parent(bucket_resource.clone())
+            .set_prefix(object_prefix.to_owned());
+        if !page_token.is_empty() {
+            request = request.set_page_token(page_token.clone());
+        }
+
+        let page = request
+            .send()
+            .await
+            .with_context(|| format!("Failed while listing gs://{}/{}", bucket, object_prefix))?;
+
+        for object in page.objects {
+            let Some(relative) = object
+                .name
+                .strip_prefix(object_prefix)
+                .map(|path| path.trim_start_matches('/'))
+            else {
+                continue;
+            };
+            if relative.is_empty() {
+                continue;
+            }
+
+            let destination = local_dir.join(relative);
+            if let Some(parent) = destination.parent() {
+                tokio::fs::create_dir_all(parent).await.with_context(|| {
+                    format!("Cannot create local staging directory {}", parent.display())
+                })?;
+            }
+
+            let mut reader = storage
+                .read_object(bucket_resource.clone(), object.name.clone())
+                .send()
+                .await
+                .with_context(|| format!("Failed to open gs://{}/{}", bucket, object.name))?;
+            let mut bytes = Vec::new();
+            while let Some(chunk) = reader.next().await {
+                let chunk = chunk.with_context(|| {
+                    format!("Failed reading gs://{}/{}", bucket, object.name)
+                })?;
+                bytes.extend_from_slice(&chunk);
+            }
+
+            tokio::fs::write(&destination, bytes).await.with_context(|| {
+                format!("Cannot write staged import file {}", destination.display())
+            })?;
+            downloaded += 1;
+        }
+
+        if page.next_page_token.is_empty() {
+            break;
+        }
+        page_token = page.next_page_token;
+    }
+
+    debug!(
+        "[gcs-debug] metadata stage done: downloaded_files={} from gs://{}/{}",
+        downloaded,
+        bucket,
+        object_prefix
+    );
+
+    Ok(downloaded)
+}
+
+fn gcs_prefix_candidates_for_project_subdir(prefix: &str, project_dir: &str, subdir: &str) -> Vec<String> {
+    let trimmed_prefix = prefix.trim_matches('/');
+    let project_segment = project_dir.trim_matches('/');
+    let subdir_segment = subdir.trim_matches('/');
+    let mut candidates = Vec::new();
+
+    let effective_prefix = ensure_output_prefix_segments(prefix, None, project_dir);
+    if !effective_prefix.is_empty() {
+        candidates.push(format!("{effective_prefix}/{subdir_segment}/"));
+    }
+
+    if trimmed_prefix.is_empty() {
+        candidates.push(format!("{subdir_segment}/"));
+        if !project_segment.is_empty() {
+            candidates.push(format!("{project_segment}/{subdir_segment}/"));
+        }
+    } else {
+        candidates.push(format!("{trimmed_prefix}/{subdir_segment}/"));
+        if !project_segment.is_empty() {
+            let ends_with_project = trimmed_prefix
+                .split('/')
+                .next_back()
+                .is_some_and(|last| last == project_segment);
+            if !ends_with_project {
+                candidates.push(format!("{trimmed_prefix}/{project_segment}/{subdir_segment}/"));
+            }
+        }
+    }
+
+    candidates.sort();
+    candidates.dedup();
+    candidates
+}
+
+async fn stage_export_metadata_from_gcs(
+    bucket: &str,
+    prefix: &str,
+    cluster_name: Option<&str>,
+    project_dir: &str,
+    db_name: &str,
+) -> Result<Option<tempfile::TempDir>> {
+    ensure_gcs_authentication().await?;
+
+    let stage = tempfile::Builder::new()
+        .prefix("mongo2pg-gcs-export-meta-")
+        .tempdir()
+        .context("Cannot create temporary export metadata staging directory")?;
+
+    let staged_tables_dir = stage
+        .path()
+        .join("schema")
+        .join("tables")
+        .join(db_name);
+    std::fs::create_dir_all(&staged_tables_dir).with_context(|| {
+        format!(
+            "Cannot create staged schema directory {}",
+            staged_tables_dir.display()
+        )
+    })?;
+
+    let mut staged_tables = 0usize;
+    for candidate in gcs_prefix_candidates_for_project_subdir(
+        &ensure_output_prefix_segments(prefix, cluster_name, project_dir),
+        project_dir,
+        &format!("schema/tables/{db_name}"),
+    ) {
+        let count = download_gcs_prefix_to_local_dir(bucket, &candidate, &staged_tables_dir)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to stage schema metadata from gs://{}/{}",
+                    bucket, candidate
+                )
+            })?;
+        if count > 0 {
+            staged_tables = count;
+            info!(
+                "staged {} schema files from gs://{}/{} into {}",
+                count,
+                bucket,
+                candidate,
+                staged_tables_dir.display()
+            );
+            break;
+        }
+    }
+
+    if staged_tables == 0 {
+        return Ok(None);
+    }
+
+    let staged_collections_root = stage.path().join("source").join("collections");
+    std::fs::create_dir_all(&staged_collections_root).with_context(|| {
+        format!(
+            "Cannot create staged collections directory {}",
+            staged_collections_root.display()
+        )
+    })?;
+
+    let collection_candidates = [
+        format!("source/collections/{db_name}"),
+        "source/collections".to_owned(),
+    ];
+    for subdir in collection_candidates {
+        for candidate in gcs_prefix_candidates_for_project_subdir(
+            &ensure_output_prefix_segments(prefix, cluster_name, project_dir),
+            project_dir,
+            &subdir,
+        ) {
+            let target_dir = if subdir.ends_with(&format!("/{db_name}")) {
+                staged_collections_root.join(db_name)
+            } else {
+                staged_collections_root.clone()
+            };
+            let count = download_gcs_prefix_to_local_dir(bucket, &candidate, &target_dir)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to stage collection mappings from gs://{}/{}",
+                        bucket, candidate
+                    )
+                })?;
+            if count > 0 {
+                info!(
+                    "staged {} collection mapping files from gs://{}/{} into {}",
+                    count,
+                    bucket,
+                    candidate,
+                    target_dir.display()
+                );
+                break;
+            }
+        }
+    }
+
+    Ok(Some(stage))
 }
 
 async fn run_import(args: ImportArgs) -> Result<()> {
@@ -5343,7 +6189,19 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     let should_import_collection =
         |name: &str| should_infer_collection(name, &conf_include, &conf_exclude);
 
-    let project_root = c.base_dir.join(&c.project_dir);
+    let storage_backend =
+        resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
+    let project_root = match &storage_backend {
+        ExportWriteBackend::LocalFs => configured_project_root(&c),
+        ExportWriteBackend::Gcs { .. } => {
+            let local_root = resolve_local_project_root_from_config(&args.config, &c);
+            info!(
+                "import metadata root (local, read-only): {}",
+                local_root.display()
+            );
+            local_root
+        }
+    };
     let tables_root = project_root.join("schema").join("tables");
     let tables_dir = if tables_root.join(db_name).is_dir() {
         tables_root.join(db_name)
@@ -5351,17 +6209,82 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         tables_root.clone()
     };
     let data_root = project_root.join("data");
-    let data_db_dir = if data_root.join(db_name).is_dir() {
+    let mut data_db_dir = if data_root.join(db_name).is_dir() {
         data_root.join(db_name)
     } else {
         data_root.clone()
     };
+    let mut import_data_stage: Option<tempfile::TempDir> = None;
+
+    if !data_db_dir.is_dir() {
+        if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+            ensure_gcs_authentication().await?;
+
+            let stage = tempfile::Builder::new()
+                .prefix("mongo2pg-gcs-import-stage-")
+                .tempdir()
+                .context("Cannot create temporary import staging directory")?;
+            let staged_data_root = stage.path().join("data").join(db_name);
+            std::fs::create_dir_all(&staged_data_root).with_context(|| {
+                format!("Cannot create staged import data directory {}", staged_data_root.display())
+            })?;
+
+            let requested_suffix = requested_collection_dir
+                .as_deref()
+                .map(|name| format!("{name}/"));
+            let mut downloaded = 0usize;
+            let candidates = gcs_prefix_candidates_for_import_data(
+                prefix,
+                c.cluster_name.as_deref(),
+                &c.project_dir,
+                db_name,
+            );
+            for candidate in candidates {
+                let effective_prefix = if let Some(suffix) = &requested_suffix {
+                    format!("{candidate}{suffix}")
+                } else {
+                    candidate.clone()
+                };
+                let count = download_gcs_prefix_to_local_dir(bucket, &effective_prefix, &staged_data_root)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "Failed to stage import data from gs://{}/{}",
+                            bucket, effective_prefix
+                        )
+                    })?;
+                if count > 0 {
+                    downloaded += count;
+                    info!(
+                        "staged {} import data files from gs://{}/{} into {}",
+                        count,
+                        bucket,
+                        effective_prefix,
+                        staged_data_root.display()
+                    );
+                    break;
+                }
+            }
+
+            if downloaded > 0 {
+                data_db_dir = staged_data_root;
+                import_data_stage = Some(stage);
+            }
+        }
+    }
 
     if !tables_dir.is_dir() {
         return Err(anyhow!(
             "Cannot read SQL tables directory {}",
             tables_dir.display()
         ));
+    }
+
+    if let Some(stage) = &import_data_stage {
+        info!(
+            "import data staging dir (temporary): {}",
+            stage.path().display()
+        );
     }
     if !data_db_dir.is_dir() {
         return Err(anyhow!(
@@ -7490,15 +8413,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
-    consumer
-        .subscribe(&topic_refs)
-        .with_context(|| {
-            format!(
-                "{}: failed to subscribe topics: {}",
-                connection_failed_context("kafka", "consume"),
-                topics.join(", ")
-            )
-        })?;
+    consumer.subscribe(&topic_refs).with_context(|| {
+        format!(
+            "{}: failed to subscribe topics: {}",
+            connection_failed_context("kafka", "consume"),
+            topics.join(", ")
+        )
+    })?;
 
     info!(
         "Kafka import started. group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
@@ -7847,6 +8768,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
     let (collections_dir, namespace, cluster, reports_dir, project_name, ftitle) =
         if let Some(ref conf) = args.config {
             let c = read_conf(conf)?;
+            let local_project_root = resolve_local_project_root_from_config(conf, &c);
             let ns = args.namespace.clone();
             let ns = if ns.is_empty() {
                 c.namespace.unwrap_or_else(|| c.project_dir.clone())
@@ -7858,12 +8780,8 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
                 .as_deref()
                 .map(mongo2pg::report::cluster_from_uri)
                 .unwrap_or_default();
-            let cols_dir = c
-                .base_dir
-                .join(&c.project_dir)
-                .join("source")
-                .join("collections");
-            let rep_dir = c.base_dir.join(&c.project_dir).join("reports");
+            let cols_dir = local_project_root.join("source").join("collections");
+            let rep_dir = local_project_root.join("reports");
             let proj = c.project_dir.clone();
             let ftitle = c.title.clone();
             (
@@ -8027,7 +8945,8 @@ async fn write_post_import_report(
     let c = read_conf(conf)?;
     let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
     let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
-    let reports_dir = c.base_dir.join(&c.project_dir).join("reports");
+    let project_root = configured_project_root(&c);
+    let reports_dir = project_root.join("reports");
     std::fs::create_dir_all(&reports_dir)
         .with_context(|| format!("Failed to create reports dir {}", reports_dir.display()))?;
 
@@ -8052,16 +8971,8 @@ async fn write_post_import_report(
         .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
     let target_database_name = c.target_database_name.as_deref();
 
-    let collections_dir = c
-        .base_dir
-        .join(&c.project_dir)
-        .join("source")
-        .join("collections");
-    let schema_tables_root = c
-        .base_dir
-        .join(&c.project_dir)
-        .join("schema")
-        .join("tables");
+    let collections_dir = project_root.join("source").join("collections");
+    let schema_tables_root = project_root.join("schema").join("tables");
     let output_path = reports_dir.join("post_report.html");
 
     let rows = build_post_import_rows(
@@ -8120,11 +9031,7 @@ fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
             }
         }
 
-        let collections_dir = c
-            .base_dir
-            .join(&c.project_dir)
-            .join("source")
-            .join("collections");
+        let collections_dir = configured_project_root(&c).join("source").join("collections");
 
         let rows = collect_rows(&collections_dir, None)
             .with_context(|| format!("Failed to read collections for {db_name}"))?;
@@ -8584,14 +9491,12 @@ async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
         tls_builder.danger_accept_invalid_certs(true);
         tls_builder.danger_accept_invalid_hostnames(true);
     }
-    let tls = tls_builder
-        .build()
-        .with_context(|| {
-            format!(
-                "{}: failed to initialize PostgreSQL TLS connector",
-                connection_failed_context("pg", "connect")
-            )
-        })?;
+    let tls = tls_builder.build().with_context(|| {
+        format!(
+            "{}: failed to initialize PostgreSQL TLS connector",
+            connection_failed_context("pg", "connect")
+        )
+    })?;
     let tls = MakeTlsConnector::new(tls);
 
     let (pg_client, pg_connection) = tokio_postgres::connect(target_uri, tls)
@@ -8933,24 +9838,19 @@ async fn build_post_import_rows(
 
     let (db_name, only_collection) = split_namespace_scope(namespace);
 
-    let mongo_client = Client::with_uri_str(source_uri)
-        .await
-        .with_context(|| {
-            format!(
-                "{}: failed to connect to MongoDB using SOURCE_URI",
-                connection_failed_context("mongo", "connect")
-            )
-        })?;
+    let mongo_client = Client::with_uri_str(source_uri).await.with_context(|| {
+        format!(
+            "{}: failed to connect to MongoDB using SOURCE_URI",
+            connection_failed_context("mongo", "connect")
+        )
+    })?;
     let mongo_db = mongo_client.database(db_name);
-    let mut collection_names = mongo_db
-        .list_collection_names()
-        .await
-        .with_context(|| {
-            format!(
-                "{}: failed to list collections for MongoDB database {db_name}",
-                connection_failed_context("mongo", "query")
-            )
-        })?;
+    let mut collection_names = mongo_db.list_collection_names().await.with_context(|| {
+        format!(
+            "{}: failed to list collections for MongoDB database {db_name}",
+            connection_failed_context("mongo", "query")
+        )
+    })?;
     collection_names.retain(|name| !name.starts_with("system."));
     collection_names.retain(|name| should_infer_collection(&sanitize_name(name), include, exclude));
     if let Some(coll_name) = only_collection {
@@ -9232,23 +10132,25 @@ mod tests {
         classify_unauthorized_retry, collect_infer_type_warnings, collect_nullable_scalar_warnings,
         connection_failed_context, count_dynamic_map_entries, detect_candidate_groups,
         dynamic_map_value_fields, format_runtime_log_line, infer_query_max_time,
-        is_unauthorized_cursor_error,
-        plan_export_jobs_for_collections, render_ddl_from_mapping_tables, resolve_collections_dir,
+        is_unauthorized_cursor_error, plan_export_jobs_for_collections,
+        render_ddl_from_mapping_tables, resolve_collections_dir, resolve_export_chunk_size,
         resolve_export_sql_lookup_for_collection, resolve_infer_auth_retry_max,
         resolve_infer_chunk_size, resolve_log_level_precedence, resolve_post_import_table_row,
         resolve_root_table_name, sanitize_name, should_infer_collection, strip_psql_preamble,
         timeout_fallback_hint, validate_group_schema_compatibility, ConfigOverrides,
-        PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_INFER_AUTH_RETRY_MAX,
-        DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
+        PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_EXPORT_CHUNK_ROWS,
+        DEFAULT_INFER_AUTH_RETRY_MAX, DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
     };
     use anyhow::{anyhow, Context as _};
     use bson::doc;
     use log::{Level, LevelFilter};
     use mongo2pg::analyzer::Analyzer;
+    use mongo2pg::export::{resolve_export_write_backend, ExportWriteBackend};
     use mongo2pg::schema_diagram::Table;
     use serde::Deserialize;
     use std::collections::{HashMap, HashSet};
     use std::io::Write;
+    use std::path::Path;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use tempfile::NamedTempFile;
 
@@ -9408,6 +10310,55 @@ mod tests {
     fn resolve_infer_chunk_size_rejects_invalid_values() {
         assert!(resolve_infer_chunk_size(Some(0)).is_err());
         assert!(resolve_infer_chunk_size(Some(i64::MAX as u64 + 1)).is_err());
+    }
+
+    #[test]
+    fn resolve_export_chunk_size_uses_default_or_configured_value() {
+        assert_eq!(
+            resolve_export_chunk_size(None).expect("default export chunk size should resolve"),
+            DEFAULT_EXPORT_CHUNK_ROWS
+        );
+        assert_eq!(
+            resolve_export_chunk_size(Some(100_000))
+                .expect("configured export chunk size should resolve"),
+            100_000
+        );
+    }
+
+    #[test]
+    fn resolve_export_chunk_size_rejects_invalid_values() {
+        assert!(resolve_export_chunk_size(Some(0)).is_err());
+        assert!(resolve_export_chunk_size(Some(i64::MAX as u64 + 1)).is_err());
+    }
+
+    #[test]
+    fn resolve_export_write_backend_uses_local_for_non_gs_base_dir() {
+        let backend = resolve_export_write_backend(Path::new("/tmp/work"))
+            .expect("local path should resolve to filesystem backend");
+        assert_eq!(backend, ExportWriteBackend::LocalFs);
+    }
+
+    #[test]
+    fn resolve_export_write_backend_uses_gcs_for_gs_prefix() {
+        let backend = resolve_export_write_backend(Path::new("gs://my-bucket/path/to/base"))
+            .expect("gs URI should resolve to gcs backend");
+        assert_eq!(
+            backend,
+            ExportWriteBackend::Gcs {
+                bucket: "my-bucket".to_owned(),
+                prefix: "path/to/base".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_export_write_backend_rejects_empty_gcs_bucket() {
+        let err =
+            resolve_export_write_backend(Path::new("gs://")).expect_err("empty bucket must fail");
+        assert!(
+            err.to_string().contains("missing bucket name"),
+            "unexpected error message: {err}"
+        );
     }
 
     #[test]
@@ -11201,6 +12152,7 @@ pg_mapping:
             source_uri: None,
             target_uri: None,
             namespace: Some("dbapi".to_owned()),
+            cluster_name: None,
         })
         .expect("init should succeed");
 
@@ -11347,6 +12299,7 @@ pg_mapping:
             source_uri,
             target_uri,
             namespace,
+            cluster_name: None,
         }
     }
     fn create_default_infer_args(config: PathBuf) -> InferArgs {
@@ -11376,6 +12329,7 @@ pg_mapping:
             database_name: None,
             schema_name: None,
             project_dir: None,
+            chunk_size: None,
             output_dir: None,
             config: Some(config),
         }

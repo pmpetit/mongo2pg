@@ -41,6 +41,10 @@ reqwest = { version = "0.12", default-features = false, features = [
 apache-avro = "0.17"
 env_logger = "0.11"
 log = "0.4"
+google-cloud-auth = "1.13.0"
+google-cloud-storage = "1.15.0"
+rustls = { version = "0.23", features = ["ring"] }
+tempfile = "3.27.0"
 
 md5 = "0.7"
 
@@ -48,7 +52,6 @@ md5 = "0.7"
 indoc = "2.0.7"
 postgres = "0.19.14"
 rstest = "0.26.1"
-tempfile = "3.27.0"
 testcontainers = "0.27.1"
 testcontainers-modules = { version = "0.15.0", features = [
     "postgres",
