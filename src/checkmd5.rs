@@ -5,6 +5,7 @@ use crate::util::{
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
     inline_object_leaf_fields_with_prefix, read_conf, scalar_type_family,
 };
+use crate::export::resolve_grouped_sql_lookup_name;
 use anyhow::{anyhow, Context, Result};
 use bson::{doc, Bson, Document};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -1684,7 +1685,10 @@ fn backfill_mapping_columns_from_schema(
     }
 }
 
-fn collection_paths_from_conf(conf: &crate::util::ConfData) -> Result<(String, PathBuf)> {
+fn collection_paths_from_conf(
+    conf: &crate::util::ConfData,
+    collections_root_override: Option<&Path>,
+) -> Result<(String, PathBuf)> {
     let namespace = conf
         .namespace
         .as_ref()
@@ -1694,9 +1698,13 @@ fn collection_paths_from_conf(conf: &crate::util::ConfData) -> Result<(String, P
         .map(|(db_name, _)| db_name)
         .unwrap_or(namespace)
         .to_owned();
-    let collections_root = crate::util::configured_project_root(conf)
-        .join("source")
-        .join("collections");
+    let collections_root = collections_root_override
+        .map(|path| path.to_path_buf())
+        .unwrap_or_else(|| {
+            crate::util::configured_project_root(conf)
+                .join("source")
+                .join("collections")
+        });
     let collections_dir = if collections_root.join(&db_name).is_dir() {
         collections_root.join(&db_name)
     } else {
@@ -1708,6 +1716,7 @@ fn collection_paths_from_conf(conf: &crate::util::ConfData) -> Result<(String, P
 fn discover_mapping_targets_for_collection(
     collection: &str,
     conf: &crate::util::ConfData,
+    collections_root_override: Option<&Path>,
 ) -> Result<Vec<MappingTarget>> {
     fn parse_mongo_path(path: &str) -> SourcePath {
         let trimmed = path.trim();
@@ -1792,10 +1801,20 @@ fn discover_mapping_targets_for_collection(
         derived
     }
 
-    let (_, collections_dir) = collection_paths_from_conf(conf)?;
+    let (_, collections_dir) = collection_paths_from_conf(conf, collections_root_override)?;
     let safe_collection_name = collection.replace('/', "_");
-    let coll_dir = collections_dir.join(&safe_collection_name);
-    let schema_path = coll_dir.join(format!("{safe_collection_name}.json"));
+    let mut coll_dir = collections_dir.join(&safe_collection_name);
+    let mut schema_path = coll_dir.join(format!("{safe_collection_name}.json"));
+    if !schema_path.is_file() {
+        if let Some(grouped_lookup) = resolve_grouped_sql_lookup_name(&collections_dir, collection) {
+            let grouped_dir = collections_dir.join(&grouped_lookup);
+            let grouped_schema = grouped_dir.join(format!("{grouped_lookup}.json"));
+            if grouped_schema.is_file() {
+                coll_dir = grouped_dir;
+                schema_path = grouped_schema;
+            }
+        }
+    }
     let schema: CollectionSchema = serde_json::from_str(
         &std::fs::read_to_string(&schema_path)
             .with_context(|| format!("Failed to read {}", schema_path.display()))?,
@@ -1967,13 +1986,22 @@ pub async fn compute_md5_summaries_for_collection(
     collection: &str,
     config_path: &Path,
 ) -> Result<Vec<Md5TableSummary>> {
+    compute_md5_summaries_for_collection_with_collections_root(collection, config_path, None).await
+}
+
+pub async fn compute_md5_summaries_for_collection_with_collections_root(
+    collection: &str,
+    config_path: &Path,
+    collections_root_override: Option<&Path>,
+) -> Result<Vec<Md5TableSummary>> {
     let conf = read_conf(config_path)?;
-    let targets = discover_mapping_targets_for_collection(collection, &conf)?;
+    let targets =
+        discover_mapping_targets_for_collection(collection, &conf, collections_root_override)?;
     let mongo_uri = conf
         .source_uri
         .as_ref()
         .ok_or_else(|| anyhow!("SOURCE_URI not found in config"))?;
-    let (db_name, _) = collection_paths_from_conf(&conf)?;
+    let (db_name, _) = collection_paths_from_conf(&conf, collections_root_override)?;
     let client_options = mongodb::options::ClientOptions::parse(mongo_uri).await?;
     let mongo_client = mongodb::Client::with_options(client_options)?;
     let mut summaries = Vec::new();

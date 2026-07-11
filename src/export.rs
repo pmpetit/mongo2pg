@@ -153,11 +153,11 @@ pub async fn ensure_gcs_authentication() -> Result<()> {
 
     match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
         Ok(path) => debug!(
-            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS is set (adc_source=key_file path='{}')",
+            "[gcs] auth preflight: GOOGLE_APPLICATION_CREDENTIALS is set (adc_source=key_file path='{}')",
             path
         ),
         Err(_) => debug!(
-            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS not set (adc_source=metadata_or_default)"
+            "[gcs] auth preflight: GOOGLE_APPLICATION_CREDENTIALS not set (adc_source=metadata_or_default)"
         ),
     }
 
@@ -236,7 +236,7 @@ async fn upload_export_files_to_gcs(
     prefix: &str,
 ) -> Result<()> {
     debug!(
-        "[gcs-debug] export upload start: bucket='{}' prefix='{}' db='{}' sql='{}' local_dir='{}'",
+        "[gcs] export upload start: bucket='{}' prefix='{}' db='{}' sql='{}' local_dir='{}'",
         bucket,
         prefix.trim_matches('/'),
         db_name,
@@ -273,7 +273,7 @@ async fn upload_export_files_to_gcs(
             .with_context(|| format!("Cannot read staged export file {}", path.display()))?;
 
         debug!(
-            "[gcs-debug] export upload object: {} -> gs://{}/{}",
+            "[gcs] export upload object: {} -> gs://{}/{}",
             path.display(),
             bucket,
             object_name
@@ -296,7 +296,7 @@ async fn upload_export_files_to_gcs(
         uploaded_files += 1;
     }
     debug!(
-        "[gcs-debug] export upload done: uploaded_files={} bucket='{}' prefix='{}'",
+        "[gcs] export upload done: uploaded_files={} bucket='{}' prefix='{}'",
         uploaded_files,
         bucket,
         prefix.trim_matches('/'),
@@ -695,7 +695,12 @@ fn csv_escape(s: &str) -> String {
 
 fn csv_cell_text(cell: Option<&str>) -> String {
     match cell {
-        Some(text) => csv_escape(text),
+        Some(text) => {
+            // PostgreSQL COPY rejects embedded NUL bytes (0x00).
+            // Drop them during export so malformed source strings do not break import.
+            let sanitized = text.replace('\0', "");
+            csv_escape(&sanitized)
+        }
         None => String::new(),
     }
 }
@@ -2551,7 +2556,7 @@ pub async fn export_collections_to_sql(
     let total_sources = coll_names.len();
     for (source_index, coll_name) in coll_names.iter().enumerate() {
         info!(
-            "-> export source [{}/{}]: {}.{} -> {}.sql",
+            "-> export source [{}/{}]: {}.{} -> {}.csv.gz",
             source_index + 1,
             total_sources,
             db_name,
