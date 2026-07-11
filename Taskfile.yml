@@ -25,6 +25,34 @@ tasks:
     generates:
       - target/debug/mongo2pg
 
+  clean-rust-temp:
+    desc: Clean temporary Rust compile artifacts (safe allowlist under target/)
+    silent: true
+    cmds:
+      - |
+        for path in \
+          target/flycheck0 \
+          target/debug/build \
+          target/debug/deps \
+          target/debug/examples \
+          target/debug/incremental \
+          target/debug/.fingerprint \
+          target/debug/mongo2pg \
+          target/debug/mongo2pg.d \
+          target/debug/libmongo2pg.d \
+          target/release/build \
+          target/release/deps \
+          target/release/examples \
+          target/release/incremental \
+          target/release/.fingerprint \
+          target/release/mongo2pg \
+          target/release/mongo2pg.d \
+          target/release/libmongo2pg.d
+        do
+          rm -rf "$path"
+        done
+      - echo "🧹 cleaned Rust temp artifacts"
+
   infer:
     desc: Infer schemas for all sample databases, generate SQL DDL into {{.RESULTS_DIR}}/infer/
     silent: true
