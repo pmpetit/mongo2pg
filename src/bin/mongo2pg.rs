@@ -792,6 +792,17 @@ async fn stage_config_path_if_gcs(
         return Ok((config_path, None));
     };
 
+    // Guard against malformed values where a local path is accidentally appended
+    // after the config object path (for example: gs://.../config.toml/tmp/... ).
+    let object = [".toml/", ".yaml/", ".yml/"]
+        .iter()
+        .find_map(|marker| {
+            object
+                .find(marker)
+                .map(|idx| object[..idx + marker.len() - 1].to_owned())
+        })
+        .unwrap_or(object);
+
     let bytes = download_gcs_object_bytes(&bucket, &object).await?;
     let stage = tempfile::Builder::new()
         .prefix("mongo2pg-gcs-config-")
@@ -1702,6 +1713,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     let chained_config = args.config.clone();
     let chained_output_dir = args.output_dir.clone();
     let quiet_infer = chained_config.is_some();
+    let mut infer_fallback_root: Option<PathBuf> = None;
     // Resolve SOURCE_URI, namespace, number, and percent – reading conf file if -c was given
     let (
         resolved_source_uri,
@@ -1732,8 +1744,34 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 "--output-dir is ignored when --config is set; infer outputs are written under base_dir/project_dir/source/collections"
             );
         }
-        let local_project_root = resolve_local_project_root_from_config(conf, &c);
-        let out_dir = local_project_root.join("source").join("collections");
+        let configured_project_root = resolve_local_project_root_from_config(conf, &c);
+        let configured_out_dir = configured_project_root.join("source").join("collections");
+
+        let (local_project_root, out_dir) = match std::fs::create_dir_all(&configured_out_dir) {
+            Ok(()) => (configured_project_root, configured_out_dir),
+            Err(err) => {
+                let fallback_project_root = std::env::temp_dir()
+                    .join("mongo2pg-infer")
+                    .join(sanitize_name(&c.project_dir));
+                let fallback_out_dir = fallback_project_root.join("source").join("collections");
+                std::fs::create_dir_all(&fallback_out_dir).with_context(|| {
+                    format!(
+                        "Failed to create configured infer output dir {} (original error: {}) and fallback dir {}",
+                        configured_out_dir.display(),
+                        err,
+                        fallback_out_dir.display()
+                    )
+                })?;
+                warn!(
+                    "Configured infer output dir {} is not writable; using fallback {}",
+                    configured_out_dir.display(),
+                    fallback_out_dir.display()
+                );
+                infer_fallback_root = Some(fallback_project_root.clone());
+                (fallback_project_root, fallback_out_dir)
+            }
+        };
+
         info!(
             "infer output root (local): {}",
             local_project_root.display()
@@ -1957,6 +1995,76 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         }
     }
 
+    if let Some(fallback_root) = infer_fallback_root.as_ref() {
+        if chained_config.is_some() {
+            if let Some(conf) = chained_config.as_ref() {
+                warn!(
+                    "Infer artifacts were written to fallback root {}; running chained to-pg/report on fallback project root",
+                    fallback_root.display()
+                );
+
+                let fallback_config_dir = fallback_root.join("config");
+                std::fs::create_dir_all(&fallback_config_dir).with_context(|| {
+                    format!(
+                        "Failed to create fallback config directory {}",
+                        fallback_config_dir.display()
+                    )
+                })?;
+                let fallback_config_path = fallback_config_dir.join(
+                    conf.file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("config.toml"),
+                );
+                std::fs::copy(conf, &fallback_config_path).with_context(|| {
+                    format!(
+                        "Failed to stage fallback config {} from {}",
+                        fallback_config_path.display(),
+                        conf.display()
+                    )
+                })?;
+
+                run_to_pg(
+                    ToPgArgs {
+                        collection: None,
+                        table: None,
+                        config: Some(fallback_config_path.clone()),
+                        output_dir: None,
+                        schema: None,
+                        project_dir: None,
+                    },
+                    true,
+                )?;
+
+                run_report(
+                    ReportArgs {
+                        mongo: UriArg { source_uri: None },
+                        config: Some(fallback_config_path),
+                        collections_dir: None,
+                        output: None,
+                        namespace: String::new(),
+                        project_dir: None,
+                        post_import: false,
+                        check_md5: true,
+                        noaggregate: false,
+                    },
+                    true,
+                )
+                .await?;
+
+                move_infer_artifacts_to_gcs_if_needed_with_project_root(
+                    conf,
+                    Some(fallback_root.as_path()),
+                )
+                .await?;
+            }
+            info!(
+                "Fallback infer pipeline completed under {} and artifacts uploaded to configured bucket.",
+                fallback_root.display()
+            );
+            return Ok(());
+        }
+    }
+
     if let Some(ref conf) = chained_config {
         run_to_pg(
             ToPgArgs {
@@ -2121,6 +2229,13 @@ fn infer_object_mime_type(file_path: &Path) -> &'static str {
 }
 
 async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
+    move_infer_artifacts_to_gcs_if_needed_with_project_root(conf, None).await
+}
+
+async fn move_infer_artifacts_to_gcs_if_needed_with_project_root(
+    conf: &Path,
+    project_root_override: Option<&Path>,
+) -> Result<()> {
     debug!(
         "[gcs] infer upload hook entered: config='{}'",
         conf.display()
@@ -2152,7 +2267,9 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
         .context("Failed to initialize Google Cloud Storage client")?;
     let bucket_resource = format!("projects/_/buckets/{bucket}");
 
-    let project_root = resolve_local_project_root_from_config(conf, &c);
+    let project_root = project_root_override
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| resolve_local_project_root_from_config(conf, &c));
     debug!(
         "[gcs] infer upload project root resolved: {}",
         project_root.display()
@@ -3180,7 +3297,7 @@ async fn infer_collection(
                     Ok(cur) => cur,
                     Err(e) => {
                         warn!(
-                            "  [warn] find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
+                            "find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
                             db_name,
                             coll_name,
                             chunk_index,
@@ -3214,7 +3331,7 @@ async fn infer_collection(
                                 Some(UnauthorizedRetryDecision::Retry) => {
                                     auth_retry_attempt += 1;
                                     warn!(
-                                        "  [warn] auth_retry namespace={}.{} chunk={}/{} processed={}/{} retry_attempt={}/{} reason={}",
+                                        "auth_retry namespace={}.{} chunk={}/{} processed={}/{} retry_attempt={}/{} reason={}",
                                         db_name,
                                         coll_name,
                                         chunk_index,
@@ -3229,7 +3346,7 @@ async fn infer_collection(
                                 }
                                 Some(UnauthorizedRetryDecision::Exhausted) => {
                                     warn!(
-                                        "  [warn] auth_retry_exhausted namespace={}.{} chunk={}/{} processed={}/{} retries={} reason={}",
+                                        "auth_retry_exhausted namespace={}.{} chunk={}/{} processed={}/{} retries={} reason={}",
                                         db_name,
                                         coll_name,
                                         chunk_index,
@@ -3250,7 +3367,7 @@ async fn infer_collection(
                                 }
                                 None => {
                                     warn!(
-                                        "  [warn] find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
+                                        "find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
                                         db_name,
                                         coll_name,
                                         chunk_index,
@@ -3284,7 +3401,7 @@ async fn infer_collection(
         Err(e) => {
             let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
             warn!(
-                "  [warn] $sample failed for {db_name}.{coll_name} \
+                "$sample failed for {db_name}.{coll_name} \
                  ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
             );
             find_fallback(
@@ -3307,8 +3424,8 @@ async fn infer_collection(
                     analyzer = Analyzer::new(true);
                     let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
                     warn!(
-                        "  [warn] $sample cursor error for {db_name}.{coll_name} \
-                             ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
+                        "$sample cursor error for {db_name}.{coll_name} \
+                            ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
                     );
                     find_fallback(
                         &collection,
@@ -3748,6 +3865,32 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
         statements
     }
 
+    fn grouped_key_index_statements(
+        table: &DdlTableMapping,
+        schema_name: Option<&str>,
+    ) -> Vec<String> {
+        let has_grouped_key_column = table
+            .columns
+            .iter()
+            .any(|column| column.name.eq_ignore_ascii_case("_key"));
+        if !has_grouped_key_column {
+            return Vec::new();
+        }
+
+        let index_name = format!("idx_{}_key", table.name);
+        let qualified_table = match schema_name {
+            Some(schema) => format!("{}.{}", quote_ident(schema), quote_ident(&table.name)),
+            None => quote_ident(&table.name),
+        };
+
+        vec![format!(
+            "CREATE INDEX IF NOT EXISTS {} ON {} ({});",
+            quote_ident(&index_name),
+            qualified_table,
+            quote_ident("_key")
+        )]
+    }
+
     let mut ddl_body = String::new();
 
     if let Some(schema) = schema_name {
@@ -3839,6 +3982,12 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
         let fk_indexes = fk_index_statements(table, schema_name);
         if !fk_indexes.is_empty() {
             ddl_body.push_str(&fk_indexes.join("\n"));
+            ddl_body.push_str("\n\n");
+        }
+
+        let grouped_key_indexes = grouped_key_index_statements(table, schema_name);
+        if !grouped_key_indexes.is_empty() {
+            ddl_body.push_str(&grouped_key_indexes.join("\n"));
             ddl_body.push_str("\n\n");
         }
     }
@@ -6334,12 +6483,9 @@ async fn stage_export_metadata_from_gcs(
         "source/collections".to_owned(),
     ];
     for subdir in collection_candidates {
-        for candidate in gcs_prefix_candidates_for_project_subdir(
-            prefix,
-            cluster_name,
-            project_dir,
-            &subdir,
-        ) {
+        for candidate in
+            gcs_prefix_candidates_for_project_subdir(prefix, cluster_name, project_dir, &subdir)
+        {
             let target_dir = if subdir.ends_with(&format!("/{db_name}")) {
                 staged_collections_root.join(db_name)
             } else {
@@ -6387,6 +6533,25 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         }
     }
 
+    fn count_supported_csv_files_recursive(root: &Path) -> usize {
+        let mut pending_dirs = vec![root.to_path_buf()];
+        let mut count = 0usize;
+        while let Some(dir) = pending_dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.filter_map(|entry| entry.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending_dirs.push(path);
+                } else if is_supported_import_csv_path(&path) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
     log_import_stage("start");
 
     apply_config_overrides(
@@ -6401,8 +6566,6 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     )?;
 
     let c = read_conf(&args.config)?;
-    let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
-    let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
     let target_schema = c.target_schema.clone();
     let target_uri = c
         .target_uri
@@ -6419,8 +6582,6 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     let target_database_name = c.target_database_name.as_deref().unwrap_or(db_name);
     let requested_collection = args.collection.as_deref().or(namespace_collection);
     let requested_collection_dir = requested_collection.map(sanitize_name);
-    let should_import_collection =
-        |name: &str| should_infer_collection(name, &conf_include, &conf_exclude);
 
     let storage_backend =
         resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
@@ -6428,7 +6589,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         ExportWriteBackend::LocalFs => configured_project_root(&c),
         ExportWriteBackend::Gcs { .. } => {
             let local_root = resolve_local_project_root_from_config(&args.config, &c);
-            info!(
+            debug!(
                 "import metadata root (local, read-only): {}",
                 local_root.display()
             );
@@ -6537,15 +6698,26 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                             )
                         })?;
                 if count > 0 {
-                    downloaded += count;
-                    info!(
-                        "staged {} import data files from gs://{}/{} into {}",
+                    let csv_count = count_supported_csv_files_recursive(&staged_data_root);
+                    if csv_count > 0 {
+                        downloaded += count;
+                        info!(
+                            "staged {} import data files from gs://{}/{} into {}",
+                            count,
+                            bucket,
+                            effective_prefix,
+                            staged_data_root.display()
+                        );
+                        break;
+                    }
+
+                    warn!(
+                        "staged {} files from gs://{}/{} but found no .csv/.csv.gz yet under {}; trying next candidate prefix",
                         count,
                         bucket,
                         effective_prefix,
                         staged_data_root.display()
                     );
-                    break;
                 }
             }
 
@@ -6594,25 +6766,35 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     log_import_stage("pg_connect_target_begin");
     let mut pg_client = connect_pg_client(&db_target_uri).await?;
 
-    let mut sql_files: Vec<PathBuf> = std::fs::read_dir(&tables_dir)
-        .with_context(|| format!("Cannot read {}", tables_dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("sql"))
-        .filter(|path| {
-            requested_collection_dir
-                .as_deref()
-                .map_or(true, |collection_dir| {
-                    path.file_stem().and_then(|stem| stem.to_str()) == Some(collection_dir)
-                })
-        })
-        .filter(|path| {
-            path.file_stem()
-                .and_then(|stem| stem.to_str())
-                .map(&should_import_collection)
-                .unwrap_or(false)
-        })
-        .collect();
+    let mut pending_dirs = vec![tables_dir.clone()];
+    let mut sql_files: Vec<PathBuf> = Vec::new();
+    while let Some(dir) = pending_dirs.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .with_context(|| format!("Cannot read {}", dir.display()))?
+            .filter_map(|entry| entry.ok())
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                pending_dirs.push(path);
+                continue;
+            }
+            sql_files.push(path);
+        }
+    }
+
+    sql_files.retain(|path| path.extension().and_then(|ext| ext.to_str()) == Some("sql"));
+    sql_files.retain(|path| {
+        requested_collection_dir
+            .as_deref()
+            .map_or(true, |collection_dir| {
+                path.file_stem().and_then(|stem| stem.to_str()) == Some(collection_dir)
+            })
+    });
+    sql_files.retain(|path| {
+        path.file_stem()
+            .and_then(|stem| stem.to_str())
+            .is_some_and(|name| !name.trim().is_empty())
+    });
     sql_files.sort();
 
     if sql_files.is_empty() {
@@ -6669,39 +6851,55 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     }
 
     log_import_stage("ddl_execute_done");
+    if import_metadata_stage.take().is_some() {
+        log_import_stage("gcs_stage_metadata_released");
+    }
 
-    let mut csv_candidates: Vec<PathBuf> = std::fs::read_dir(&data_db_dir)
-        .with_context(|| format!("Cannot read {}", data_db_dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.is_dir())
-        .filter(|path| {
-            requested_collection_dir
+    let mut pending_dirs = vec![data_db_dir.clone()];
+    let mut csv_candidates: Vec<PathBuf> = Vec::new();
+    while let Some(dir) = pending_dirs.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .with_context(|| format!("Cannot read {}", dir.display()))?
+            .filter_map(|entry| entry.ok())
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                pending_dirs.push(path);
+                continue;
+            }
+            if !is_supported_import_csv_path(&path) {
+                continue;
+            }
+
+            let table_name = match import_table_name_from_csv_path(&path) {
+                Some(name) => name,
+                None => continue,
+            };
+
+            let import_collection = path.strip_prefix(&data_db_dir).ok().and_then(|relative| {
+                let mut parts = relative.components();
+                let first = parts.next()?.as_os_str().to_str()?;
+                if parts.next().is_some() {
+                    Some(first)
+                } else {
+                    None
+                }
+            });
+
+            if !requested_collection_dir
                 .as_deref()
                 .map_or(true, |collection_dir| {
-                    path.file_name().and_then(|name| name.to_str()) == Some(collection_dir)
+                    import_collection == Some(collection_dir) || table_name == collection_dir
                 })
-        })
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(&should_import_collection)
-                .unwrap_or(false)
-        })
-        .flat_map(|collection_dir| {
-            std::fs::read_dir(&collection_dir)
-                .into_iter()
-                .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
-                .map(|entry| entry.path())
-                .filter(|path| is_supported_import_csv_path(path))
-                .filter(|path| {
-                    import_table_name_from_csv_path(path)
-                        .map(|table_name| allowed_table_names.contains(&table_name))
-                        .unwrap_or(false)
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
+            {
+                continue;
+            }
+
+            if allowed_table_names.contains(&table_name) {
+                csv_candidates.push(path);
+            }
+        }
+    }
 
     csv_candidates.sort();
     let mut csv_files_by_table: std::collections::HashMap<String, PathBuf> =
@@ -6780,6 +6978,8 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     }
     log_import_stage("truncate_done");
 
+    let mut imported_relations: Vec<(String, String)> = Vec::new();
+
     log_import_stage("copy_begin");
     for csv_path in &csv_files {
         let schema = target_schema
@@ -6794,7 +6994,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         let table = import_table_name_from_csv_path(csv_path.as_path())
             .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
         info!(
-            "Processing import file {} for {}.{}",
+            "Unzip and /COPY file {} into {}.{}",
             csv_path.display(),
             schema,
             table
@@ -6840,7 +7040,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         };
         let mut sink = pin!(sink);
         let streamed_bytes = if is_gz {
-            debug!(
+            info!(
                 "[import] copy_decompress_begin table={}.{} file={}",
                 schema,
                 table,
@@ -6858,7 +7058,6 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                         csv_path.display()
                     )
                 })?;
-
             let stdout = child.stdout.take().ok_or_else(|| {
                 anyhow!("Failed to capture gunzip stdout for {}", csv_path.display())
             })?;
@@ -6891,7 +7090,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                     stderr
                 ));
             }
-            debug!(
+            info!(
                 "[import] copy_decompress_done table={}.{} file={} streamed_bytes={}",
                 schema,
                 table,
@@ -6900,7 +7099,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             );
             streamed
         } else {
-            debug!(
+            info!(
                 "[import] copy_read_begin table={}.{} file={}",
                 schema,
                 table,
@@ -6912,7 +7111,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             let streamed = stream_reader_to_copy(file, &mut sink, 64 * 1024)
                 .await
                 .with_context(|| format!("Failed to stream CSV data for {}", csv_path.display()))?;
-            debug!(
+            info!(
                 "[import] copy_read_done table={}.{} file={} streamed_bytes={}",
                 schema,
                 table,
@@ -6941,11 +7140,37 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             csv_path.display(),
             streamed_bytes
         );
+        imported_relations.push((schema.to_owned(), table));
         log_import_stage("copy_table_done");
     }
 
     log_import_stage("transaction_commit_begin");
     transaction.commit().await?;
+
+    imported_relations.sort();
+    imported_relations.dedup();
+    log_import_stage("analyze_begin");
+    for (schema, table) in &imported_relations {
+        info!("Analyze imported table {}.{}", schema, table);
+        let analyze_sql = format!(
+            "ANALYZE {}.{}",
+            quote_ident(schema),
+            quote_ident(table)
+        );
+        if let Err(err) = pg_client.batch_execute(&analyze_sql).await {
+            return Err(anyhow!(
+                "Failed to analyze {}.{}\n{}",
+                schema,
+                table,
+                format_postgres_error(&err)
+            ));
+        }
+    }
+    log_import_stage("analyze_done");
+
+    if import_data_stage.take().is_some() {
+        log_import_stage("gcs_stage_data_released");
+    }
     info!("Import completed for database '{target_database_name}'.");
 
     let post_import_namespace = if namespace_collection.is_none() {
@@ -9110,7 +9335,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 // `report` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
 
-async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
+async fn run_report(mut args: ReportArgs, quiet: bool) -> Result<()> {
+    let mut _staged_config: Option<tempfile::TempDir> = None;
+    if let Some(config) = args.config.take() {
+        let (local, stage) = stage_config_path_if_gcs(config).await?;
+        args.config = Some(local);
+        _staged_config = stage;
+    }
+
     if let Some(conf) = args.config.as_deref() {
         apply_config_overrides(
             conf,
@@ -9204,7 +9436,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
         o.clone()
     } else if let (Some(ref dir), Some(ref _proj)) = (&reports_dir, &project_name) {
         std::fs::create_dir_all(dir)
-            .with_context(|| format!("Failed to create reports dir {}", dir.display()))?;
+            .with_context(|| format!("Can't create reports dir {}", dir.display()))?;
         dir.join("main.html")
     } else {
         PathBuf::from("main.html")
@@ -9326,6 +9558,55 @@ async fn write_post_import_report(
     source_uri_override: &str,
     include_md5: bool,
 ) -> Result<()> {
+    async fn upload_post_import_report_to_gcs(
+        output_path: &Path,
+        bucket: &str,
+        prefix: &str,
+        cluster_name: Option<&str>,
+        project_dir: &str,
+    ) -> Result<()> {
+        ensure_gcs_authentication().await?;
+        let storage = Storage::builder()
+            .build()
+            .await
+            .context("Failed to initialize Google Cloud Storage client")?;
+        let bucket_resource = format!("projects/_/buckets/{bucket}");
+
+        let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
+        let object_key = if effective_prefix.is_empty() {
+            "reports/post_report.html".to_owned()
+        } else {
+            format!("{effective_prefix}/reports/post_report.html")
+        };
+
+        let bytes = tokio::fs::read(output_path).await.with_context(|| {
+            format!(
+                "Cannot read post-import report for upload: {}",
+                output_path.display()
+            )
+        })?;
+
+        storage
+            .write_object(bucket_resource, object_key.clone(), Bytes::from(bytes))
+            .send_buffered()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to upload post-import report {} to gs://{}/{}",
+                    output_path.display(),
+                    bucket,
+                    object_key
+                )
+            })?;
+
+        info!(
+            "Post-import report uploaded to gs://{}/{}",
+            bucket, object_key
+        );
+
+        Ok(())
+    }
+
     let c = read_conf(conf)?;
     let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
     let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
@@ -9336,9 +9617,30 @@ async fn write_post_import_report(
         ExportWriteBackend::Gcs { .. } => resolve_local_project_root_from_config(conf, &c),
     };
     let reports_root = resolve_local_project_root_from_config(conf, &c);
-    let reports_dir = reports_root.join("reports");
-    std::fs::create_dir_all(&reports_dir)
-        .with_context(|| format!("Failed to create reports dir {}", reports_dir.display()))?;
+    let configured_reports_dir = reports_root.join("reports");
+    let reports_dir = match std::fs::create_dir_all(&configured_reports_dir) {
+        Ok(()) => configured_reports_dir,
+        Err(err) => {
+            let fallback_reports_dir = std::env::temp_dir()
+                .join("mongo2pg-reports")
+                .join(sanitize_name(&c.project_dir))
+                .join("reports");
+            std::fs::create_dir_all(&fallback_reports_dir).with_context(|| {
+                format!(
+                    "Can't create reports dir {} (original error: {}) and fallback dir {}",
+                    configured_reports_dir.display(),
+                    err,
+                    fallback_reports_dir.display()
+                )
+            })?;
+            info!(
+                "Can't create reports dir {}; using fallback {}",
+                configured_reports_dir.display(),
+                fallback_reports_dir.display()
+            );
+            fallback_reports_dir
+        }
+    };
 
     let namespace = if namespace_override.is_empty() {
         c.namespace.clone().ok_or_else(|| {
@@ -9379,7 +9681,7 @@ async fn write_post_import_report(
                 metadata_root = stage.path().to_path_buf();
                 schema_tables_root = metadata_root.join("schema").join("tables");
                 info!(
-                    "post-import metadata staged from GCS into temporary directory {}",
+                    "post-import report metadata staged from GCS into temporary directory {}",
                     metadata_root.display()
                 );
                 metadata_stage = Some(stage);
@@ -9417,6 +9719,17 @@ async fn write_post_import_report(
     std::fs::write(&output_path, html)
         .with_context(|| format!("Failed to write {}", output_path.display()))?;
     info!("Post-import report written to {}", output_path.display());
+
+    if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+        upload_post_import_report_to_gcs(
+            &output_path,
+            bucket,
+            prefix,
+            c.cluster_name.as_deref(),
+            &c.project_dir,
+        )
+        .await?;
+    }
 
     drop(metadata_stage);
 
@@ -10257,6 +10570,69 @@ async fn build_post_import_rows(
         }
     }
 
+    fn is_transient_pg_count_error(err: &tokio_postgres::Error) -> bool {
+        let message = err.to_string().to_ascii_lowercase();
+        message.contains("connection closed")
+            || message.contains("error communicating with the server")
+            || message.contains("server closed the connection")
+            || message.contains("connection reset")
+            || message.contains("broken pipe")
+            || message.contains("timed out")
+            || message.contains("timeout")
+    }
+
+    async fn query_pg_count_with_retry(
+        target_uri: &str,
+        qualified_name: &str,
+        count_sql: &str,
+    ) -> Result<i64> {
+        const RETRY_MAX: u32 = 2;
+        let mut attempt = 0_u32;
+        loop {
+            attempt += 1;
+            let pg_client = connect_pg_client(target_uri).await.with_context(|| {
+                format!(
+                    "{}: failed during PostgreSQL count connection setup",
+                    connection_failed_context("pg", "connect")
+                )
+            })?;
+
+            match pg_client.query_one(count_sql, &[]).await {
+                Ok(row) => {
+                    let row_count: i64 = row.get(0);
+                    return Ok(row_count);
+                }
+                Err(err) if attempt <= RETRY_MAX && is_transient_pg_count_error(&err) => {
+                    warn!(
+                        "retrying PostgreSQL row count for {} attempt={}/{} due to transient error: {}",
+                        qualified_name,
+                        attempt,
+                        RETRY_MAX + 1,
+                        err
+                    );
+                    continue;
+                }
+                Err(err) => {
+                    return Err(err).with_context(|| {
+                        format!("Failed to count PostgreSQL rows in {qualified_name}")
+                    });
+                }
+            }
+        }
+    }
+
+    fn quote_sql_literal(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+
+    fn grouped_table_key_filter_value(coll_name: &str, table_name: &str) -> Option<String> {
+        coll_name
+            .strip_prefix(table_name)
+            .and_then(|rest| rest.strip_prefix('_'))
+            .filter(|suffix| !suffix.is_empty())
+            .map(str::to_owned)
+    }
+
     let (db_name, only_collection) = split_namespace_scope(namespace);
 
     let mongo_client = Client::with_uri_str(source_uri).await.with_context(|| {
@@ -10290,13 +10666,6 @@ async fn build_post_import_rows(
         collections_root.to_path_buf()
     };
 
-    let pg_client = connect_pg_client(target_uri).await.with_context(|| {
-        format!(
-            "{}: failed during post-import PostgreSQL connection setup",
-            connection_failed_context("pg", "connect")
-        )
-    })?;
-
     let total_collections = collection_names.len();
     let mut global_table_rows: HashMap<String, PostImportTableRow> = HashMap::new();
     let mut rows = Vec::new();
@@ -10319,7 +10688,6 @@ async fn build_post_import_rows(
             if let Some(grouped_lookup) =
                 resolve_grouped_sql_lookup_name(&collections_dir_for_lookup, &coll_name)
             {
-
                 if !sql_path.is_file() {
                     let grouped_sql_path = ddl_dir.join(format!("{}.sql", grouped_lookup));
                     if grouped_sql_path.is_file() {
@@ -10333,6 +10701,28 @@ async fn build_post_import_rows(
                         .join(format!("{}.json", grouped_lookup));
                     if grouped_schema_path.is_file() {
                         schema_path = grouped_schema_path;
+                    }
+                }
+            }
+
+            if !sql_path.is_file() || !schema_path.is_file() {
+                if let Some((group_prefix, _)) = coll_name.split_once('_') {
+                    let safe_group_prefix = group_prefix.replace('/', "_");
+
+                    if !sql_path.is_file() {
+                        let grouped_sql_path = ddl_dir.join(format!("{}.sql", safe_group_prefix));
+                        if grouped_sql_path.is_file() {
+                            sql_path = grouped_sql_path;
+                        }
+                    }
+
+                    if !schema_path.is_file() {
+                        let grouped_schema_path = collections_dir_for_lookup
+                            .join(&safe_group_prefix)
+                            .join(format!("{}.json", safe_group_prefix));
+                        if grouped_schema_path.is_file() {
+                            schema_path = grouped_schema_path;
+                        }
                     }
                 }
             }
@@ -10356,14 +10746,26 @@ async fn build_post_import_rows(
                     Some(schema) => format!("{}.{}", quote_ident(schema), quote_ident(&table.name)),
                     None => quote_ident(&table.name),
                 };
-                let count_sql = format!("SELECT COUNT(*)::BIGINT FROM {qualified_name}");
-                let row = pg_client
-                    .query_one(&count_sql, &[])
-                    .await
-                    .with_context(|| {
-                        format!("Failed to count PostgreSQL rows in {qualified_name}")
-                    })?;
-                let row_count: i64 = row.get(0);
+                let grouped_key_filter = if table
+                    .columns
+                    .iter()
+                    .any(|column| column.name.eq_ignore_ascii_case("_key"))
+                {
+                    grouped_table_key_filter_value(&coll_name, &table.name)
+                } else {
+                    None
+                };
+                let count_sql = if let Some(grouped_key) = grouped_key_filter {
+                    format!(
+                        "SELECT COUNT(*)::BIGINT FROM {qualified_name} WHERE {} = {}",
+                        quote_ident("_key"),
+                        quote_sql_literal(&grouped_key)
+                    )
+                } else {
+                    format!("SELECT COUNT(*)::BIGINT FROM {qualified_name}")
+                };
+                let row_count =
+                    query_pg_count_with_retry(target_uri, &qualified_name, &count_sql).await?;
                 table_rows.insert(
                     table.name.clone(),
                     PostImportTableRow {
@@ -10433,8 +10835,10 @@ async fn build_post_import_rows(
                         .collect::<HashMap<_, _>>(),
                     Err(err) => {
                         warn!(
-                            "failed to compute md5 summary for {}.{}: {}",
-                            db_name, coll_name, err
+                            "failed to compute md5 summary for {}.{}: {:#} (non-fatal; rowcount-diff phase will retry md5 for mismatched tables)",
+                            db_name,
+                            coll_name,
+                            err
                         );
                         HashMap::new()
                     }
@@ -10474,11 +10878,41 @@ async fn build_post_import_rows(
                 .with_context(|| {
                     format!("Failed to scan MongoDB documents for {db_name}.{coll_name}")
                 })?;
+            info!(
+                "[{}/{}] 🔎 scan nested MongoDB fields for {}.{} (docs={})",
+                index + 1,
+                total_collections,
+                db_name,
+                coll_name,
+                document_count
+            );
+            let mut scanned_docs: usize = 0;
+            let nested_scan_log_every: usize = 10_000;
             while let Some(doc) = cursor.try_next().await.with_context(|| {
                 format!("Failed to iterate MongoDB documents for {db_name}.{coll_name}")
             })? {
                 count_children(&mut root.children, &doc);
+                scanned_docs += 1;
+                if scanned_docs % nested_scan_log_every == 0 {
+                    info!(
+                        "[{}/{}]↳ scanned {} / {} MongoDB docs for {}.{} nested counts",
+                        index + 1,
+                        total_collections,
+                        scanned_docs,
+                        document_count,
+                        db_name,
+                        coll_name,
+                    );
+                }
             }
+            info!(
+                "[{}/{}] ✅ nested MongoDB scan complete for {}.{} (scanned={})",
+                index + 1,
+                total_collections,
+                db_name,
+                coll_name,
+                scanned_docs
+            );
 
             let mut mismatch_tables = Vec::new();
             collect_rowcount_mismatch_tables(&root, &mut mismatch_tables);
@@ -10548,7 +10982,7 @@ async fn build_post_import_rows(
                         }
                         Err(err) => {
                             warn!(
-                                "failed to collect count differences for {}.{}: {}",
+                                "failed to collect count differences for {}.{}: {:#}",
                                 db_name, coll_name, err
                             );
                         }
@@ -10577,6 +11011,11 @@ async fn build_post_import_rows(
             document_count,
             root,
         });
+        info!(
+            "[{}/{}] ✅ post-import report collection completed",
+            index + 1,
+            total_collections
+        );
     }
 
     Ok(rows)
@@ -12266,6 +12705,35 @@ CREATE TABLE demo (
 
         assert!(sql.contains(
             "CREATE INDEX IF NOT EXISTS \"idx_child_parent_a_parent_b\" ON \"child\" (\"parent_a\", \"parent_b\");"
+        ));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_adds_index_for_grouped_key_column() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "events".to_owned(),
+                columns: vec![
+                    super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "BIGSERIAL".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    super::DdlColumnMapping {
+                        name: "_key".to_owned(),
+                        sql_type: "TEXT".to_owned(),
+                        nullable: true,
+                        primary_key: false,
+                    },
+                ],
+                foreign_keys: Vec::new(),
+            }],
+            Some("dbapi"),
+        );
+
+        assert!(sql.contains(
+            "CREATE INDEX IF NOT EXISTS \"idx_events_key\" ON \"dbapi\".\"events\" (\"_key\");"
         ));
     }
 
