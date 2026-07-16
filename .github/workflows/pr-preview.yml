@@ -3,7 +3,7 @@ name: PR Preview Build
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
     paths:
       - "src/**"
       - "Cargo.toml"
@@ -20,6 +20,7 @@ concurrency:
 jobs:
   test:
     name: Test
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.0
@@ -42,6 +43,7 @@ jobs:
 
   build:
     name: Build – ${{ matrix.target }}
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     needs: test
     runs-on: ${{ matrix.os }}
     strategy:
@@ -107,6 +109,7 @@ jobs:
 
   preview-release:
     name: Publish PR preview release
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     needs: build
     runs-on: ubuntu-latest
     env:
@@ -177,7 +180,7 @@ jobs:
 
   cleanup:
     name: Delete preview release on PR close
-    if: github.event.action == 'closed'
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Delete preview release and tag
