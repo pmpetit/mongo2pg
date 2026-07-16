@@ -4,6 +4,7 @@ pub struct TestHarness {
     _pg_container: Box<dyn std::any::Any>,
     _mongo_container: Box<dyn std::any::Any>,
     pub pg_client: tokio_postgres::Client,
+    pub pg_read_client: tokio_postgres::Client,
     pub mongo_collection: mongodb::Collection<bson::Document>,
     pub schema_name: Option<String>,
     pub table_name: String,
@@ -46,10 +47,17 @@ impl TestHarness {
         let pg_conn_str =
             format!("postgres://postgres:postgres@localhost:{pg_port}/postgres?sslmode=disable");
         let (pg_client, pg_connection) = tokio_postgres::connect(&pg_conn_str, NoTls).await?;
+        let (pg_read_client, pg_read_connection) =
+            tokio_postgres::connect(&pg_conn_str, NoTls).await?;
 
         tokio::spawn(async move {
             if let Err(err) = pg_connection.await {
                 eprintln!("PostgreSQL connection error: {err}");
+            }
+        });
+        tokio::spawn(async move {
+            if let Err(err) = pg_read_connection.await {
+                eprintln!("PostgreSQL read connection error: {err}");
             }
         });
 
@@ -196,16 +204,11 @@ impl TestHarness {
             _pg_container: Box::new(pg_container),
             _mongo_container: Box::new(mongo_container),
             pg_client,
+            pg_read_client,
             mongo_collection,
             schema_name,
             table_name,
             document: base_document,
         })
-    }
-
-    pub async fn get_mongo_cursor(
-        &self,
-    ) -> Result<mongodb::Cursor<bson::Document>, mongodb::error::Error> {
-        self.mongo_collection.find(bson::doc! {}).await
     }
 }

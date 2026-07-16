@@ -153,11 +153,11 @@ pub async fn ensure_gcs_authentication() -> Result<()> {
 
     match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
         Ok(path) => debug!(
-            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS is set (adc_source=key_file path='{}')",
+            "[gcs] auth preflight: GOOGLE_APPLICATION_CREDENTIALS is set (adc_source=key_file path='{}')",
             path
         ),
         Err(_) => debug!(
-            "[gcs-debug] auth preflight: GOOGLE_APPLICATION_CREDENTIALS not set (adc_source=metadata_or_default)"
+            "[gcs] auth preflight: GOOGLE_APPLICATION_CREDENTIALS not set (adc_source=metadata_or_default)"
         ),
     }
 
@@ -186,11 +186,7 @@ pub async fn ensure_gcs_authentication() -> Result<()> {
 async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
     ensure_gcs_authentication().await?;
     let storage_control = StorageControl::builder().build().await.map_err(|err| {
-        format_categorized_cloud_error(
-            "preflight",
-            &format!("bucket {bucket}"),
-            &anyhow!(err),
-        )
+        format_categorized_cloud_error("preflight", &format!("bucket {bucket}"), &anyhow!(err))
     })?;
     let bucket_resource = format!("projects/_/buckets/{bucket}");
     storage_control
@@ -199,11 +195,7 @@ async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
         .send()
         .await
         .map_err(|err| {
-            format_categorized_cloud_error(
-                "preflight",
-                &format!("bucket {bucket}"),
-                &anyhow!(err),
-            )
+            format_categorized_cloud_error("preflight", &format!("bucket {bucket}"), &anyhow!(err))
         })?;
     Ok(())
 }
@@ -211,7 +203,12 @@ async fn preflight_gcs_destination(bucket: &str) -> Result<()> {
 fn gcs_preflight_enabled() -> bool {
     std::env::var("MONGO2PG_GCS_PREFLIGHT")
         .ok()
-        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|value| {
+            matches!(
+                value.to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false)
 }
 
@@ -236,7 +233,7 @@ async fn upload_export_files_to_gcs(
     prefix: &str,
 ) -> Result<()> {
     debug!(
-        "[gcs-debug] export upload start: bucket='{}' prefix='{}' db='{}' sql='{}' local_dir='{}'",
+        "[gcs] export upload start: bucket='{}' prefix='{}' db='{}' sql='{}' local_dir='{}'",
         bucket,
         prefix.trim_matches('/'),
         db_name,
@@ -244,11 +241,7 @@ async fn upload_export_files_to_gcs(
         out_dir.display()
     );
     let storage = Storage::builder().build().await.map_err(|err| {
-        format_categorized_cloud_error(
-            "upload_init",
-            &format!("bucket {bucket}"),
-            &anyhow!(err),
-        )
+        format_categorized_cloud_error("upload_init", &format!("bucket {bucket}"), &anyhow!(err))
     })?;
     let bucket_resource = format!("projects/_/buckets/{bucket}");
     let mut uploaded_files = 0usize;
@@ -273,7 +266,7 @@ async fn upload_export_files_to_gcs(
             .with_context(|| format!("Cannot read staged export file {}", path.display()))?;
 
         debug!(
-            "[gcs-debug] export upload object: {} -> gs://{}/{}",
+            "[gcs] export upload object: {} -> gs://{}/{}",
             path.display(),
             bucket,
             object_name
@@ -296,7 +289,7 @@ async fn upload_export_files_to_gcs(
         uploaded_files += 1;
     }
     debug!(
-        "[gcs-debug] export upload done: uploaded_files={} bucket='{}' prefix='{}'",
+        "[gcs] export upload done: uploaded_files={} bucket='{}' prefix='{}'",
         uploaded_files,
         bucket,
         prefix.trim_matches('/'),
@@ -336,9 +329,7 @@ fn flush_pending_rows_to_writers(
     Ok(())
 }
 
-fn finish_writers(
-    writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>>,
-) -> Result<()> {
+fn finish_writers(writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>>) -> Result<()> {
     for (table_name, writer) in writers {
         writer
             .finish()
@@ -695,7 +686,12 @@ fn csv_escape(s: &str) -> String {
 
 fn csv_cell_text(cell: Option<&str>) -> String {
     match cell {
-        Some(text) => csv_escape(text),
+        Some(text) => {
+            // PostgreSQL COPY rejects embedded NUL bytes (0x00).
+            // Drop them during export so malformed source strings do not break import.
+            let sanitized = text.replace('\0', "");
+            csv_escape(&sanitized)
+        }
         None => String::new(),
     }
 }
@@ -2406,6 +2402,7 @@ pub async fn export_collections_to_sql(
     backend: &ExportWriteBackend,
 ) -> Result<()> {
     const PROGRESS_LOG_EVERY_DOCS: u64 = 10_000;
+    const CURSOR_RETRY_MAX: u32 = 5;
 
     if coll_names.is_empty() {
         return Ok(());
@@ -2428,9 +2425,7 @@ pub async fn export_collections_to_sql(
                 );
             }
         } else {
-            info!(
-                "-> export preflight: skipped (set MONGO2PG_GCS_PREFLIGHT=1 to enable)"
-            );
+            info!("-> export preflight: skipped (set MONGO2PG_GCS_PREFLIGHT=1 to enable)");
         }
     }
 
@@ -2551,7 +2546,7 @@ pub async fn export_collections_to_sql(
     let total_sources = coll_names.len();
     for (source_index, coll_name) in coll_names.iter().enumerate() {
         info!(
-            "-> export source [{}/{}]: {}.{} -> {}.sql",
+            "-> export source [{}/{}]: {}.{} -> {}.csv.gz",
             source_index + 1,
             total_sources,
             db_name,
@@ -2591,56 +2586,110 @@ pub async fn export_collections_to_sql(
 
         let db = client.database(db_name);
         let collection = db.collection::<bson::Document>(coll_name);
-        let mut cursor = collection
-            .find(bson::doc! {})
-            .await
-            .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
         let mut source_docs_exported = 0_u64;
+        let mut last_seen_id: Option<Bson> = None;
+        let mut cursor_retry_attempt = 0_u32;
 
-        while let Some(doc) = cursor.try_next().await.context("Cursor error")? {
-            source_docs_exported += 1;
-            if source_docs_exported % PROGRESS_LOG_EVERY_DOCS == 0 {
-                info!(
-                    "progress {}.{}: {} docs exported",
-                    db_name, coll_name, source_docs_exported
-                );
-            }
+        'cursor_stream: loop {
+            let find_filter = match &last_seen_id {
+                Some(last_id) => bson::doc! { "_id": { "$gt": last_id.clone() } },
+                None => bson::doc! {},
+            };
 
-            let bson_val = Bson::Document(doc);
-            for root in &roots {
-                extract_rows_with_mapping(
-                    &bson_val,
-                    root,
-                    None,
-                    true,
-                    &mut all_rows,
-                    &mut counters,
-                    &root_target_to_source,
-                    &root_target_to_literal,
-                );
-            }
+            let mut cursor = collection
+                .find(find_filter)
+                .no_cursor_timeout(true)
+                .await
+                .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
 
-            for (table_name, rows) in all_rows.drain() {
-                let Some(writer) = writers.get_mut(&table_name) else {
-                    warn!(
-                        "Skipping {} rows for unknown table '{}'",
-                        rows.len(),
-                        table_name
-                    );
-                    continue;
+            loop {
+                let next_doc = match cursor.try_next().await {
+                    Ok(value) => value,
+                    Err(err) => {
+                        if cursor_retry_attempt < CURSOR_RETRY_MAX {
+                            cursor_retry_attempt += 1;
+                            warn!(
+                                "cursor stream retry {}/{} for {}.{} after {} docs (last_id={}): {:#}",
+                                cursor_retry_attempt,
+                                CURSOR_RETRY_MAX,
+                                db_name,
+                                coll_name,
+                                source_docs_exported,
+                                last_seen_id
+                                    .as_ref()
+                                    .map(|id| id.to_string())
+                                    .unwrap_or_else(|| "<begin>".to_owned()),
+                                err
+                            );
+                            continue 'cursor_stream;
+                        }
+
+                        return Err(anyhow!(
+                            "Cursor error after {} retry attempts for {}.{} (docs_exported={}, last_id={}): {:#}",
+                            CURSOR_RETRY_MAX,
+                            db_name,
+                            coll_name,
+                            source_docs_exported,
+                            last_seen_id
+                                .as_ref()
+                                .map(|id| id.to_string())
+                                .unwrap_or_else(|| "<begin>".to_owned()),
+                            err
+                        ));
+                    }
                 };
-                for row in rows {
-                    let line: Vec<String> = row
-                        .iter()
-                        .map(|value| csv_cell_text(value.as_deref()))
-                        .collect();
-                    writeln!(writer, "{}", line.join(",")).with_context(|| {
-                        format!(
-                            "Cannot append CSV row for table '{}' in {}",
-                            table_name,
-                            out_dir.display()
-                        )
-                    })?;
+
+                let Some(doc) = next_doc else {
+                    break 'cursor_stream;
+                };
+
+                cursor_retry_attempt = 0;
+                last_seen_id = doc.get("_id").cloned().or(last_seen_id);
+
+                source_docs_exported += 1;
+                if source_docs_exported % PROGRESS_LOG_EVERY_DOCS == 0 {
+                    info!(
+                        "progress {}.{}: {} docs exported",
+                        db_name, coll_name, source_docs_exported
+                    );
+                }
+
+                let bson_val = Bson::Document(doc);
+                for root in &roots {
+                    extract_rows_with_mapping(
+                        &bson_val,
+                        root,
+                        None,
+                        true,
+                        &mut all_rows,
+                        &mut counters,
+                        &root_target_to_source,
+                        &root_target_to_literal,
+                    );
+                }
+
+                for (table_name, rows) in all_rows.drain() {
+                    let Some(writer) = writers.get_mut(&table_name) else {
+                        warn!(
+                            "Skipping {} rows for unknown table '{}'",
+                            rows.len(),
+                            table_name
+                        );
+                        continue;
+                    };
+                    for row in rows {
+                        let line: Vec<String> = row
+                            .iter()
+                            .map(|value| csv_cell_text(value.as_deref()))
+                            .collect();
+                        writeln!(writer, "{}", line.join(",")).with_context(|| {
+                            format!(
+                                "Cannot append CSV row for table '{}' in {}",
+                                table_name,
+                                out_dir.display()
+                            )
+                        })?;
+                    }
                 }
             }
         }

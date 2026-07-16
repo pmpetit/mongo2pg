@@ -18,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::pin::pin;
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
@@ -27,7 +28,6 @@ use bytes::Bytes;
 use chrono::Utc;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use env_logger::Builder as EnvLoggerBuilder;
-use flate2::read::GzDecoder;
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use google_cloud_storage::client::{Storage, StorageControl};
 use indexmap::IndexMap;
@@ -35,7 +35,7 @@ use log::{debug, info, warn, Level, LevelFilter};
 use mongo2pg::analyzer::{
     Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
-use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
+use mongo2pg::checkmd5::compute_md5_summaries_for_collection_with_collections_root;
 // use mongo2pg::checkmd5::run_check_md5;
 use mongo2pg::export::{
     ensure_gcs_authentication, export_collections_to_sql, resolve_export_write_backend,
@@ -55,9 +55,8 @@ use mongo2pg::stats::{
 };
 use mongo2pg::to_pg::schema_to_ddl_with_timestamp_fields;
 use mongo2pg::util::{
-    can_inline_object_fields, flatten_grouped_root_array_object_fields,
+    can_inline_object_fields, configured_project_root, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
-    configured_project_root,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
     inline_object_leaf_fields_with_prefix, is_pg_reserved, objectid_hex_to_uuid,
     property_filter_entries_for_collection, read_conf, sanitize, scalar_type_family,
@@ -72,6 +71,7 @@ use rdkafka::ClientConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strsim::jaro_winkler;
+use tokio::io::AsyncReadExt;
 use toml::{map::Map as TomlMap, Value as TomlValue};
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -458,7 +458,8 @@ struct KafkaImportArgs {
 async fn main() -> Result<()> {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    let _config_stages = stage_cli_config_paths(&mut cli).await?;
 
     let log_level = resolve_effective_log_level(&cli)?;
     init_runtime_logger(log_level)?;
@@ -727,6 +728,190 @@ fn validate_target_uri(uri: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+fn parse_gcs_uri(uri: &str) -> Result<Option<(String, String)>> {
+    let raw = uri.trim();
+    let Some(remainder) = raw
+        .strip_prefix("gs://")
+        .or_else(|| raw.strip_prefix("gs:/"))
+    else {
+        return Ok(None);
+    };
+
+    let trimmed = remainder.trim_matches('/');
+    let (bucket, object) = trimmed
+        .split_once('/')
+        .map_or((trimmed, ""), |(bucket, object)| (bucket, object));
+
+    if bucket.is_empty() {
+        return Err(anyhow!(
+            "Invalid config URI '{}': missing bucket name after gs://",
+            uri
+        ));
+    }
+    if object.is_empty() {
+        return Err(anyhow!(
+            "Invalid config URI '{}': missing object path after bucket name",
+            uri
+        ));
+    }
+
+    Ok(Some((bucket.to_owned(), object.to_owned())))
+}
+
+async fn download_gcs_object_bytes(bucket: &str, object: &str) -> Result<Vec<u8>> {
+    ensure_gcs_authentication().await?;
+
+    let storage = Storage::builder()
+        .build()
+        .await
+        .with_context(|| format!("Failed to initialize GCS client for gs://{bucket}/{object}"))?;
+
+    let bucket_resource = format!("projects/_/buckets/{bucket}");
+    let mut reader = storage
+        .read_object(bucket_resource, object.to_owned())
+        .send()
+        .await
+        .with_context(|| format!("Failed to open gs://{bucket}/{object}"))?;
+
+    let mut bytes = Vec::new();
+    while let Some(chunk) = reader.next().await {
+        let chunk = chunk.with_context(|| format!("Failed reading gs://{bucket}/{object}"))?;
+        bytes.extend_from_slice(&chunk);
+    }
+
+    Ok(bytes)
+}
+
+async fn stage_config_path_if_gcs(
+    config_path: PathBuf,
+) -> Result<(PathBuf, Option<tempfile::TempDir>)> {
+    let raw = config_path.to_string_lossy().to_string();
+    let Some((bucket, object)) = parse_gcs_uri(&raw)? else {
+        return Ok((config_path, None));
+    };
+
+    // Guard against malformed values where a local path is accidentally appended
+    // after the config object path (for example: gs://.../config.toml/tmp/... ).
+    let object = [".toml/", ".yaml/", ".yml/"]
+        .iter()
+        .find_map(|marker| {
+            object
+                .find(marker)
+                .map(|idx| object[..idx + marker.len() - 1].to_owned())
+        })
+        .unwrap_or(object);
+
+    let bytes = download_gcs_object_bytes(&bucket, &object).await?;
+    let stage = tempfile::Builder::new()
+        .prefix("mongo2pg-gcs-config-")
+        .tempdir()
+        .context("Cannot create temporary config staging directory")?;
+
+    let file_name = Path::new(&object)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("config.toml");
+    let local_path = stage.path().join(file_name);
+
+    tokio::fs::write(&local_path, bytes)
+        .await
+        .with_context(|| format!("Failed to stage config file {}", local_path.display()))?;
+
+    info!(
+        "staged config file from gs://{}/{} into {}",
+        bucket,
+        object,
+        local_path.display()
+    );
+
+    Ok((local_path, Some(stage)))
+}
+
+async fn stage_cli_config_paths(cli: &mut Cli) -> Result<Vec<tempfile::TempDir>> {
+    let mut stages = Vec::new();
+
+    match &mut cli.command {
+        Some(Command::Infer(args)) => {
+            if let Some(config) = args.config.take() {
+                let (local, stage) = stage_config_path_if_gcs(config).await?;
+                args.config = Some(local);
+                if let Some(stage) = stage {
+                    stages.push(stage);
+                }
+            }
+        }
+        Some(Command::ToPg(args)) => {
+            if let Some(config) = args.config.take() {
+                let (local, stage) = stage_config_path_if_gcs(config).await?;
+                args.config = Some(local);
+                if let Some(stage) = stage {
+                    stages.push(stage);
+                }
+            }
+        }
+        Some(Command::Report(args)) => {
+            if let Some(config) = args.config.take() {
+                let (local, stage) = stage_config_path_if_gcs(config).await?;
+                args.config = Some(local);
+                if let Some(stage) = stage {
+                    stages.push(stage);
+                }
+            }
+        }
+        Some(Command::Export(args)) => {
+            if let Some(config) = args.config.take() {
+                let (local, stage) = stage_config_path_if_gcs(config).await?;
+                args.config = Some(local);
+                if let Some(stage) = stage {
+                    stages.push(stage);
+                }
+            }
+        }
+        Some(Command::Import(args)) => {
+            let config = std::mem::take(&mut args.config);
+            let (local, stage) = stage_config_path_if_gcs(config).await?;
+            args.config = local;
+            if let Some(stage) = stage {
+                stages.push(stage);
+            }
+        }
+        Some(Command::ClusterReport(args)) => {
+            let mut local_configs = Vec::with_capacity(args.configs.len());
+            for config in args.configs.drain(..) {
+                let (local, stage) = stage_config_path_if_gcs(config).await?;
+                local_configs.push(local);
+                if let Some(stage) = stage {
+                    stages.push(stage);
+                }
+            }
+            args.configs = local_configs;
+        }
+        Some(Command::KafkaImport(args)) => {
+            let config = std::mem::take(&mut args.config);
+            let (local, stage) = stage_config_path_if_gcs(config).await?;
+            args.config = local;
+            if let Some(stage) = stage {
+                stages.push(stage);
+            }
+        }
+        Some(Command::Init(_)) => {}
+        None => {
+            if let Some(args) = &mut cli.infer {
+                if let Some(config) = args.config.take() {
+                    let (local, stage) = stage_config_path_if_gcs(config).await?;
+                    args.config = Some(local);
+                    if let Some(stage) = stage {
+                        stages.push(stage);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(stages)
 }
 
 #[derive(Default)]
@@ -1226,9 +1411,7 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
     let (collections_dir, output_dir) = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
         let local_project_root = resolve_local_project_root_from_config(conf, &c);
-        let cols = local_project_root
-            .join("source")
-            .join("collections");
+        let cols = local_project_root.join("source").join("collections");
         let sql_out = local_project_root.join("schema").join("tables");
         (cols, sql_out)
     } else {
@@ -1530,6 +1713,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     let chained_config = args.config.clone();
     let chained_output_dir = args.output_dir.clone();
     let quiet_infer = chained_config.is_some();
+    let mut infer_fallback_root: Option<PathBuf> = None;
     // Resolve SOURCE_URI, namespace, number, and percent – reading conf file if -c was given
     let (
         resolved_source_uri,
@@ -1560,9 +1744,38 @@ async fn run_infer(args: InferArgs) -> Result<()> {
                 "--output-dir is ignored when --config is set; infer outputs are written under base_dir/project_dir/source/collections"
             );
         }
-        let local_project_root = resolve_local_project_root_from_config(conf, &c);
-        let out_dir = local_project_root.join("source").join("collections");
-        info!("infer output root (local): {}", local_project_root.display());
+        let configured_project_root = resolve_local_project_root_from_config(conf, &c);
+        let configured_out_dir = configured_project_root.join("source").join("collections");
+
+        let (local_project_root, out_dir) = match std::fs::create_dir_all(&configured_out_dir) {
+            Ok(()) => (configured_project_root, configured_out_dir),
+            Err(err) => {
+                let fallback_project_root = std::env::temp_dir()
+                    .join("mongo2pg-infer")
+                    .join(sanitize_name(&c.project_dir));
+                let fallback_out_dir = fallback_project_root.join("source").join("collections");
+                std::fs::create_dir_all(&fallback_out_dir).with_context(|| {
+                    format!(
+                        "Failed to create configured infer output dir {} (original error: {}) and fallback dir {}",
+                        configured_out_dir.display(),
+                        err,
+                        fallback_out_dir.display()
+                    )
+                })?;
+                warn!(
+                    "Configured infer output dir {} is not writable; using fallback {}",
+                    configured_out_dir.display(),
+                    fallback_out_dir.display()
+                );
+                infer_fallback_root = Some(fallback_project_root.clone());
+                (fallback_project_root, fallback_out_dir)
+            }
+        };
+
+        info!(
+            "infer output root (local): {}",
+            local_project_root.display()
+        );
         (
             source_uri,
             Some(out_dir),
@@ -1782,6 +1995,76 @@ async fn run_infer(args: InferArgs) -> Result<()> {
         }
     }
 
+    if let Some(fallback_root) = infer_fallback_root.as_ref() {
+        if chained_config.is_some() {
+            if let Some(conf) = chained_config.as_ref() {
+                warn!(
+                    "Infer artifacts were written to fallback root {}; running chained to-pg/report on fallback project root",
+                    fallback_root.display()
+                );
+
+                let fallback_config_dir = fallback_root.join("config");
+                std::fs::create_dir_all(&fallback_config_dir).with_context(|| {
+                    format!(
+                        "Failed to create fallback config directory {}",
+                        fallback_config_dir.display()
+                    )
+                })?;
+                let fallback_config_path = fallback_config_dir.join(
+                    conf.file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("config.toml"),
+                );
+                std::fs::copy(conf, &fallback_config_path).with_context(|| {
+                    format!(
+                        "Failed to stage fallback config {} from {}",
+                        fallback_config_path.display(),
+                        conf.display()
+                    )
+                })?;
+
+                run_to_pg(
+                    ToPgArgs {
+                        collection: None,
+                        table: None,
+                        config: Some(fallback_config_path.clone()),
+                        output_dir: None,
+                        schema: None,
+                        project_dir: None,
+                    },
+                    true,
+                )?;
+
+                run_report(
+                    ReportArgs {
+                        mongo: UriArg { source_uri: None },
+                        config: Some(fallback_config_path),
+                        collections_dir: None,
+                        output: None,
+                        namespace: String::new(),
+                        project_dir: None,
+                        post_import: false,
+                        check_md5: true,
+                        noaggregate: false,
+                    },
+                    true,
+                )
+                .await?;
+
+                move_infer_artifacts_to_gcs_if_needed_with_project_root(
+                    conf,
+                    Some(fallback_root.as_path()),
+                )
+                .await?;
+            }
+            info!(
+                "Fallback infer pipeline completed under {} and artifacts uploaded to configured bucket.",
+                fallback_root.display()
+            );
+            return Ok(());
+        }
+    }
+
     if let Some(ref conf) = chained_config {
         run_to_pg(
             ToPgArgs {
@@ -1815,9 +2098,7 @@ async fn run_infer(args: InferArgs) -> Result<()> {
     }
 
     if chained_config.is_none() {
-        debug!(
-            "[gcs-debug] infer upload hook skipped: infer ran without -c config"
-        );
+        debug!("[gcs] infer upload hook skipped: infer ran without -c config");
         if let Some(output_dir) = args.output_dir.as_deref() {
             info!(
                 "Inference completed. Collection schemas and statistics were written under {}.",
@@ -1889,8 +2170,8 @@ fn collect_files_recursive(root: &Path) -> Result<Vec<PathBuf>> {
         return Ok(files);
     }
 
-    for entry in
-        std::fs::read_dir(root).with_context(|| format!("Cannot read directory {}", root.display()))?
+    for entry in std::fs::read_dir(root)
+        .with_context(|| format!("Cannot read directory {}", root.display()))?
     {
         let entry = entry?;
         let path = entry.path();
@@ -1948,8 +2229,15 @@ fn infer_object_mime_type(file_path: &Path) -> &'static str {
 }
 
 async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
+    move_infer_artifacts_to_gcs_if_needed_with_project_root(conf, None).await
+}
+
+async fn move_infer_artifacts_to_gcs_if_needed_with_project_root(
+    conf: &Path,
+    project_root_override: Option<&Path>,
+) -> Result<()> {
     debug!(
-        "[gcs-debug] infer upload hook entered: config='{}'",
+        "[gcs] infer upload hook entered: config='{}'",
         conf.display()
     );
     let c = read_conf(conf)?;
@@ -1966,7 +2254,7 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
     };
 
     debug!(
-        "[gcs-debug] infer upload enabled: base_dir='{}' bucket='{}' prefix='{}'",
+        "[gcs] infer upload enabled: base_dir='{}' bucket='{}' prefix='{}'",
         c.base_dir.display(),
         bucket,
         prefix.trim_matches('/'),
@@ -1979,15 +2267,17 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
         .context("Failed to initialize Google Cloud Storage client")?;
     let bucket_resource = format!("projects/_/buckets/{bucket}");
 
-    let project_root = resolve_local_project_root_from_config(conf, &c);
+    let project_root = project_root_override
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| resolve_local_project_root_from_config(conf, &c));
     debug!(
-        "[gcs-debug] infer upload project root resolved: {}",
+        "[gcs] infer upload project root resolved: {}",
         project_root.display()
     );
     let artifact_dirs = infer_artifact_directories(&project_root);
     for dir in &artifact_dirs {
         debug!(
-            "[gcs-debug] infer upload scan dir: {} exists={} is_dir={}",
+            "[gcs] infer upload scan dir: {} exists={} is_dir={}",
             dir.display(),
             dir.exists(),
             dir.is_dir()
@@ -1998,7 +2288,7 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
         files_to_move.extend(collect_files_recursive(dir)?);
     }
     debug!(
-        "[gcs-debug] infer upload candidate files: {}",
+        "[gcs] infer upload candidate files: {}",
         files_to_move.len()
     );
 
@@ -2033,7 +2323,7 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
             .with_context(|| format!("Cannot read infer artifact {}", file_path.display()))?;
         let _ = mime_type;
         debug!(
-            "[gcs-debug] infer upload object: {} -> gs://{}/{}",
+            "[gcs] infer upload object: {} -> gs://{}/{}",
             file_path.display(),
             bucket,
             object_key
@@ -2058,7 +2348,7 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
     }
 
     debug!(
-        "[gcs-debug] infer upload done: uploaded_files={} bucket='{}' prefix='{}'",
+        "[gcs] infer upload done: uploaded_files={} bucket='{}' prefix='{}'",
         uploaded_files,
         bucket,
         prefix.trim_matches('/'),
@@ -2066,13 +2356,21 @@ async fn move_infer_artifacts_to_gcs_if_needed(conf: &Path) -> Result<()> {
 
     let purge_local = std::env::var("MONGO2PG_GCS_PURGE_LOCAL")
         .ok()
-        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|value| {
+            matches!(
+                value.to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false);
 
     if purge_local {
         for file_path in &files_to_move {
             std::fs::remove_file(file_path).with_context(|| {
-                format!("Failed to remove local infer artifact {}", file_path.display())
+                format!(
+                    "Failed to remove local infer artifact {}",
+                    file_path.display()
+                )
             })?;
         }
         info!(
@@ -2999,7 +3297,7 @@ async fn infer_collection(
                     Ok(cur) => cur,
                     Err(e) => {
                         warn!(
-                            "  [warn] find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
+                            "find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
                             db_name,
                             coll_name,
                             chunk_index,
@@ -3033,7 +3331,7 @@ async fn infer_collection(
                                 Some(UnauthorizedRetryDecision::Retry) => {
                                     auth_retry_attempt += 1;
                                     warn!(
-                                        "  [warn] auth_retry namespace={}.{} chunk={}/{} processed={}/{} retry_attempt={}/{} reason={}",
+                                        "auth_retry namespace={}.{} chunk={}/{} processed={}/{} retry_attempt={}/{} reason={}",
                                         db_name,
                                         coll_name,
                                         chunk_index,
@@ -3048,7 +3346,7 @@ async fn infer_collection(
                                 }
                                 Some(UnauthorizedRetryDecision::Exhausted) => {
                                     warn!(
-                                        "  [warn] auth_retry_exhausted namespace={}.{} chunk={}/{} processed={}/{} retries={} reason={}",
+                                        "auth_retry_exhausted namespace={}.{} chunk={}/{} processed={}/{} retries={} reason={}",
                                         db_name,
                                         coll_name,
                                         chunk_index,
@@ -3069,7 +3367,7 @@ async fn infer_collection(
                                 }
                                 None => {
                                     warn!(
-                                        "  [warn] find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
+                                        "find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
                                         db_name,
                                         coll_name,
                                         chunk_index,
@@ -3103,7 +3401,7 @@ async fn infer_collection(
         Err(e) => {
             let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
             warn!(
-                "  [warn] $sample failed for {db_name}.{coll_name} \
+                "$sample failed for {db_name}.{coll_name} \
                  ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
             );
             find_fallback(
@@ -3126,8 +3424,8 @@ async fn infer_collection(
                     analyzer = Analyzer::new(true);
                     let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
                     warn!(
-                        "  [warn] $sample cursor error for {db_name}.{coll_name} \
-                             ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
+                        "$sample cursor error for {db_name}.{coll_name} \
+                            ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
                     );
                     find_fallback(
                         &collection,
@@ -3567,6 +3865,32 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
         statements
     }
 
+    fn grouped_key_index_statements(
+        table: &DdlTableMapping,
+        schema_name: Option<&str>,
+    ) -> Vec<String> {
+        let has_grouped_key_column = table
+            .columns
+            .iter()
+            .any(|column| column.name.eq_ignore_ascii_case("_key"));
+        if !has_grouped_key_column {
+            return Vec::new();
+        }
+
+        let index_name = format!("idx_{}_key", table.name);
+        let qualified_table = match schema_name {
+            Some(schema) => format!("{}.{}", quote_ident(schema), quote_ident(&table.name)),
+            None => quote_ident(&table.name),
+        };
+
+        vec![format!(
+            "CREATE INDEX IF NOT EXISTS {} ON {} ({});",
+            quote_ident(&index_name),
+            qualified_table,
+            quote_ident("_key")
+        )]
+    }
+
     let mut ddl_body = String::new();
 
     if let Some(schema) = schema_name {
@@ -3658,6 +3982,12 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
         let fk_indexes = fk_index_statements(table, schema_name);
         if !fk_indexes.is_empty() {
             ddl_body.push_str(&fk_indexes.join("\n"));
+            ddl_body.push_str("\n\n");
+        }
+
+        let grouped_key_indexes = grouped_key_index_statements(table, schema_name);
+        if !grouped_key_indexes.is_empty() {
+            ddl_body.push_str(&grouped_key_indexes.join("\n"));
             ddl_body.push_str("\n\n");
         }
     }
@@ -5284,7 +5614,9 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        args.project_base.join(&args.project_name).join(cluster_name)
+        args.project_base
+            .join(&args.project_name)
+            .join(cluster_name)
     } else {
         args.project_base.join(&args.project_name)
     };
@@ -5302,16 +5634,14 @@ fn run_init(args: InitArgs) -> Result<()> {
             .with_context(|| format!("Failed to create directory {}", dir.display()))?;
     }
 
-    let conf_path = project_root
-        .join("config")
-        .join(format!(
-            "{}.toml",
-            args.cluster_name
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .unwrap_or(&args.project_name)
-        ));
+    let conf_path = project_root.join("config").join(format!(
+        "{}.toml",
+        args.cluster_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&args.project_name)
+    ));
     let project_title = if let Some(cluster_name) = args
         .cluster_name
         .as_deref()
@@ -5381,7 +5711,11 @@ fn append_non_empty_segment(path: &mut String, segment: Option<&str>) {
     }
 }
 
-fn ensure_output_prefix_segments(prefix: &str, cluster_name: Option<&str>, project_dir: &str) -> String {
+fn ensure_output_prefix_segments(
+    prefix: &str,
+    cluster_name: Option<&str>,
+    project_dir: &str,
+) -> String {
     let mut normalized = prefix.trim_matches('/').to_owned();
 
     let project_segment = project_dir.trim_matches('/');
@@ -5399,7 +5733,10 @@ fn ensure_output_prefix_segments(prefix: &str, cluster_name: Option<&str>, proje
         .map(str::trim)
         .filter(|value| !value.is_empty());
     if let Some(cluster) = cluster_segment {
-        let already_has_cluster = normalized.rsplit('/').next().is_some_and(|segment| segment == cluster);
+        let already_has_cluster = normalized
+            .rsplit('/')
+            .next()
+            .is_some_and(|segment| segment == cluster);
         if !already_has_cluster {
             append_non_empty_segment(&mut normalized, Some(cluster));
         }
@@ -5506,15 +5843,23 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         })?;
 
     // Use args.namespace if provided, else fall back to config file
-    let db_name = args.namespace.clone().or(c.namespace.clone()).ok_or_else(|| {
-        anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
-    })?;
+    let db_name = args
+        .namespace
+        .clone()
+        .or(c.namespace.clone())
+        .ok_or_else(|| {
+            anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
+        })?;
     let export_chunk_size = resolve_export_chunk_size(args.chunk_size.or(c.chunk_size))?;
     let storage_backend = match resolve_export_write_backend(&c.base_dir)? {
         ExportWriteBackend::LocalFs => ExportWriteBackend::LocalFs,
         ExportWriteBackend::Gcs { bucket, prefix } => ExportWriteBackend::Gcs {
             bucket,
-            prefix: ensure_output_prefix_segments(&prefix, c.cluster_name.as_deref(), &c.project_dir),
+            prefix: ensure_output_prefix_segments(
+                &prefix,
+                c.cluster_name.as_deref(),
+                &c.project_dir,
+            ),
         },
     };
     match &storage_backend {
@@ -5540,15 +5885,14 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             collections_dir = resolve_collections_dir(&project_root, &db_name);
         }
         ExportWriteBackend::Gcs { bucket, prefix } => {
-            let Some(stage) =
-                stage_export_metadata_from_gcs(
-                    bucket,
-                    prefix,
-                    c.cluster_name.as_deref(),
-                    &c.project_dir,
-                    &db_name,
-                )
-                .await?
+            let Some(stage) = stage_export_metadata_from_gcs(
+                bucket,
+                prefix,
+                c.cluster_name.as_deref(),
+                &c.project_dir,
+                &db_name,
+            )
+            .await?
             else {
                 return Err(anyhow!(
                     "Cannot stage export metadata from gs://{}/{}/schema/tables/{}",
@@ -5590,7 +5934,8 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         );
     }
 
-    let (data_dir, cleanup_staging_after_export) = match (&storage_backend, args.output_dir.clone()) {
+    let (data_dir, cleanup_staging_after_export) = match (&storage_backend, args.output_dir.clone())
+    {
         (_, Some(dir)) => (dir, false),
         (ExportWriteBackend::LocalFs, None) => (project_root.join("data"), false),
         (ExportWriteBackend::Gcs { .. }, None) => {
@@ -5599,10 +5944,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
                 std::process::id(),
                 Utc::now().timestamp_millis()
             ));
-            info!(
-                "export staging dir (temporary): {}",
-                staging_dir.display()
-            );
+            info!("export staging dir (temporary): {}", staging_dir.display());
             (staging_dir, true)
         }
     };
@@ -5917,7 +6259,9 @@ fn gcs_prefix_candidates_for_import_data(
                 .next_back()
                 .is_some_and(|last| last == project_segment);
             if !ends_with_project {
-                candidates.push(format!("{trimmed_prefix}/{project_segment}/data/{db_name}/"));
+                candidates.push(format!(
+                    "{trimmed_prefix}/{project_segment}/data/{db_name}/"
+                ));
             }
         }
     }
@@ -5933,7 +6277,7 @@ async fn download_gcs_prefix_to_local_dir(
     local_dir: &Path,
 ) -> Result<usize> {
     debug!(
-        "[gcs-debug] metadata stage start: gs://{}/{} -> {}",
+        "[gcs] metadata stage start: gs://{}/{} -> {}",
         bucket,
         object_prefix,
         local_dir.display()
@@ -5942,9 +6286,10 @@ async fn download_gcs_prefix_to_local_dir(
         .build()
         .await
         .with_context(|| format!("Failed to initialize GCS data client for gs://{bucket}"))?;
-    let storage_control = StorageControl::builder().build().await.with_context(|| {
-        format!("Failed to initialize GCS control client for gs://{bucket}")
-    })?;
+    let storage_control = StorageControl::builder()
+        .build()
+        .await
+        .with_context(|| format!("Failed to initialize GCS control client for gs://{bucket}"))?;
     let bucket_resource = format!("projects/_/buckets/{bucket}");
 
     let mut downloaded = 0usize;
@@ -5971,7 +6316,7 @@ async fn download_gcs_prefix_to_local_dir(
             else {
                 continue;
             };
-            if relative.is_empty() {
+            if relative.is_empty() || relative.ends_with('/') || object.name.ends_with('/') {
                 continue;
             }
 
@@ -5989,15 +6334,16 @@ async fn download_gcs_prefix_to_local_dir(
                 .with_context(|| format!("Failed to open gs://{}/{}", bucket, object.name))?;
             let mut bytes = Vec::new();
             while let Some(chunk) = reader.next().await {
-                let chunk = chunk.with_context(|| {
-                    format!("Failed reading gs://{}/{}", bucket, object.name)
-                })?;
+                let chunk = chunk
+                    .with_context(|| format!("Failed reading gs://{}/{}", bucket, object.name))?;
                 bytes.extend_from_slice(&chunk);
             }
 
-            tokio::fs::write(&destination, bytes).await.with_context(|| {
-                format!("Cannot write staged import file {}", destination.display())
-            })?;
+            tokio::fs::write(&destination, bytes)
+                .await
+                .with_context(|| {
+                    format!("Cannot write staged import file {}", destination.display())
+                })?;
             downloaded += 1;
         }
 
@@ -6008,40 +6354,59 @@ async fn download_gcs_prefix_to_local_dir(
     }
 
     debug!(
-        "[gcs-debug] metadata stage done: downloaded_files={} from gs://{}/{}",
-        downloaded,
-        bucket,
-        object_prefix
+        "[gcs] metadata stage done: downloaded_files={} from gs://{}/{}",
+        downloaded, bucket, object_prefix
     );
 
     Ok(downloaded)
 }
 
-fn gcs_prefix_candidates_for_project_subdir(prefix: &str, project_dir: &str, subdir: &str) -> Vec<String> {
+fn gcs_prefix_candidates_for_project_subdir(
+    prefix: &str,
+    cluster_name: Option<&str>,
+    project_dir: &str,
+    subdir: &str,
+) -> Vec<String> {
     let trimmed_prefix = prefix.trim_matches('/');
+    let cluster_segment = cluster_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     let project_segment = project_dir.trim_matches('/');
     let subdir_segment = subdir.trim_matches('/');
     let mut candidates = Vec::new();
 
-    let effective_prefix = ensure_output_prefix_segments(prefix, None, project_dir);
+    let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
     if !effective_prefix.is_empty() {
         candidates.push(format!("{effective_prefix}/{subdir_segment}/"));
     }
 
     if trimmed_prefix.is_empty() {
         candidates.push(format!("{subdir_segment}/"));
+        if let Some(cluster_name) = cluster_segment {
+            candidates.push(format!("{cluster_name}/{subdir_segment}/"));
+        }
         if !project_segment.is_empty() {
             candidates.push(format!("{project_segment}/{subdir_segment}/"));
+            if let Some(cluster_name) = cluster_segment {
+                candidates.push(format!(
+                    "{project_segment}/{cluster_name}/{subdir_segment}/"
+                ));
+            }
         }
     } else {
         candidates.push(format!("{trimmed_prefix}/{subdir_segment}/"));
+        if let Some(cluster_name) = cluster_segment {
+            candidates.push(format!("{trimmed_prefix}/{cluster_name}/{subdir_segment}/"));
+        }
         if !project_segment.is_empty() {
             let ends_with_project = trimmed_prefix
                 .split('/')
                 .next_back()
                 .is_some_and(|last| last == project_segment);
             if !ends_with_project {
-                candidates.push(format!("{trimmed_prefix}/{project_segment}/{subdir_segment}/"));
+                candidates.push(format!(
+                    "{trimmed_prefix}/{project_segment}/{subdir_segment}/"
+                ));
             }
         }
     }
@@ -6065,11 +6430,7 @@ async fn stage_export_metadata_from_gcs(
         .tempdir()
         .context("Cannot create temporary export metadata staging directory")?;
 
-    let staged_tables_dir = stage
-        .path()
-        .join("schema")
-        .join("tables")
-        .join(db_name);
+    let staged_tables_dir = stage.path().join("schema").join("tables").join(db_name);
     std::fs::create_dir_all(&staged_tables_dir).with_context(|| {
         format!(
             "Cannot create staged schema directory {}",
@@ -6079,7 +6440,8 @@ async fn stage_export_metadata_from_gcs(
 
     let mut staged_tables = 0usize;
     for candidate in gcs_prefix_candidates_for_project_subdir(
-        &ensure_output_prefix_segments(prefix, cluster_name, project_dir),
+        prefix,
+        cluster_name,
         project_dir,
         &format!("schema/tables/{db_name}"),
     ) {
@@ -6121,11 +6483,9 @@ async fn stage_export_metadata_from_gcs(
         "source/collections".to_owned(),
     ];
     for subdir in collection_candidates {
-        for candidate in gcs_prefix_candidates_for_project_subdir(
-            &ensure_output_prefix_segments(prefix, cluster_name, project_dir),
-            project_dir,
-            &subdir,
-        ) {
+        for candidate in
+            gcs_prefix_candidates_for_project_subdir(prefix, cluster_name, project_dir, &subdir)
+        {
             let target_dir = if subdir.ends_with(&format!("/{db_name}")) {
                 staged_collections_root.join(db_name)
             } else {
@@ -6156,6 +6516,44 @@ async fn stage_export_metadata_from_gcs(
 }
 
 async fn run_import(args: ImportArgs) -> Result<()> {
+    fn process_rss_mb() -> Option<u64> {
+        let status = std::fs::read_to_string("/proc/self/status").ok()?;
+        let vm_rss_line = status.lines().find(|line| line.starts_with("VmRSS:"))?;
+        let kb = vm_rss_line
+            .split_whitespace()
+            .nth(1)
+            .and_then(|value| value.parse::<u64>().ok())?;
+        Some(kb / 1024)
+    }
+
+    fn log_import_stage(stage: &str) {
+        debug!("[import] stage={stage}");
+        if let Some(rss_mb) = process_rss_mb() {
+            debug!("[debug][import] stage={stage} rss_mb={rss_mb}");
+        }
+    }
+
+    fn count_supported_csv_files_recursive(root: &Path) -> usize {
+        let mut pending_dirs = vec![root.to_path_buf()];
+        let mut count = 0usize;
+        while let Some(dir) = pending_dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.filter_map(|entry| entry.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending_dirs.push(path);
+                } else if is_supported_import_csv_path(&path) {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    log_import_stage("start");
+
     apply_config_overrides(
         &args.config,
         &ConfigOverrides {
@@ -6168,8 +6566,6 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     )?;
 
     let c = read_conf(&args.config)?;
-    let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
-    let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
     let target_schema = c.target_schema.clone();
     let target_uri = c
         .target_uri
@@ -6186,28 +6582,70 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     let target_database_name = c.target_database_name.as_deref().unwrap_or(db_name);
     let requested_collection = args.collection.as_deref().or(namespace_collection);
     let requested_collection_dir = requested_collection.map(sanitize_name);
-    let should_import_collection =
-        |name: &str| should_infer_collection(name, &conf_include, &conf_exclude);
 
     let storage_backend =
         resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
-    let project_root = match &storage_backend {
+    let mut project_root = match &storage_backend {
         ExportWriteBackend::LocalFs => configured_project_root(&c),
         ExportWriteBackend::Gcs { .. } => {
             let local_root = resolve_local_project_root_from_config(&args.config, &c);
-            info!(
+            debug!(
                 "import metadata root (local, read-only): {}",
                 local_root.display()
             );
             local_root
         }
     };
-    let tables_root = project_root.join("schema").join("tables");
-    let tables_dir = if tables_root.join(db_name).is_dir() {
+    let mut import_metadata_stage: Option<tempfile::TempDir> = None;
+
+    let mut tables_root = project_root.join("schema").join("tables");
+    let mut tables_dir = if tables_root.join(db_name).is_dir() {
         tables_root.join(db_name)
     } else {
         tables_root.clone()
     };
+
+    if !tables_dir.is_dir() {
+        if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+            log_import_stage("gcs_stage_metadata_begin");
+            if let Some(stage) = stage_export_metadata_from_gcs(
+                bucket,
+                prefix,
+                c.cluster_name.as_deref(),
+                &c.project_dir,
+                db_name,
+            )
+            .await?
+            {
+                project_root = stage.path().to_path_buf();
+                tables_root = project_root.join("schema").join("tables");
+                tables_dir = if tables_root.join(db_name).is_dir() {
+                    tables_root.join(db_name)
+                } else {
+                    tables_root.clone()
+                };
+                info!(
+                    "import metadata staged from GCS into temporary directory {}",
+                    project_root.display()
+                );
+                import_metadata_stage = Some(stage);
+            } else {
+                let expected_prefix = ensure_output_prefix_segments(
+                    prefix,
+                    c.cluster_name.as_deref(),
+                    &c.project_dir,
+                );
+                return Err(anyhow!(
+                    "Cannot stage SQL tables metadata from gs://{}/{}/schema/tables/{}",
+                    bucket,
+                    expected_prefix,
+                    db_name
+                ));
+            }
+            log_import_stage("gcs_stage_metadata_done");
+        }
+    }
+
     let data_root = project_root.join("data");
     let mut data_db_dir = if data_root.join(db_name).is_dir() {
         data_root.join(db_name)
@@ -6215,9 +6653,11 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         data_root.clone()
     };
     let mut import_data_stage: Option<tempfile::TempDir> = None;
+    log_import_stage("config_resolved");
 
     if !data_db_dir.is_dir() {
         if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+            log_import_stage("gcs_stage_begin");
             ensure_gcs_authentication().await?;
 
             let stage = tempfile::Builder::new()
@@ -6226,7 +6666,10 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                 .context("Cannot create temporary import staging directory")?;
             let staged_data_root = stage.path().join("data").join(db_name);
             std::fs::create_dir_all(&staged_data_root).with_context(|| {
-                format!("Cannot create staged import data directory {}", staged_data_root.display())
+                format!(
+                    "Cannot create staged import data directory {}",
+                    staged_data_root.display()
+                )
             })?;
 
             let requested_suffix = requested_collection_dir
@@ -6245,24 +6688,36 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                 } else {
                     candidate.clone()
                 };
-                let count = download_gcs_prefix_to_local_dir(bucket, &effective_prefix, &staged_data_root)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Failed to stage import data from gs://{}/{}",
-                            bucket, effective_prefix
-                        )
-                    })?;
+                let count =
+                    download_gcs_prefix_to_local_dir(bucket, &effective_prefix, &staged_data_root)
+                        .await
+                        .with_context(|| {
+                            format!(
+                                "Failed to stage import data from gs://{}/{}",
+                                bucket, effective_prefix
+                            )
+                        })?;
                 if count > 0 {
-                    downloaded += count;
-                    info!(
-                        "staged {} import data files from gs://{}/{} into {}",
+                    let csv_count = count_supported_csv_files_recursive(&staged_data_root);
+                    if csv_count > 0 {
+                        downloaded += count;
+                        info!(
+                            "staged {} import data files from gs://{}/{} into {}",
+                            count,
+                            bucket,
+                            effective_prefix,
+                            staged_data_root.display()
+                        );
+                        break;
+                    }
+
+                    warn!(
+                        "staged {} files from gs://{}/{} but found no .csv/.csv.gz yet under {}; trying next candidate prefix",
                         count,
                         bucket,
                         effective_prefix,
                         staged_data_root.display()
                     );
-                    break;
                 }
             }
 
@@ -6270,6 +6725,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                 data_db_dir = staged_data_root;
                 import_data_stage = Some(stage);
             }
+            log_import_stage("gcs_stage_done");
         }
     }
 
@@ -6278,6 +6734,13 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             "Cannot read SQL tables directory {}",
             tables_dir.display()
         ));
+    }
+
+    if let Some(stage) = &import_metadata_stage {
+        info!(
+            "import metadata staging dir (temporary): {}",
+            stage.path().display()
+        );
     }
 
     if let Some(stage) = &import_data_stage {
@@ -6293,36 +6756,52 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         ));
     }
 
+    log_import_stage("filesystem_validated");
+
+    log_import_stage("pg_connect_admin_begin");
     let admin_client = connect_pg_client(&target_uri).await?;
     ensure_pg_database(&admin_client, target_database_name).await?;
 
     let db_target_uri = pg_uri_with_database(&target_uri, target_database_name);
+    log_import_stage("pg_connect_target_begin");
     let mut pg_client = connect_pg_client(&db_target_uri).await?;
 
-    let mut sql_files: Vec<PathBuf> = std::fs::read_dir(&tables_dir)
-        .with_context(|| format!("Cannot read {}", tables_dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("sql"))
-        .filter(|path| {
-            requested_collection_dir
-                .as_deref()
-                .map_or(true, |collection_dir| {
-                    path.file_stem().and_then(|stem| stem.to_str()) == Some(collection_dir)
-                })
-        })
-        .filter(|path| {
-            path.file_stem()
-                .and_then(|stem| stem.to_str())
-                .map(&should_import_collection)
-                .unwrap_or(false)
-        })
-        .collect();
+    let mut pending_dirs = vec![tables_dir.clone()];
+    let mut sql_files: Vec<PathBuf> = Vec::new();
+    while let Some(dir) = pending_dirs.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .with_context(|| format!("Cannot read {}", dir.display()))?
+            .filter_map(|entry| entry.ok())
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                pending_dirs.push(path);
+                continue;
+            }
+            sql_files.push(path);
+        }
+    }
+
+    sql_files.retain(|path| path.extension().and_then(|ext| ext.to_str()) == Some("sql"));
+    sql_files.retain(|path| {
+        requested_collection_dir
+            .as_deref()
+            .map_or(true, |collection_dir| {
+                path.file_stem().and_then(|stem| stem.to_str()) == Some(collection_dir)
+            })
+    });
+    sql_files.retain(|path| {
+        path.file_stem()
+            .and_then(|stem| stem.to_str())
+            .is_some_and(|name| !name.trim().is_empty())
+    });
     sql_files.sort();
 
     if sql_files.is_empty() {
         return Err(anyhow!("No SQL files found in {}", tables_dir.display()));
     }
+    debug!("[debug][import] ddl_files_count={}", sql_files.len());
+    log_import_stage("ddl_execute_begin");
 
     use std::collections::{HashMap, HashSet};
     let mut allowed_table_names: HashSet<String> = HashSet::new();
@@ -6371,38 +6850,56 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         info!("Created PostgreSQL objects from {}", sql_path.display());
     }
 
-    let mut csv_candidates: Vec<PathBuf> = std::fs::read_dir(&data_db_dir)
-        .with_context(|| format!("Cannot read {}", data_db_dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.is_dir())
-        .filter(|path| {
-            requested_collection_dir
+    log_import_stage("ddl_execute_done");
+    if import_metadata_stage.take().is_some() {
+        log_import_stage("gcs_stage_metadata_released");
+    }
+
+    let mut pending_dirs = vec![data_db_dir.clone()];
+    let mut csv_candidates: Vec<PathBuf> = Vec::new();
+    while let Some(dir) = pending_dirs.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .with_context(|| format!("Cannot read {}", dir.display()))?
+            .filter_map(|entry| entry.ok())
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                pending_dirs.push(path);
+                continue;
+            }
+            if !is_supported_import_csv_path(&path) {
+                continue;
+            }
+
+            let table_name = match import_table_name_from_csv_path(&path) {
+                Some(name) => name,
+                None => continue,
+            };
+
+            let import_collection = path.strip_prefix(&data_db_dir).ok().and_then(|relative| {
+                let mut parts = relative.components();
+                let first = parts.next()?.as_os_str().to_str()?;
+                if parts.next().is_some() {
+                    Some(first)
+                } else {
+                    None
+                }
+            });
+
+            if !requested_collection_dir
                 .as_deref()
                 .map_or(true, |collection_dir| {
-                    path.file_name().and_then(|name| name.to_str()) == Some(collection_dir)
+                    import_collection == Some(collection_dir) || table_name == collection_dir
                 })
-        })
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(&should_import_collection)
-                .unwrap_or(false)
-        })
-        .flat_map(|collection_dir| {
-            std::fs::read_dir(&collection_dir)
-                .into_iter()
-                .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
-                .map(|entry| entry.path())
-                .filter(|path| is_supported_import_csv_path(path))
-                .filter(|path| {
-                    import_table_name_from_csv_path(path)
-                        .map(|table_name| allowed_table_names.contains(&table_name))
-                        .unwrap_or(false)
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect();
+            {
+                continue;
+            }
+
+            if allowed_table_names.contains(&table_name) {
+                csv_candidates.push(path);
+            }
+        }
+    }
 
     csv_candidates.sort();
     let mut csv_files_by_table: std::collections::HashMap<String, PathBuf> =
@@ -6440,12 +6937,16 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             data_db_dir.display()
         ));
     }
+    debug!("[debug][import] csv_files_count={}", csv_files.len());
+    log_import_stage("csv_discovery_done");
 
+    log_import_stage("transaction_begin");
     let transaction = pg_client.transaction().await?;
     transaction
         .batch_execute("SET CONSTRAINTS ALL DEFERRED;")
         .await?;
 
+    log_import_stage("truncate_begin");
     for csv_path in &csv_files {
         let schema = target_schema
             .as_deref()
@@ -6475,7 +6976,11 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             }
         }
     }
+    log_import_stage("truncate_done");
 
+    let mut imported_relations: Vec<(String, String)> = Vec::new();
+
+    log_import_stage("copy_begin");
     for csv_path in &csv_files {
         let schema = target_schema
             .as_deref()
@@ -6488,6 +6993,12 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
         let table = import_table_name_from_csv_path(csv_path.as_path())
             .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
+        info!(
+            "Unzip and /COPY file {} into {}.{}",
+            csv_path.display(),
+            schema,
+            table
+        );
         let table_columns = table_columns_by_name
             .get(&table)
             .ok_or_else(|| anyhow!("No DDL column metadata found for table {table}"))?;
@@ -6502,23 +7013,20 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             quote_ident(&table),
             copy_columns,
         );
-        let mut contents = Vec::new();
         let is_gz = csv_path
             .file_name()
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.ends_with(".csv.gz"));
-        if is_gz {
-            let file = std::fs::File::open(csv_path)
-                .with_context(|| format!("Failed to open {}", csv_path.display()))?;
-            let mut decoder = GzDecoder::new(file);
-            std::io::Read::read_to_end(&mut decoder, &mut contents)
-                .with_context(|| format!("Failed to decompress {}", csv_path.display()))?;
-        } else {
-            contents = std::fs::read(csv_path)
-                .with_context(|| format!("Failed to read {}", csv_path.display()))?;
+        if let Ok(meta) = std::fs::metadata(csv_path) {
+            debug!(
+                "[import] copy_prepare table={}.{} file={} compressed_bytes={} gz={}",
+                schema,
+                table,
+                csv_path.display(),
+                meta.len(),
+                is_gz
+            );
         }
-        let content_text = String::from_utf8_lossy(&contents).into_owned();
-
         let sink = match transaction.copy_in(&copy_sql).await {
             Ok(sink) => sink,
             Err(err) => {
@@ -6531,39 +7039,138 @@ async fn run_import(args: ImportArgs) -> Result<()> {
             }
         };
         let mut sink = pin!(sink);
-        sink.as_mut()
-            .send(Bytes::from(contents))
-            .await
-            .with_context(|| format!("Failed to stream CSV data for {}", csv_path.display()))?;
+        let streamed_bytes = if is_gz {
+            info!(
+                "[import] copy_decompress_begin table={}.{} file={}",
+                schema,
+                table,
+                csv_path.display()
+            );
+            let mut child = tokio::process::Command::new("gunzip")
+                .arg("-c")
+                .arg(csv_path)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .with_context(|| {
+                    format!(
+                        "Failed to execute gunzip for {}. Ensure gunzip is installed",
+                        csv_path.display()
+                    )
+                })?;
+            let stdout = child.stdout.take().ok_or_else(|| {
+                anyhow!("Failed to capture gunzip stdout for {}", csv_path.display())
+            })?;
+
+            let streamed = stream_reader_to_copy(stdout, &mut sink, 64 * 1024)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to stream decompressed data for {}",
+                        csv_path.display()
+                    )
+                })?;
+
+            let output = child.wait_with_output().await.with_context(|| {
+                format!(
+                    "Failed waiting for gunzip process for {}",
+                    csv_path.display()
+                )
+            })?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+                return Err(anyhow!(
+                    "gunzip failed for {} (status={}): {}",
+                    csv_path.display(),
+                    output
+                        .status
+                        .code()
+                        .map(|code| code.to_string())
+                        .unwrap_or_else(|| "signal".to_owned()),
+                    stderr
+                ));
+            }
+            info!(
+                "[import] copy_decompress_done table={}.{} file={} streamed_bytes={}",
+                schema,
+                table,
+                csv_path.display(),
+                streamed
+            );
+            streamed
+        } else {
+            info!(
+                "[import] copy_read_begin table={}.{} file={}",
+                schema,
+                table,
+                csv_path.display()
+            );
+            let file = tokio::fs::File::open(csv_path)
+                .await
+                .with_context(|| format!("Failed to open {}", csv_path.display()))?;
+            let streamed = stream_reader_to_copy(file, &mut sink, 64 * 1024)
+                .await
+                .with_context(|| format!("Failed to stream CSV data for {}", csv_path.display()))?;
+            info!(
+                "[import] copy_read_done table={}.{} file={} streamed_bytes={}",
+                schema,
+                table,
+                csv_path.display(),
+                streamed
+            );
+            streamed
+        };
+        log_import_stage("copy_payload_loaded");
         let rows = match sink.as_mut().finish().await {
             Ok(rows) => rows,
             Err(err) => {
-                let line_detail = extract_copy_error_line(&err)
-                    .and_then(|line_number| {
-                        csv_line_at(&content_text, line_number)
-                            .map(|line| format!("CSV line {line_number}: {line}"))
-                    })
-                    .unwrap_or_default();
                 return Err(anyhow!(
-                    "Failed to finish COPY for {}.{} from {}\n{}{}{}",
+                    "Failed to finish COPY for {}.{} from {}\n{}",
                     schema,
                     table,
                     csv_path.display(),
-                    format_postgres_error(&err),
-                    if line_detail.is_empty() { "" } else { "\n" },
-                    line_detail
+                    format_postgres_error(&err)
                 ));
             }
         };
         info!(
-            "Imported {rows} row(s) into {}.{} from {}",
+            "Imported {rows} row(s) into {}.{} from {} (streamed_bytes={})",
             schema,
             table,
-            csv_path.display()
+            csv_path.display(),
+            streamed_bytes
         );
+        imported_relations.push((schema.to_owned(), table));
+        log_import_stage("copy_table_done");
     }
 
+    log_import_stage("transaction_commit_begin");
     transaction.commit().await?;
+
+    imported_relations.sort();
+    imported_relations.dedup();
+    log_import_stage("analyze_begin");
+    for (schema, table) in &imported_relations {
+        info!("Analyze imported table {}.{}", schema, table);
+        let analyze_sql = format!(
+            "ANALYZE {}.{}",
+            quote_ident(schema),
+            quote_ident(table)
+        );
+        if let Err(err) = pg_client.batch_execute(&analyze_sql).await {
+            return Err(anyhow!(
+                "Failed to analyze {}.{}\n{}",
+                schema,
+                table,
+                format_postgres_error(&err)
+            ));
+        }
+    }
+    log_import_stage("analyze_done");
+
+    if import_data_stage.take().is_some() {
+        log_import_stage("gcs_stage_data_released");
+    }
     info!("Import completed for database '{target_database_name}'.");
 
     let post_import_namespace = if namespace_collection.is_none() {
@@ -6574,7 +7181,9 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     } else {
         namespace.clone()
     };
+    log_import_stage("post_import_report_begin");
     write_post_import_report(&args.config, &post_import_namespace, "", true).await?;
+    log_import_stage("done");
 
     Ok(())
 }
@@ -8726,7 +9335,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 // `report` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
 
-async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
+async fn run_report(mut args: ReportArgs, quiet: bool) -> Result<()> {
+    let mut _staged_config: Option<tempfile::TempDir> = None;
+    if let Some(config) = args.config.take() {
+        let (local, stage) = stage_config_path_if_gcs(config).await?;
+        args.config = Some(local);
+        _staged_config = stage;
+    }
+
     if let Some(conf) = args.config.as_deref() {
         apply_config_overrides(
             conf,
@@ -8820,7 +9436,7 @@ async fn run_report(args: ReportArgs, quiet: bool) -> Result<()> {
         o.clone()
     } else if let (Some(ref dir), Some(ref _proj)) = (&reports_dir, &project_name) {
         std::fs::create_dir_all(dir)
-            .with_context(|| format!("Failed to create reports dir {}", dir.display()))?;
+            .with_context(|| format!("Can't create reports dir {}", dir.display()))?;
         dir.join("main.html")
     } else {
         PathBuf::from("main.html")
@@ -8942,13 +9558,89 @@ async fn write_post_import_report(
     source_uri_override: &str,
     include_md5: bool,
 ) -> Result<()> {
+    async fn upload_post_import_report_to_gcs(
+        output_path: &Path,
+        bucket: &str,
+        prefix: &str,
+        cluster_name: Option<&str>,
+        project_dir: &str,
+    ) -> Result<()> {
+        ensure_gcs_authentication().await?;
+        let storage = Storage::builder()
+            .build()
+            .await
+            .context("Failed to initialize Google Cloud Storage client")?;
+        let bucket_resource = format!("projects/_/buckets/{bucket}");
+
+        let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
+        let object_key = if effective_prefix.is_empty() {
+            "reports/post_report.html".to_owned()
+        } else {
+            format!("{effective_prefix}/reports/post_report.html")
+        };
+
+        let bytes = tokio::fs::read(output_path).await.with_context(|| {
+            format!(
+                "Cannot read post-import report for upload: {}",
+                output_path.display()
+            )
+        })?;
+
+        storage
+            .write_object(bucket_resource, object_key.clone(), Bytes::from(bytes))
+            .send_buffered()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to upload post-import report {} to gs://{}/{}",
+                    output_path.display(),
+                    bucket,
+                    object_key
+                )
+            })?;
+
+        info!(
+            "Post-import report uploaded to gs://{}/{}",
+            bucket, object_key
+        );
+
+        Ok(())
+    }
+
     let c = read_conf(conf)?;
     let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
     let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
-    let project_root = configured_project_root(&c);
-    let reports_dir = project_root.join("reports");
-    std::fs::create_dir_all(&reports_dir)
-        .with_context(|| format!("Failed to create reports dir {}", reports_dir.display()))?;
+    let storage_backend =
+        resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
+    let mut metadata_root = match &storage_backend {
+        ExportWriteBackend::LocalFs => configured_project_root(&c),
+        ExportWriteBackend::Gcs { .. } => resolve_local_project_root_from_config(conf, &c),
+    };
+    let reports_root = resolve_local_project_root_from_config(conf, &c);
+    let configured_reports_dir = reports_root.join("reports");
+    let reports_dir = match std::fs::create_dir_all(&configured_reports_dir) {
+        Ok(()) => configured_reports_dir,
+        Err(err) => {
+            let fallback_reports_dir = std::env::temp_dir()
+                .join("mongo2pg-reports")
+                .join(sanitize_name(&c.project_dir))
+                .join("reports");
+            std::fs::create_dir_all(&fallback_reports_dir).with_context(|| {
+                format!(
+                    "Can't create reports dir {} (original error: {}) and fallback dir {}",
+                    configured_reports_dir.display(),
+                    err,
+                    fallback_reports_dir.display()
+                )
+            })?;
+            info!(
+                "Can't create reports dir {}; using fallback {}",
+                configured_reports_dir.display(),
+                fallback_reports_dir.display()
+            );
+            fallback_reports_dir
+        }
+    };
 
     let namespace = if namespace_override.is_empty() {
         c.namespace.clone().ok_or_else(|| {
@@ -8970,9 +9662,34 @@ async fn write_post_import_report(
         .as_deref()
         .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
     let target_database_name = c.target_database_name.as_deref();
+    let (db_name, _) = split_namespace_scope(&namespace);
 
-    let collections_dir = project_root.join("source").join("collections");
-    let schema_tables_root = project_root.join("schema").join("tables");
+    let mut metadata_stage: Option<tempfile::TempDir> = None;
+    let mut schema_tables_root = metadata_root.join("schema").join("tables");
+
+    if !(schema_tables_root.join(db_name).is_dir() || schema_tables_root.is_dir()) {
+        if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+            if let Some(stage) = stage_export_metadata_from_gcs(
+                bucket,
+                prefix,
+                c.cluster_name.as_deref(),
+                &c.project_dir,
+                db_name,
+            )
+            .await?
+            {
+                metadata_root = stage.path().to_path_buf();
+                schema_tables_root = metadata_root.join("schema").join("tables");
+                info!(
+                    "post-import report metadata staged from GCS into temporary directory {}",
+                    metadata_root.display()
+                );
+                metadata_stage = Some(stage);
+            }
+        }
+    }
+
+    let collections_dir = resolve_collections_dir(&metadata_root, db_name);
     let output_path = reports_dir.join("post_report.html");
 
     let rows = build_post_import_rows(
@@ -9003,6 +9720,19 @@ async fn write_post_import_report(
         .with_context(|| format!("Failed to write {}", output_path.display()))?;
     info!("Post-import report written to {}", output_path.display());
 
+    if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+        upload_post_import_report_to_gcs(
+            &output_path,
+            bucket,
+            prefix,
+            c.cluster_name.as_deref(),
+            &c.project_dir,
+        )
+        .await?;
+    }
+
+    drop(metadata_stage);
+
     Ok(())
 }
 
@@ -9031,7 +9761,9 @@ fn run_cluster_report(args: ClusterReportArgs) -> Result<()> {
             }
         }
 
-        let collections_dir = configured_project_root(&c).join("source").join("collections");
+        let collections_dir = configured_project_root(&c)
+            .join("source")
+            .join("collections");
 
         let rows = collect_rows(&collections_dir, None)
             .with_context(|| format!("Failed to read collections for {db_name}"))?;
@@ -9206,27 +9938,29 @@ fn format_postgres_error(err: &tokio_postgres::Error) -> String {
     }
 }
 
-fn extract_copy_error_line(err: &tokio_postgres::Error) -> Option<usize> {
-    let context = err.as_db_error()?.where_()?;
-    let marker = ", line ";
-    let start = context.find(marker)? + marker.len();
-    let digits: String = context[start..]
-        .chars()
-        .take_while(|ch| ch.is_ascii_digit())
-        .collect();
-    if digits.is_empty() {
-        None
-    } else {
-        digits.parse().ok()
-    }
-}
+async fn stream_reader_to_copy<R>(
+    mut reader: R,
+    sink: &mut std::pin::Pin<&mut impl futures::Sink<Bytes, Error = tokio_postgres::Error>>,
+    chunk_size: usize,
+) -> Result<usize>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut total = 0usize;
+    let mut buffer = vec![0u8; chunk_size.max(8 * 1024)];
 
-fn csv_line_at(contents: &str, line_number: usize) -> Option<&str> {
-    if line_number == 0 {
-        None
-    } else {
-        contents.lines().nth(line_number - 1)
+    loop {
+        let read = reader.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+        total = total.saturating_add(read);
+        sink.as_mut()
+            .send(Bytes::copy_from_slice(&buffer[..read]))
+            .await?;
     }
+
+    Ok(total)
 }
 
 fn resolve_root_table_name(
@@ -9836,6 +10570,69 @@ async fn build_post_import_rows(
         }
     }
 
+    fn is_transient_pg_count_error(err: &tokio_postgres::Error) -> bool {
+        let message = err.to_string().to_ascii_lowercase();
+        message.contains("connection closed")
+            || message.contains("error communicating with the server")
+            || message.contains("server closed the connection")
+            || message.contains("connection reset")
+            || message.contains("broken pipe")
+            || message.contains("timed out")
+            || message.contains("timeout")
+    }
+
+    async fn query_pg_count_with_retry(
+        target_uri: &str,
+        qualified_name: &str,
+        count_sql: &str,
+    ) -> Result<i64> {
+        const RETRY_MAX: u32 = 2;
+        let mut attempt = 0_u32;
+        loop {
+            attempt += 1;
+            let pg_client = connect_pg_client(target_uri).await.with_context(|| {
+                format!(
+                    "{}: failed during PostgreSQL count connection setup",
+                    connection_failed_context("pg", "connect")
+                )
+            })?;
+
+            match pg_client.query_one(count_sql, &[]).await {
+                Ok(row) => {
+                    let row_count: i64 = row.get(0);
+                    return Ok(row_count);
+                }
+                Err(err) if attempt <= RETRY_MAX && is_transient_pg_count_error(&err) => {
+                    warn!(
+                        "retrying PostgreSQL row count for {} attempt={}/{} due to transient error: {}",
+                        qualified_name,
+                        attempt,
+                        RETRY_MAX + 1,
+                        err
+                    );
+                    continue;
+                }
+                Err(err) => {
+                    return Err(err).with_context(|| {
+                        format!("Failed to count PostgreSQL rows in {qualified_name}")
+                    });
+                }
+            }
+        }
+    }
+
+    fn quote_sql_literal(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+
+    fn grouped_table_key_filter_value(coll_name: &str, table_name: &str) -> Option<String> {
+        coll_name
+            .strip_prefix(table_name)
+            .and_then(|rest| rest.strip_prefix('_'))
+            .filter(|suffix| !suffix.is_empty())
+            .map(str::to_owned)
+    }
+
     let (db_name, only_collection) = split_namespace_scope(namespace);
 
     let mongo_client = Client::with_uri_str(source_uri).await.with_context(|| {
@@ -9863,13 +10660,11 @@ async fn build_post_import_rows(
     } else {
         schema_tables_root.to_path_buf()
     };
-
-    let pg_client = connect_pg_client(target_uri).await.with_context(|| {
-        format!(
-            "{}: failed during post-import PostgreSQL connection setup",
-            connection_failed_context("pg", "connect")
-        )
-    })?;
+    let collections_dir_for_lookup = if collections_root.join(db_name).is_dir() {
+        collections_root.join(db_name)
+    } else {
+        collections_root.to_path_buf()
+    };
 
     let total_collections = collection_names.len();
     let mut global_table_rows: HashMap<String, PostImportTableRow> = HashMap::new();
@@ -9883,15 +10678,56 @@ async fn build_post_import_rows(
                 format!("Failed to count MongoDB documents for {db_name}.{coll_name}")
             })?;
 
-        let sql_path = ddl_dir.join(format!("{}.sql", sanitize_name(&coll_name)));
-        let coll_dir = if collections_root.join(db_name).is_dir() {
-            collections_root
-                .join(db_name)
-                .join(coll_name.replace('/', "_"))
-        } else {
-            collections_root.join(coll_name.replace('/', "_"))
-        };
-        let schema_path = coll_dir.join(format!("{}.json", coll_name.replace('/', "_")));
+        let safe_coll_name = coll_name.replace('/', "_");
+        let mut sql_path = ddl_dir.join(format!("{}.sql", sanitize_name(&coll_name)));
+        let mut schema_path = collections_dir_for_lookup
+            .join(&safe_coll_name)
+            .join(format!("{}.json", safe_coll_name));
+
+        if !sql_path.is_file() || !schema_path.is_file() {
+            if let Some(grouped_lookup) =
+                resolve_grouped_sql_lookup_name(&collections_dir_for_lookup, &coll_name)
+            {
+                if !sql_path.is_file() {
+                    let grouped_sql_path = ddl_dir.join(format!("{}.sql", grouped_lookup));
+                    if grouped_sql_path.is_file() {
+                        sql_path = grouped_sql_path;
+                    }
+                }
+
+                if !schema_path.is_file() {
+                    let grouped_schema_path = collections_dir_for_lookup
+                        .join(&grouped_lookup)
+                        .join(format!("{}.json", grouped_lookup));
+                    if grouped_schema_path.is_file() {
+                        schema_path = grouped_schema_path;
+                    }
+                }
+            }
+
+            if !sql_path.is_file() || !schema_path.is_file() {
+                if let Some((group_prefix, _)) = coll_name.split_once('_') {
+                    let safe_group_prefix = group_prefix.replace('/', "_");
+
+                    if !sql_path.is_file() {
+                        let grouped_sql_path = ddl_dir.join(format!("{}.sql", safe_group_prefix));
+                        if grouped_sql_path.is_file() {
+                            sql_path = grouped_sql_path;
+                        }
+                    }
+
+                    if !schema_path.is_file() {
+                        let grouped_schema_path = collections_dir_for_lookup
+                            .join(&safe_group_prefix)
+                            .join(format!("{}.json", safe_group_prefix));
+                        if grouped_schema_path.is_file() {
+                            schema_path = grouped_schema_path;
+                        }
+                    }
+                }
+            }
+        }
+
         let schema: CollectionSchema = serde_json::from_str(
             &std::fs::read_to_string(&schema_path)
                 .with_context(|| format!("Failed to read {}", schema_path.display()))?,
@@ -9910,14 +10746,26 @@ async fn build_post_import_rows(
                     Some(schema) => format!("{}.{}", quote_ident(schema), quote_ident(&table.name)),
                     None => quote_ident(&table.name),
                 };
-                let count_sql = format!("SELECT COUNT(*)::BIGINT FROM {qualified_name}");
-                let row = pg_client
-                    .query_one(&count_sql, &[])
-                    .await
-                    .with_context(|| {
-                        format!("Failed to count PostgreSQL rows in {qualified_name}")
-                    })?;
-                let row_count: i64 = row.get(0);
+                let grouped_key_filter = if table
+                    .columns
+                    .iter()
+                    .any(|column| column.name.eq_ignore_ascii_case("_key"))
+                {
+                    grouped_table_key_filter_value(&coll_name, &table.name)
+                } else {
+                    None
+                };
+                let count_sql = if let Some(grouped_key) = grouped_key_filter {
+                    format!(
+                        "SELECT COUNT(*)::BIGINT FROM {qualified_name} WHERE {} = {}",
+                        quote_ident("_key"),
+                        quote_sql_literal(&grouped_key)
+                    )
+                } else {
+                    format!("SELECT COUNT(*)::BIGINT FROM {qualified_name}")
+                };
+                let row_count =
+                    query_pg_count_with_retry(target_uri, &qualified_name, &count_sql).await?;
                 table_rows.insert(
                     table.name.clone(),
                     PostImportTableRow {
@@ -9945,7 +10793,13 @@ async fn build_post_import_rows(
                     db_name,
                     coll_name
                 );
-                match compute_md5_summaries_for_collection(&coll_name, config_path).await {
+                match compute_md5_summaries_for_collection_with_collections_root(
+                    &coll_name,
+                    config_path,
+                    Some(&collections_dir_for_lookup),
+                )
+                .await
+                {
                     Ok(summaries) => summaries
                         .into_iter()
                         .map(|table_summary| {
@@ -9981,8 +10835,10 @@ async fn build_post_import_rows(
                         .collect::<HashMap<_, _>>(),
                     Err(err) => {
                         warn!(
-                            "failed to compute md5 summary for {}.{}: {}",
-                            db_name, coll_name, err
+                            "failed to compute md5 summary for {}.{}: {:#} (non-fatal; rowcount-diff phase will retry md5 for mismatched tables)",
+                            db_name,
+                            coll_name,
+                            err
                         );
                         HashMap::new()
                     }
@@ -10022,11 +10878,41 @@ async fn build_post_import_rows(
                 .with_context(|| {
                     format!("Failed to scan MongoDB documents for {db_name}.{coll_name}")
                 })?;
+            info!(
+                "[{}/{}] 🔎 scan nested MongoDB fields for {}.{} (docs={})",
+                index + 1,
+                total_collections,
+                db_name,
+                coll_name,
+                document_count
+            );
+            let mut scanned_docs: usize = 0;
+            let nested_scan_log_every: usize = 10_000;
             while let Some(doc) = cursor.try_next().await.with_context(|| {
                 format!("Failed to iterate MongoDB documents for {db_name}.{coll_name}")
             })? {
                 count_children(&mut root.children, &doc);
+                scanned_docs += 1;
+                if scanned_docs % nested_scan_log_every == 0 {
+                    info!(
+                        "[{}/{}]↳ scanned {} / {} MongoDB docs for {}.{} nested counts",
+                        index + 1,
+                        total_collections,
+                        scanned_docs,
+                        document_count,
+                        db_name,
+                        coll_name,
+                    );
+                }
             }
+            info!(
+                "[{}/{}] ✅ nested MongoDB scan complete for {}.{} (scanned={})",
+                index + 1,
+                total_collections,
+                db_name,
+                coll_name,
+                scanned_docs
+            );
 
             let mut mismatch_tables = Vec::new();
             collect_rowcount_mismatch_tables(&root, &mut mismatch_tables);
@@ -10067,7 +10953,13 @@ async fn build_post_import_rows(
                         );
                     }
                 } else {
-                    match compute_md5_summaries_for_collection(&coll_name, config_path).await {
+                    match compute_md5_summaries_for_collection_with_collections_root(
+                        &coll_name,
+                        config_path,
+                        Some(&collections_dir_for_lookup),
+                    )
+                    .await
+                    {
                         Ok(summaries) => {
                             for summary in summaries {
                                 if !mismatch_set.contains(&summary.table_name) {
@@ -10090,7 +10982,7 @@ async fn build_post_import_rows(
                         }
                         Err(err) => {
                             warn!(
-                                "failed to collect count differences for {}.{}: {}",
+                                "failed to collect count differences for {}.{}: {:#}",
                                 db_name, coll_name, err
                             );
                         }
@@ -10119,6 +11011,11 @@ async fn build_post_import_rows(
             document_count,
             root,
         });
+        info!(
+            "[{}/{}] ✅ post-import report collection completed",
+            index + 1,
+            total_collections
+        );
     }
 
     Ok(rows)
@@ -11808,6 +12705,35 @@ CREATE TABLE demo (
 
         assert!(sql.contains(
             "CREATE INDEX IF NOT EXISTS \"idx_child_parent_a_parent_b\" ON \"child\" (\"parent_a\", \"parent_b\");"
+        ));
+    }
+
+    #[test]
+    fn render_ddl_from_mapping_tables_adds_index_for_grouped_key_column() {
+        let sql = render_ddl_from_mapping_tables(
+            &[super::DdlTableMapping {
+                name: "events".to_owned(),
+                columns: vec![
+                    super::DdlColumnMapping {
+                        name: "id".to_owned(),
+                        sql_type: "BIGSERIAL".to_owned(),
+                        nullable: false,
+                        primary_key: true,
+                    },
+                    super::DdlColumnMapping {
+                        name: "_key".to_owned(),
+                        sql_type: "TEXT".to_owned(),
+                        nullable: true,
+                        primary_key: false,
+                    },
+                ],
+                foreign_keys: Vec::new(),
+            }],
+            Some("dbapi"),
+        );
+
+        assert!(sql.contains(
+            "CREATE INDEX IF NOT EXISTS \"idx_events_key\" ON \"dbapi\".\"events\" (\"_key\");"
         ));
     }
 

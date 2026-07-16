@@ -5,17 +5,18 @@ use crate::util::{
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
     inline_object_leaf_fields_with_prefix, read_conf, scalar_type_family,
 };
+use crate::export::resolve_grouped_sql_lookup_name;
 use anyhow::{anyhow, Context, Result};
 use bson::{doc, Bson, Document};
 use chrono::{DateTime, SecondsFormat, Utc};
-use futures::TryStreamExt;
+use futures::{SinkExt, TryStreamExt};
 use postgres_native_tls::MakeTlsConnector;
 use serde::{Deserialize,Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tokio_postgres::{Client, Row};
-use log::{info, error};
+use log::{debug, error, info, warn};
 
 #[derive(Debug, Clone, Deserialize)]
 struct MappingYaml {
@@ -67,6 +68,8 @@ struct MappingColumnYaml {
     target_field: String,
     #[serde(default)]
     data_type: Option<String>,
+    #[serde(default)]
+    literal_value: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -158,6 +161,84 @@ struct RowSnapshot {
     delta: Vec<String>, // The string representations from your values array
 }
 
+#[cfg(target_os = "linux")]
+fn linux_process_memory_kib() -> (Option<u64>, Option<u64>) {
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return (None, None);
+    };
+
+    let mut rss_kib: Option<u64> = None;
+    let mut hwm_kib: Option<u64> = None;
+
+    for line in status.lines() {
+        if let Some(value) = line.strip_prefix("VmRSS:") {
+            rss_kib = value
+                .split_whitespace()
+                .next()
+                .and_then(|raw| raw.parse::<u64>().ok());
+            continue;
+        }
+        if let Some(value) = line.strip_prefix("VmHWM:") {
+            hwm_kib = value
+                .split_whitespace()
+                .next()
+                .and_then(|raw| raw.parse::<u64>().ok());
+        }
+    }
+
+    (rss_kib, hwm_kib)
+}
+
+fn log_oom_probe(stage: &str, table_name: &str, mongo_rows: usize, pg_rows: usize) {
+    #[cfg(target_os = "linux")]
+    {
+        let (rss_kib, hwm_kib) = linux_process_memory_kib();
+        debug!(
+            "oom_probe stage={} table={} pid={} mongo_docs={} pg_rows={} vmrss_kib={} vmhwm_kib={}",
+            stage,
+            table_name,
+            std::process::id(),
+            mongo_rows,
+            pg_rows,
+            rss_kib.map(|v| v.to_string()).unwrap_or_else(|| "na".to_owned()),
+            hwm_kib.map(|v| v.to_string()).unwrap_or_else(|| "na".to_owned())
+        );
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        log::debug!(
+            "oom_probe stage={} table={} pid={} mongo_rows={} pg_rows={} vmrss_kib=na vmhwm_kib=na",
+            stage,
+            table_name,
+            std::process::id(),
+            mongo_rows,
+            pg_rows,
+        );
+    }
+}
+
+fn copy_text_escape(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '\t' => escaped.push_str("\\t"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+fn append_copy_text_row(buffer: &mut String, md5: &str, values: &str) {
+    buffer.push_str(&copy_text_escape(md5));
+    buffer.push('\t');
+    buffer.push_str(&copy_text_escape(values));
+    buffer.push('\n');
+}
+
 fn build_row_deltas(
     mongo_vals: Option<&[String]>,
     pg_vals: Option<&[String]>,
@@ -192,115 +273,104 @@ fn build_row_deltas(
     }
 }
 
-// fn build_row_deltas(
-//     mongo_vals: Option<&[String]>,
-//     pg_vals: Option<&[String]>,
-//     target_fields: &[String],
-// ) -> (Vec<String>, Vec<String>) {
-//     let (mongo_values, pg_values) = match (mongo_vals, pg_vals) {
-//         (None, Some(pv)) => {
-//             return (
-//                 vec![format!("Row missing in MongoDB")],
-//                 vec![format!("Row exists only in PostgreSQL: {:?}", pv)],
-//             );
-//         }
-//         (Some(mv), None) => {
-//             return (
-//                 vec![format!("Row exists only in MongoDB: {:?}", mv)],
-//                 vec![format!("Row missing in PostgreSQL")],
-//             );
-//         }
-//         (Some(mv), Some(pv)) => (mv, pv),
-//         (None, None) => return (vec![], vec![]),
-//     };
-
-//     let mut mongo_deltas = Vec::new();
-//     let mut pg_deltas = Vec::new();
-//     let max_len = std::cmp::max(mongo_values.len(), pg_values.len());
-
-//     for i in 0..max_len {
-//         let m_raw = mongo_values.get(i).map(String::as_str).unwrap_or("");
-//         let p_raw = pg_values.get(i).map(String::as_str).unwrap_or("");
-//         let col = target_fields.get(i).map(String::as_str).unwrap_or("?");
-
-//         let m_clean = m_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
-//         let p_clean = p_raw.replace("\\\"", "\"").replace("\\\\", "\\").replace('"', "");
-
-//         if m_clean == p_clean {
-//             continue;
-//         }
-
-//         let (m_preview, p_preview) = {
-//             let mc: Vec<char> = m_clean.chars().collect();
-//             let pc: Vec<char> = p_clean.chars().collect();
-//             let mut start = 0;
-//             while start < mc.len() && start < pc.len() && mc[start] == pc[start] {
-//                 start += 1;
-//             }
-//             let mut em = mc.len();
-//             let mut ep = pc.len();
-//             while em > start && ep > start && mc[em - 1] == pc[ep - 1] {
-//                 em -= 1;
-//                 ep -= 1;
-//             }
-//             let md: String = mc[start..em].iter().collect();
-//             let pd: String = pc[start..ep].iter().collect();
-//             let m_hi = format!(
-//                 "{}{}{}",
-//                 mc[0..start].iter().collect::<String>(),
-//                 if md.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", md) },
-//                 mc[em..].iter().collect::<String>()
-//             );
-//             let p_hi = format!(
-//                 "{}{}{}",
-//                 pc[0..start].iter().collect::<String>(),
-//                 if pd.is_empty() { "**[MISSING]**".to_string() } else { format!("**{}**", pd) },
-//                 pc[ep..].iter().collect::<String>()
-//             );
-//             (m_hi, p_hi)
-//         };
-
-//         mongo_deltas.push(format!(
-//             "Col '{}'\n     Original: {}\n     Diff:     {}",
-//             col, m_raw, m_preview
-//         ));
-//         pg_deltas.push(format!(
-//             "Col '{}'\n     Original: {}\n     Diff:     {}",
-//             col, p_raw, p_preview
-//         ));
-//     }
-
-//     if mongo_deltas.is_empty() {
-//         mongo_deltas.push(format!("No column-level delta found"));
-//         pg_deltas.push(format!("No column-level delta found"));
-//     }
-
-//     (mongo_deltas, pg_deltas)
-// }
-
 /// Orchestrates the process using temporary tables to sort and calculate the aggregate checksums.
 async fn compute_collection_checksums_via_temp_tables(
-    pg_client: &Client,
-    mongo_cursor: &mut mongodb::Cursor<bson::Document>,
+    pg_read_client: &Client,
+    _pg_read_uri: Option<&str>,
+    pg_write_client: &Client,
+    mongo_collection: &mongodb::Collection<bson::Document>,
     source_fields: &[(String, Option<String>)], // Typed MongoDB source fields
     source_path: &SourcePath,
+    db_name: &str,
+    coll_name: &str,
     schema_name: Option<&str>,
     table_name: &str,
     target_fields: &[String],
+    pg_key_filter: Option<(&str, &str)>,
 ) -> Result<CollectionChecksumResult> {
+    const COPY_BUFFER_ROWS: usize = 5_000;
+    const MONGO_CURSOR_RETRY_MAX: u32 = 4;
+    const PG_STREAM_RETRY_MAX: u32 = 4;
+    const PG_STREAM_OPEN_TIMEOUT_SECS: u64 = 600;
+    const PG_STREAM_IDLE_HEARTBEAT_SECS: u64 = 45;
+    const PG_STREAM_IDLE_STALL_HEARTBEATS: u32 = 3;
+    const PG_STREAM_IDLE_STALL_RETRY_MAX: u32 = 2;
+    const PG_QUERY_HEARTBEAT_SECS: u64 = 30;
+    const PG_EXPLAIN_TIMEOUT_SECS: u64 = 120;
+
+    async fn await_pg_with_heartbeat<T, F>(
+        future: F,
+        table_name: &str,
+        stage: &str,
+        mongo_rows: usize,
+        pg_rows: usize,
+        heartbeat_secs: u64,
+    ) -> Result<T>
+    where
+        F: std::future::Future<Output = std::result::Result<T, tokio_postgres::Error>>,
+    {
+        futures::pin_mut!(future);
+        loop {
+            match tokio::time::timeout(std::time::Duration::from_secs(heartbeat_secs), future.as_mut())
+                .await
+            {
+                Ok(Ok(value)) => return Ok(value),
+                Ok(Err(err)) => return Err(err.into()),
+                Err(_) => {
+                    info!(
+                        "  ↳ ⏳ Waiting for PostgreSQL query stage={} table={} (mongo_rows={} pg_rows={} idle={}s)",
+                        stage,
+                        table_name,
+                        mongo_rows,
+                        pg_rows,
+                        heartbeat_secs,
+                    );
+                    log_oom_probe(stage, table_name, mongo_rows, pg_rows);
+                }
+            }
+        }
+    }
+
+    async fn explain_select_query(client: &Client, select_sql: &str, timeout_secs: u64) -> String {
+        let explain_sql = format!("EXPLAIN (FORMAT TEXT) {select_sql}");
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(timeout_secs),
+            client.query(&explain_sql, &[]),
+        )
+        .await
+        {
+            Ok(Ok(rows)) => {
+                let plan = rows
+                    .iter()
+                    .map(|row| row.get::<usize, String>(0))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if plan.is_empty() {
+                    "<empty explain output>".to_owned()
+                } else {
+                    plan
+                }
+            }
+            Ok(Err(err)) => format!("<explain failed: {:#}>", err),
+            Err(_) => format!("<explain timed out after {}s>", timeout_secs),
+        }
+    }
+
     let suffix = sanitize_pg_name(table_name);
     let temp_mongo_table = format!("temp_mongo_hashes_{suffix}");
     let temp_pg_table = format!("temp_pg_hashes_{suffix}");
 
     let temp_mongo_ident = quote_ident(&temp_mongo_table);
     let temp_pg_ident = quote_ident(&temp_pg_table);
+
+    log_oom_probe("start", table_name, 0, 0);
  
     // --- STEP 1: Initialize temporary tables ---
     // Using ON COMMIT PRESERVE ROWS so they last for the lifetime of our session/connection
-    pg_client
+    pg_write_client
         .execute(
             &format!(
-                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) on commit preserve rows",
+                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) ON COMMIT PRESERVE ROWS",
                 temp_mongo_ident
             ),
             &[],
@@ -308,84 +378,194 @@ async fn compute_collection_checksums_via_temp_tables(
         .await
         .context("Failed to create temporary table for MongoDB hashes")?;
 
-    pg_client
+    pg_write_client
         .execute(
             &format!(
-                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) on commit preserve rows",
+                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) ON COMMIT PRESERVE ROWS",
                 temp_pg_ident
             ),
             &[],
         )
         .await
         .context("Failed to create temporary table for Postgres hashes")?;
-    // Prepare insert statements for maximum speed
 
-
-    let insert_mongo_stmt = pg_client
-        .prepare(&format!(
-            "INSERT INTO {} (md5, values) VALUES ($1, $2)",
-            temp_mongo_ident
-        ))
-        .await?;
-    let insert_pg_stmt = pg_client
-        .prepare(&format!(
-            "INSERT INTO {} (md5, values) VALUES ($1, $2)",
-            temp_pg_ident
-        ))
-        .await?;
+    log_oom_probe("temp_tables_ready", table_name, 0, 0);
 
     // --- STEP 2: Stream Mongo data, calculate MD5 row-by-row, and save to temp table ---
-    info!("🔄 [Collection: {}] Starting MongoDB md5 docs compute...", table_name);
+    info!("🔄 [Collection: {}] Starting MongoDB md5 docs compute...", coll_name);
     let mut mongo_row_count: usize = 0;
     let mongo_log_every: usize = 10000;
-    while let Some(doc) = mongo_cursor.try_next().await? {
-        if source_path.path.is_empty()
-            && source_path.scalar_array_field.is_none()
-            && source_path.grouped_fields.is_none()
-        {
-            // Calculate the individual record hash as it arrives
-            let record = mongo_hash_record_for_columns(&doc, source_fields);
-            let record_values = mongo_hash_values_pipe_for_columns(&doc, source_fields);
-
-            // Push the single md5 row directly into the database scratchpad
-            pg_client
-                .execute(&insert_mongo_stmt, &[&record.md5, &record_values])
-                .await?;
-            mongo_row_count += 1;
-            if mongo_row_count % mongo_log_every == 0 {
-                info!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
-            }
-            continue;
+    let mongo_total_docs = match mongo_collection.estimated_document_count().await {
+        Ok(total) => Some(total as usize),
+        Err(err) => {
+            warn!(
+                "Could not estimate MongoDB total docs for {}.{} table={}: {:#}",
+                db_name, coll_name, table_name, err
+            );
+            None
         }
-        for mut source_doc in extract_source_documents(&doc, source_path) {
-            if source_fields.iter().any(|(field, _)| field == "_id")
-                && !source_doc.contains_key("_id")
-            {
-                if let Some(root_id) = doc.get("_id") {
-                    source_doc.insert("_id", root_id.clone());
+    };
+    let mongo_copy_sql = format!("COPY {} (md5, values) FROM STDIN", temp_mongo_ident);
+    let mongo_copy_sink = pg_write_client.copy_in(&mongo_copy_sql).await?;
+    let mut mongo_copy_sink = std::pin::pin!(mongo_copy_sink);
+    let mut mongo_copy_buffer = String::with_capacity(256 * 1024);
+    let mut mongo_copy_buffered_rows = 0usize;
+    let mut last_seen_id: Option<Bson> = None;
+    let mut cursor_retry_attempt = 0_u32;
+    'mongo_stream: loop {
+        let find_filter = match &last_seen_id {
+            Some(last_id) => doc! { "_id": { "$gt": last_id.clone() } },
+            None => doc! {},
+        };
+        let mut mongo_cursor = mongo_collection
+            .find(find_filter)
+            .sort(doc! { "_id": 1 })
+            .no_cursor_timeout(true)
+            .await
+            .with_context(|| format!("Failed to query {db_name}.{coll_name} for md5 stream"))?;
+
+        loop {
+            let next_doc = match mongo_cursor.try_next().await {
+                Ok(value) => value,
+                Err(err) => {
+                    if cursor_retry_attempt < MONGO_CURSOR_RETRY_MAX {
+                        cursor_retry_attempt += 1;
+                        warn!(
+                            "Mongo md5 cursor retry {}/{} for {}.{} table={} rows={} last_id={} reason={:#}",
+                            cursor_retry_attempt,
+                            MONGO_CURSOR_RETRY_MAX,
+                            db_name,
+                            coll_name,
+                            table_name,
+                            mongo_row_count,
+                            last_seen_id
+                                .as_ref()
+                                .map(|id| id.to_string())
+                                .unwrap_or_else(|| "<begin>".to_owned()),
+                            err
+                        );
+                        continue 'mongo_stream;
+                    }
+                    return Err(anyhow!(
+                        "Mongo md5 cursor failed after {} retries for {}.{} table={} rows={} last_id={}: {:#}",
+                        MONGO_CURSOR_RETRY_MAX,
+                        db_name,
+                        coll_name,
+                        table_name,
+                        mongo_row_count,
+                        last_seen_id
+                            .as_ref()
+                            .map(|id| id.to_string())
+                            .unwrap_or_else(|| "<begin>".to_owned()),
+                        err
+                    ));
                 }
+            };
+
+            let Some(doc) = next_doc else {
+                break 'mongo_stream;
+            };
+
+            cursor_retry_attempt = 0;
+            if let Some(doc_id) = doc.get("_id") {
+                last_seen_id = Some(doc_id.clone());
             }
 
-            let record = mongo_hash_record_for_columns(&source_doc, source_fields);
-            let record_values = mongo_hash_values_pipe_for_columns(&source_doc, source_fields);
-            // Prefer the nested doc's own _id; fall back to the parent root _id.
-            pg_client
-                .execute(&insert_mongo_stmt, &[&record.md5, &record_values])
-                .await?;
-            mongo_row_count += 1;
-            if mongo_row_count % mongo_log_every == 0 {
-                info!("  ↳ 📥 Processed {} MongoDB docs from {}...", mongo_row_count, table_name);
+            if source_path.path.is_empty()
+                && source_path.scalar_array_field.is_none()
+                && source_path.grouped_fields.is_none()
+            {
+                let record = mongo_hash_record_for_columns(&doc, source_fields);
+                let record_values = mongo_hash_values_pipe_for_columns(&doc, source_fields);
+
+                append_copy_text_row(&mut mongo_copy_buffer, &record.md5, &record_values);
+                mongo_copy_buffered_rows += 1;
+                if mongo_copy_buffered_rows >= COPY_BUFFER_ROWS {
+                    mongo_copy_sink
+                        .as_mut()
+                        .send(bytes::Bytes::from(std::mem::take(&mut mongo_copy_buffer).into_bytes()))
+                        .await?;
+                    mongo_copy_buffered_rows = 0;
+                }
+                mongo_row_count += 1;
+                if mongo_row_count % mongo_log_every == 0 {
+                    if let Some(total_docs) = mongo_total_docs {
+                        info!(
+                            "  ↳ 📥 Read {}/{} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            total_docs,
+                            coll_name
+                        );
+                    } else {
+                        info!(
+                            "  ↳ 📥 Read {} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            coll_name
+                        );
+                    }
+                    //log_oom_probe("mongo_stream_progress", coll_name, mongo_row_count, 0);
+                }
+                continue;
+            }
+
+            for mut source_doc in extract_source_documents(&doc, source_path) {
+                if source_fields.iter().any(|(field, _)| field == "_id")
+                    && !source_doc.contains_key("_id")
+                {
+                    if let Some(root_id) = doc.get("_id") {
+                        source_doc.insert("_id", root_id.clone());
+                    }
+                }
+
+                let record = mongo_hash_record_for_columns(&source_doc, source_fields);
+                let record_values = mongo_hash_values_pipe_for_columns(&source_doc, source_fields);
+                append_copy_text_row(&mut mongo_copy_buffer, &record.md5, &record_values);
+                mongo_copy_buffered_rows += 1;
+                if mongo_copy_buffered_rows >= COPY_BUFFER_ROWS {
+                    mongo_copy_sink
+                        .as_mut()
+                        .send(bytes::Bytes::from(std::mem::take(&mut mongo_copy_buffer).into_bytes()))
+                        .await?;
+                    mongo_copy_buffered_rows = 0;
+                }
+                mongo_row_count += 1;
+                if mongo_row_count % mongo_log_every == 0 {
+                    if let Some(total_docs) = mongo_total_docs {
+                        info!(
+                            "  ↳ 📥 Read nested {}/{} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            total_docs,
+                            coll_name
+                        );
+                    } else {
+                        info!(
+                            "  ↳ 📥 Read nested {} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            coll_name
+                        );
+                    }
+                    //log_oom_probe("mongo_stream_progress", table_name, mongo_row_count, 0);
+                }
             }
         }
     }
+    if !mongo_copy_buffer.is_empty() {
+        mongo_copy_sink
+            .as_mut()
+            .send(bytes::Bytes::from(std::mem::take(&mut mongo_copy_buffer).into_bytes()))
+            .await?;
+    }
+    mongo_copy_sink.as_mut().finish().await?;
+
     info!(
         "✅ [Collection: {}] MongoDB md5 docs complete. Docs: {}",
-        table_name, mongo_row_count
+        coll_name, mongo_row_count
     );
+    log_oom_probe("mongo_stream_done", coll_name, mongo_row_count, 0);
 
     // --- STEP 3: Stream target Postgres data (unordered), calculate MD5, and save to temp table ---
-    info!("🔄 [Collection: {}] Starting PostgreSQL md5 rows compute...", table_name);
-    let pg_order_field = source_fields
+    info!("🔄 [Table: {}] Starting PostgreSQL md5 rows compute...", table_name);
+    let pg_resume_field = source_fields
         .iter()
         .zip(target_fields.iter())
         .find_map(|((source_field, _), target_field)| {
@@ -400,70 +580,402 @@ async fn compute_collection_checksums_via_temp_tables(
                 .iter()
                 .find(|field| field.eq_ignore_ascii_case("id"))
                 .map(String::as_str)
-        })
-        .or_else(|| target_fields.first().map(String::as_str));
-    let pg_order_field_index =
-        pg_order_field.and_then(|field| target_fields.iter().position(|candidate| candidate == field));
-    let select_sql = pg_select_query_unordered(schema_name, table_name, target_fields, pg_order_field);
+        });
+    // Keep ordering only when we have a stable resume key (_id/id).
+    // Fallback ordering by first projected column can trigger expensive sorts.
+    let pg_order_field = pg_resume_field;
+    log_oom_probe("pg_stream_start", table_name, mongo_row_count, 0);
     let _pg_stream_started_at = Instant::now();
-    let pg_stream = pg_client
-        .query_raw(
-            &select_sql,
-            std::iter::empty::<&(dyn tokio_postgres::types::ToSql + Sync)>(),
-        )
-        .await?;
-    futures::pin_mut!(pg_stream);
+
+    let pg_copy_sql = format!("COPY {} (md5, values) FROM STDIN", temp_pg_ident);
+    let pg_copy_sink = pg_write_client.copy_in(&pg_copy_sql).await?;
+    let mut pg_copy_sink = std::pin::pin!(pg_copy_sink);
+    let mut pg_copy_buffer = String::with_capacity(256 * 1024);
+    let mut pg_copy_buffered_rows = 0usize;
+
+    let pg_qualified_table = match schema_name {
+        Some(schema_name) => format!("{}.{}", quote_ident(schema_name), quote_ident(table_name)),
+        None => quote_ident(table_name),
+    };
+    let mut pg_count_sql = format!("SELECT COUNT(*)::BIGINT FROM {pg_qualified_table}");
+    if let Some((field, value)) = pg_key_filter {
+        pg_count_sql.push_str(&format!(
+            " WHERE {} = '{}'",
+            quote_ident(field),
+            value.replace('\'', "''")
+        ));
+    }
+    let pg_total_rows = match tokio::time::timeout(
+        std::time::Duration::from_secs(PG_EXPLAIN_TIMEOUT_SECS),
+        pg_read_client.query_one(&pg_count_sql, &[]),
+    )
+    .await
+    {
+        Ok(Ok(row)) => Some(row.get::<usize, i64>(0) as usize),
+        Ok(Err(err)) => {
+            warn!(
+                "Could not count PostgreSQL total rows for table={} query={}: {:#}",
+                table_name, pg_count_sql, err
+            );
+            None
+        }
+        Err(_) => {
+            warn!(
+                "Counting PostgreSQL total rows timed out after {}s for table={} query={}",
+                PG_EXPLAIN_TIMEOUT_SECS,
+                table_name,
+                pg_count_sql
+            );
+            None
+        }
+    };
 
     let mut pg_row_count = 0;
-    let mut pg_hash_rows: Vec<(String, String, Option<String>)> = Vec::new();
-    while let Some(row) = pg_stream.try_next().await? {
-        // Transform columns into normalized representations and calculate row MD5
-        let record = pg_hash_record(&row);
-        let record_values = pg_hash_values_pipe(&row, target_fields);
-        let row_id = pg_order_field_index.and_then(|index| {
-            record_values.split('|').nth(index).map(String::from)
-        });
-        pg_hash_rows.push((record.md5, record_values, row_id));
-        pg_row_count += 1;
-        if pg_row_count % mongo_log_every == 0 {
-            info!("  ↳ 📥 Processed {} PostgreSQL rows from {}...", pg_row_count, table_name);
+    let mut pg_last_order_value: Option<String> = None;
+    let mut pg_retry_attempt = 0_u32;
+    let mut pg_idle_stall_retry_attempt = 0_u32;
+    let pg_resume_field_name = pg_resume_field.map(str::to_owned);
+    let pg_resume_field_index = pg_resume_field_name
+        .as_ref()
+        .and_then(|field| target_fields.iter().position(|candidate| candidate == field));
+    let mut pg_idle_heartbeat_count = 0_u32;
+
+    'pg_stream: loop {
+        let select_sql = pg_select_query_unordered(
+            schema_name,
+            table_name,
+            target_fields,
+            pg_order_field,
+            pg_key_filter,
+            pg_resume_field_name
+                .as_deref()
+                .zip(pg_last_order_value.as_deref()),
+        );
+
+        let pg_stream_open = tokio::time::timeout(
+            std::time::Duration::from_secs(PG_STREAM_OPEN_TIMEOUT_SECS),
+            async {
+                pg_read_client
+                    .query_raw(
+                        &select_sql,
+                        std::iter::empty::<&(dyn tokio_postgres::types::ToSql + Sync)>(),
+                    )
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
+        )
+        .await;
+
+        let pg_stream = match pg_stream_open {
+            Err(_) => {
+                let explain_plan =
+                    explain_select_query(pg_read_client, &select_sql, PG_EXPLAIN_TIMEOUT_SECS)
+                        .await;
+                if pg_retry_attempt < PG_STREAM_RETRY_MAX {
+                    pg_retry_attempt += 1;
+                    warn!(
+                        "PostgreSQL md5 stream open timed out after {}s, retry {}/{} for table={} rows={} last_order={} query={} explain_plan={}",
+                        PG_STREAM_OPEN_TIMEOUT_SECS,
+                        pg_retry_attempt,
+                        PG_STREAM_RETRY_MAX,
+                        table_name,
+                        pg_row_count,
+                        pg_last_order_value.as_deref().unwrap_or("<begin>"),
+                        select_sql,
+                        explain_plan
+                    );
+                    continue 'pg_stream;
+                }
+                return Err(anyhow!(
+                    "PostgreSQL md5 stream open timed out after {}s and {} retries for table={} rows={} last_order={} query={} explain_plan={}",
+                    PG_STREAM_OPEN_TIMEOUT_SECS,
+                    PG_STREAM_RETRY_MAX,
+                    table_name,
+                    pg_row_count,
+                    pg_last_order_value.as_deref().unwrap_or("<begin>"),
+                    select_sql,
+                    explain_plan
+                ));
+            }
+            Ok(Err(err)) => {
+                if pg_retry_attempt < PG_STREAM_RETRY_MAX {
+                    pg_retry_attempt += 1;
+                    warn!(
+                        "PostgreSQL md5 stream retry {}/{} for table={} rows={} last_order={} reason={:#} query={}",
+                        pg_retry_attempt,
+                        PG_STREAM_RETRY_MAX,
+                        table_name,
+                        pg_row_count,
+                        pg_last_order_value.as_deref().unwrap_or("<begin>"),
+                        err,
+                        select_sql
+                    );
+                    continue 'pg_stream;
+                }
+                return Err(anyhow!(
+                    "PostgreSQL md5 stream failed after {} retries for table={} rows={} last_order={}: {:#}; query={}",
+                    PG_STREAM_RETRY_MAX,
+                    table_name,
+                    pg_row_count,
+                    pg_last_order_value.as_deref().unwrap_or("<begin>"),
+                    err,
+                    select_sql
+                ));
+            }
+            Ok(Ok(stream)) => stream,
+        };
+
+        futures::pin_mut!(pg_stream);
+        loop {
+            let row = match tokio::time::timeout(
+                std::time::Duration::from_secs(PG_STREAM_IDLE_HEARTBEAT_SECS),
+                pg_stream.try_next(),
+            )
+            .await
+            {
+                Ok(Ok(value)) => value,
+                Ok(Err(err)) => {
+                    if pg_retry_attempt < PG_STREAM_RETRY_MAX {
+                        pg_retry_attempt += 1;
+                        warn!(
+                            "PostgreSQL md5 stream retry {}/{} for table={} rows={} last_order={} reason={:#} query={}",
+                            pg_retry_attempt,
+                            PG_STREAM_RETRY_MAX,
+                            table_name,
+                            pg_row_count,
+                            pg_last_order_value
+                                .as_deref()
+                                .unwrap_or("<begin>"),
+                            err,
+                            select_sql
+                        );
+                        continue 'pg_stream;
+                    }
+                    return Err(anyhow!(
+                        "PostgreSQL md5 stream failed after {} retries for table={} rows={} last_order={}: {:#}; query={}",
+                        PG_STREAM_RETRY_MAX,
+                        table_name,
+                        pg_row_count,
+                        pg_last_order_value
+                            .as_deref()
+                            .unwrap_or("<begin>"),
+                        err,
+                        select_sql
+                    ));
+                }
+                Err(timeout_err) => {
+                    pg_idle_heartbeat_count += 1;
+                    info!(
+                        "  ↳ ⏳ Waiting for PostgreSQL rows from {} (processed={} last_order={} idle={}s timeout_error={} idle_count={}/{})",
+                        table_name,
+                        pg_row_count,
+                        pg_last_order_value
+                            .as_deref()
+                            .unwrap_or("<begin>"),
+                        PG_STREAM_IDLE_HEARTBEAT_SECS,
+                        timeout_err,
+                        pg_idle_heartbeat_count,
+                        PG_STREAM_IDLE_STALL_HEARTBEATS,
+                    );
+                    log_oom_probe("pg_stream_idle", table_name, mongo_row_count, pg_row_count);
+
+                    if pg_idle_heartbeat_count >= PG_STREAM_IDLE_STALL_HEARTBEATS {
+                        if pg_resume_field_name.is_some()
+                            && pg_idle_stall_retry_attempt < PG_STREAM_IDLE_STALL_RETRY_MAX
+                        {
+                            pg_idle_stall_retry_attempt += 1;
+                            warn!(
+                                "PostgreSQL md5 stream idle-stall retry {}/{} for table={} rows={} last_order={}",
+                                pg_idle_stall_retry_attempt,
+                                PG_STREAM_IDLE_STALL_RETRY_MAX,
+                                table_name,
+                                pg_row_count,
+                                pg_last_order_value.as_deref().unwrap_or("<begin>")
+                            );
+                            pg_idle_heartbeat_count = 0;
+                            continue 'pg_stream;
+                        }
+
+                        return Err(anyhow!(
+                            "PostgreSQL md5 stream stalled for {} heartbeat intervals on table={} rows={} last_order={} (resume_field={}): no progress",
+                            PG_STREAM_IDLE_STALL_HEARTBEATS,
+                            table_name,
+                            pg_row_count,
+                            pg_last_order_value.as_deref().unwrap_or("<begin>"),
+                            pg_resume_field_name.as_deref().unwrap_or("<none>")
+                        ));
+                    }
+                    continue;
+                }
+            };
+
+            let Some(row) = row else {
+                break 'pg_stream;
+            };
+
+            pg_idle_heartbeat_count = 0;
+            pg_idle_stall_retry_attempt = 0;
+            pg_retry_attempt = 0;
+            if let Some(order_idx) = pg_resume_field_index {
+                let order_value: String = row.get(order_idx);
+                pg_last_order_value = Some(order_value);
+            }
+
+            // Transform columns into normalized representations and calculate row MD5
+            let record = pg_hash_record(&row);
+            let record_values = pg_hash_values_pipe(&row, target_fields);
+            append_copy_text_row(&mut pg_copy_buffer, &record.md5, &record_values);
+            pg_copy_buffered_rows += 1;
+            if pg_copy_buffered_rows >= COPY_BUFFER_ROWS {
+                pg_copy_sink
+                    .as_mut()
+                    .send(bytes::Bytes::from(std::mem::take(&mut pg_copy_buffer).into_bytes()))
+                    .await?;
+                pg_copy_buffered_rows = 0;
+            }
+            pg_row_count += 1;
+            if pg_row_count % mongo_log_every == 0 {
+                if let Some(total_rows) = pg_total_rows {
+                    info!(
+                        "  ↳ 📥 Read {}/{} PostgreSQL rows, compute md5 and /copy to temp table from {}...",
+                        pg_row_count,
+                        total_rows,
+                        table_name
+                    );
+                } else {
+                    info!(
+                        "  ↳ 📥 Read {} PostgreSQL rows, compute md5 and /copy to temp table from {}...",
+                        pg_row_count,
+                        table_name
+                    );
+                }
+                log_oom_probe("pg_stream_progress", table_name, mongo_row_count, pg_row_count);
+            }
         }
     }
-
-    // Insert after stream completion to avoid blocking on same connection while portal is active.
-    for (md5, values, _) in &pg_hash_rows {
-        pg_client.execute(&insert_pg_stmt, &[md5, values]).await?;
+    if !pg_copy_buffer.is_empty() {
+        pg_copy_sink
+            .as_mut()
+            .send(bytes::Bytes::from(std::mem::take(&mut pg_copy_buffer).into_bytes()))
+            .await?;
     }
+    pg_copy_sink.as_mut().finish().await?;
+
     info!(
         "✅ [Collection: {}] PostgreSQL md5 rows completed. Rows: {}",
         table_name, pg_row_count
     );
+    log_oom_probe("pg_stream_done", table_name, mongo_row_count, pg_row_count);
 
+    info!(
+        "🔄 [Collection: {}] Starting aggregate checksum. Create index & analyze pg & mongo temp tables (this may take a while).",
+        table_name
+    );
+
+    await_pg_with_heartbeat(
+        pg_write_client.execute(
+            &format!("CREATE INDEX ON {} (md5) include (values)", temp_mongo_ident),
+            &[],
+        ),
+        table_name,
+        "create_mongo_temp_index_wait",
+        mongo_row_count,
+        pg_row_count,
+        PG_QUERY_HEARTBEAT_SECS,
+    )
+    .await
+    .context("Failed to create md5 index for MongoDB temp hashes")?;
+    info!("Created index for MongoDB temp hashes. Now creating index for PostgreSQL temp hashes...");
+    await_pg_with_heartbeat(
+        pg_write_client.execute(
+            &format!("CREATE INDEX ON {} (md5) include (values)", temp_pg_ident),
+            &[],
+        ),
+        table_name,
+        "create_pg_temp_index_wait",
+        mongo_row_count,
+        pg_row_count,
+        PG_QUERY_HEARTBEAT_SECS,
+    )
+    .await
+    .context("Failed to create md5 index for PostgreSQL temp hashes")?;
+    info!("Created index for PostgreSQL temp hashes. Now analyzing both temp tables...");
+    await_pg_with_heartbeat(
+        pg_write_client.execute(
+            &format!("ANALYZE {}", temp_mongo_ident),
+            &[],
+        ),
+        table_name,
+        "analyze_mongo_temp_wait",
+        mongo_row_count,
+        pg_row_count,
+        PG_QUERY_HEARTBEAT_SECS,
+    )
+    .await
+    .context("Failed to analyze mongo temp hashes")?;
+    info!("Analyzed MongoDB temp hashes. Now analyzing PostgreSQL temp hashes...");
+    await_pg_with_heartbeat(
+        pg_write_client.execute(
+            &format!("ANALYZE {}", temp_pg_ident),
+            &[],
+        ),
+        table_name,
+        "analyze_pg_temp_wait",
+        mongo_row_count,
+        pg_row_count,
+        PG_QUERY_HEARTBEAT_SECS,
+    )
+    .await
+    .context("Failed to analyze pg temp hashes")?;
+    info!("Analyzed PostgreSQL temp hashes. Now performing aggregate checksum queries...");
     // 3. Complete internal sorted aggregation calculations using string_agg entirely inside PG
-    let mongo_agg_row = pg_client
-        .query_one(
+    let mongo_agg_row = await_pg_with_heartbeat(
+        pg_write_client.query_one(
             &format!(
                 "SELECT COALESCE(md5(string_agg(md5, '' ORDER BY md5)), md5('')) FROM {}",
                 temp_mongo_ident
             ),
             &[],
-        )
-        .await?;
+        ),
+        table_name,
+        "aggregate_mongo_wait",
+        mongo_row_count,
+        pg_row_count,
+        PG_QUERY_HEARTBEAT_SECS,
+    )
+    .await?;
     let final_mongo_md5: String = mongo_agg_row.get(0);
-
-    let pg_agg_row = pg_client
-        .query_one(
+    let pg_agg_row = await_pg_with_heartbeat(
+        pg_write_client.query_one(
             &format!(
                 "SELECT COALESCE(md5(string_agg(md5, '' ORDER BY md5)), md5('')) FROM {}",
                 temp_pg_ident
             ),
             &[],
-        )
-        .await?;
+        ),
+        table_name,
+        "aggregate_pg_wait",
+        mongo_row_count,
+        pg_row_count,
+        PG_QUERY_HEARTBEAT_SECS,
+    )
+    .await?;
     let final_pg_md5: String = pg_agg_row.get(0);
 
     let matches = final_mongo_md5 == final_pg_md5;
     let mut mismatches = None;
+    
+    if matches {
+        info!(
+            "✅ [Collection: {} Table: {}] Aggregate checksum completed (matches={})",
+            coll_name, table_name, matches
+        );
+    } else {
+        warn!(
+            "⚠️ [Collection: {} Table: {}] Checksum mismatch detected! MongoDB md5={} vs PostgreSQL md5={}, retrieving first 5 row differences for inspection...",
+            coll_name, table_name, final_mongo_md5, final_pg_md5
+        );
+    }
 
     // --- STEP 5: If datasets diverge, find first 5 rows that differ, matched by id ---
     if !matches {
@@ -495,7 +1007,15 @@ async fn compute_collection_checksums_via_temp_tables(
             pg = temp_pg_ident,
         );
 
-        let diff_rows = pg_client.query(&diff_query, &[]).await?;
+        let diff_rows = await_pg_with_heartbeat(
+            pg_write_client.query(&diff_query, &[]),
+            table_name,
+            "mismatch_diff_wait",
+            mongo_row_count,
+            pg_row_count,
+            PG_QUERY_HEARTBEAT_SECS,
+        )
+        .await?;
         let mut mongo_only = Vec::new();
         let mut pg_only = Vec::new();
 
@@ -522,13 +1042,14 @@ async fn compute_collection_checksums_via_temp_tables(
 
         mismatches = Some(MismatchDelta { mongo_only, pg_only });
     }
-    // --- STEP 5: Clean up scratchpad tables explicitly ---
-    pg_client
+    //--- STEP 5: Clean up scratchpad tables explicitly ---
+    pg_write_client
         .execute(&format!("DROP TABLE {}", temp_mongo_ident), &[])
         .await?;
-    pg_client
+    pg_write_client
         .execute(&format!("DROP TABLE {}", temp_pg_ident), &[])
         .await?;
+    log_oom_probe("cleanup_done", table_name, mongo_row_count, pg_row_count);
 
     Ok(CollectionChecksumResult {
         mongo_md5: final_mongo_md5,
@@ -543,7 +1064,13 @@ fn pg_select_query_unordered(
     table_name: &str,
     target_fields: &[String],
     order_by_field: Option<&str>,
+    equality_filter: Option<(&str, &str)>,
+    resume_after: Option<(&str, &str)>,
 ) -> String {
+    fn quote_literal(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+
     let select_list = target_fields
         .iter()
         .map(|field| {
@@ -558,13 +1085,62 @@ fn pg_select_query_unordered(
         None => quote_ident(table_name),
     };
 
+    let mut predicates: Vec<String> = Vec::new();
+    if let Some((field, value)) = equality_filter {
+        predicates.push(format!("{} = {}", quote_ident(field), quote_literal(value)));
+    }
+    if let Some((field, value)) = resume_after {
+        predicates.push(format!(
+            "COALESCE(to_json({})::text, 'null') > {}",
+            quote_ident(field),
+            quote_literal(value)
+        ));
+    }
+    let where_clause = if predicates.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", predicates.join(" AND "))
+    };
+
     match order_by_field {
-        Some(field) => format!(
-            "SELECT {select_list} FROM {qualified_table} ORDER BY {}",
+        Some(field) if resume_after.is_some() => format!(
+            "SELECT {select_list} FROM {qualified_table}{where_clause} ORDER BY COALESCE(to_json({})::text, 'null')",
             quote_ident(field)
         ),
-        None => format!("SELECT {select_list} FROM {qualified_table}"),
+        Some(field) => format!(
+            "SELECT {select_list} FROM {qualified_table}{where_clause} ORDER BY {}",
+            quote_ident(field)
+        ),
+        None => format!(
+            "SELECT {select_list} FROM {qualified_table}{where_clause}"
+        ),
     }
+}
+
+fn grouped_key_filter_for_target(target: &MappingTarget) -> Option<(String, String)> {
+    let key_mapping = target
+        .mapping_yaml
+        .pg_mapping
+        .columns
+        .iter()
+        .find(|column| column.target_field.eq_ignore_ascii_case("_key"))?;
+
+    if let Some(value) = key_mapping
+        .literal_value
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(("_key".to_owned(), value.to_owned()));
+    }
+
+    let table_name = target.mapping_yaml.pg_mapping.table_name.as_str();
+    target
+        .source_collection
+        .strip_prefix(table_name)
+        .and_then(|rest| rest.strip_prefix('_'))
+        .filter(|suffix| !suffix.is_empty())
+        .map(|suffix| ("_key".to_owned(), suffix.to_owned()))
 }
 
 fn comparable_md5_columns(columns: &[MappingColumnYaml]) -> Vec<&MappingColumnYaml> {
@@ -627,6 +1203,10 @@ fn bson_to_comparable_json(value: &Bson) -> serde_json::Value {
 }
 
 fn canonicalize_json_value(value: &serde_json::Value) -> String {
+    fn strip_embedded_nuls(raw: &str) -> String {
+        raw.chars().filter(|ch| *ch != '\u{0000}').collect()
+    }
+
     fn canonicalize_json_object(map: &serde_json::Map<String, serde_json::Value>) -> String {
         format!(
             "{{{}}}",
@@ -694,16 +1274,19 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
             }
         }
         serde_json::Value::String(v) => {
+            let cleaned = strip_embedded_nuls(v);
             {
                 // Attempt to parse as RFC3339 / ISO8601 (e.g. "2024-01-15T00:00:00Z").
-                if let Ok(dt) = v.parse::<DateTime<Utc>>() {
+                if let Ok(dt) = cleaned.parse::<DateTime<Utc>>() {
                     let normalized_ts = dt.to_rfc3339_opts(SecondsFormat::Secs, true);
                     return serde_json::to_string(&normalized_ts)
                         .expect("serializing normalized timestamp should succeed");
                 }
 
                 // Fallback: MongoDB may store dates as "Fri Apr 03 11:15:02 UTC 2009".
-                if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(v, "%a %b %d %H:%M:%S UTC %Y") {
+                if let Ok(naive) =
+                    chrono::NaiveDateTime::parse_from_str(&cleaned, "%a %b %d %H:%M:%S UTC %Y")
+                {
                     let dt = naive.and_utc();
                     let normalized_ts = dt.to_rfc3339_opts(SecondsFormat::Secs, true);
                     return serde_json::to_string(&normalized_ts)
@@ -711,7 +1294,8 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
                 }
 
                 // Not a timestamp — treat as a regular string.
-                serde_json::to_string(v).expect("serializing canonical JSON string should succeed")
+                serde_json::to_string(&cleaned)
+                    .expect("serializing canonical JSON string should succeed")
             }
         }
         serde_json::Value::Array(values) => format!(
@@ -1585,6 +2169,7 @@ fn backfill_mapping_columns_from_schema(
             source_field,
             target_field: ddl_column.name.clone(),
             data_type: Some(ddl_column.sql_type.to_ascii_lowercase()),
+            literal_value: None,
         });
     };
 
@@ -1684,7 +2269,10 @@ fn backfill_mapping_columns_from_schema(
     }
 }
 
-fn collection_paths_from_conf(conf: &crate::util::ConfData) -> Result<(String, PathBuf)> {
+fn collection_paths_from_conf(
+    conf: &crate::util::ConfData,
+    collections_root_override: Option<&Path>,
+) -> Result<(String, PathBuf)> {
     let namespace = conf
         .namespace
         .as_ref()
@@ -1694,9 +2282,13 @@ fn collection_paths_from_conf(conf: &crate::util::ConfData) -> Result<(String, P
         .map(|(db_name, _)| db_name)
         .unwrap_or(namespace)
         .to_owned();
-    let collections_root = crate::util::configured_project_root(conf)
-        .join("source")
-        .join("collections");
+    let collections_root = collections_root_override
+        .map(|path| path.to_path_buf())
+        .unwrap_or_else(|| {
+            crate::util::configured_project_root(conf)
+                .join("source")
+                .join("collections")
+        });
     let collections_dir = if collections_root.join(&db_name).is_dir() {
         collections_root.join(&db_name)
     } else {
@@ -1708,7 +2300,29 @@ fn collection_paths_from_conf(conf: &crate::util::ConfData) -> Result<(String, P
 fn discover_mapping_targets_for_collection(
     collection: &str,
     conf: &crate::util::ConfData,
+    collections_root_override: Option<&Path>,
 ) -> Result<Vec<MappingTarget>> {
+    fn list_mapping_files(dir: &Path) -> Result<Vec<PathBuf>> {
+        if !dir.is_dir() {
+            return Ok(Vec::new());
+        }
+
+        let mut files = std::fs::read_dir(dir)
+            .with_context(|| format!("Cannot read mapping directory {}", dir.display()))?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.starts_with("mapping_") && name.ends_with(".yaml"))
+                    .unwrap_or(false)
+            })
+            .collect::<Vec<_>>();
+        files.sort();
+        Ok(files)
+    }
+
     fn parse_mongo_path(path: &str) -> SourcePath {
         let trimmed = path.trim();
         let segments = if trimmed == "." || trimmed.is_empty() {
@@ -1792,29 +2406,73 @@ fn discover_mapping_targets_for_collection(
         derived
     }
 
-    let (_, collections_dir) = collection_paths_from_conf(conf)?;
+    let (_, collections_dir) = collection_paths_from_conf(conf, collections_root_override)?;
     let safe_collection_name = collection.replace('/', "_");
-    let coll_dir = collections_dir.join(&safe_collection_name);
-    let schema_path = coll_dir.join(format!("{safe_collection_name}.json"));
+    let member_dir = collections_dir.join(&safe_collection_name);
+    let mut coll_dir = member_dir.clone();
+    let mut schema_path = member_dir.join(format!("{safe_collection_name}.json"));
+    let mut grouped_lookup: Option<String> = None;
+
+    if !schema_path.is_file() {
+        if let Some(lookup) = resolve_grouped_sql_lookup_name(&collections_dir, collection) {
+            grouped_lookup = Some(lookup.clone());
+            let grouped_dir = collections_dir.join(&lookup);
+            let grouped_schema = grouped_dir.join(format!("{lookup}.json"));
+            if grouped_schema.is_file() {
+                schema_path = grouped_schema;
+            }
+        }
+
+        if !schema_path.is_file() {
+            if let Some((group_prefix, _)) = collection.split_once('_') {
+                let safe_group_prefix = group_prefix.replace('/', "_");
+                let grouped_dir = collections_dir.join(&safe_group_prefix);
+                let grouped_schema = grouped_dir.join(format!("{safe_group_prefix}.json"));
+                if grouped_schema.is_file() {
+                    schema_path = grouped_schema;
+                }
+            }
+        }
+    }
+
+    let mut mapping_files = list_mapping_files(&member_dir)?;
+    if mapping_files.is_empty() {
+        if let Some(lookup) = grouped_lookup.as_deref() {
+            let grouped_dir = collections_dir.join(lookup);
+            let grouped_files = list_mapping_files(&grouped_dir)?;
+            if !grouped_files.is_empty() {
+                coll_dir = grouped_dir;
+                mapping_files = grouped_files;
+            }
+        }
+    }
+
+    if mapping_files.is_empty() {
+        if let Some((group_prefix, _)) = collection.split_once('_') {
+            let safe_group_prefix = group_prefix.replace('/', "_");
+            let grouped_dir = collections_dir.join(&safe_group_prefix);
+            let grouped_files = list_mapping_files(&grouped_dir)?;
+            if !grouped_files.is_empty() {
+                coll_dir = grouped_dir;
+                mapping_files = grouped_files;
+            }
+        }
+    }
+
+    if mapping_files.is_empty() {
+        return Err(anyhow!(
+            "No mapping files found for collection {} (checked {})",
+            collection,
+            coll_dir.display()
+        ));
+    }
+
     let schema: CollectionSchema = serde_json::from_str(
         &std::fs::read_to_string(&schema_path)
             .with_context(|| format!("Failed to read {}", schema_path.display()))?,
     )
     .with_context(|| format!("Failed to parse {}", schema_path.display()))?;
     let source_paths = build_mapping_source_paths(collection, &schema);
-
-    let mapping_files = std::fs::read_dir(&coll_dir)
-        .with_context(|| format!("Cannot read mapping directory {}", coll_dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.is_file())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| name.starts_with("mapping_") && name.ends_with(".yaml"))
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
 
     let mut parsed_mappings = mapping_files
         .into_iter()
@@ -1956,7 +2614,14 @@ async fn connect_pg_client(target_uri: &str) -> Result<Client> {
         .with_context(|| "Failed to connect to PostgreSQL using TARGET_URI")?;
     tokio::spawn(async move {
         if let Err(err) = pg_connection.await {
-            error!("PostgreSQL connection error: {err}");
+            let message = err.to_string();
+            if message.contains("error communicating with the server")
+                || message.contains("connection closed")
+            {
+                debug!("PostgreSQL connection closed: {err}");
+            } else {
+                error!("PostgreSQL connection error: {err}");
+            }
         }
     });
 
@@ -1967,16 +2632,42 @@ pub async fn compute_md5_summaries_for_collection(
     collection: &str,
     config_path: &Path,
 ) -> Result<Vec<Md5TableSummary>> {
+    compute_md5_summaries_for_collection_with_collections_root(collection, config_path, None).await
+}
+
+pub async fn compute_md5_summaries_for_collection_with_collections_root(
+    collection: &str,
+    config_path: &Path,
+    collections_root_override: Option<&Path>,
+) -> Result<Vec<Md5TableSummary>> {
+    fn is_transient_md5_error(err: &anyhow::Error) -> bool {
+        let message = err.to_string().to_ascii_lowercase();
+        message.contains("connection closed")
+            || message.contains("error communicating with the server")
+            || message.contains("server monitor timeout")
+            || message.contains("connection reset")
+            || message.contains("broken pipe")
+            || message.contains("eof")
+            || message.contains("temporarily unavailable")
+            || message.contains("network")
+            || message.contains("interrupted")
+            || message.contains("timed out")
+            || message.contains("timeout")
+    }
+
     let conf = read_conf(config_path)?;
-    let targets = discover_mapping_targets_for_collection(collection, &conf)?;
+    let targets =
+        discover_mapping_targets_for_collection(collection, &conf, collections_root_override)?;
     let mongo_uri = conf
         .source_uri
         .as_ref()
         .ok_or_else(|| anyhow!("SOURCE_URI not found in config"))?;
-    let (db_name, _) = collection_paths_from_conf(&conf)?;
+    let (db_name, _) = collection_paths_from_conf(&conf, collections_root_override)?;
     let client_options = mongodb::options::ClientOptions::parse(mongo_uri).await?;
     let mongo_client = mongodb::Client::with_options(client_options)?;
     let mut summaries = Vec::new();
+
+    const TARGET_MD5_RETRY_MAX: u32 = 4;
 
     for target in targets {
         let ddl_type_by_target = target
@@ -2025,7 +2716,6 @@ pub async fn compute_md5_summaries_for_collection(
         let mongo_collection = mongo_client
             .database(&db_name)
             .collection::<bson::Document>(&target.source_collection);
-        let mut mongo_cursor = mongo_collection.find(doc! {}).sort(doc! { "_id": 1 }).await?;
 
         let target_uri = conf
             .target_uri
@@ -2041,20 +2731,58 @@ pub async fn compute_md5_summaries_for_collection(
             .target_schema
             .as_deref()
             .or(target.mapping_yaml.pg_mapping.schema_name.as_deref());
-        let pg_uri = pg_uri_with_database(target_uri, target_database_name);
-        let pg_client = connect_pg_client(&pg_uri).await?;
-
         let table_name = target.mapping_yaml.pg_mapping.table_name.clone();
-        let result = compute_collection_checksums_via_temp_tables(
-            &pg_client,
-            &mut mongo_cursor,
-            &typed_source_fields,
-            &target.source_path,
-            schema_name,
-            &table_name,
-            &target_fields,
-        )
-        .await?;
+        let grouped_key_filter = grouped_key_filter_for_target(&target);
+        let pg_uri = pg_uri_with_database(target_uri, target_database_name);
+
+        let mut attempt = 0_u32;
+        let result = loop {
+            attempt += 1;
+            let compute_result: Result<CollectionChecksumResult> = async {
+                let pg_read_client = connect_pg_client(&pg_uri).await?;
+                let pg_write_client = connect_pg_client(&pg_uri).await?;
+                compute_collection_checksums_via_temp_tables(
+                    &pg_read_client,
+                    Some(&pg_uri),
+                    &pg_write_client,
+                    &mongo_collection,
+                    &typed_source_fields,
+                    &target.source_path,
+                    &db_name,
+                    &target.source_collection,
+                    schema_name,
+                    &table_name,
+                    &target_fields,
+                    grouped_key_filter
+                        .as_ref()
+                        .map(|(field, value)| (field.as_str(), value.as_str())),
+                )
+                .await
+            }
+            .await;
+
+            match compute_result {
+                Ok(result) => break result,
+                Err(err) => {
+                    if attempt <= TARGET_MD5_RETRY_MAX && is_transient_md5_error(&err) {
+                        let backoff_secs = (1_u64 << (attempt - 1)).min(15);
+                        warn!(
+                            "retrying md5 summary for {}.{} table={} attempt={}/{} after {}s due to transient error: {}",
+                            db_name,
+                            target.source_collection,
+                            table_name,
+                            attempt,
+                            TARGET_MD5_RETRY_MAX + 1,
+                            backoff_secs,
+                            err
+                        );
+                        tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+                        continue;
+                    }
+                    return Err(err);
+                }
+            }
+        };
 
         let mismatches = if let Some(mismatch_delta) = result.mismatches {
             mismatch_delta
@@ -2805,7 +3533,9 @@ pg_mapping:
         assert_eq!(result, expected_json);
     }
 
-    use crate::checkmd5::{pg_select_query_unordered, read_mapping_yaml};
+    use crate::checkmd5::{
+        grouped_key_filter_for_target, pg_select_query_unordered, read_mapping_yaml,
+    };
     use std::path::PathBuf;
     #[test]
     fn test_pg_select_query_unordered_for_mapping_address() {
@@ -2841,7 +3571,8 @@ pg_mapping:
         );
 
         // 2. Act: Generate the SQL select query using your function
-        let generated_sql = pg_select_query_unordered(schema_name, table_name, &target_fields, None);
+        let generated_sql =
+            pg_select_query_unordered(schema_name, table_name, &target_fields, None, None, None);
 
         //println!("Generated SQL: {}", generated_sql);
 
@@ -2859,6 +3590,81 @@ pg_mapping:
         );
         //println!("Expected SQL: {}", expected_sql);
         assert_eq!(generated_sql, expected_sql);
+    }
+
+    #[test]
+    fn pg_select_query_unordered_adds_grouped_key_where_clause() {
+        let sql = pg_select_query_unordered(
+            Some("sample_airbnb"),
+            "address",
+            &["country".to_owned()],
+            None,
+            Some(("_key", "dev")),
+            None,
+        );
+
+        assert_eq!(
+            sql,
+            "SELECT COALESCE(to_json(\"country\")::text, 'null') AS \"country\" FROM \"sample_airbnb\".\"address\" WHERE \"_key\" = 'dev'"
+        );
+    }
+
+    #[test]
+    fn grouped_key_filter_for_target_prefers_mapping_literal_value() {
+        let mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: events
+  columns:
+    - { source_field: "", target_field: _key, literal_value: prod }
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        let target = super::MappingTarget {
+            source_collection: "events_dev".to_owned(),
+            mapping_path: PathBuf::from("mapping_events.yaml"),
+            mapping_yaml,
+            source_path: super::SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+        };
+
+        assert_eq!(
+            grouped_key_filter_for_target(&target),
+            Some(("_key".to_owned(), "prod".to_owned()))
+        );
+    }
+
+    #[test]
+    fn grouped_key_filter_for_target_falls_back_to_collection_suffix() {
+        let mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: events
+  columns:
+    - { source_field: "", target_field: _key }
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        let target = super::MappingTarget {
+            source_collection: "events_dev".to_owned(),
+            mapping_path: PathBuf::from("mapping_events.yaml"),
+            mapping_yaml,
+            source_path: super::SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+        };
+
+        assert_eq!(
+            grouped_key_filter_for_target(&target),
+            Some(("_key".to_owned(), "dev".to_owned()))
+        );
     }
 
     use super::*;
@@ -2898,17 +3704,22 @@ pg_mapping:
 
         // 3. Act: Run the verification engine
         let result = compute_collection_checksums_via_temp_tables(
+            &harness.pg_read_client,
+            None,
             &harness.pg_client,
-            &mut harness.get_mongo_cursor().await?,
+            &harness.mongo_collection,
             &source_fields,
             &SourcePath {
                 path: Vec::new(),
                 scalar_array_field: None,
                 grouped_fields: None,
             },
+            "test_db",
+            "employees",
             harness.schema_name.as_deref(),
             &harness.table_name,
             &target_fields,
+            None,
         )
         .await?;
 
@@ -3009,17 +3820,22 @@ pg_mapping:
 
         // 3. Act: Run the verification engine
         let result = compute_collection_checksums_via_temp_tables(
+            &harness.pg_read_client,
+            None,
             &harness.pg_client,
-            &mut harness.get_mongo_cursor().await?,
+            &harness.mongo_collection,
             &source_fields,
             &SourcePath {
                 path: Vec::new(),
                 scalar_array_field: None,
                 grouped_fields: None,
             },
+            "test_db",
+            "employees",
             harness.schema_name.as_deref(),
             &harness.table_name,
             &target_fields,
+            None,
         )
         .await?;
 

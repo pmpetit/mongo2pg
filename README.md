@@ -158,11 +158,3 @@ For example, a collection `orders` with an array field `products` that itself co
 > **Tip:** keep collection names reasonably short. Very deep nesting combined with long field names can produce table names that exceed PostgreSQL's 63-character identifier limit (`NAMEDATALEN - 1`). PostgreSQL will silently truncate them, which can cause duplicate-table errors. If you hit this, consider using `--jsonb` on deeply-nested collections to collapse those branches into a single JSONB column instead.
 
 ---
-
-## License
-
-Apache-2.0 – see [LICENSE](LICENSE).
-
-## Disclaimer
-
-This project is not affiliated with, endorsed by, or software from MongoDB, Inc. or the PostgreSQL Global Development Group. "MongoDB" and "PostgreSQL" are trademarks of their respective owners.
