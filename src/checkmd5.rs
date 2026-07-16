@@ -291,12 +291,12 @@ async fn compute_collection_checksums_via_temp_tables(
     const COPY_BUFFER_ROWS: usize = 5_000;
     const MONGO_CURSOR_RETRY_MAX: u32 = 4;
     const PG_STREAM_RETRY_MAX: u32 = 4;
-    const PG_STREAM_OPEN_TIMEOUT_SECS: u64 = 120;
-    const PG_STREAM_IDLE_HEARTBEAT_SECS: u64 = 30;
+    const PG_STREAM_OPEN_TIMEOUT_SECS: u64 = 600;
+    const PG_STREAM_IDLE_HEARTBEAT_SECS: u64 = 45;
     const PG_STREAM_IDLE_STALL_HEARTBEATS: u32 = 3;
-    const PG_STREAM_IDLE_STALL_RETRY_MAX: u32 = 1;
-    const PG_QUERY_HEARTBEAT_SECS: u64 = 15;
-    const PG_EXPLAIN_TIMEOUT_SECS: u64 = 20;
+    const PG_STREAM_IDLE_STALL_RETRY_MAX: u32 = 2;
+    const PG_QUERY_HEARTBEAT_SECS: u64 = 30;
+    const PG_EXPLAIN_TIMEOUT_SECS: u64 = 120;
 
     async fn await_pg_with_heartbeat<T, F>(
         future: F,
@@ -344,7 +344,7 @@ async fn compute_collection_checksums_via_temp_tables(
                     .iter()
                     .map(|row| row.get::<usize, String>(0))
                     .collect::<Vec<_>>()
-                    .join(" | ");
+                    .join("\n");
                 if plan.is_empty() {
                     "<empty explain output>".to_owned()
                 } else {
@@ -395,6 +395,16 @@ async fn compute_collection_checksums_via_temp_tables(
     info!("🔄 [Collection: {}] Starting MongoDB md5 docs compute...", coll_name);
     let mut mongo_row_count: usize = 0;
     let mongo_log_every: usize = 10000;
+    let mongo_total_docs = match mongo_collection.estimated_document_count().await {
+        Ok(total) => Some(total as usize),
+        Err(err) => {
+            warn!(
+                "Could not estimate MongoDB total docs for {}.{} table={}: {:#}",
+                db_name, coll_name, table_name, err
+            );
+            None
+        }
+    };
     let mongo_copy_sql = format!("COPY {} (md5, values) FROM STDIN", temp_mongo_ident);
     let mongo_copy_sink = pg_write_client.copy_in(&mongo_copy_sql).await?;
     let mut mongo_copy_sink = std::pin::pin!(mongo_copy_sink);
@@ -479,7 +489,20 @@ async fn compute_collection_checksums_via_temp_tables(
                 }
                 mongo_row_count += 1;
                 if mongo_row_count % mongo_log_every == 0 {
-                    info!("  ↳ 📥 Read {} MongoDB docs compute md5 and copy result to temp table from {}...", mongo_row_count, coll_name);
+                    if let Some(total_docs) = mongo_total_docs {
+                        info!(
+                            "  ↳ 📥 Read {}/{} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            total_docs,
+                            coll_name
+                        );
+                    } else {
+                        info!(
+                            "  ↳ 📥 Read {} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            coll_name
+                        );
+                    }
                     //log_oom_probe("mongo_stream_progress", coll_name, mongo_row_count, 0);
                 }
                 continue;
@@ -507,7 +530,20 @@ async fn compute_collection_checksums_via_temp_tables(
                 }
                 mongo_row_count += 1;
                 if mongo_row_count % mongo_log_every == 0 {
-                    info!("  ↳ 📥 Read nested {} MongoDB docs, compute md5 and copy result to temp table from {}...", mongo_row_count, coll_name);
+                    if let Some(total_docs) = mongo_total_docs {
+                        info!(
+                            "  ↳ 📥 Read nested {}/{} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            total_docs,
+                            coll_name
+                        );
+                    } else {
+                        info!(
+                            "  ↳ 📥 Read nested {} MongoDB docs, compute md5 and copy result to temp table from {}...",
+                            mongo_row_count,
+                            coll_name
+                        );
+                    }
                     //log_oom_probe("mongo_stream_progress", table_name, mongo_row_count, 0);
                 }
             }
@@ -545,7 +581,9 @@ async fn compute_collection_checksums_via_temp_tables(
                 .find(|field| field.eq_ignore_ascii_case("id"))
                 .map(String::as_str)
         });
-    let pg_order_field = pg_resume_field.or_else(|| target_fields.first().map(String::as_str));
+    // Keep ordering only when we have a stable resume key (_id/id).
+    // Fallback ordering by first projected column can trigger expensive sorts.
+    let pg_order_field = pg_resume_field;
     log_oom_probe("pg_stream_start", table_name, mongo_row_count, 0);
     let _pg_stream_started_at = Instant::now();
 
@@ -554,6 +592,43 @@ async fn compute_collection_checksums_via_temp_tables(
     let mut pg_copy_sink = std::pin::pin!(pg_copy_sink);
     let mut pg_copy_buffer = String::with_capacity(256 * 1024);
     let mut pg_copy_buffered_rows = 0usize;
+
+    let pg_qualified_table = match schema_name {
+        Some(schema_name) => format!("{}.{}", quote_ident(schema_name), quote_ident(table_name)),
+        None => quote_ident(table_name),
+    };
+    let mut pg_count_sql = format!("SELECT COUNT(*)::BIGINT FROM {pg_qualified_table}");
+    if let Some((field, value)) = pg_key_filter {
+        pg_count_sql.push_str(&format!(
+            " WHERE {} = '{}'",
+            quote_ident(field),
+            value.replace('\'', "''")
+        ));
+    }
+    let pg_total_rows = match tokio::time::timeout(
+        std::time::Duration::from_secs(PG_EXPLAIN_TIMEOUT_SECS),
+        pg_read_client.query_one(&pg_count_sql, &[]),
+    )
+    .await
+    {
+        Ok(Ok(row)) => Some(row.get::<usize, i64>(0) as usize),
+        Ok(Err(err)) => {
+            warn!(
+                "Could not count PostgreSQL total rows for table={} query={}: {:#}",
+                table_name, pg_count_sql, err
+            );
+            None
+        }
+        Err(_) => {
+            warn!(
+                "Counting PostgreSQL total rows timed out after {}s for table={} query={}",
+                PG_EXPLAIN_TIMEOUT_SECS,
+                table_name,
+                pg_count_sql
+            );
+            None
+        }
+    };
 
     let mut pg_row_count = 0;
     let mut pg_last_order_value: Option<String> = None;
@@ -760,7 +835,20 @@ async fn compute_collection_checksums_via_temp_tables(
             }
             pg_row_count += 1;
             if pg_row_count % mongo_log_every == 0 {
-                info!("  ↳ 📥 Read {} PostgreSQL rows, compute md5 and /copy to temp table from {}...", pg_row_count, table_name);
+                if let Some(total_rows) = pg_total_rows {
+                    info!(
+                        "  ↳ 📥 Read {}/{} PostgreSQL rows, compute md5 and /copy to temp table from {}...",
+                        pg_row_count,
+                        total_rows,
+                        table_name
+                    );
+                } else {
+                    info!(
+                        "  ↳ 📥 Read {} PostgreSQL rows, compute md5 and /copy to temp table from {}...",
+                        pg_row_count,
+                        table_name
+                    );
+                }
                 log_oom_probe("pg_stream_progress", table_name, mongo_row_count, pg_row_count);
             }
         }
@@ -3616,7 +3704,7 @@ pg_mapping:
 
         // 3. Act: Run the verification engine
         let result = compute_collection_checksums_via_temp_tables(
-            &harness.pg_client,
+            &harness.pg_read_client,
             None,
             &harness.pg_client,
             &harness.mongo_collection,
@@ -3732,7 +3820,7 @@ pg_mapping:
 
         // 3. Act: Run the verification engine
         let result = compute_collection_checksums_via_temp_tables(
-            &harness.pg_client,
+            &harness.pg_read_client,
             None,
             &harness.pg_client,
             &harness.mongo_collection,
