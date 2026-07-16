@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kafka nested insert cast for serial PKs**: normalized casts so PostgreSQL does not receive `CAST(... AS BIGSERIAL|SERIAL|SMALLSERIAL)` in recursive insert paths.
 - **Post-import `check-md5` Mongo sort limit (error 13103)**: removed MongoDB-side sort-by-all-fields in MD5 collection flow and rely on local deterministic sorting to avoid "too many compound keys" failures.
 - **Post-import `check-md5` type mismatch noise**: when a MongoDB source field is string-only but the mapped PostgreSQL target type is non-text (not `TEXT`/`VARCHAR`-family), that column is now excluded from MD5 comparison to prevent false mismatches (for example `_id` string vs `BIGSERIAL`, string dates vs `TIMESTAMP`).
+- **PR preview release cleanup after merge to `main`**: preview releases/tags (`pr-<number>-preview`) are now deleted when the PR is closed by merge into `main`, and preview build/test/release jobs are skipped on close events.
 
 ## [0.5.3] - 2026-06-15
 
