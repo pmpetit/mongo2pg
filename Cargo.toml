@@ -1,6 +1,6 @@
 [package]
 name = "mongo2pg"
-version = "0.5.5"
+version = "0.6.0"
 edition = "2021"
 description = "Schema inference and conversion tool: MongoDB → JSON Schema variants"
 license = "Apache-2.0"
