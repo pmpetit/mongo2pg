@@ -82,7 +82,7 @@ jobs:
           merge-multiple: true
 
       - name: Create release and upload assets
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v3.0.1
         with:
           files: artifacts/*
           generate_release_notes: true
