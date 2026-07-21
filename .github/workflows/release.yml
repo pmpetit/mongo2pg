@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*.*.*"
+      - "mongo2pg-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build/upload release assets for"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -37,6 +44,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7.0.0
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -50,7 +59,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')
+          key:
+            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')
             }}
           restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
 
@@ -84,5 +94,6 @@ jobs:
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v3.0.1
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
           files: artifacts/*
           generate_release_notes: true
