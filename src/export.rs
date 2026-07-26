@@ -2542,6 +2542,13 @@ pub async fn export_collections_to_sql(
 
     let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
+    let mut use_no_cursor_timeout = true;
+
+    let no_cursor_timeout_rejected = |err: &mongodb::error::Error| {
+        let lower = err.to_string().to_ascii_lowercase();
+        lower.contains("notimeout cursors are disallowed")
+            || (lower.contains("notimeout") && lower.contains("disallowed"))
+    };
 
     let total_sources = coll_names.len();
     for (source_index, coll_name) in coll_names.iter().enumerate() {
@@ -2596,11 +2603,48 @@ pub async fn export_collections_to_sql(
                 None => bson::doc! {},
             };
 
-            let mut cursor = collection
-                .find(find_filter)
-                .no_cursor_timeout(true)
-                .await
-                .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
+            let mut cursor = if use_no_cursor_timeout {
+                match collection
+                    .find(find_filter.clone())
+                    .no_cursor_timeout(true)
+                    .await
+                {
+                    Ok(cursor) => cursor,
+                    Err(no_cursor_timeout_err) => {
+                        if no_cursor_timeout_rejected(&no_cursor_timeout_err) {
+                            use_no_cursor_timeout = false;
+                            info!(
+                                "query option no_cursor_timeout=true not supported by server tier; disabling for remaining export sources (first seen on {}.{})",
+                                db_name,
+                                coll_name
+                            );
+                            debug!(
+                                "no_cursor_timeout rejection details for {}.{}: {:#}",
+                                db_name, coll_name, no_cursor_timeout_err
+                            );
+                        } else {
+                            warn!(
+                                "query with no_cursor_timeout=true failed for {}.{}; retrying without option: {:#}",
+                                db_name,
+                                coll_name,
+                                no_cursor_timeout_err
+                            );
+                        }
+
+                        collection.find(find_filter).await.with_context(|| {
+                            format!(
+                                "Failed to query {db_name}.{coll_name} (with and without no_cursor_timeout). initial error: {:#}",
+                                no_cursor_timeout_err
+                            )
+                        })?
+                    }
+                }
+            } else {
+                collection
+                    .find(find_filter)
+                    .await
+                    .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?
+            };
 
             loop {
                 let next_doc = match cursor.try_next().await {

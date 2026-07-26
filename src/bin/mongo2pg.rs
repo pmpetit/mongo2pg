@@ -468,7 +468,7 @@ async fn main() -> Result<()> {
     validate_command_and_args(&command, infer.as_ref())?;
 
     match command {
-        Some(Command::Init(args)) => run_init(args),
+        Some(Command::Init(args)) => run_init(args).await,
         Some(Command::ToPg(args)) => run_to_pg(args, false),
         Some(Command::Report(args)) => run_report(args, false).await,
         Some(Command::Export(args)) => run_export(args).await,
@@ -3368,11 +3368,7 @@ async fn infer_collection(
                                 None => {
                                     warn!(
                                         "find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
-                                        db_name,
-                                        coll_name,
-                                        chunk_index,
-                                        total_chunks,
-                                        e
+                                        db_name, coll_name, chunk_index, total_chunks, e
                                     );
                                     break;
                                 }
@@ -5607,41 +5603,14 @@ fn write_collection_files(
 // `init` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn run_init(args: InitArgs) -> Result<()> {
-    let project_root = if let Some(cluster_name) = args
+async fn run_init(args: InitArgs) -> Result<()> {
+    let cluster_name = args
         .cluster_name
         .as_deref()
         .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        args.project_base
-            .join(&args.project_name)
-            .join(cluster_name)
-    } else {
-        args.project_base.join(&args.project_name)
-    };
+        .filter(|value| !value.is_empty());
+    let config_file_name = format!("{}.toml", cluster_name.unwrap_or(&args.project_name));
 
-    let dirs = [
-        project_root.join("schema").join("tables"),
-        project_root.join("source").join("collections"),
-        project_root.join("data"),
-        project_root.join("config"),
-        project_root.join("reports"),
-    ];
-
-    for dir in &dirs {
-        std::fs::create_dir_all(dir)
-            .with_context(|| format!("Failed to create directory {}", dir.display()))?;
-    }
-
-    let conf_path = project_root.join("config").join(format!(
-        "{}.toml",
-        args.cluster_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .unwrap_or(&args.project_name)
-    ));
     let project_title = if let Some(cluster_name) = args
         .cluster_name
         .as_deref()
@@ -5687,19 +5656,95 @@ fn run_init(args: InitArgs) -> Result<()> {
             }),
         target_database_name.replace('"', "\\\""),
     );
-    std::fs::write(&conf_path, conf_content)
-        .with_context(|| format!("Failed to write {}", conf_path.display()))?;
+    let storage_backend = resolve_export_write_backend(&args.project_base)?;
+    match storage_backend {
+        ExportWriteBackend::LocalFs => {
+            let project_root = if let Some(cluster_name) = cluster_name {
+                args.project_base
+                    .join(&args.project_name)
+                    .join(cluster_name)
+            } else {
+                args.project_base.join(&args.project_name)
+            };
 
-    info!(
-        "Project '{}' initialised at {}",
-        args.project_name,
-        project_root.display()
-    );
-    for dir in &dirs {
-        info!("{}", dir.display());
+            let dirs = [
+                project_root.join("schema").join("tables"),
+                project_root.join("source").join("collections"),
+                project_root.join("data"),
+                project_root.join("config"),
+                project_root.join("reports"),
+            ];
+
+            for dir in &dirs {
+                std::fs::create_dir_all(dir)
+                    .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+            }
+
+            let conf_path = project_root.join("config").join(config_file_name);
+            std::fs::write(&conf_path, conf_content)
+                .with_context(|| format!("Failed to write {}", conf_path.display()))?;
+
+            info!(
+                "Project '{}' initialised at {}",
+                args.project_name,
+                project_root.display()
+            );
+            for dir in &dirs {
+                info!("{}", dir.display());
+            }
+            info!("{}", conf_path.display());
+            Ok(())
+        }
+        ExportWriteBackend::Gcs { bucket, prefix } => {
+            ensure_gcs_authentication().await?;
+            let storage = Storage::builder()
+                .build()
+                .await
+                .context("Failed to initialize Google Cloud Storage client")?;
+            let bucket_resource = format!("projects/_/buckets/{bucket}");
+
+            let effective_prefix =
+                ensure_output_prefix_segments(&prefix, cluster_name, &args.project_name);
+            let project_root_uri = if effective_prefix.is_empty() {
+                format!("gs://{bucket}")
+            } else {
+                format!("gs://{bucket}/{effective_prefix}")
+            };
+
+            let config_object = if effective_prefix.is_empty() {
+                format!("config/{config_file_name}")
+            } else {
+                format!("{effective_prefix}/config/{config_file_name}")
+            };
+
+            storage
+                .write_object(
+                    bucket_resource,
+                    config_object.clone(),
+                    Bytes::from(conf_content.into_bytes()),
+                )
+                .send_buffered()
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to write config to gs://{}/{}",
+                        bucket, config_object
+                    )
+                })?;
+
+            info!(
+                "Project '{}' initialised at {}",
+                args.project_name, project_root_uri
+            );
+            info!("{}/schema/tables", project_root_uri);
+            info!("{}/source/collections", project_root_uri);
+            info!("{}/data", project_root_uri);
+            info!("{}/config", project_root_uri);
+            info!("{}/reports", project_root_uri);
+            info!("gs://{}/{}", bucket, config_object);
+            Ok(())
+        }
     }
-    info!("{}", conf_path.display());
-    Ok(())
 }
 
 fn append_non_empty_segment(path: &mut String, segment: Option<&str>) {
@@ -5757,6 +5802,31 @@ fn is_supported_import_csv_path(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.ends_with(".csv.gz") || name.ends_with(".csv"))
+}
+
+fn build_missing_import_csv_error(
+    data_db_dir: &Path,
+    requested_collection_dir: Option<&str>,
+    allowed_table_count: usize,
+) -> anyhow::Error {
+    let scope_hint = requested_collection_dir
+        .map(|collection| format!(" for requested collection '{collection}'"))
+        .unwrap_or_default();
+
+    let table_hint = if allowed_table_count == 0 {
+        "No importable SQL tables were discovered from schema files.".to_owned()
+    } else {
+        format!("Found {allowed_table_count} SQL table(s), but no matching data files.",)
+    };
+
+    anyhow!(
+        "No .csv or .csv.gz files found in {}{} that match generated SQL tables. {} \
+Expected layout: data/<db>/<collection>/<table>.csv.gz (or .csv). \
+Run `mongo2pg export -c <config>` first, or verify --namespace / [COLLECTION] filters.",
+        data_db_dir.display(),
+        scope_hint,
+        table_hint,
+    )
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -6121,7 +6191,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             Ok(()) => {}
             Err(e) => {
                 let job_label = format!("{}.{}", db_name, sql_lookup_name);
-                warn!("  warning: export failed for {}: {}", job_label, e);
+                warn!("  warning: export failed for {}: {:#}", job_label, e);
                 failed_jobs.push(format!("{}: {}", job_label, e));
             }
         }
@@ -6655,8 +6725,22 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     let mut import_data_stage: Option<tempfile::TempDir> = None;
     log_import_stage("config_resolved");
 
-    if !data_db_dir.is_dir() {
+    let local_csv_count = if data_db_dir.is_dir() {
+        count_supported_csv_files_recursive(&data_db_dir)
+    } else {
+        0
+    };
+    let should_stage_from_gcs =
+        matches!(&storage_backend, ExportWriteBackend::Gcs { .. }) && local_csv_count == 0;
+
+    if should_stage_from_gcs {
         if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+            if data_db_dir.is_dir() {
+                info!(
+                    "local data directory {} has no .csv/.csv.gz files; attempting GCS data staging",
+                    data_db_dir.display()
+                );
+            }
             log_import_stage("gcs_stage_begin");
             ensure_gcs_authentication().await?;
 
@@ -6932,9 +7016,10 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     csv_files.sort();
 
     if csv_files.is_empty() {
-        return Err(anyhow!(
-            "No .csv or .csv.gz files found in {}",
-            data_db_dir.display()
+        return Err(build_missing_import_csv_error(
+            &data_db_dir,
+            requested_collection_dir.as_deref(),
+            allowed_table_names.len(),
         ));
     }
     debug!("[debug][import] csv_files_count={}", csv_files.len());
@@ -7002,17 +7087,29 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         let table_columns = table_columns_by_name
             .get(&table)
             .ok_or_else(|| anyhow!("No DDL column metadata found for table {table}"))?;
-        let copy_columns = table_columns
-            .iter()
-            .map(|column| quote_ident(&column.trim_matches('"').replace("\"\"", "\"")))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let copy_sql = format!(
-            "COPY {}.{} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)",
-            quote_ident(schema),
-            quote_ident(&table),
-            copy_columns,
-        );
+        let copy_sql = if table_columns.is_empty() {
+            warn!(
+                "No parsed DDL columns for {}.{}; using COPY without explicit column list",
+                schema, table
+            );
+            format!(
+                "COPY {}.{} FROM STDIN WITH (FORMAT csv, HEADER true)",
+                quote_ident(schema),
+                quote_ident(&table),
+            )
+        } else {
+            let copy_columns = table_columns
+                .iter()
+                .map(|column| quote_ident(&column.trim_matches('"').replace("\"\"", "\"")))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "COPY {}.{} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)",
+                quote_ident(schema),
+                quote_ident(&table),
+                copy_columns,
+            )
+        };
         let is_gz = csv_path
             .file_name()
             .and_then(|name| name.to_str())
@@ -7152,11 +7249,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     log_import_stage("analyze_begin");
     for (schema, table) in &imported_relations {
         info!("Analyze imported table {}.{}", schema, table);
-        let analyze_sql = format!(
-            "ANALYZE {}.{}",
-            quote_ident(schema),
-            quote_ident(table)
-        );
+        let analyze_sql = format!("ANALYZE {}.{}", quote_ident(schema), quote_ident(table));
         if let Err(err) = pg_client.batch_execute(&analyze_sql).await {
             return Err(anyhow!(
                 "Failed to analyze {}.{}\n{}",
@@ -7287,6 +7380,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         http_client: &reqwest::Client,
         schema_cache: &mut HashMap<u32, Schema>,
     ) -> Result<Value> {
+        // If Schema Registry is not configured, treat payloads as JsonConverter
+        // output and decode directly as JSON.
+        if schema_registry_url.is_none() {
+            return serde_json::from_slice::<Value>(bytes).with_context(|| {
+                "Failed to decode message as JSON payload (no schema registry configured)"
+            });
+        }
+
         if bytes.len() > 5 && bytes[0] == 0 {
             let schema_id = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
             let schema = if let Some(schema) = schema_cache.get(&schema_id) {
@@ -13064,8 +13165,8 @@ pg_mapping:
         std::fs::remove_dir_all(&root).expect("temp root should be removed");
     }
 
-    #[test]
-    fn run_init_writes_default_datetime_field_patterns() {
+    #[tokio::test]
+    async fn run_init_writes_default_datetime_field_patterns() {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be after unix epoch")
@@ -13080,6 +13181,7 @@ pg_mapping:
             namespace: Some("dbapi".to_owned()),
             cluster_name: None,
         })
+        .await
         .expect("init should succeed");
 
         let conf_path = project_base.join("dbapi").join("config").join("dbapi.toml");
@@ -13351,7 +13453,7 @@ pg_mapping:
             Some(pg_connection_string.clone()),
             Some(db_mongo.to_owned()),
         );
-        run_init(init_args).expect("init should succeed");
+        run_init(init_args).await.expect("init should succeed");
 
         assert!(
             temp_dir.path().join("test_project").exists(),
@@ -13586,5 +13688,32 @@ pg_mapping:
         assert_eq!(retrieved_last_update, last_update);
 
         Ok(())
+    }
+
+    #[test]
+    fn missing_import_csv_error_mentions_export_and_layout() {
+        let err =
+            super::build_missing_import_csv_error(Path::new("/tmp/project/data/mydb"), None, 2);
+        let message = err.to_string();
+
+        assert!(message.contains("No .csv or .csv.gz files found in /tmp/project/data/mydb"));
+        assert!(message.contains("Found 2 SQL table(s), but no matching data files."));
+        assert!(
+            message.contains("Expected layout: data/<db>/<collection>/<table>.csv.gz (or .csv).")
+        );
+        assert!(message.contains("mongo2pg export -c <config>"));
+    }
+
+    #[test]
+    fn missing_import_csv_error_mentions_collection_scope() {
+        let err = super::build_missing_import_csv_error(
+            Path::new("/tmp/project/data/mydb"),
+            Some("users"),
+            0,
+        );
+        let message = err.to_string();
+
+        assert!(message.contains("for requested collection 'users'"));
+        assert!(message.contains("No importable SQL tables were discovered from schema files."));
     }
 }
