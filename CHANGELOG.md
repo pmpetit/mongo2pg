@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.6.0...mongo2pg-v0.7.0) (2026-07-29)
+
+
+### Features
+
+* add cluster-level migrability score and cluster-report subcommand ([d2594f1](https://github.com/pmpetit/mongo2pg/commit/d2594f180fbb2d4914c19c4472e5e22ef0949ad2))
+* add docker compose ([93d541c](https://github.com/pmpetit/mongo2pg/commit/93d541c7d6d812bbc9c112305700e5aa139d9bd8))
+* add docker compose for kafka ([d1404a5](https://github.com/pmpetit/mongo2pg/commit/d1404a527389c41fd47c0af993896e469577aa06))
+* add docker compose for kafka ([8dd9964](https://github.com/pmpetit/mongo2pg/commit/8dd996478258d8840ac7a191a0b10496a7fc0e42))
+* add exclude/include properties, fix number to double ([8732808](https://github.com/pmpetit/mongo2pg/commit/873280839c7af4f7d4c206ed418726cfb52ef6d7))
+* add wf to build package ([79ee354](https://github.com/pmpetit/mongo2pg/commit/79ee354fb8882360e27d2602e59b70e4117bd927))
+* add wf to build package ([25619ad](https://github.com/pmpetit/mongo2pg/commit/25619ad78e75f911a6cf1c866c6ead8fdd5fc914))
+* add wf to build package ([571db32](https://github.com/pmpetit/mongo2pg/commit/571db32ef7530873d0dd9dfd5284fae73e091f94))
+* **branch:** add count(*) ([8f3c5f3](https://github.com/pmpetit/mongo2pg/commit/8f3c5f3500d07dcffdd70ed3b75d80ea83302d4d))
+* branching factors with tests ([1e75d31](https://github.com/pmpetit/mongo2pg/commit/1e75d3100861d8a6963eeb4f2fa8cdf7f5e7fc8a))
+* branching factors with tests ([d212aac](https://github.com/pmpetit/mongo2pg/commit/d212aacb9818369f14777c44047002613155bc28))
+* cluster-level migrability score and `cluster-report` subcommand ([f5a0da4](https://github.com/pmpetit/mongo2pg/commit/f5a0da4de044b147d1da43c062d275b06fdf3ee1))
+* **export:** add export command ([3c3ce49](https://github.com/pmpetit/mongo2pg/commit/3c3ce49ca2259e258d467d81c5406a20ad6bdbad))
+* infer all user databases when namespace is omitted ([9898a96](https://github.com/pmpetit/mongo2pg/commit/9898a96ae18d7eaf1eb218d9e86e15b6187e5608))
+* **infer:** enumerate all user databases when --namespace is omitted ([b56c7d9](https://github.com/pmpetit/mongo2pg/commit/b56c7d95d570a359533dad89f23eed33b6144cfc))
+* merge some report command ([c4b0025](https://github.com/pmpetit/mongo2pg/commit/c4b002531cc8476022594cfcb0de356e9cc72556))
+* **reports:** ora2pg like ([7fb2a3e](https://github.com/pmpetit/mongo2pg/commit/7fb2a3e8c876e12b83b82b0408c21926dad5c30f))
+* **score:** add collection score ([ccfb47e](https://github.com/pmpetit/mongo2pg/commit/ccfb47e66b2b23c0362519019c1150cd2e729ea4))
+* **score:** to help cluster choice, add a complexity score ([d5a1e02](https://github.com/pmpetit/mongo2pg/commit/d5a1e02884ea6ce0261246b1e8eb13f995468172))
+* **to-pg:** from json generate sql file ([6126c86](https://github.com/pmpetit/mongo2pg/commit/6126c86bdbcccb08e69c68400b3c3589cd357b9d))
+* **version:** bump to 0.5.1 ([b8190c3](https://github.com/pmpetit/mongo2pg/commit/b8190c306bb9cb7ce3297694902be23caeb8b6f6))
+* **warnings:** add warnings on fields ([2290439](https://github.com/pmpetit/mongo2pg/commit/2290439ecca510f5d4685db5d54506f542a15732))
+
+
+### Bug Fixes
+
+* add namespace to export cmd ([5c761b7](https://github.com/pmpetit/mongo2pg/commit/5c761b792d8ff1d15b5b23c3b008955a4fafb38f))
+* convert error & sort on disk ([8cf59c7](https://github.com/pmpetit/mongo2pg/commit/8cf59c7857898860d689c2f11bdbfeca7dc3baf9))
+* convert error & sort on disk ([2eecfb0](https://github.com/pmpetit/mongo2pg/commit/2eecfb07c2fb9d4e760136e4a8fcd422ee15b6ed))
+* convert error & sort on disk ([87a23a0](https://github.com/pmpetit/mongo2pg/commit/87a23a035e965c44e73f8143c44906bbad39632c))
+* error 292 ([30ccfa9](https://github.com/pmpetit/mongo2pg/commit/30ccfa984fdf9644fbd5f0b35a6a2b48ad9bea73))
+* error 292 ([e75ab15](https://github.com/pmpetit/mongo2pg/commit/e75ab15e84c6ba1fdab537aa84c90c21c7ccf135))
+* **export:** export command failure with CamelCase collection ([6622665](https://github.com/pmpetit/mongo2pg/commit/66226652ca46c12974db208224d492decd495e56))
+* filename.sql in lowercase instead of CamelCase ([89aa56b](https://github.com/pmpetit/mongo2pg/commit/89aa56b027ef97a70387c95fef12b67cb5e80212))
+* filename.sql in lowercase instead of CamelCase, modify the changelog ([583b701](https://github.com/pmpetit/mongo2pg/commit/583b701bdf815fb0ae18447d2c7a9e1cb245934b))
+* **stats:** analytics stats, add warning about collection name ([6a8d993](https://github.com/pmpetit/mongo2pg/commit/6a8d99337781fa5d56af03b78006d085143c03d1))
+
 ## [0.6.0](https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.5.5...mongo2pg-v0.6.0) (2026-07-16)
 
 
