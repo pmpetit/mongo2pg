@@ -49,14 +49,14 @@ Just as tool exist to migrate from relational databases to document stores, a to
 version="vX.Y.Z"
 platform="linux-x86_64"
 gh auth login
-gh release download ${version} --repo adeo/mongo2pg --pattern "mongo2pg-${platform}.tar.gz"
+gh release download ${version} --repo mongo2pg --pattern "mongo2pg-${platform}.tar.gz"
 tar -xzf "mongo2pg-${platform}.tar.gz"
 mv mongo2pg-${platform} mongo2pg
 chmod +x mongo2pg
 sudo mv mongo2pg /usr/local/bin/
 ```
 
-<https://github.com/adeo/mongo2pg/tree/vX.Y.Z>
+<https://github.com/mongo2pg/tree/vX.Y.Z>
 
 ## CLI Usage
 
