@@ -36,6 +36,14 @@ pub struct KafkaConfData {
     pub group_id: Option<String>,
     pub topics: Vec<String>,
     pub topic_prefix: Option<String>,
+    pub security_protocol: Option<String>,
+    pub sasl_mechanism: Option<String>,
+    pub sasl_username: Option<String>,
+    pub sasl_password: Option<String>,
+    pub ssl_ca_location: Option<String>,
+    pub ssl_certificate_location: Option<String>,
+    pub ssl_key_location: Option<String>,
+    pub ssl_key_password: Option<String>,
     pub schema_registry_url: Option<String>,
     pub schema_registry_username: Option<String>,
     pub schema_registry_password: Option<String>,
@@ -43,6 +51,12 @@ pub struct KafkaConfData {
     pub auto_offset_reset: Option<String>,
     pub max_messages: Option<usize>,
     pub batch_log_messages: Option<usize>,
+    pub poll_interval_ms: Option<u64>,
+    pub poll_size: Option<usize>,
+    pub transaction_batch_size: Option<usize>,
+    pub worker_count: Option<usize>,
+    pub group_id_log_suffix: Option<bool>,
+    pub debug: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -100,11 +114,19 @@ struct TomlSourceSection {
     max_time_ms: Option<u64>,
     #[serde(alias = "CHUNK_SIZE", alias = "ChunkSize", alias = "chunkSize")]
     chunk_size: Option<u64>,
-    #[serde(alias = "AUTH_RETRY_MAX", alias = "AuthRetryMax", alias = "authRetryMax")]
+    #[serde(
+        alias = "AUTH_RETRY_MAX",
+        alias = "AuthRetryMax",
+        alias = "authRetryMax"
+    )]
     auth_retry_max: Option<u32>,
     #[serde(alias = "LOG_LEVEL", alias = "LogLevel", alias = "logLevel")]
     log_level: Option<String>,
-    #[serde(alias = "ADD_GROUPED_KEY", alias = "AddGroupedKey", alias = "addGroupedKey")]
+    #[serde(
+        alias = "ADD_GROUPED_KEY",
+        alias = "AddGroupedKey",
+        alias = "addGroupedKey"
+    )]
     add_grouped_key: Option<bool>,
     #[serde(alias = "JSONB", alias = "Jsonb")]
     jsonb: Option<bool>,
@@ -138,7 +160,11 @@ pub fn default_timestamp_fields() -> Vec<String> {
 struct TomlTargetSection {
     #[serde(alias = "TARGET_URI", alias = "URI", alias = "Uri")]
     uri: Option<String>,
-    #[serde(alias = "TARGET_DATABASE_NAME", alias = "DATABASE_NAME", alias = "databaseName")]
+    #[serde(
+        alias = "TARGET_DATABASE_NAME",
+        alias = "DATABASE_NAME",
+        alias = "databaseName"
+    )]
     database_name: Option<String>,
     #[serde(alias = "TARGET_SCHEMA", alias = "SCHEMA_NAME", alias = "schemaName")]
     schema_name: Option<String>,
@@ -155,6 +181,22 @@ struct TomlKafkaSection {
     topics: Vec<String>,
     #[serde(alias = "TOPIC_PREFIX", alias = "topicPrefix")]
     topic_prefix: Option<String>,
+    #[serde(alias = "SECURITY_PROTOCOL", alias = "securityProtocol")]
+    security_protocol: Option<String>,
+    #[serde(alias = "SASL_MECHANISM", alias = "saslMechanism")]
+    sasl_mechanism: Option<String>,
+    #[serde(alias = "SASL_USERNAME", alias = "saslUsername")]
+    sasl_username: Option<String>,
+    #[serde(alias = "SASL_PASSWORD", alias = "saslPassword")]
+    sasl_password: Option<String>,
+    #[serde(alias = "SSL_CA_LOCATION", alias = "sslCaLocation")]
+    ssl_ca_location: Option<String>,
+    #[serde(alias = "SSL_CERTIFICATE_LOCATION", alias = "sslCertificateLocation")]
+    ssl_certificate_location: Option<String>,
+    #[serde(alias = "SSL_KEY_LOCATION", alias = "sslKeyLocation")]
+    ssl_key_location: Option<String>,
+    #[serde(alias = "SSL_KEY_PASSWORD", alias = "sslKeyPassword")]
+    ssl_key_password: Option<String>,
     #[serde(alias = "SCHEMA_REGISTRY_URL", alias = "schemaRegistryUrl")]
     schema_registry_url: Option<String>,
     #[serde(alias = "SCHEMA_REGISTRY_USERNAME", alias = "schemaRegistryUsername")]
@@ -169,11 +211,51 @@ struct TomlKafkaSection {
     max_messages: Option<usize>,
     #[serde(alias = "BATCH_LOG_MESSAGES", alias = "batchLogMessages")]
     batch_log_messages: Option<usize>,
+    #[serde(
+        alias = "POLL_INTERVAL_MS",
+        alias = "pollIntervalMs",
+        alias = "max.poll.interval.ms",
+        alias = "consumer.override.max.poll.interval.ms",
+        alias = "POOL_INTERVAL_MS",
+        alias = "poolIntervalMs"
+    )]
+    poll_interval_ms: Option<u64>,
+    #[serde(
+        alias = "POLL_SIZE",
+        alias = "pollSize",
+        alias = "max.poll.records",
+        alias = "consumer.override.max.poll.records",
+        alias = "POOL_SIZE",
+        alias = "poolSize"
+    )]
+    poll_size: Option<usize>,
+    #[serde(alias = "TRANSACTION_BATCH_SIZE", alias = "transactionBatchSize")]
+    transaction_batch_size: Option<usize>,
+    #[serde(alias = "WORKER_COUNT", alias = "workerCount")]
+    worker_count: Option<usize>,
+    #[serde(alias = "GROUP_ID_LOG_SUFFIX", alias = "groupIdLogSuffix")]
+    group_id_log_suffix: Option<bool>,
+    #[serde(alias = "DEBUG", alias = "debug")]
+    debug: Option<String>,
 }
 
 pub fn read_conf(path: &Path) -> Result<ConfData> {
     fn parse_toml_conf(path: &Path, content: &str) -> Result<ConfData> {
-        let parsed: TomlProjectConfig = toml::from_str(content)
+        let parsed_doc: toml::Value = toml::from_str(content)
+            .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
+        let has_project = parsed_doc.get("project").is_some();
+        let has_kafka = parsed_doc.get("kafka").is_some();
+        if has_kafka && !has_project {
+            return Err(anyhow!(
+                "Invalid config {}: found [kafka] section but missing required [project] section. \
+This often means the config file was truncated or overwritten. Provide full config with [project], [source], [target], and [kafka] sections.",
+                path.display()
+            ));
+        }
+
+        let parsed: TomlProjectConfig = parsed_doc
+            .clone()
+            .try_into()
             .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
         let source = parsed.source.unwrap_or_default();
         let target = parsed.target.unwrap_or_default();
@@ -182,6 +264,14 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             group_id: k.group_id,
             topics: k.topics,
             topic_prefix: k.topic_prefix,
+            security_protocol: k.security_protocol,
+            sasl_mechanism: k.sasl_mechanism,
+            sasl_username: k.sasl_username,
+            sasl_password: k.sasl_password,
+            ssl_ca_location: k.ssl_ca_location,
+            ssl_certificate_location: k.ssl_certificate_location,
+            ssl_key_location: k.ssl_key_location,
+            ssl_key_password: k.ssl_key_password,
             schema_registry_url: k.schema_registry_url,
             schema_registry_username: k.schema_registry_username,
             schema_registry_password: k.schema_registry_password,
@@ -189,6 +279,12 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             auto_offset_reset: k.auto_offset_reset,
             max_messages: k.max_messages,
             batch_log_messages: k.batch_log_messages,
+            poll_interval_ms: k.poll_interval_ms,
+            poll_size: k.poll_size,
+            transaction_batch_size: k.transaction_batch_size,
+            worker_count: k.worker_count,
+            group_id_log_suffix: k.group_id_log_suffix,
+            debug: k.debug,
         });
 
         Ok(ConfData {

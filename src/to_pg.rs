@@ -30,9 +30,8 @@ use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_null_type, is_pg_reserved,
-    matches_timestamp_field, sanitize,
-    scalar_type_family,
+    inline_object_leaf_fields_with_prefix, is_null_type, is_pg_reserved, matches_timestamp_field,
+    sanitize, scalar_type_family,
 };
 
 const FORCED_TIMESTAMP_PG_TYPE: &str = "TIMESTAMP WITH TIME ZONE";
@@ -483,7 +482,15 @@ fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> 
 }
 
 /// Prepend extension setup and optionally `CREATE SCHEMA` + `SET search_path` preamble.
-fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
+fn prepend_schema_preamble(
+    ddl: String,
+    pg_schema: Option<&str>,
+    schema_owner: Option<&str>,
+) -> String {
+    fn quote_ident_always(ident: &str) -> String {
+        format!("\"{}\"", ident.replace('"', "\"\""))
+    }
+
     let mut preamble = String::new();
 
     if ddl.contains("DEFAULT public.gen_random_uuid()") {
@@ -502,8 +509,19 @@ fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
         None => format!("{preamble}{ddl}"),
         Some(schema) => {
             let s = sanitize(schema);
+            let owner_stmt = schema_owner
+                .map(str::trim)
+                .filter(|owner| !owner.is_empty())
+                .map(|owner| {
+                    format!(
+                        "ALTER SCHEMA {} OWNER TO {};\n",
+                        quote_ident_always(&s),
+                        quote_ident_always(owner)
+                    )
+                })
+                .unwrap_or_default();
             format!(
-                "{preamble}CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s}, public;\n\n{ddl}"
+                "{preamble}CREATE SCHEMA IF NOT EXISTS {s};\n{owner_stmt}SET search_path = {s}, public;\n\n{ddl}"
             )
         }
     }
@@ -1756,7 +1774,11 @@ fn render_table(table: &Table) -> String {
         ));
     }
     let body = defs.join(",\n");
-    format!("CREATE TABLE {} (\n{}\n);", maybe_quote_ident(&table.name), body)
+    format!(
+        "CREATE TABLE {} (\n{}\n);",
+        maybe_quote_ident(&table.name),
+        body
+    )
 }
 
 fn render_fk_indexes(table: &Table) -> Vec<String> {
@@ -1800,10 +1822,11 @@ fn render_fk_indexes(table: &Table) -> Vec<String> {
 ///
 /// # Returns
 /// A string containing one or more `CREATE TABLE` statements separated by blank lines.
-pub fn schema_to_ddl_with_timestamp_fields(
+pub fn schema_to_ddl_with_timestamp_fields_and_owner(
     schema: &CollectionSchema,
     table_name: &str,
     pg_schema: Option<&str>,
+    schema_owner: Option<&str>,
     timestamp_fields: &[String],
 ) -> String {
     if let Some(group) = flatten_grouped_root_array_object_fields(schema) {
@@ -1851,7 +1874,7 @@ pub fn schema_to_ddl_with_timestamp_fields(
             })
             .collect::<Vec<_>>()
             .join("\n\n");
-        return prepend_schema_preamble(ddl, pg_schema);
+        return prepend_schema_preamble(ddl, pg_schema, schema_owner);
     }
 
     if let Some((_, array_field)) = flatten_root_array_object_field(schema) {
@@ -1913,7 +1936,7 @@ pub fn schema_to_ddl_with_timestamp_fields(
                     })
                     .collect::<Vec<_>>()
                     .join("\n\n");
-                return prepend_schema_preamble(ddl, pg_schema);
+                return prepend_schema_preamble(ddl, pg_schema, schema_owner);
             }
         }
     }
@@ -1944,7 +1967,22 @@ pub fn schema_to_ddl_with_timestamp_fields(
         })
         .collect::<Vec<_>>()
         .join("\n\n");
-    prepend_schema_preamble(ddl, pg_schema)
+    prepend_schema_preamble(ddl, pg_schema, schema_owner)
+}
+
+pub fn schema_to_ddl_with_timestamp_fields(
+    schema: &CollectionSchema,
+    table_name: &str,
+    pg_schema: Option<&str>,
+    timestamp_fields: &[String],
+) -> String {
+    schema_to_ddl_with_timestamp_fields_and_owner(
+        schema,
+        table_name,
+        pg_schema,
+        None,
+        timestamp_fields,
+    )
 }
 
 pub fn schema_to_ddl(
@@ -2005,6 +2043,36 @@ mod tests {
             !ddl.contains("opt TEXT NOT NULL"),
             "optional field must not have NOT NULL"
         );
+    }
+
+    #[test]
+    fn test_schema_owner_is_rendered_when_provided() {
+        let docs = vec![doc! { "_id": 1_i32, "name": "Alice" }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl_with_timestamp_fields_and_owner(
+            &schema,
+            "users",
+            Some("ciam_prep2"),
+            Some("user_ciam"),
+            &[],
+        );
+        assert!(ddl.contains("CREATE SCHEMA IF NOT EXISTS ciam_prep2;"));
+        assert!(ddl.contains("ALTER SCHEMA \"ciam_prep2\" OWNER TO \"user_ciam\";"));
+        assert!(ddl.contains("SET search_path = ciam_prep2, public;"));
+    }
+
+    #[test]
+    fn test_schema_owner_not_rendered_when_missing() {
+        let docs = vec![doc! { "_id": 1_i32, "name": "Alice" }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl_with_timestamp_fields_and_owner(
+            &schema,
+            "users",
+            Some("ciam_prep2"),
+            None,
+            &[],
+        );
+        assert!(!ddl.contains("ALTER SCHEMA"));
     }
 
     #[test]

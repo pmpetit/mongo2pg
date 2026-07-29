@@ -45,8 +45,8 @@ Just as tool exist to migrate from relational databases to document stores, a to
 ## Install
 
 ```bash
-# Replace <version> and <platform> with your values, e.g. v0.2.0 and linux-x86_64
-version="0.0.0-pr.19.7df94be"
+# Replace <version> and <platform> with your values, e.g. v0.6.4 and linux-x86_64
+version="vX.Y.Z"
 platform="linux-x86_64"
 gh auth login
 gh release download ${version} --repo adeo/mongo2pg --pattern "mongo2pg-${platform}.tar.gz"
@@ -56,7 +56,7 @@ chmod +x mongo2pg
 sudo mv mongo2pg /usr/local/bin/
 ```
 
-<https://github.com/adeo/mongo2pg/tree/0.0.0-pr.19.7df94be>
+<https://github.com/adeo/mongo2pg/tree/vX.Y.Z>
 
 ## CLI Usage
 
@@ -121,7 +121,7 @@ Each collection gets a **complexity score** that estimates how much effort its m
 $$C_i = \frac{depth_{max}}{2} + array\_fields + \frac{distinct\_fields}{avg\_fields\_per\_doc}$$
 
 | Term | Meaning |
-|------|---------|
+| ------ | --------- |
 | $depth_{max} / 2$ | Penalises nesting depth (halved so it doesn't dominate). Every level of nesting typically requires a `JOIN` in SQL. |
 | $array\_fields$ | Number of top-level fields whose type is `Array`. Each array field produces a child table with a foreign key. |
 | $distinct\_fields / avg\_fields\_per\_doc$ | **Polymorphism ratio.** `1.0` means every field appears in every document (perfectly flat). Values `> 5` indicate a sparse or highly polymorphic schema where many columns will be `NULL`. |
@@ -135,7 +135,7 @@ The $1.5 \times N$ factor accounts for the baseline coordination cost of migrati
 Three summary metrics are shown in the HTML report:
 
 | Metric | Description |
-|--------|-------------|
+| -------- | ------------- |
 | **Score (total)** | $C_{db}$ – primary complexity indicator for the whole database |
 | **Score (avg weighted)** | $C_i$ weighted by document count – shows where the bulk of the data sits |
 | **Score (max collection)** | The single hardest collection to migrate |
@@ -143,7 +143,7 @@ Three summary metrics are shown in the HTML report:
 **Thresholds:**
 
 | Label | Range | Meaning |
-|-------|-------|---------|
+| ------- | ------- | --------- |
 | 🟢 Easy | $C_{db} < 30$ | Mostly flat, scalar documents – migration is straightforward |
 | 🟠 Medium | $30 \le C_{db} < 80$ | Some nesting or arrays – migration needs care but is tractable |
 | 🔴 Hard | $C_{db} \ge 80$ | Deep nesting, many arrays, or high polymorphism – significant schema redesign likely required |
@@ -164,7 +164,7 @@ Three summary metrics are shown in the HTML report:
 For example, a collection `orders` with an array field `products` that itself contains an array field `images` produces:
 
 | MongoDB path | PostgreSQL table |
-|---|---|
+| --- | --- |
 | `orders` | `orders` |
 | `orders[].products` | `orders_products` |
 | `orders[].products[].images` | `orders_products_images` |

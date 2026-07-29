@@ -18,7 +18,7 @@ mongo2pg init --project-base <dir>
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `--project-base` | Base directory where the project folder will be created |
 | `--project-name` | Project name |
 | `--cluster-name` | Optional cluster segment appended after project name in generated paths |
@@ -67,7 +67,7 @@ mongo2pg infer -c <config>
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `--source-uri` | MongoDB source connection URI |
 | `--namespace` | One collection, one database, or omitted to enumerate all user databases |
 | `--number` | Number of documents to sample |
@@ -94,7 +94,7 @@ mongo2pg export [collection] -c <config> [--output-dir <dir>] [--namespace <db-o
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `[collection]` | Optional collection name |
 | `-c, --config` | Project config file |
 | `--output-dir` | CSV output directory override |
@@ -114,7 +114,7 @@ mongo2pg report [--collections-dir <dir> | -c <config>] [--output <file>] [--nam
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `-c, --config` | Project config file |
 | `--collections-dir` | Path to `source/collections/` |
 | `--output` | HTML output file |
@@ -133,13 +133,47 @@ mongo2pg import [collection] -c <config> [--namespace <db-or-db.collection>]
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `[collection]` | Optional collection name |
 | `-c, --config` | Project config file |
 | `--namespace` | Database or fully qualified collection namespace |
 
 With `-c <config>`, `[source].include` / `[source].exclude` filters are also
 applied before import.
+
+Import preflight behavior:
+
+- Ensures target database exists before connecting to the destination database session.
+- Ensures target schema exists before executing destination table DDL.
+- Fails fast with actionable errors when database/schema creation is denied by PostgreSQL privileges.
+- Stops early if any destination tables already exist; drop or clean destination tables before retrying.
+
+---
+
+## `mongo2pg ping`
+
+Checks backend connectivity for selected dependencies without running infer/export/import flows.
+
+```text
+mongo2pg ping -c <config> [--source] [--target] [--kafka]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-c, --config` | Project config file |
+| `--source` | Validate MongoDB SOURCE_URI connectivity |
+| `--target` | Validate PostgreSQL TARGET_URI connectivity |
+| `--kafka` | Validate Kafka bootstrap/auth reachability |
+
+At least one backend flag is required. The command prints one pass/fail line per selected backend and exits non-zero if any selected backend fails.
+
+Examples:
+
+```bash
+mongo2pg ping -c ./projects/airbnb/config/airbnb.toml --source
+mongo2pg ping -c ./projects/airbnb/config/airbnb.toml --target
+mongo2pg ping -c ./projects/airbnb/config/airbnb.toml --kafka
+```
 
 ---
 
@@ -166,7 +200,7 @@ schema_registry_url = "http://localhost:8081"
 ```
 
 | Property | Required | Description |
-|---|---|---|
+| --- | --- | --- |
 | `bootstrap_servers` | Yes | Kafka bootstrap servers (for example `localhost:9092`) |
 | `group_id` | No | Consumer group id. Default: `mongo2pg-kafka-import` |
 | `topics` | Yes* | Explicit topic list consumed by `kafka-import` |
@@ -188,6 +222,7 @@ schema_registry_url = "http://localhost:8081"
 
 - With `topic_prefix` set, topic names must start with `<topic_prefix>.`.
 - If `topics` is empty, `kafka-import` auto-discovers broker topics starting with `<topic_prefix>.` and subscribes to them.
+- If `--topics` is passed while `topic_prefix` is also set, `kafka-import` logs a warning and ignores `topic_prefix` (explicit topics take precedence).
 - The prefix is removed, then the last two segments are interpreted as `<db>.<collection>`.
 - Messages whose topic does not match the prefix are skipped.
 

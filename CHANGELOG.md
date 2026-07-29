@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-07-29
+
+### Added
+
+- **force**: add force option to kafka-import to re-use the same table in sink connector
+
+### Fixed
+
+- **import**: can choose different pg database_name and mongo database_name. To prevent having pg database `mongdb-mydb`
+
+## [0.6.4] - 2026-07-29
+
+### Added
+
+- **`ping` command**: added `mongo2pg ping -c <config> [--source] [--target] [--kafka]` to validate backend connectivity without running infer/export/import.
+- **Per-backend ping status**: ping now reports pass/fail per selected backend and exits non-zero when any selected backend check fails.
+- **Schema owner emission in generated SQL**: when `target.uri` contains a PostgreSQL username, generated DDL now includes `ALTER SCHEMA ... OWNER TO ...` after schema creation.
+
+### Changed
+
+- **Init config defaults**: `mongo2pg init` now writes `target.schema_name` as an active key (not commented) and defaults it to the same value as `target.database_name`.
+- **Release docs for contributors**: contribution guide now includes branch/PR workflow from `main` and post-merge release steps.
+- **Operational documentation refresh**: updated reference/how-to/tutorial docs to reflect import preflight behavior, Kafka topic precedence (`--topics` over `topic_prefix`), and the new `ping` command usage.
+- **Scoring context marker (`search_node`)**: infer/report now detects MongoDB Search node capability (`$listSearchIndexes`) and adds a marker in score summaries to highlight features without direct PostgreSQL equivalent.
+
+### Fixed
+
+- **`to-pg` target database selection**: SQL preamble (`CREATE DATABASE` / `\connect`) now prefers `target.database_name` from config instead of deriving database name from `source.namespace` path layout.
+- **Schema ownership mismatch**: generated schema no longer defaults to execution-role ownership when a target URI username is available; owner is explicitly set in generated SQL.
+- **Connection attribution coverage**: connection-attribution specs now include ping command failures.
+
 ## [0.6.3] - 2026-07-24
 
 ### Added
@@ -246,7 +277,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema analysis with type detection, nested objects, arrays, and probability scores
 - CI pipeline with GitHub Actions
 
-[Unreleased]: https://github.com/pmpetit/mongo2pg/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/pmpetit/mongo2pg/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/pmpetit/mongo2pg/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/pmpetit/mongo2pg/compare/v0.5.3...v0.6.3
 [0.5.3]: https://github.com/pmpetit/mongo2pg/compare/v0.4.0...v0.5.3
 [0.4.0]: https://github.com/pmpetit/mongo2pg/compare/v0.3.7...v0.4.0

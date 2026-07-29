@@ -1,6 +1,6 @@
 [package]
 name = "mongo2pg"
-version = "0.6.3"
+version = "0.6.5"
 edition = "2021"
 description = "Schema inference and conversion tool: MongoDB → JSON Schema variants"
 license = "Apache-2.0"
@@ -33,7 +33,7 @@ flate2 = "1.1.9"
 bytes = "1.12.1"
 toml = "0.9.8"
 strsim = "0.11.1"
-rdkafka = { version = "0.39.0" }
+rdkafka = { version = "0.39.0", features = ["ssl-vendored"] }
 reqwest = { version = "0.12.28", default-features = false, features = [
     "json",
     "rustls-tls",
