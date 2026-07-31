@@ -14,4 +14,4 @@
 
 - [x] 3.1 Add/update tests for grouped mappings showing shared target table in report output.
 - [x] 3.2 Add/update tests for non-grouped mappings and legacy inputs without target-table metadata.
-- [x] 3.3 Regenerate and verify report output for CIAM sample data to confirm `events` table appears in report.
+- [x] 3.3 Regenerate and verify report output for PST sample data to confirm `events` table appears in report.
