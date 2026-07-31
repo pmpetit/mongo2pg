@@ -140,10 +140,12 @@ pub struct CollectionStatsYaml {
     pub infer_warnings: Vec<InferWarningYaml>,
     #[serde(default)]
     pub read_ops: Option<CollectionReadOpsYaml>,
-  }
+    #[serde(default)]
+    pub has_search_node: bool,
+}
 
-  #[derive(Debug, Deserialize)]
-  pub struct CollectionReadOpsYaml {
+#[derive(Debug, Deserialize)]
+pub struct CollectionReadOpsYaml {
     pub read_ops: u64,
     #[serde(default)]
     pub since: Option<String>,
@@ -152,8 +154,8 @@ pub struct CollectionStatsYaml {
 pub struct CollectionRow {
     pub name: String,
     pub stats: CollectionStatsYaml,
-  /// Resolved PostgreSQL target table for this collection, when known.
-  pub pg_target_table: Option<String>,
+    /// Resolved PostgreSQL target table for this collection, when known.
+    pub pg_target_table: Option<String>,
     /// PostgreSQL tables generated for this collection: `(table_name, ddl)`.
     /// Empty when no `schema/tables/` directory was provided.
     pub table_names: Vec<(String, String)>,
@@ -234,12 +236,12 @@ fn escape_html(value: &str) -> String {
 }
 
 fn render_documents_cell(stats: &CollectionStatsYaml) -> String {
-  let doc_count = match &stats.documents_in_collection {
-    serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
-    _ => "startup".to_owned(),
-  };
+    let doc_count = match &stats.documents_in_collection {
+        serde_yaml::Value::Number(n) => n.as_u64().unwrap_or(0).to_string(),
+        _ => "startup".to_owned(),
+    };
 
-  let read_ops_hint = stats
+    let read_ops_hint = stats
     .read_ops
     .as_ref()
     .map(|read_ops| {
@@ -252,11 +254,7 @@ fn render_documents_cell(stats: &CollectionStatsYaml) -> String {
     })
     .unwrap_or_default();
 
-  format!(
-    r#"<td class="num">{}{}</td>"#,
-    doc_count,
-    read_ops_hint,
-  )
+    format!(r#"<td class="num">{}{}</td>"#, doc_count, read_ops_hint,)
 }
 
 /// Read every `<base>/<collection>/<collection>.stats.yaml` and return sorted rows.
@@ -308,8 +306,12 @@ pub fn collect_rows(base: &Path, tables_dir: Option<&Path>) -> Result<Vec<Collec
             })
             .unwrap_or_default();
 
-          let pg_target_table = crate::export::resolve_grouped_sql_lookup_name(base, &name)
-            .or_else(|| table_names.first().map(|(table_name, _)| table_name.clone()));
+        let pg_target_table =
+            crate::export::resolve_grouped_sql_lookup_name(base, &name).or_else(|| {
+                table_names
+                    .first()
+                    .map(|(table_name, _)| table_name.clone())
+            });
 
         rows.push(CollectionRow {
             name,
@@ -353,6 +355,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
 
     let has_tables = rows.iter().any(|r| !r.table_names.is_empty());
     let total_pg_tables: usize = rows.iter().map(|r| r.table_names.len()).sum();
+    let has_search_node_marker = rows.iter().any(|r| r.stats.has_search_node);
 
     // DB-level migrability aggregates
     // C_db = 1.5 * N + sum(C_i)
@@ -400,6 +403,11 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
                 "#e67e22"
             } else {
                 "#c0392b"
+            };
+            let score_marker = if r.stats.has_search_node {
+              r#"<span class="score-marker" title="MongoDB Search node capability detected (Atlas Search/mongot); no direct PostgreSQL equivalent">*</span>"#
+            } else {
+              ""
             };
 
             let (name_cell, detail_row) = if r.table_names.is_empty() {
@@ -497,7 +505,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
           <td class="num">{width_max:.1} <span class="level">(L{width_max_level})</span></td>
           <td class="num">{depth}</td>
           <td class="num" title="{branch_tooltip}">{branch:.1}</td>
-          <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score:.2}</span></td>
+          <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score:.2}</span>{score_marker}</td>
           {tables_cell}
         </tr>
         {detail_row}"#,
@@ -519,6 +527,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
                 },
                 score = r.stats.migrability_score,
                 score_color = score_color,
+                score_marker = score_marker,
                 tables_cell = tables_cell,
                 detail_row = detail_row,
             )
@@ -675,6 +684,14 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     }}
     .level {{ color: #95a5a6; font-size: 0.8rem; }}
     .score-badge {{ font-size: 0.95rem; }}
+    .score-marker {{
+      margin-left: 0.2rem;
+      color: #7f8c8d;
+      font-size: 0.9rem;
+      font-weight: 700;
+      vertical-align: baseline;
+      cursor: help;
+    }}
     .complexity-badge {{
       display: inline-block;
       padding: 0.15rem 0.6rem;
@@ -705,7 +722,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     {pg_tables_card}
     <div class="card">
       <div class="label">Complexity Score</div>
-      <div class="value" style="color:{complexity_color}">{score_db:.1}</div>
+      <div class="value" style="color:{complexity_color}">{score_db:.1}{summary_score_marker}</div>
     </div>
     <div class="card">
       <div class="label">Complexity</div>
@@ -713,8 +730,8 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
         <span class="complexity-badge" style="background:{complexity_color}">{complexity_label}</span>
       </div>
     </div>
-    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
-    <div class="card"><div class="label">Score (max collection)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
+    <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}{summary_score_marker}</div></div>
+    <div class="card"><div class="label">Score (max collection)</div><div class="value" style="font-size:1.3rem">{score_max:.2}{summary_score_marker}</div></div>
   </div>
 
   <p class="score-explainer">
@@ -728,7 +745,8 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     <strong>Width (max)</strong>: highest field count found at any single nesting level, with the level shown in parentheses (probability-weighted).<br>
     <strong>Depth (max)</strong>: maximum nesting depth — top-level fields are depth 1, their sub-fields depth 2, etc.<br>
     <strong>Fields (total)</strong>: expected number of fields a typical document in the collection
-    actually has, summed across all nesting levels (probability-weighted). Hover the value for the per-level breakdown.
+    actually has, summed across all nesting levels (probability-weighted). Hover the value for the per-level breakdown.<br>
+    {search_node_hint}
   </p>
 
   <table>
@@ -786,6 +804,11 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
         score_sum = score_sum,
         score_avg = score_avg,
         score_max = score_max,
+        summary_score_marker = if has_search_node_marker {
+            r#"<span class="score-marker" title="MongoDB Search node capability detected (Atlas Search/mongot); no direct PostgreSQL equivalent">*</span>"#
+        } else {
+            ""
+        },
         complexity_label = complexity_label.0,
         complexity_color = complexity_label.1,
         pg_tables_card = if has_tables {
@@ -797,6 +820,11 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
             String::new()
         },
         table_rows = table_rows,
+        search_node_hint = if has_search_node_marker {
+            "<strong>*</strong> MongoDB Search node capability detected (Atlas Search/mongot), a feature without direct PostgreSQL equivalent."
+        } else {
+            ""
+        },
         tables_header = if has_tables {
             r#"<th class="num">PG Tables</th>"#
         } else {
@@ -988,15 +1016,15 @@ pub fn render_post_import_html(
             .collect::<Vec<_>>()
             .join("");
         let mismatch_detail = if md5_summary.mismatches.is_empty() {
-          String::new()
+            String::new()
         } else {
-          format!(
-            r#"<button type="button" class="md5-open-window" onclick="openMd5DiffWindow('{detail_id}')">Open diff in new page</button><template id="{detail_id}"><!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mongo2pg md5 mismatch</title><style>body{{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;padding:1.25rem;background:#f8fafc;color:#1f2937}}h1{{margin:.2rem 0 .5rem;font-size:1.1rem}}.meta{{margin:0 0 1rem;font-size:.9rem;color:#475569}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{border:1px solid #cbd5e1;padding:.45rem .5rem;vertical-align:top;text-align:left;font-size:.85rem;line-height:1.35}}th{{background:#e2e8f0;color:#0f172a}}code{{white-space:pre-wrap;word-break:break-word}}</style></head><body><h1>First 5 non-corresponding rows</h1><p class="meta"><strong>MongoDB:</strong> {mongo_md5}<br><strong>PostgreSQL:</strong> {pg_md5}</p><table><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{mismatch_rows}</tbody></table></body></html></template>"#,
-            detail_id = detail_id,
-            mongo_md5 = escape_html(&md5_summary.mongo_md5),
-            pg_md5 = escape_html(&md5_summary.pg_md5),
-            mismatch_rows = mismatch_rows,
-          )
+            format!(
+                r#"<button type="button" class="md5-open-window" onclick="openMd5DiffWindow('{detail_id}')">Open diff in new page</button><template id="{detail_id}"><!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mongo2pg md5 mismatch</title><style>body{{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;padding:1.25rem;background:#f8fafc;color:#1f2937}}h1{{margin:.2rem 0 .5rem;font-size:1.1rem}}.meta{{margin:0 0 1rem;font-size:.9rem;color:#475569}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{border:1px solid #cbd5e1;padding:.45rem .5rem;vertical-align:top;text-align:left;font-size:.85rem;line-height:1.35}}th{{background:#e2e8f0;color:#0f172a}}code{{white-space:pre-wrap;word-break:break-word}}</style></head><body><h1>First 5 non-corresponding rows</h1><p class="meta"><strong>MongoDB:</strong> {mongo_md5}<br><strong>PostgreSQL:</strong> {pg_md5}</p><table><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{mismatch_rows}</tbody></table></body></html></template>"#,
+                detail_id = detail_id,
+                mongo_md5 = escape_html(&md5_summary.mongo_md5),
+                pg_md5 = escape_html(&md5_summary.pg_md5),
+                mismatch_rows = mismatch_rows,
+            )
         };
         let state_class = if md5_summary.mongo_md5 == md5_summary.pg_md5 {
             "is-match"
@@ -1048,7 +1076,7 @@ pub fn render_post_import_html(
         let md5_detail = node
             .md5_summary
             .as_ref()
-          .map(|summary| render_md5_detail(summary, &md5_detail_id))
+            .map(|summary| render_md5_detail(summary, &md5_detail_id))
             .unwrap_or_default();
         let pg_cell = match (&node.pg_table_name, node.pg_row_count) {
             (Some(table_name), Some(row_count)) => format!(
@@ -1666,7 +1694,8 @@ mod tests {
                             },
                         ],
                     }],
-                      read_ops: None,
+                    read_ops: None,
+                    has_search_node: false,
                 },
                 pg_target_table: Some("advisors".to_owned()),
                 table_names: Vec::new(),
@@ -1716,7 +1745,8 @@ mod tests {
                             examples: vec!["1609954220".to_owned()],
                         }],
                     }],
-                      read_ops: None,
+                    read_ops: None,
+                    has_search_node: false,
                 },
                 pg_target_table: Some("scheduling_executions".to_owned()),
                 table_names: Vec::new(),
@@ -1763,7 +1793,8 @@ mod tests {
                             examples: vec!["\"2026-05-22 18:50:52.681 +00:00:00\"".to_owned()],
                         }],
                     }],
-                      read_ops: None,
+                    read_ops: None,
+                    has_search_node: false,
                 },
                 pg_target_table: Some("sample".to_owned()),
                 table_names: Vec::new(),
@@ -1778,128 +1809,165 @@ mod tests {
         assert!(html.contains("Date"));
     }
 
-      #[test]
-      fn render_html_shows_collection_read_ops_hint() {
+    #[test]
+    fn render_html_shows_collection_read_ops_hint() {
         let html = render_html(
-          &[CollectionRow {
-            name: "customers".to_owned(),
-            stats: CollectionStatsYaml {
-              documents_in_collection: serde_yaml::Value::Number(500_u64.into()),
-              documents_sampled: 500,
-              width_top_level: 8,
-              width_max: 8.0,
-              width_max_level: 1,
-              depth_max: 2,
-              branch_total: 9.4,
-              branch_per_level: indexmap::IndexMap::from([
-                ("L1".to_owned(), 8.0),
-                ("L2".to_owned(), 1.4),
-              ]),
-              array_field_count: 1,
-              avg_fields_per_doc: 6.8,
-              migrability_score: 2.3,
-              infer_warnings: Vec::new(),
-              read_ops: Some(super::CollectionReadOpsYaml {
-                read_ops: 1234,
-                since: Some("2026-07-03 10:00:00 UTC".to_owned()),
-              }),
-            },
-            pg_target_table: Some("customers".to_owned()),
-            table_names: Vec::new(),
-          }],
-          "sample_analytics",
-          "cluster0",
-          "Read Ops",
+            &[CollectionRow {
+                name: "customers".to_owned(),
+                stats: CollectionStatsYaml {
+                    documents_in_collection: serde_yaml::Value::Number(500_u64.into()),
+                    documents_sampled: 500,
+                    width_top_level: 8,
+                    width_max: 8.0,
+                    width_max_level: 1,
+                    depth_max: 2,
+                    branch_total: 9.4,
+                    branch_per_level: indexmap::IndexMap::from([
+                        ("L1".to_owned(), 8.0),
+                        ("L2".to_owned(), 1.4),
+                    ]),
+                    array_field_count: 1,
+                    avg_fields_per_doc: 6.8,
+                    migrability_score: 2.3,
+                    infer_warnings: Vec::new(),
+                    read_ops: Some(super::CollectionReadOpsYaml {
+                        read_ops: 1234,
+                        since: Some("2026-07-03 10:00:00 UTC".to_owned()),
+                    }),
+                    has_search_node: false,
+                },
+                pg_target_table: Some("customers".to_owned()),
+                table_names: Vec::new(),
+            }],
+            "sample_analytics",
+            "cluster0",
+            "Read Ops",
         );
 
         assert!(html.contains("reads: 1234 since 2026-07-03 10:00:00 UTC"));
-      }
+    }
 
-  #[test]
-  fn render_html_shows_grouped_pg_target_table() {
-    let html = render_html(
-      &[
-        CollectionRow {
-          name: "events_bcit".to_owned(),
-          stats: CollectionStatsYaml {
-            documents_in_collection: serde_yaml::Value::Number(10_u64.into()),
-            documents_sampled: 10,
-            width_top_level: 2,
-            width_max: 2.0,
-            width_max_level: 1,
-            depth_max: 1,
-            branch_total: 2.0,
-            branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
-            array_field_count: 0,
-            avg_fields_per_doc: 2.0,
-            migrability_score: 1.0,
-            infer_warnings: Vec::new(),
-            read_ops: None,
-          },
-          pg_target_table: Some("events".to_owned()),
-          table_names: Vec::new(),
-        },
-        CollectionRow {
-          name: "events_lmza".to_owned(),
-          stats: CollectionStatsYaml {
-            documents_in_collection: serde_yaml::Value::Number(20_u64.into()),
-            documents_sampled: 20,
-            width_top_level: 2,
-            width_max: 2.0,
-            width_max_level: 1,
-            depth_max: 1,
-            branch_total: 2.0,
-            branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
-            array_field_count: 0,
-            avg_fields_per_doc: 2.0,
-            migrability_score: 1.0,
-            infer_warnings: Vec::new(),
-            read_ops: None,
-          },
-          pg_target_table: Some("events".to_owned()),
-          table_names: Vec::new(),
-        },
-      ],
-      "sample",
-      "cluster0",
-      "Grouped PG Table",
-    );
+    #[test]
+    fn render_html_shows_grouped_pg_target_table() {
+        let html = render_html(
+            &[
+                CollectionRow {
+                    name: "events_bcit".to_owned(),
+                    stats: CollectionStatsYaml {
+                        documents_in_collection: serde_yaml::Value::Number(10_u64.into()),
+                        documents_sampled: 10,
+                        width_top_level: 2,
+                        width_max: 2.0,
+                        width_max_level: 1,
+                        depth_max: 1,
+                        branch_total: 2.0,
+                        branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
+                        array_field_count: 0,
+                        avg_fields_per_doc: 2.0,
+                        migrability_score: 1.0,
+                        infer_warnings: Vec::new(),
+                        read_ops: None,
+                        has_search_node: false,
+                    },
+                    pg_target_table: Some("events".to_owned()),
+                    table_names: Vec::new(),
+                },
+                CollectionRow {
+                    name: "events_lmza".to_owned(),
+                    stats: CollectionStatsYaml {
+                        documents_in_collection: serde_yaml::Value::Number(20_u64.into()),
+                        documents_sampled: 20,
+                        width_top_level: 2,
+                        width_max: 2.0,
+                        width_max_level: 1,
+                        depth_max: 1,
+                        branch_total: 2.0,
+                        branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 2.0)]),
+                        array_field_count: 0,
+                        avg_fields_per_doc: 2.0,
+                        migrability_score: 1.0,
+                        infer_warnings: Vec::new(),
+                        read_ops: None,
+                        has_search_node: false,
+                    },
+                    pg_target_table: Some("events".to_owned()),
+                    table_names: Vec::new(),
+                },
+            ],
+            "sample",
+            "cluster0",
+            "Grouped PG Table",
+        );
 
-    assert!(html.contains("<th>PG Table</th>"));
-    assert!(html.contains(r#"class="pg-table">events</td>"#));
-  }
+        assert!(html.contains("<th>PG Table</th>"));
+        assert!(html.contains(r#"class="pg-table">events</td>"#));
+    }
 
-  #[test]
-  fn render_html_is_backward_compatible_when_pg_target_table_missing() {
-    let html = render_html(
-      &[CollectionRow {
-        name: "legacy_collection".to_owned(),
-        stats: CollectionStatsYaml {
-          documents_in_collection: serde_yaml::Value::Number(3_u64.into()),
-          documents_sampled: 3,
-          width_top_level: 1,
-          width_max: 1.0,
-          width_max_level: 1,
-          depth_max: 1,
-          branch_total: 1.0,
-          branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 1.0)]),
-          array_field_count: 0,
-          avg_fields_per_doc: 1.0,
-          migrability_score: 0.5,
-          infer_warnings: Vec::new(),
-          read_ops: None,
-        },
-        pg_target_table: None,
-        table_names: Vec::new(),
-      }],
-      "legacy",
-      "cluster0",
-      "Legacy",
-    );
+    #[test]
+    fn render_html_is_backward_compatible_when_pg_target_table_missing() {
+        let html = render_html(
+            &[CollectionRow {
+                name: "legacy_collection".to_owned(),
+                stats: CollectionStatsYaml {
+                    documents_in_collection: serde_yaml::Value::Number(3_u64.into()),
+                    documents_sampled: 3,
+                    width_top_level: 1,
+                    width_max: 1.0,
+                    width_max_level: 1,
+                    depth_max: 1,
+                    branch_total: 1.0,
+                    branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 1.0)]),
+                    array_field_count: 0,
+                    avg_fields_per_doc: 1.0,
+                    migrability_score: 0.5,
+                    infer_warnings: Vec::new(),
+                    read_ops: None,
+                    has_search_node: false,
+                },
+                pg_target_table: None,
+                table_names: Vec::new(),
+            }],
+            "legacy",
+            "cluster0",
+            "Legacy",
+        );
 
-    assert!(html.contains("legacy_collection"));
-    assert!(html.contains(r#"class="pg-table">-</td>"#));
-  }
+        assert!(html.contains("legacy_collection"));
+        assert!(html.contains(r#"class="pg-table">-</td>"#));
+    }
+
+    #[test]
+    fn render_html_marks_score_when_search_node_is_detected() {
+        let html = render_html(
+            &[CollectionRow {
+                name: "search_ready".to_owned(),
+                stats: CollectionStatsYaml {
+                    documents_in_collection: serde_yaml::Value::Number(12_u64.into()),
+                    documents_sampled: 12,
+                    width_top_level: 3,
+                    width_max: 3.0,
+                    width_max_level: 1,
+                    depth_max: 1,
+                    branch_total: 3.0,
+                    branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 3.0)]),
+                    array_field_count: 0,
+                    avg_fields_per_doc: 3.0,
+                    migrability_score: 1.2,
+                    infer_warnings: Vec::new(),
+                    read_ops: None,
+                    has_search_node: true,
+                },
+                pg_target_table: Some("search_ready".to_owned()),
+                table_names: Vec::new(),
+            }],
+            "sample",
+            "cluster0",
+            "Search Node Marker",
+        );
+
+        assert!(html.contains("score-marker"));
+        assert!(html.contains("MongoDB Search node capability detected"));
+    }
 
     #[test]
     fn render_post_import_html_shows_clickable_md5_details() {

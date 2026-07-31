@@ -40,5 +40,21 @@ Attribution MUST be visible in user-facing command failure output for all releva
 
 #### Scenario: Command fails with attributed backend
 
-- **WHEN** `infer`, `export`, `import`, `report --post-import`, or `kafka-import` fails due to backend connectivity
+- **WHEN** `infer`, `export`, `import`, `report --post-import`, `kafka-import`, or `ping` fails due to backend connectivity
 - **THEN** command output includes explicit backend attribution identifying which dependency failed
+
+### Requirement: Privilege-denied preflight errors are operation-attributed
+
+Preflight authorization failures MUST include explicit backend and operation attribution for database and schema creation paths.
+
+#### Scenario: Import fails on database creation privilege
+
+- **WHEN** `import` or `kafka-import` cannot create a missing target database due to insufficient privileges
+- **THEN** command output includes backend attribution for PostgreSQL and operation attribution for database creation
+- **THEN** the error includes the underlying driver cause details
+
+#### Scenario: Import fails on schema creation privilege
+
+- **WHEN** `import` or `kafka-import` cannot create a missing target schema due to insufficient privileges
+- **THEN** command output includes backend attribution for PostgreSQL and operation attribution for schema creation
+- **THEN** the error includes the underlying driver cause details

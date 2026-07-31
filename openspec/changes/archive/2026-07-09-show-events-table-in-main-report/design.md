@@ -52,7 +52,7 @@ Constraints:
 
 - Implement report data plumbing and template rendering for target table visibility.
 - Add/update tests that cover grouped collections mapping to one table and non-grouped controls.
-- Regenerate/validate report output in sample CIAM dataset.
+- Regenerate/validate report output in sample PST dataset.
 - Rollback strategy: remove rendering of new field and keep old row format if regressions are found.
 
 ## Open Questions

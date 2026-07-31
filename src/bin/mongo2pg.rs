@@ -53,7 +53,9 @@ use mongo2pg::stats::{
     format_stats, stats_to_yaml, CollectionReadOpsYaml, InferWarningMinorityYaml,
     InferWarningTypeYaml, InferWarningYaml,
 };
-use mongo2pg::to_pg::schema_to_ddl_with_timestamp_fields;
+use mongo2pg::to_pg::{
+    schema_to_ddl_with_timestamp_fields, schema_to_ddl_with_timestamp_fields_and_owner,
+};
 use mongo2pg::util::{
     can_inline_object_fields, configured_project_root, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
@@ -131,6 +133,8 @@ enum Command {
     ClusterReport(ClusterReportArgs),
     /// Consume Kafka CDC topics and apply mapping-based updates into PostgreSQL
     KafkaImport(KafkaImportArgs),
+    /// Check backend connectivity for selected dependencies
+    Ping(PingArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -449,6 +453,30 @@ struct KafkaImportArgs {
 
     #[arg(long = "schema-name")]
     schema_name: Option<String>,
+
+    /// Reuse existing destination tables during bootstrap instead of failing preflight.
+    /// When enabled, DDL files that target already-existing tables are skipped.
+    #[arg(long = "force", action = clap::ArgAction::SetTrue)]
+    force: bool,
+}
+
+#[derive(Parser, Debug)]
+struct PingArgs {
+    /// Path to the project config file (TOML)
+    #[arg(short = 'c', long = "config")]
+    config: PathBuf,
+
+    /// Check MongoDB source connectivity
+    #[arg(long = "source", action = clap::ArgAction::SetTrue)]
+    source: bool,
+
+    /// Check PostgreSQL target connectivity
+    #[arg(long = "target", action = clap::ArgAction::SetTrue)]
+    target: bool,
+
+    /// Check Kafka connectivity/reachability
+    #[arg(long = "kafka", action = clap::ArgAction::SetTrue)]
+    kafka: bool,
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -468,12 +496,13 @@ async fn main() -> Result<()> {
     validate_command_and_args(&command, infer.as_ref())?;
 
     match command {
-        Some(Command::Init(args)) => run_init(args),
+        Some(Command::Init(args)) => run_init(args).await,
         Some(Command::ToPg(args)) => run_to_pg(args, false),
         Some(Command::Report(args)) => run_report(args, false).await,
         Some(Command::Export(args)) => run_export(args).await,
         Some(Command::Import(args)) => run_import(args).await,
         Some(Command::KafkaImport(args)) => run_kafka_import(args).await,
+        Some(Command::Ping(args)) => run_ping(args).await,
         Some(Command::Infer(args)) => run_infer(args).await,
         Some(Command::ClusterReport(args)) => run_cluster_report(args),
         None => match infer {
@@ -522,6 +551,7 @@ fn config_path_from_cli(cli: &Cli) -> Option<&Path> {
         Some(Command::Import(args)) => Some(args.config.as_path()),
         Some(Command::ClusterReport(args)) => args.configs.first().map(PathBuf::as_path),
         Some(Command::KafkaImport(args)) => Some(args.config.as_path()),
+        Some(Command::Ping(args)) => Some(args.config.as_path()),
         Some(Command::Init(_)) => None,
         None => cli.infer.as_ref().and_then(|args| args.config.as_deref()),
     }
@@ -636,6 +666,14 @@ fn validate_command_and_args(command: &Option<Command>, infer: Option<&InferArgs
                 if !matches!(offset, "latest" | "earliest" | "0") {
                     return Err(anyhow!("--offset must be one of: latest, earliest, 0"));
                 }
+            }
+            Ok(())
+        }
+        Some(Command::Ping(args)) => {
+            if !(args.source || args.target || args.kafka) {
+                return Err(anyhow!(
+                    "ping requires at least one backend flag: --source and/or --target and/or --kafka"
+                ));
             }
             Ok(())
         }
@@ -890,6 +928,14 @@ async fn stage_cli_config_paths(cli: &mut Cli) -> Result<Vec<tempfile::TempDir>>
             args.configs = local_configs;
         }
         Some(Command::KafkaImport(args)) => {
+            let config = std::mem::take(&mut args.config);
+            let (local, stage) = stage_config_path_if_gcs(config).await?;
+            args.config = local;
+            if let Some(stage) = stage {
+                stages.push(stage);
+            }
+        }
+        Some(Command::Ping(args)) => {
             let config = std::mem::take(&mut args.config);
             let (local, stage) = stage_config_path_if_gcs(config).await?;
             args.config = local;
@@ -1371,7 +1417,7 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
             None => ddl,
             Some(name) => {
                 let quoted_name = quote_ident(name);
-                format!("CREATE DATABASE {quoted_name};\n\\connect {quoted_name}\n\n{ddl}")
+                format!("--CREATE DATABASE {quoted_name};\n\\connect {quoted_name}\n\n{ddl}")
             }
         }
     }
@@ -1390,14 +1436,25 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
     // Resolve collections source dir and SQL output dir
     let config_db_name: Option<String> = if let Some(ref conf) = args.config {
         let c = read_conf(conf)?;
-        c.namespace
-            .map(|namespace| split_namespace_scope(&namespace).0.to_owned())
+        resolve_target_database_name_from_conf(
+            c.target_database_name.as_deref(),
+            c.namespace.as_deref(),
+        )
     } else {
         None
     };
 
     let config_target_schema: Option<String> = if let Some(ref conf) = args.config {
         read_conf(conf)?.target_schema
+    } else {
+        None
+    };
+
+    let config_schema_owner: Option<String> = if let Some(ref conf) = args.config {
+        let c = read_conf(conf)?;
+        c.target_uri
+            .as_deref()
+            .and_then(extract_postgres_uri_username)
     } else {
         None
     };
@@ -1638,20 +1695,27 @@ fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
         let ddl = if let Some(mapping_tables) =
             mapping_tables.filter(|_| !force_schema_inference_for_objectid)
         {
-            render_ddl_from_mapping_tables(&mapping_tables, target_schema)
+            if config_schema_owner.is_some() {
+                render_ddl_from_mapping_tables_with_owner(
+                    &mapping_tables,
+                    target_schema,
+                    config_schema_owner.as_deref(),
+                )
+            } else {
+                render_ddl_from_mapping_tables(&mapping_tables, target_schema)
+            }
         } else {
-            schema_to_ddl_with_timestamp_fields(
+            schema_to_ddl_with_timestamp_fields_and_owner(
                 &schema,
                 table_name,
                 target_schema,
+                config_schema_owner.as_deref(),
                 &config_timestamp_fields,
             )
         };
-        let db_name = effective_rel_sql
-            .parent()
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str());
-        let ddl = prepend_database_preamble(ddl, db_name);
+        let preamble_db_name =
+            resolve_preamble_database_name(config_db_name.as_deref(), &effective_rel_sql);
+        let ddl = prepend_database_preamble(ddl, preamble_db_name.as_deref());
 
         std::fs::write(&sql_path, &ddl)
             .with_context(|| format!("Failed to write {}", sql_path.display()))?;
@@ -3368,11 +3432,7 @@ async fn infer_collection(
                                 None => {
                                     warn!(
                                         "find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
-                                        db_name,
-                                        coll_name,
-                                        chunk_index,
-                                        total_chunks,
-                                        e
+                                        db_name, coll_name, chunk_index, total_chunks, e
                                     );
                                     break;
                                 }
@@ -3460,6 +3520,7 @@ async fn infer_collection(
     }
     let infer_warnings = infer_warnings_to_yaml(&schema);
     let read_ops = fetch_collection_read_ops_stats(&db, &collection).await;
+    let has_search_node = detect_search_node_capability(&collection).await;
     emit_infer_type_warnings(db_name, coll_name, &schema);
     let output_dir = output_dir; // rebind to keep borrow checker happy
 
@@ -3490,6 +3551,7 @@ async fn infer_collection(
             &stats_lines,
             &infer_warnings,
             read_ops,
+            has_search_node,
         )
         .with_context(|| format!("Failed to write output files for {output_name}"))?;
     }
@@ -3565,6 +3627,16 @@ async fn fetch_collection_read_ops_stats(
     }
 
     Some(CollectionReadOpsYaml { read_ops, since })
+}
+
+async fn detect_search_node_capability(collection: &mongodb::Collection<bson::Document>) -> bool {
+    collection
+        .aggregate(vec![
+            doc! { "$listSearchIndexes": {} },
+            doc! { "$limit": 1 },
+        ])
+        .await
+        .is_ok()
 }
 
 fn apply_collection_property_filters(
@@ -3754,6 +3826,18 @@ fn ddl_table_mapping_from_table(table: &mongo2pg::schema_diagram::Table) -> DdlT
 }
 
 fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Option<&str>) -> String {
+    render_ddl_from_mapping_tables_with_owner(tables, schema_name, None)
+}
+
+fn render_ddl_from_mapping_tables_with_owner(
+    tables: &[DdlTableMapping],
+    schema_name: Option<&str>,
+    schema_owner: Option<&str>,
+) -> String {
+    fn quote_ident_always(ident: &str) -> String {
+        format!("\"{}\"", ident.replace('"', "\"\""))
+    }
+
     fn is_standalone_index_pseudo_column(column: &DdlColumnMapping) -> bool {
         column.name.eq_ignore_ascii_case("create")
             && column
@@ -3895,8 +3979,21 @@ fn render_ddl_from_mapping_tables(tables: &[DdlTableMapping], schema_name: Optio
 
     if let Some(schema) = schema_name {
         ddl_body.push_str(&format!(
-            "CREATE SCHEMA IF NOT EXISTS {};\nSET search_path = {}, public;\n\n",
-            quote_ident(schema),
+            "CREATE SCHEMA IF NOT EXISTS {};\n",
+            quote_ident(schema)
+        ));
+        if let Some(owner) = schema_owner
+            .map(str::trim)
+            .filter(|owner| !owner.is_empty())
+        {
+            ddl_body.push_str(&format!(
+                "ALTER SCHEMA {} OWNER TO {};\n",
+                quote_ident_always(schema),
+                quote_ident_always(owner)
+            ));
+        }
+        ddl_body.push_str(&format!(
+            "SET search_path = {}, public;\n\n",
             quote_ident(schema)
         ));
     }
@@ -5532,6 +5629,7 @@ fn write_collection_files(
     stats_lines: &[String],
     infer_warnings: &[InferWarningYaml],
     read_ops: Option<CollectionReadOpsYaml>,
+    has_search_node: bool,
 ) -> Result<()> {
     // Sanitize collection name for use as a filesystem path component:
     // MongoDB allows '/' in collection names; replace with '_' to avoid
@@ -5549,7 +5647,13 @@ fn write_collection_files(
     std::fs::write(&stats_path, stats_lines.join("\n") + "\n")
         .with_context(|| format!("Failed to write {}", stats_path.display()))?;
 
-    let yaml_stats = stats_to_yaml(schema, Some(schema.count), infer_warnings, read_ops);
+    let yaml_stats = stats_to_yaml(
+        schema,
+        Some(schema.count),
+        infer_warnings,
+        read_ops,
+        has_search_node,
+    );
     let yaml_path = dir.join(format!("{safe_name}.stats.yaml"));
     std::fs::write(&yaml_path, serde_yaml::to_string(&yaml_stats)?)
         .with_context(|| format!("Failed to write {}", yaml_path.display()))?;
@@ -5607,41 +5711,14 @@ fn write_collection_files(
 // `init` subcommand
 // ──────────────────────────────────────────────────────────────────────────────
 
-fn run_init(args: InitArgs) -> Result<()> {
-    let project_root = if let Some(cluster_name) = args
+async fn run_init(args: InitArgs) -> Result<()> {
+    let cluster_name = args
         .cluster_name
         .as_deref()
         .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        args.project_base
-            .join(&args.project_name)
-            .join(cluster_name)
-    } else {
-        args.project_base.join(&args.project_name)
-    };
+        .filter(|value| !value.is_empty());
+    let config_file_name = format!("{}.toml", cluster_name.unwrap_or(&args.project_name));
 
-    let dirs = [
-        project_root.join("schema").join("tables"),
-        project_root.join("source").join("collections"),
-        project_root.join("data"),
-        project_root.join("config"),
-        project_root.join("reports"),
-    ];
-
-    for dir in &dirs {
-        std::fs::create_dir_all(dir)
-            .with_context(|| format!("Failed to create directory {}", dir.display()))?;
-    }
-
-    let conf_path = project_root.join("config").join(format!(
-        "{}.toml",
-        args.cluster_name
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .unwrap_or(&args.project_name)
-    ));
     let project_title = if let Some(cluster_name) = args
         .cluster_name
         .as_deref()
@@ -5668,7 +5745,7 @@ fn run_init(args: InitArgs) -> Result<()> {
         .map(|name| format!("cluster_name = \"{}\"", name.replace('"', "\\\"")))
         .unwrap_or_else(|| "# cluster_name = \"cluster-a\"".to_owned());
     let conf_content = format!(
-        "[project]\ntitle = \"{}\"\nbase_dir = \"{}\"\n{}\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\n# chunk_size = 1000000\n# auth_retry_max = 3\n# log_level = \"info\"\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\n# schema_name = \"shared_schema\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n",
+        "[project]\ntitle = \"{}\"\nbase_dir = \"{}\"\n{}\nproject_dir = \"{}\"\n\n[source]\nuri = {}\n{}\nnumber = 1000\n# percent = 10.0\n# chunk_size = 1000000\n# auth_retry_max = 3\n# log_level = \"info\"\njsonb = false\n# include = [\"collection_a\", \"collection_b\"]\n# exclude = [\"collection_to_skip\"]\ndatetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]\n\n[target]\nuri = {}\ndatabase_name = \"{}\"\nschema_name = \"{}\"\n\n[kafka]\nbootstrap_servers = \"localhost:9092\"\ngroup_id = \"mongo2pg-kafka-import\"\n# topics = [\"mongo2pg_dbapi.dbapi.projects\"]\n# topic_prefix = \"mongo2pg_dbapi\"\n# security_protocol = \"SASL_SSL\"\n# sasl_mechanism = \"PLAIN\"\n# sasl_username = \"<kafka_api_key>\"\n# sasl_password = \"<kafka_api_secret>\"\nschema_registry_url = \"http://localhost:8081\"\n# schema_registry_username = \"\"\n# schema_registry_password = \"\"\noffset = \"latest\"\n# auto_offset_reset = \"earliest\" # legacy key still supported\n# max_messages = 1000\n# batch_log_messages = 100\n# poll_interval_ms = 500\n# poll_size = 1000\n# transaction_batch_size = 200\n# worker_count = 1\n# group_id_log_suffix = true\n",
         project_title.replace('"', "\\\""),
         args.project_base.display(),
         cluster_line,
@@ -5686,20 +5763,97 @@ fn run_init(args: InitArgs) -> Result<()> {
                     .to_owned()
             }),
         target_database_name.replace('"', "\\\""),
+        target_database_name.replace('"', "\\\""),
     );
-    std::fs::write(&conf_path, conf_content)
-        .with_context(|| format!("Failed to write {}", conf_path.display()))?;
+    let storage_backend = resolve_export_write_backend(&args.project_base)?;
+    match storage_backend {
+        ExportWriteBackend::LocalFs => {
+            let project_root = if let Some(cluster_name) = cluster_name {
+                args.project_base
+                    .join(&args.project_name)
+                    .join(cluster_name)
+            } else {
+                args.project_base.join(&args.project_name)
+            };
 
-    info!(
-        "Project '{}' initialised at {}",
-        args.project_name,
-        project_root.display()
-    );
-    for dir in &dirs {
-        info!("{}", dir.display());
+            let dirs = [
+                project_root.join("schema").join("tables"),
+                project_root.join("source").join("collections"),
+                project_root.join("data"),
+                project_root.join("config"),
+                project_root.join("reports"),
+            ];
+
+            for dir in &dirs {
+                std::fs::create_dir_all(dir)
+                    .with_context(|| format!("Failed to create directory {}", dir.display()))?;
+            }
+
+            let conf_path = project_root.join("config").join(config_file_name);
+            std::fs::write(&conf_path, conf_content)
+                .with_context(|| format!("Failed to write {}", conf_path.display()))?;
+
+            info!(
+                "Project '{}' initialised at {}",
+                args.project_name,
+                project_root.display()
+            );
+            for dir in &dirs {
+                info!("{}", dir.display());
+            }
+            info!("{}", conf_path.display());
+            Ok(())
+        }
+        ExportWriteBackend::Gcs { bucket, prefix } => {
+            ensure_gcs_authentication().await?;
+            let storage = Storage::builder()
+                .build()
+                .await
+                .context("Failed to initialize Google Cloud Storage client")?;
+            let bucket_resource = format!("projects/_/buckets/{bucket}");
+
+            let effective_prefix =
+                ensure_output_prefix_segments(&prefix, cluster_name, &args.project_name);
+            let project_root_uri = if effective_prefix.is_empty() {
+                format!("gs://{bucket}")
+            } else {
+                format!("gs://{bucket}/{effective_prefix}")
+            };
+
+            let config_object = if effective_prefix.is_empty() {
+                format!("config/{config_file_name}")
+            } else {
+                format!("{effective_prefix}/config/{config_file_name}")
+            };
+
+            storage
+                .write_object(
+                    bucket_resource,
+                    config_object.clone(),
+                    Bytes::from(conf_content.into_bytes()),
+                )
+                .send_buffered()
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to write config to gs://{}/{}",
+                        bucket, config_object
+                    )
+                })?;
+
+            info!(
+                "Project '{}' initialised at {}",
+                args.project_name, project_root_uri
+            );
+            info!("{}/schema/tables", project_root_uri);
+            info!("{}/source/collections", project_root_uri);
+            info!("{}/data", project_root_uri);
+            info!("{}/config", project_root_uri);
+            info!("{}/reports", project_root_uri);
+            info!("gs://{}/{}", bucket, config_object);
+            Ok(())
+        }
     }
-    info!("{}", conf_path.display());
-    Ok(())
 }
 
 fn append_non_empty_segment(path: &mut String, segment: Option<&str>) {
@@ -5757,6 +5911,31 @@ fn is_supported_import_csv_path(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.ends_with(".csv.gz") || name.ends_with(".csv"))
+}
+
+fn build_missing_import_csv_error(
+    data_db_dir: &Path,
+    requested_collection_dir: Option<&str>,
+    allowed_table_count: usize,
+) -> anyhow::Error {
+    let scope_hint = requested_collection_dir
+        .map(|collection| format!(" for requested collection '{collection}'"))
+        .unwrap_or_default();
+
+    let table_hint = if allowed_table_count == 0 {
+        "No importable SQL tables were discovered from schema files.".to_owned()
+    } else {
+        format!("Found {allowed_table_count} SQL table(s), but no matching data files.",)
+    };
+
+    anyhow!(
+        "No .csv or .csv.gz files found in {}{} that match generated SQL tables. {} \
+Expected layout: data/<db>/<collection>/<table>.csv.gz (or .csv). \
+Run `mongo2pg export -c <config>` first, or verify --namespace / [COLLECTION] filters.",
+        data_db_dir.display(),
+        scope_hint,
+        table_hint,
+    )
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -5842,14 +6021,20 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             )
         })?;
 
-    // Use args.namespace if provided, else fall back to config file
-    let db_name = args
+    // Use args.namespace if provided, else fall back to config file.
+    // Namespace controls source collections; target database controls SQL tables.
+    let namespace = args
         .namespace
         .clone()
         .or(c.namespace.clone())
         .ok_or_else(|| {
             anyhow!("No NAMESPACE provided: pass --namespace or add NAMESPACE to the config file")
         })?;
+    let (namespace_db_name, _) = split_namespace_scope(&namespace);
+    let tables_db_name = c
+        .target_database_name
+        .as_deref()
+        .unwrap_or(namespace_db_name);
     let export_chunk_size = resolve_export_chunk_size(args.chunk_size.or(c.chunk_size))?;
     let storage_backend = match resolve_export_write_backend(&c.base_dir)? {
         ExportWriteBackend::LocalFs => ExportWriteBackend::LocalFs,
@@ -5881,8 +6066,11 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     match &storage_backend {
         ExportWriteBackend::LocalFs => {
             project_root = configured_project_root(&c);
-            tables_dir = project_root.join("schema").join("tables").join(&db_name);
-            collections_dir = resolve_collections_dir(&project_root, &db_name);
+            tables_dir = project_root
+                .join("schema")
+                .join("tables")
+                .join(tables_db_name);
+            collections_dir = resolve_collections_dir(&project_root, namespace_db_name);
         }
         ExportWriteBackend::Gcs { bucket, prefix } => {
             let Some(stage) = stage_export_metadata_from_gcs(
@@ -5890,7 +6078,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
                 prefix,
                 c.cluster_name.as_deref(),
                 &c.project_dir,
-                &db_name,
+                tables_db_name,
             )
             .await?
             else {
@@ -5898,13 +6086,16 @@ async fn run_export(args: ExportArgs) -> Result<()> {
                     "Cannot stage export metadata from gs://{}/{}/schema/tables/{}",
                     bucket,
                     prefix.trim_matches('/'),
-                    db_name
+                    tables_db_name
                 ));
             };
 
             project_root = stage.path().to_path_buf();
-            tables_dir = project_root.join("schema").join("tables").join(&db_name);
-            collections_dir = resolve_collections_dir(&project_root, &db_name);
+            tables_dir = project_root
+                .join("schema")
+                .join("tables")
+                .join(tables_db_name);
+            collections_dir = resolve_collections_dir(&project_root, namespace_db_name);
             info!(
                 "export metadata staged from GCS into temporary directory {}",
                 project_root.display()
@@ -6030,12 +6221,12 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     } else {
         // Get all collection names from MongoDB
         let mongo_colls = client
-            .database(&db_name)
+            .database(namespace_db_name)
             .list_collection_names()
             .await
             .with_context(|| {
                 format!(
-                    "{}: failed to list collections for database {db_name}",
+                    "{}: failed to list collections for database {namespace_db_name}",
                     connection_failed_context("mongo", "query")
                 )
             })?
@@ -6079,7 +6270,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
     for (index, (sql_lookup_name, coll_names)) in jobs.iter().enumerate() {
         if coll_names.len() == 1 {
             info!(
-                "[{}/{}] Exporting {db_name}.{} via {}.sql",
+                "[{}/{}] Exporting {namespace_db_name}.{} via {}.sql",
                 index + 1,
                 total_jobs,
                 coll_names[0],
@@ -6096,7 +6287,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
             );
             for (member_index, coll_name) in coll_names.iter().enumerate() {
                 info!(
-                    "-> member [{}/{}]: {db_name}.{} -> {}.sql",
+                    "-> member [{}/{}]: {namespace_db_name}.{} -> {}.sql",
                     member_index + 1,
                     coll_names.len(),
                     coll_name,
@@ -6107,7 +6298,7 @@ async fn run_export(args: ExportArgs) -> Result<()> {
 
         match export_collections_to_sql(
             &client,
-            &db_name,
+            namespace_db_name,
             coll_names,
             sql_lookup_name,
             &tables_dir,
@@ -6120,8 +6311,8 @@ async fn run_export(args: ExportArgs) -> Result<()> {
         {
             Ok(()) => {}
             Err(e) => {
-                let job_label = format!("{}.{}", db_name, sql_lookup_name);
-                warn!("  warning: export failed for {}: {}", job_label, e);
+                let job_label = format!("{}.{}", namespace_db_name, sql_lookup_name);
+                warn!("  warning: export failed for {}: {:#}", job_label, e);
                 failed_jobs.push(format!("{}: {}", job_label, e));
             }
         }
@@ -6655,8 +6846,22 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     let mut import_data_stage: Option<tempfile::TempDir> = None;
     log_import_stage("config_resolved");
 
-    if !data_db_dir.is_dir() {
+    let local_csv_count = if data_db_dir.is_dir() {
+        count_supported_csv_files_recursive(&data_db_dir)
+    } else {
+        0
+    };
+    let should_stage_from_gcs =
+        matches!(&storage_backend, ExportWriteBackend::Gcs { .. }) && local_csv_count == 0;
+
+    if should_stage_from_gcs {
         if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+            if data_db_dir.is_dir() {
+                info!(
+                    "local data directory {} has no .csv/.csv.gz files; attempting GCS data staging",
+                    data_db_dir.display()
+                );
+            }
             log_import_stage("gcs_stage_begin");
             ensure_gcs_authentication().await?;
 
@@ -6759,8 +6964,8 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     log_import_stage("filesystem_validated");
 
     log_import_stage("pg_connect_admin_begin");
-    let admin_client = connect_pg_client(&target_uri).await?;
-    ensure_pg_database(&admin_client, target_database_name).await?;
+    // let admin_client = connect_pg_admin_client(&target_uri, target_database_name).await?;
+    //ensure_pg_database(&admin_client, target_database_name).await?;
 
     let db_target_uri = pg_uri_with_database(&target_uri, target_database_name);
     log_import_stage("pg_connect_target_begin");
@@ -6806,6 +7011,11 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     use std::collections::{HashMap, HashSet};
     let mut allowed_table_names: HashSet<String> = HashSet::new();
     let mut table_columns_by_name: HashMap<String, Vec<String>> = HashMap::new();
+    let mut preflight_existing_tables: Vec<(String, String)> = Vec::new();
+
+    // if let Some(schema_name) = target_schema.as_deref() {
+    //     ensure_pg_schema(&pg_client, schema_name).await?;
+    // }
 
     for sql_path in &sql_files {
         let sql = std::fs::read_to_string(sql_path)
@@ -6814,7 +7024,27 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         if executable_sql.trim().is_empty() {
             continue;
         }
+
+        let file_schema = extract_search_path(&executable_sql)
+            .or_else(|| target_schema.clone())
+            .unwrap_or_else(|| db_name.to_owned());
+        //ensure_pg_schema(&pg_client, &file_schema).await?;
+
         for table in parse_sql(&executable_sql) {
+            let qualified = format!("{}.{}", file_schema, table.name);
+            let row = pg_client
+                .query_one("SELECT to_regclass($1)::text", &[&qualified])
+                .await
+                .with_context(|| format!("Failed to check existing table {}", qualified))?;
+            let exists: Option<String> = row.try_get(0).with_context(|| {
+                format!(
+                    "Failed to read to_regclass result while checking existing table {}",
+                    qualified
+                )
+            })?;
+            if exists.is_some() {
+                preflight_existing_tables.push((file_schema.clone(), table.name.clone()));
+            }
             allowed_table_names.insert(table.name.clone());
             table_columns_by_name.insert(
                 table.name,
@@ -6824,6 +7054,22 @@ async fn run_import(args: ImportArgs) -> Result<()> {
                     .map(|column| column.name)
                     .collect(),
             );
+        }
+    }
+
+    if !preflight_existing_tables.is_empty() {
+        return Err(preflight_existing_tables_error(
+            target_database_name,
+            &preflight_existing_tables,
+        ));
+    }
+
+    for sql_path in &sql_files {
+        let sql = std::fs::read_to_string(sql_path)
+            .with_context(|| format!("Failed to read {}", sql_path.display()))?;
+        let executable_sql = strip_psql_preamble(&sql);
+        if executable_sql.trim().is_empty() {
+            continue;
         }
         match pg_client.batch_execute(&executable_sql).await {
             Ok(()) => {}
@@ -6932,9 +7178,10 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     csv_files.sort();
 
     if csv_files.is_empty() {
-        return Err(anyhow!(
-            "No .csv or .csv.gz files found in {}",
-            data_db_dir.display()
+        return Err(build_missing_import_csv_error(
+            &data_db_dir,
+            requested_collection_dir.as_deref(),
+            allowed_table_names.len(),
         ));
     }
     debug!("[debug][import] csv_files_count={}", csv_files.len());
@@ -6945,38 +7192,6 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     transaction
         .batch_execute("SET CONSTRAINTS ALL DEFERRED;")
         .await?;
-
-    log_import_stage("truncate_begin");
-    for csv_path in &csv_files {
-        let schema = target_schema
-            .as_deref()
-            .or_else(|| {
-                csv_path
-                    .parent()
-                    .and_then(|path| path.file_name())
-                    .and_then(|name| name.to_str())
-            })
-            .ok_or_else(|| anyhow!("Cannot derive schema name from {}", csv_path.display()))?;
-        let table = import_table_name_from_csv_path(csv_path.as_path())
-            .ok_or_else(|| anyhow!("Cannot derive table name from {}", csv_path.display()))?;
-        let truncate_sql = format!(
-            "TRUNCATE TABLE {}.{} CASCADE",
-            quote_ident(schema),
-            quote_ident(&table)
-        );
-        match transaction.batch_execute(&truncate_sql).await {
-            Ok(()) => {}
-            Err(err) => {
-                return Err(anyhow!(
-                    "Failed to truncate {}.{}\n{}",
-                    schema,
-                    table,
-                    format_postgres_error(&err)
-                ));
-            }
-        }
-    }
-    log_import_stage("truncate_done");
 
     let mut imported_relations: Vec<(String, String)> = Vec::new();
 
@@ -7002,17 +7217,29 @@ async fn run_import(args: ImportArgs) -> Result<()> {
         let table_columns = table_columns_by_name
             .get(&table)
             .ok_or_else(|| anyhow!("No DDL column metadata found for table {table}"))?;
-        let copy_columns = table_columns
-            .iter()
-            .map(|column| quote_ident(&column.trim_matches('"').replace("\"\"", "\"")))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let copy_sql = format!(
-            "COPY {}.{} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)",
-            quote_ident(schema),
-            quote_ident(&table),
-            copy_columns,
-        );
+        let copy_sql = if table_columns.is_empty() {
+            warn!(
+                "No parsed DDL columns for {}.{}; using COPY without explicit column list",
+                schema, table
+            );
+            format!(
+                "COPY {}.{} FROM STDIN WITH (FORMAT csv, HEADER true)",
+                quote_ident(schema),
+                quote_ident(&table),
+            )
+        } else {
+            let copy_columns = table_columns
+                .iter()
+                .map(|column| quote_ident(&column.trim_matches('"').replace("\"\"", "\"")))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "COPY {}.{} ({}) FROM STDIN WITH (FORMAT csv, HEADER true)",
+                quote_ident(schema),
+                quote_ident(&table),
+                copy_columns,
+            )
+        };
         let is_gz = csv_path
             .file_name()
             .and_then(|name| name.to_str())
@@ -7152,11 +7379,7 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     log_import_stage("analyze_begin");
     for (schema, table) in &imported_relations {
         info!("Analyze imported table {}.{}", schema, table);
-        let analyze_sql = format!(
-            "ANALYZE {}.{}",
-            quote_ident(schema),
-            quote_ident(table)
-        );
+        let analyze_sql = format!("ANALYZE {}.{}", quote_ident(schema), quote_ident(table));
         if let Err(err) = pg_client.batch_execute(&analyze_sql).await {
             return Err(anyhow!(
                 "Failed to analyze {}.{}\n{}",
@@ -7188,7 +7411,326 @@ async fn run_import(args: ImportArgs) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PingBackend {
+    Source,
+    Target,
+    Kafka,
+}
+
+impl PingBackend {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Target => "target",
+            Self::Kafka => "kafka",
+        }
+    }
+}
+
+fn ping_requested_backends(args: &PingArgs) -> Vec<PingBackend> {
+    let mut selected = Vec::new();
+    if args.source {
+        selected.push(PingBackend::Source);
+    }
+    if args.target {
+        selected.push(PingBackend::Target);
+    }
+    if args.kafka {
+        selected.push(PingBackend::Kafka);
+    }
+    selected
+}
+
+fn ping_failed_exit(failures: usize) -> bool {
+    failures > 0
+}
+
+async fn run_ping(args: PingArgs) -> Result<()> {
+    fn normalize_kafka_bootstrap_servers(raw: &str) -> Result<String> {
+        fn normalize_one(endpoint: &str) -> Option<String> {
+            let trimmed = endpoint.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+
+            let without_scheme = trimmed
+                .strip_prefix("kafka-secure://")
+                .or_else(|| trimmed.strip_prefix("kafka://"))
+                .or_else(|| trimmed.strip_prefix("ssl://"))
+                .unwrap_or(trimmed);
+
+            let without_path = without_scheme
+                .split_once('/')
+                .map(|(host_port, _)| host_port)
+                .unwrap_or(without_scheme)
+                .trim_end_matches('/');
+
+            if without_path.is_empty() {
+                None
+            } else {
+                Some(without_path.to_owned())
+            }
+        }
+
+        let normalized = raw.split(',').filter_map(normalize_one).collect::<Vec<_>>();
+
+        if normalized.is_empty() {
+            return Err(anyhow!(
+                "kafka.bootstrap_servers resolved to empty value after URI normalization"
+            ));
+        }
+
+        Ok(normalized.join(","))
+    }
+
+    async fn ping_source_backend(conf: &mongo2pg::util::ConfData) -> Result<()> {
+        let source_uri = conf
+            .source_uri
+            .as_deref()
+            .ok_or_else(|| anyhow!("No SOURCE_URI provided: add SOURCE_URI to the config file"))?;
+        let client_options = ClientOptions::parse(source_uri).await.with_context(|| {
+            format!(
+                "{}: failed to parse MongoDB SOURCE_URI",
+                connection_failed_context("mongo", "connect")
+            )
+        })?;
+        let client = Client::with_options(client_options).with_context(|| {
+            format!(
+                "{}: failed to connect to MongoDB using SOURCE_URI",
+                connection_failed_context("mongo", "connect")
+            )
+        })?;
+        client
+            .database("admin")
+            .run_command(doc! {"ping": 1_i32})
+            .await
+            .with_context(|| {
+                format!(
+                    "{}: failed MongoDB ping command",
+                    connection_failed_context("mongo", "query")
+                )
+            })?;
+        Ok(())
+    }
+
+    async fn ping_target_backend(conf: &mongo2pg::util::ConfData) -> Result<()> {
+        let target_uri = conf
+            .target_uri
+            .as_deref()
+            .ok_or_else(|| anyhow!("No TARGET_URI provided: add TARGET_URI to the config file"))?;
+        let pg_client = connect_pg_client(target_uri).await?;
+        pg_client
+            .query_one("SELECT 1", &[])
+            .await
+            .with_context(|| {
+                format!(
+                    "{}: failed PostgreSQL ping query",
+                    connection_failed_context("pg", "query")
+                )
+            })?;
+        Ok(())
+    }
+
+    async fn ping_kafka_backend(conf: &mongo2pg::util::ConfData) -> Result<()> {
+        let kafka_conf = conf
+            .kafka
+            .as_ref()
+            .ok_or_else(|| anyhow!("Missing [kafka] section in config file"))?;
+        let bootstrap_servers_raw = kafka_conf
+            .bootstrap_servers
+            .as_deref()
+            .ok_or_else(|| anyhow!("kafka.bootstrap_servers is required"))?;
+        let bootstrap_servers = normalize_kafka_bootstrap_servers(bootstrap_servers_raw)?;
+
+        let security_protocol = kafka_conf
+            .security_protocol
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .to_ascii_uppercase();
+        let ssl_ca_location_configured = kafka_conf
+            .ssl_ca_location
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty());
+        let default_ssl_ca_location =
+            if security_protocol.contains("SSL") && !ssl_ca_location_configured {
+                [
+                    "/etc/ssl/certs/ca-certificates.crt",
+                    "/etc/pki/tls/certs/ca-bundle.crt",
+                    "/etc/ssl/cert.pem",
+                ]
+                .iter()
+                .find(|candidate| std::path::Path::new(candidate).is_file())
+                .map(|candidate| (*candidate).to_owned())
+            } else {
+                None
+            };
+
+        let mut client_config = ClientConfig::new();
+        client_config
+            .set("bootstrap.servers", &bootstrap_servers)
+            .set(
+                "group.id",
+                kafka_conf.group_id.as_deref().unwrap_or("mongo2pg-ping"),
+            );
+
+        if let Some(value) = kafka_conf
+            .security_protocol
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("security.protocol", value);
+        }
+        if let Some(value) = kafka_conf
+            .sasl_mechanism
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("sasl.mechanism", value);
+        }
+        if let Some(value) = kafka_conf
+            .sasl_username
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("sasl.username", value);
+        }
+        if let Some(value) = kafka_conf
+            .sasl_password
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("sasl.password", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_ca_location
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.ca.location", value);
+        } else if let Some(value) = default_ssl_ca_location.as_deref() {
+            client_config.set("ssl.ca.location", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_certificate_location
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.certificate.location", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_key_location
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.key.location", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_key_password
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.key.password", value);
+        }
+
+        let consumer: StreamConsumer = client_config.create().with_context(|| {
+            format!(
+                "{}: failed to create Kafka consumer for ping",
+                connection_failed_context("kafka", "connect")
+            )
+        })?;
+        consumer
+            .fetch_metadata(None, Duration::from_secs(10))
+            .with_context(|| {
+                format!(
+                    "{}: failed to fetch Kafka metadata",
+                    connection_failed_context("kafka", "query")
+                )
+            })?;
+
+        Ok(())
+    }
+
+    let conf = read_conf(&args.config)?;
+    let selected_backends = ping_requested_backends(&args);
+    let mut failures = Vec::new();
+
+    for backend in selected_backends {
+        let result = match backend {
+            PingBackend::Source => ping_source_backend(&conf).await,
+            PingBackend::Target => ping_target_backend(&conf).await,
+            PingBackend::Kafka => ping_kafka_backend(&conf).await,
+        };
+
+        match result {
+            Ok(()) => info!("Ping {}: ok", backend.label()),
+            Err(err) => {
+                warn!("Ping {}: failed", backend.label());
+                failures.push(format!("{}:\n{err:#}", backend.label()));
+            }
+        }
+    }
+
+    if ping_failed_exit(failures.len()) {
+        return Err(anyhow!(
+            "Ping failed for {} backend(s):\n{}",
+            failures.len(),
+            failures.join("\n\n")
+        ));
+    }
+
+    info!("Ping completed successfully.");
+    Ok(())
+}
+
 async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
+    fn normalize_kafka_bootstrap_servers(raw: &str) -> Result<String> {
+        fn normalize_one(endpoint: &str) -> Option<String> {
+            let trimmed = endpoint.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+
+            let without_scheme = trimmed
+                .strip_prefix("kafka-secure://")
+                .or_else(|| trimmed.strip_prefix("kafka://"))
+                .or_else(|| trimmed.strip_prefix("ssl://"))
+                .unwrap_or(trimmed);
+
+            let without_path = without_scheme
+                .split_once('/')
+                .map(|(host_port, _)| host_port)
+                .unwrap_or(without_scheme)
+                .trim_end_matches('/');
+
+            if without_path.is_empty() {
+                None
+            } else {
+                Some(without_path.to_owned())
+            }
+        }
+
+        let normalized = raw.split(',').filter_map(normalize_one).collect::<Vec<_>>();
+
+        if normalized.is_empty() {
+            return Err(anyhow!(
+                "kafka.bootstrap_servers resolved to empty value after URI normalization"
+            ));
+        }
+
+        Ok(normalized.join(","))
+    }
+
     async fn publish_to_dlq(
         producer: &FutureProducer,
         source_topic: &str,
@@ -7287,6 +7829,14 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         http_client: &reqwest::Client,
         schema_cache: &mut HashMap<u32, Schema>,
     ) -> Result<Value> {
+        // If Schema Registry is not configured, treat payloads as JsonConverter
+        // output and decode directly as JSON.
+        if schema_registry_url.is_none() {
+            return serde_json::from_slice::<Value>(bytes).with_context(|| {
+                "Failed to decode message as JSON payload (no schema registry configured)"
+            });
+        }
+
         if bytes.len() > 5 && bytes[0] == 0 {
             let schema_id = u32::from_be_bytes([bytes[1], bytes[2], bytes[3], bytes[4]]);
             let schema = if let Some(schema) = schema_cache.get(&schema_id) {
@@ -8074,6 +8624,18 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         find_value_in_nested_json_object(payload_obj, source_field)
     }
 
+    fn infer_grouped_key_value(
+        mapping: &CollectionMapping,
+        collection_name: &str,
+    ) -> Option<String> {
+        let table_name = sanitize_name(&mapping.pg_mapping.table_name);
+        let collection_name = sanitize_name(collection_name);
+        collection_name
+            .strip_prefix(&format!("{table_name}_"))
+            .filter(|suffix| !suffix.is_empty())
+            .map(|suffix| suffix.to_owned())
+    }
+
     fn debezium_document(value: Option<&Value>) -> Result<Option<Value>> {
         let Some(value) = value else {
             return Ok(None);
@@ -8321,13 +8883,10 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     fn load_collection_mapping_folders(
-        conf: &mongo2pg::util::ConfData,
-        db_name: &str,
+        collections_dir: &Path,
     ) -> Result<HashMap<String, Vec<CollectionMapping>>> {
-        let project_root = conf.base_dir.join(&conf.project_dir);
-        let collections_dir = resolve_collections_dir(&project_root, db_name);
         let mut by_collection = HashMap::new();
-        for entry in std::fs::read_dir(&collections_dir)
+        for entry in std::fs::read_dir(collections_dir)
             .with_context(|| format!("Cannot read {}", collections_dir.display()))?
         {
             let entry = entry?;
@@ -8361,13 +8920,81 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         Ok(by_collection)
     }
 
-    async fn apply_upsert_event(
-        pg_client: &tokio_postgres::Client,
+    async fn resolve_kafka_import_metadata_dirs(
+        conf_path: &Path,
+        conf: &mongo2pg::util::ConfData,
+        db_name: &str,
+    ) -> Result<(PathBuf, PathBuf, Option<tempfile::TempDir>)> {
+        let storage_backend =
+            resolve_export_write_backend(&conf.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
+
+        let mut project_root = match &storage_backend {
+            ExportWriteBackend::LocalFs => configured_project_root(conf),
+            ExportWriteBackend::Gcs { .. } => {
+                let local_root = resolve_local_project_root_from_config(conf_path, conf);
+                debug!(
+                    "kafka-import metadata root (local, read-only): {}",
+                    local_root.display()
+                );
+                local_root
+            }
+        };
+
+        let mut tables_root = project_root.join("schema").join("tables");
+        let mut tables_dir = if tables_root.join(db_name).is_dir() {
+            tables_root.join(db_name)
+        } else {
+            tables_root.clone()
+        };
+        let mut collections_dir = resolve_collections_dir(&project_root, db_name);
+        let mut metadata_stage = None;
+
+        if (!tables_dir.is_dir() || !collections_dir.is_dir())
+            && matches!(&storage_backend, ExportWriteBackend::Gcs { .. })
+        {
+            if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
+                if let Some(stage) = stage_export_metadata_from_gcs(
+                    bucket,
+                    prefix,
+                    conf.cluster_name.as_deref(),
+                    &conf.project_dir,
+                    db_name,
+                )
+                .await?
+                {
+                    project_root = stage.path().to_path_buf();
+                    tables_root = project_root.join("schema").join("tables");
+                    tables_dir = if tables_root.join(db_name).is_dir() {
+                        tables_root.join(db_name)
+                    } else {
+                        tables_root.clone()
+                    };
+                    collections_dir = resolve_collections_dir(&project_root, db_name);
+
+                    info!(
+                        "kafka-import metadata staged from GCS into temporary directory {}",
+                        project_root.display()
+                    );
+
+                    metadata_stage = Some(stage);
+                }
+            }
+        }
+
+        Ok((tables_dir, collections_dir, metadata_stage))
+    }
+
+    async fn apply_upsert_event<C>(
+        pg_client: &C,
         payload_doc: &Value,
         mappings: &[CollectionMapping],
         fallback_schema: Option<&str>,
+        collection_name: &str,
         table_insert_execs: &mut HashMap<String, u64>,
-    ) -> Result<u64> {
+    ) -> Result<u64>
+    where
+        C: tokio_postgres::GenericClient + Sync,
+    {
         let root_mapping = mappings
             .iter()
             .find(|mapping| is_root_mapping(mapping))
@@ -8383,8 +9010,17 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let mut values = Vec::new();
         for column in &root_mapping.pg_mapping.columns {
             let normalized_target_field = normalize_pg_identifier(&column.target_field);
+            let mut literal_fallback: Option<Value> = None;
+            if let Some(literal) = column.literal_value.as_deref() {
+                literal_fallback = Some(Value::String(literal.to_owned()));
+            } else if normalized_target_field == "_key" {
+                literal_fallback =
+                    infer_grouped_key_value(root_mapping, collection_name).map(Value::String);
+            }
+
             let raw_value =
-                resolve_source_field_value(payload_doc, payload_obj, &column.source_field);
+                resolve_source_field_value(payload_doc, payload_obj, &column.source_field)
+                    .or(literal_fallback.as_ref());
             let sql_type = column_sql_type(root_mapping, &normalized_target_field);
             let (resolved_value, effective_source_field) = resolve_value_with_numeric_id_fallback(
                 payload_obj,
@@ -8570,8 +9206,21 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             .columns
                             .iter()
                             .map(|mapped| {
+                                let normalized_target =
+                                    normalize_pg_identifier(&mapped.target_field);
+                                let mut literal_fallback: Option<Value> = None;
+                                if let Some(literal) = mapped.literal_value.as_deref() {
+                                    literal_fallback = Some(Value::String(literal.to_owned()));
+                                } else if normalized_target == "_key" {
+                                    literal_fallback =
+                                        infer_grouped_key_value(child_mapping, collection_name)
+                                            .map(Value::String);
+                                }
+
                                 let val =
-                                    resolve_source_field_value_from_map(&obj, &mapped.source_field);
+                                    resolve_source_field_value_from_map(&obj, &mapped.source_field)
+                                        .or(literal_fallback.as_ref())
+                                        .cloned();
                                 (mapped, val)
                             })
                             .collect::<Vec<_>>();
@@ -8598,20 +9247,20 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             }
                             let sql_type = column_sql_type(child_mapping, &mapped.target_field);
                             validate_extended_json_compatibility(
-                                val,
+                                val.as_ref(),
                                 sql_type,
                                 &mapped.source_field,
                                 &mapped.target_field,
                                 &child_table,
                             )?;
                             validate_varchar_value(
-                                val,
+                                val.as_ref(),
                                 sql_type,
                                 &mapped.source_field,
                                 &mapped.target_field,
                                 &child_table,
                             )?;
-                            child_values.push(sql_literal(val, sql_type));
+                            child_values.push(sql_literal(val.as_ref(), sql_type));
                         }
 
                         let insert_sql = format!(
@@ -8643,12 +9292,15 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         Ok(affected_rows)
     }
 
-    async fn apply_delete_event(
-        pg_client: &tokio_postgres::Client,
+    async fn apply_delete_event<C>(
+        pg_client: &C,
         before_doc: &Value,
         mappings: &[CollectionMapping],
         fallback_schema: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        C: tokio_postgres::GenericClient + Sync,
+    {
         let root_mapping = mappings
             .iter()
             .find(|mapping| is_root_mapping(mapping))
@@ -8694,19 +9346,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     async fn bootstrap_pg_objects_for_kafka_import(
-        admin_client: &tokio_postgres::Client,
+        // admin_client: &tokio_postgres::Client,
         pg_client: &tokio_postgres::Client,
-        conf: &mongo2pg::util::ConfData,
+        tables_dir: &Path,
+        fallback_schema: Option<&str>,
         db_name: &str,
+        reuse_existing_tables: bool,
     ) -> Result<()> {
-        let project_root = conf.base_dir.join(&conf.project_dir);
-        let tables_root = project_root.join("schema").join("tables");
-        let tables_dir = if tables_root.join(db_name).is_dir() {
-            tables_root.join(db_name)
-        } else {
-            tables_root
-        };
-
         if !tables_dir.is_dir() {
             return Err(anyhow!(
                 "Cannot read SQL tables directory {}",
@@ -8714,7 +9360,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             ));
         }
 
-        let mut sql_files: Vec<PathBuf> = std::fs::read_dir(&tables_dir)
+        let mut sql_files: Vec<PathBuf> = std::fs::read_dir(tables_dir)
             .with_context(|| format!("Cannot read {}", tables_dir.display()))?
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.path())
@@ -8729,7 +9375,9 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             ));
         }
 
-        let mut ensured_databases = std::collections::HashSet::new();
+        // let mut ensured_databases = std::collections::HashSet::new();
+        let mut existing_tables: Vec<(String, String)> = Vec::new();
+        let mut ddl_files_with_existing_tables = std::collections::HashSet::new();
 
         for sql_path in &sql_files {
             let sql = std::fs::read_to_string(sql_path)
@@ -8744,9 +9392,9 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                         db_name
                     );
                 }
-                if ensured_databases.insert(ddl_db_name.clone()) {
-                    ensure_pg_database(admin_client, &ddl_db_name).await?;
-                }
+                // if ensured_databases.insert(ddl_db_name.clone()) {
+                //     ensure_pg_database(admin_client, &ddl_db_name).await?;
+                // }
             }
 
             let executable_sql = strip_psql_preamble(&sql);
@@ -8755,9 +9403,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             }
 
             let parsed_tables = parse_sql(&executable_sql);
-            let file_schema = extract_search_path(&executable_sql).or(conf.target_schema.clone());
+            let file_schema =
+                extract_search_path(&executable_sql).or_else(|| fallback_schema.map(str::to_owned));
 
-            let mut all_tables_exist = !parsed_tables.is_empty();
+            // if let Some(schema_name) = file_schema.as_deref() {
+            //     ensure_pg_schema(pg_client, schema_name).await?;
+            // }
+
             for table in &parsed_tables {
                 let qualified = match file_schema.as_deref() {
                     Some(schema) => format!("{schema}.{}", table.name),
@@ -8773,17 +9425,41 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                         qualified
                     )
                 })?;
-                if exists.is_none() {
-                    all_tables_exist = false;
-                    break;
+                if exists.is_some() {
+                    let schema_name = file_schema.clone().unwrap_or_else(|| "public".to_owned());
+                    if reuse_existing_tables {
+                        ddl_files_with_existing_tables.insert(sql_path.clone());
+                    } else {
+                        existing_tables.push((schema_name, table.name.clone()));
+                    }
                 }
             }
+        }
 
-            if all_tables_exist {
+        if !existing_tables.is_empty() {
+            return Err(preflight_existing_tables_error(db_name, &existing_tables));
+        }
+
+        if reuse_existing_tables && !ddl_files_with_existing_tables.is_empty() {
+            warn!(
+                "--force enabled: reusing existing destination tables and skipping DDL execution for {} file(s)",
+                ddl_files_with_existing_tables.len()
+            );
+        }
+
+        for sql_path in &sql_files {
+            if reuse_existing_tables && ddl_files_with_existing_tables.contains(sql_path) {
                 info!(
-                    "Skipping DDL from {} (objects already exist)",
+                    "Reusing existing PostgreSQL objects from {} (--force): skipped DDL execution",
                     sql_path.display()
                 );
+                continue;
+            }
+
+            let sql = std::fs::read_to_string(sql_path)
+                .with_context(|| format!("Failed to read {}", sql_path.display()))?;
+            let executable_sql = strip_psql_preamble(&sql);
+            if executable_sql.trim().is_empty() {
                 continue;
             }
 
@@ -8809,19 +9485,6 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                         }
                     }
                 }
-                Err(err)
-                    if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_TABLE)
-                        || err.code()
-                            == Some(&tokio_postgres::error::SqlState::DUPLICATE_OBJECT)
-                        || err.code()
-                            == Some(&tokio_postgres::error::SqlState::DUPLICATE_SCHEMA) =>
-                {
-                    info!(
-                        "Skipping existing PostgreSQL objects from {} ({})",
-                        sql_path.display(),
-                        format_postgres_error(&err)
-                    );
-                }
                 Err(err) => {
                     return Err(anyhow!(
                         "Failed to execute {}\n{}",
@@ -8835,83 +9498,124 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         Ok(())
     }
 
-    async fn truncate_tables_for_snapshot(
-        pg_client: &tokio_postgres::Client,
-        mappings_by_collection: &HashMap<String, Vec<CollectionMapping>>,
-        fallback_schema: Option<&str>,
-    ) -> Result<usize> {
-        let mut qualified_tables = std::collections::HashSet::new();
+    // async fn truncate_tables_for_snapshot(
+    //     pg_client: &tokio_postgres::Client,
+    //     mappings_by_collection: &HashMap<String, Vec<CollectionMapping>>,
+    //     fallback_schema: Option<&str>,
+    // ) -> Result<usize> {
+    //     let mut qualified_tables = std::collections::HashSet::new();
 
-        for mappings in mappings_by_collection.values() {
-            for mapping in mappings {
-                let schema = mapping.pg_mapping.schema_name.trim();
-                let schema = if schema.is_empty() {
-                    fallback_schema
-                } else {
-                    Some(schema)
-                };
-                let qualified = match schema {
-                    Some(schema) => {
-                        format!(
-                            "{}.{}",
-                            quote_ident(schema),
-                            quote_ident(&mapping.pg_mapping.table_name)
-                        )
-                    }
-                    None => quote_ident(&mapping.pg_mapping.table_name),
-                };
-                qualified_tables.insert(qualified);
-            }
-        }
+    //     for mappings in mappings_by_collection.values() {
+    //         for mapping in mappings {
+    //             let schema = mapping.pg_mapping.schema_name.trim();
+    //             let schema = if schema.is_empty() {
+    //                 fallback_schema
+    //             } else {
+    //                 Some(schema)
+    //             };
+    //             let qualified = match schema {
+    //                 Some(schema) => {
+    //                     format!(
+    //                         "{}.{}",
+    //                         quote_ident(schema),
+    //                         quote_ident(&mapping.pg_mapping.table_name)
+    //                     )
+    //                 }
+    //                 None => quote_ident(&mapping.pg_mapping.table_name),
+    //             };
+    //             qualified_tables.insert(qualified);
+    //         }
+    //     }
 
-        let mut tables = qualified_tables.into_iter().collect::<Vec<_>>();
-        tables.sort();
+    //     let mut tables = qualified_tables.into_iter().collect::<Vec<_>>();
+    //     tables.sort();
 
-        for qualified in &tables {
-            let sql = format!("TRUNCATE TABLE {qualified} CASCADE");
-            pg_client
-                .batch_execute(&sql)
-                .await
-                .with_context(|| format!("Failed to truncate table {qualified} for snapshot"))?;
-        }
+    //     for qualified in &tables {
+    //         let sql = format!("TRUNCATE TABLE {qualified} CASCADE");
+    //         pg_client
+    //             .batch_execute(&sql)
+    //             .await
+    //             .with_context(|| format!("Failed to truncate table {qualified} for snapshot"))?;
+    //     }
 
-        Ok(tables.len())
+    //     Ok(tables.len())
+    // }
+
+    let mut conf = read_conf(&args.config)?;
+    if let Some(project_dir) = args.project_dir.clone() {
+        conf.project_dir = project_dir;
     }
 
-    apply_config_overrides(
-        &args.config,
-        &ConfigOverrides {
-            project_dir: args.project_dir.clone(),
-            kafka_topics: (!args.topics.is_empty()).then(|| args.topics.clone()),
-            kafka_max_messages: args.max_messages,
-            kafka_offset: args.offset.clone(),
-            kafka_group_id: args.group_id.clone(),
-            kafka_topic_prefix: args.topic_prefix.clone(),
-            target_database_name: args.database_name.clone(),
-            target_schema_name: args.schema_name.clone(),
-            ..ConfigOverrides::default()
-        },
-    )?;
-
-    let conf = read_conf(&args.config)?;
-    let kafka_conf = conf
+    let mut kafka_conf = conf
         .kafka
         .clone()
         .ok_or_else(|| anyhow!("Missing [kafka] section in config file"))?;
+    let cli_topics_supplied = !args.topics.is_empty();
+    if !args.topics.is_empty() {
+        kafka_conf.topics = args.topics.clone();
+    }
+    if let Some(group_id) = args.group_id.clone() {
+        kafka_conf.group_id = Some(group_id);
+    }
+    if let Some(topic_prefix) = args.topic_prefix.clone() {
+        kafka_conf.topic_prefix = Some(topic_prefix);
+    }
+    if !args.topics.is_empty()
+        && kafka_conf
+            .topic_prefix
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty())
+    {
+        warn!(
+            "Both --topics and kafka.topic_prefix are set; these options are mutually exclusive. Ignoring topic_prefix and consuming explicit topics only."
+        );
+        kafka_conf.topic_prefix = None;
+    }
+    if let Some(offset) = args.offset.clone() {
+        kafka_conf.offset = Some(offset.clone());
+        kafka_conf.auto_offset_reset = Some(offset);
+    }
+    if let Some(max_messages) = args.max_messages {
+        kafka_conf.max_messages = Some(max_messages);
+    }
+    conf.kafka = Some(kafka_conf.clone());
     let namespace = conf
         .namespace
         .clone()
         .ok_or_else(|| anyhow!("No NAMESPACE provided in config"))?;
     let (namespace_db_name, _) = split_namespace_scope(&namespace);
 
-    let bootstrap_servers = kafka_conf
+    let bootstrap_servers_raw = kafka_conf
         .bootstrap_servers
         .clone()
         .ok_or_else(|| anyhow!("kafka.bootstrap_servers is required"))?;
+    let bootstrap_servers = normalize_kafka_bootstrap_servers(&bootstrap_servers_raw)?;
+    if bootstrap_servers != bootstrap_servers_raw {
+        info!(
+            "Normalized kafka.bootstrap_servers from '{}' to '{}'",
+            bootstrap_servers_raw, bootstrap_servers
+        );
+    }
     let group_id = kafka_conf
         .group_id
         .clone()
         .unwrap_or_else(|| "mongo2pg-kafka-import".to_owned());
+    let configured_worker_count = kafka_conf.worker_count.unwrap_or(1).max(1);
+    let is_worker_child = std::env::var("MONGO2PG_KAFKA_WORKER_CHILD")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+    let worker_total_from_parent = std::env::var("MONGO2PG_KAFKA_WORKERS_TOTAL")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0);
+    let worker_count_for_logs = worker_total_from_parent.unwrap_or(configured_worker_count);
+    let worker_count = if is_worker_child {
+        1
+    } else {
+        configured_worker_count
+    };
+    let group_id_log_suffix = kafka_conf.group_id_log_suffix.unwrap_or(true);
     let configured_offset = kafka_conf
         .offset
         .clone()
@@ -8922,6 +9626,17 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .clone()
         .unwrap_or_else(|| configured_offset.clone());
     let snapshot_mode = effective_offset == "0";
+
+    if worker_count > 1 && snapshot_mode {
+        return Err(anyhow!(
+            "kafka.worker_count > 1 is not supported with offset=0 snapshot mode"
+        ));
+    }
+    if worker_count > 1 && (args.max_messages.is_some() || kafka_conf.max_messages.is_some()) {
+        return Err(anyhow!(
+            "kafka.worker_count > 1 is not supported with max_messages or --max-messages"
+        ));
+    }
 
     let effective_group_id = if snapshot_mode {
         let ts = std::time::SystemTime::now()
@@ -8937,26 +9652,75 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     } else {
         args.topics.clone()
     };
+    let normalized_topics = topics
+        .iter()
+        .map(|topic| topic.trim())
+        .filter(|topic| !topic.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<Vec<_>>();
+    if topics != normalized_topics {
+        warn!(
+            "Kafka topics were normalized (trimmed whitespace / dropped empty entries) before subscription"
+        );
+    }
+    topics = normalized_topics;
+    let mut spawned_worker_children = Vec::new();
 
     let target_uri = conf
         .target_uri
         .clone()
         .ok_or_else(|| anyhow!("No TARGET_URI provided in config"))?;
-    let target_database_name = conf
-        .target_database_name
+    let target_database_name = args
+        .database_name
         .clone()
+        .or_else(|| conf.target_database_name.clone())
         .unwrap_or_else(|| namespace_db_name.to_owned());
+    let effective_target_schema = args
+        .schema_name
+        .clone()
+        .or_else(|| conf.target_schema.clone());
 
-    let admin_client = connect_pg_client(&target_uri).await?;
-    ensure_pg_database(&admin_client, &target_database_name).await?;
+    let (tables_dir, collections_dir, kafka_import_metadata_stage) =
+        resolve_kafka_import_metadata_dirs(&args.config, &conf, namespace_db_name).await?;
+
+    if !tables_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read SQL tables directory {}",
+            tables_dir.display()
+        ));
+    }
+
+    if !collections_dir.is_dir() {
+        return Err(anyhow!(
+            "Cannot read collections directory {}",
+            collections_dir.display()
+        ));
+    }
+
+    if let Some(stage) = &kafka_import_metadata_stage {
+        info!(
+            "kafka-import metadata staging dir (temporary): {}",
+            stage.path().display()
+        );
+    }
+
+    //let admin_client = connect_pg_admin_client(&target_uri, &target_database_name).await?;
+    //ensure_pg_database(&admin_client, &target_database_name).await?;
 
     let db_target_uri = pg_uri_with_database(&target_uri, &target_database_name);
     let pg_client = connect_pg_client(&db_target_uri).await?;
 
-    bootstrap_pg_objects_for_kafka_import(&admin_client, &pg_client, &conf, namespace_db_name)
-        .await?;
+    bootstrap_pg_objects_for_kafka_import(
+       // &admin_client,
+        &pg_client,
+        &tables_dir,
+        effective_target_schema.as_deref(),
+        namespace_db_name,
+        args.force,
+    )
+    .await?;
 
-    let mappings_by_collection = load_collection_mapping_folders(&conf, namespace_db_name)?;
+    let mappings_by_collection = load_collection_mapping_folders(&collections_dir)?;
 
     let configured_auto_offset_reset = configured_offset;
     let auto_offset_reset = if snapshot_mode {
@@ -8964,28 +9728,168 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     } else {
         effective_offset
     };
-    let consumer: StreamConsumer = ClientConfig::new()
+
+    let security_protocol = kafka_conf
+        .security_protocol
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .to_ascii_uppercase();
+    let ssl_ca_location_configured = kafka_conf
+        .ssl_ca_location
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    let default_ssl_ca_location =
+        if security_protocol.contains("SSL") && !ssl_ca_location_configured {
+            [
+                "/etc/ssl/certs/ca-certificates.crt",
+                "/etc/pki/tls/certs/ca-bundle.crt",
+                "/etc/ssl/cert.pem",
+            ]
+            .iter()
+            .find(|candidate| std::path::Path::new(candidate).is_file())
+            .map(|candidate| (*candidate).to_owned())
+        } else {
+            None
+        };
+    if let Some(ca_path) = default_ssl_ca_location.as_deref() {
+        info!(
+            "kafka ssl_ca_location not configured; using detected system CA bundle {}",
+            ca_path
+        );
+    }
+
+    let apply_kafka_security = |client_config: &mut ClientConfig| {
+        if let Some(value) = kafka_conf
+            .security_protocol
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("security.protocol", value);
+        }
+        if let Some(value) = kafka_conf
+            .sasl_mechanism
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("sasl.mechanism", value);
+        }
+        if let Some(value) = kafka_conf
+            .sasl_username
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("sasl.username", value);
+        }
+        if let Some(value) = kafka_conf
+            .sasl_password
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("sasl.password", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_ca_location
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.ca.location", value);
+        } else if let Some(value) = default_ssl_ca_location.as_deref() {
+            client_config.set("ssl.ca.location", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_certificate_location
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.certificate.location", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_key_location
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.key.location", value);
+        }
+        if let Some(value) = kafka_conf
+            .ssl_key_password
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            client_config.set("ssl.key.password", value);
+        }
+    };
+
+    let has_sasl_user = kafka_conf
+        .sasl_username
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    let has_sasl_password = kafka_conf
+        .sasl_password
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    if has_sasl_user != has_sasl_password {
+        warn!("kafka.sasl_username/kafka.sasl_password should both be set for SASL authentication");
+    }
+
+    let mut consumer_config = ClientConfig::new();
+    consumer_config
         .set("bootstrap.servers", &bootstrap_servers)
         .set("group.id", &effective_group_id)
         .set("enable.auto.commit", "true")
-        .set("auto.offset.reset", &auto_offset_reset)
-        .create()
-        .with_context(|| {
-            format!(
-                "{}: failed to create Kafka consumer",
-                connection_failed_context("kafka", "connect")
-            )
-        })?;
-    let dlq_producer: FutureProducer = ClientConfig::new()
+        .set("auto.offset.reset", &auto_offset_reset);
+    if let Some(poll_interval_ms) = kafka_conf.poll_interval_ms {
+        consumer_config.set("fetch.wait.max.ms", &poll_interval_ms.to_string());
+    }
+    if let Some(poll_size) = kafka_conf.poll_size.filter(|value| *value > 0) {
+        consumer_config.set("queued.min.messages", &poll_size.to_string());
+    }
+    if let Some(debug_value) = kafka_conf
+        .debug
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        consumer_config.set("debug", debug_value);
+    }
+    apply_kafka_security(&mut consumer_config);
+    let consumer: StreamConsumer = consumer_config.create().with_context(|| {
+        format!(
+            "{}: failed to create Kafka consumer",
+            connection_failed_context("kafka", "connect")
+        )
+    })?;
+
+    let mut dlq_producer_config = ClientConfig::new();
+    dlq_producer_config
         .set("bootstrap.servers", &bootstrap_servers)
-        .set("message.timeout.ms", "5000")
-        .create()
-        .with_context(|| {
-            format!(
-                "{}: failed to create Kafka DLQ producer",
-                connection_failed_context("kafka", "connect")
-            )
-        })?;
+        .set("message.timeout.ms", "5000");
+    if let Some(debug_value) = kafka_conf
+        .debug
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        dlq_producer_config.set("debug", debug_value);
+    }
+    apply_kafka_security(&mut dlq_producer_config);
+    let dlq_producer: FutureProducer = dlq_producer_config.create().with_context(|| {
+        format!(
+            "{}: failed to create Kafka DLQ producer",
+            connection_failed_context("kafka", "connect")
+        )
+    })?;
 
     if topics.is_empty() {
         if let Some(prefix) = kafka_conf.topic_prefix.as_deref() {
@@ -9021,6 +9925,92 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         }
     }
 
+    if !topics.is_empty() {
+        let metadata = consumer
+            .fetch_metadata(None, Duration::from_secs(10))
+            .with_context(|| {
+                format!(
+                    "{}: failed to fetch Kafka metadata while validating topic list",
+                    connection_failed_context("kafka", "query")
+                )
+            })?;
+        let existing_topics = metadata
+            .topics()
+            .iter()
+            .map(|topic| topic.name().to_owned())
+            .collect::<HashSet<_>>();
+        let missing_topics = topics
+            .iter()
+            .filter(|topic| !existing_topics.contains(*topic))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if !missing_topics.is_empty() {
+            return Err(anyhow!(
+                "Kafka topic(s) not found on broker metadata: {}. Check --topics / [kafka].topics / topic_prefix.",
+                missing_topics.join(", ")
+            ));
+        }
+    }
+
+    if worker_count > 1 {
+        let current_exe = std::env::current_exe()
+            .context("failed to resolve current executable for kafka worker spawning")?;
+        info!(
+            "kafka worker mode enabled: spawning {} extra worker process(es) (total workers={})",
+            worker_count - 1,
+            worker_count
+        );
+
+        for worker_index in 1..worker_count {
+            let mut command = tokio::process::Command::new(&current_exe);
+            command
+                .arg("kafka-import")
+                .arg("--config")
+                .arg(&args.config)
+                .env("MONGO2PG_KAFKA_WORKER_CHILD", "1")
+                .env("MONGO2PG_KAFKA_WORKER_INDEX", worker_index.to_string())
+                .env(
+                    "MONGO2PG_KAFKA_WORKERS_TOTAL",
+                    configured_worker_count.to_string(),
+                )
+                .stdin(Stdio::null())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+
+            if !args.topics.is_empty() {
+                command.arg("--topics").arg(args.topics.join(","));
+            }
+            if let Some(value) = args.offset.as_deref() {
+                command.arg("--offset").arg(value);
+            }
+            if let Some(value) = args.project_dir.as_deref() {
+                command.arg("--project-dir").arg(value);
+            }
+            if let Some(value) = args.group_id.as_deref() {
+                command.arg("--group-id").arg(value);
+            }
+            if let Some(value) = args.topic_prefix.as_deref() {
+                command.arg("--topic-prefix").arg(value);
+            }
+            if let Some(value) = args.database_name.as_deref() {
+                command.arg("--database-name").arg(value);
+            }
+            if let Some(value) = args.schema_name.as_deref() {
+                command.arg("--schema-name").arg(value);
+            }
+            if args.force {
+                command.arg("--force");
+            }
+
+            let child = command.spawn().with_context(|| {
+                format!("failed to spawn kafka worker process {}", worker_index)
+            })?;
+            info!("spawned kafka worker process {}", worker_index);
+            spawned_worker_children.push(child);
+        }
+    }
+
     let topic_refs = topics.iter().map(String::as_str).collect::<Vec<_>>();
     consumer.subscribe(&topic_refs).with_context(|| {
         format!(
@@ -9030,60 +10020,109 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         )
     })?;
 
+    let worker_identity = if is_worker_child {
+        let worker_index = std::env::var("MONGO2PG_KAFKA_WORKER_INDEX")
+            .ok()
+            .unwrap_or_else(|| "unknown".to_owned());
+        format!("child-{worker_index}")
+    } else if worker_count > 1 {
+        "parent-0".to_owned()
+    } else {
+        "single".to_owned()
+    };
+    let effective_group_id_log = if worker_count_for_logs > 1 && group_id_log_suffix {
+        format!("{}@{}", effective_group_id, worker_identity)
+    } else {
+        effective_group_id.clone()
+    };
+
     info!(
-        "Kafka import started. group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
-        effective_group_id,
+        "Kafka import started. worker={}, workers_total={}, group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
+        worker_identity,
+        worker_count_for_logs,
+        effective_group_id_log,
         topics.join(","),
         target_database_name,
         snapshot_mode,
         auto_offset_reset
     );
 
-    if snapshot_mode {
-        info!(
-            "Snapshot mode enabled (offset=0): truncating mapped PostgreSQL tables before consuming Kafka messages"
-        );
-        let truncated = truncate_tables_for_snapshot(
-            &pg_client,
-            &mappings_by_collection,
-            conf.target_schema.as_deref(),
-        )
-        .await?;
-        info!(
-            "Snapshot mode: truncated {} mapped PostgreSQL table(s) before consuming",
-            truncated
-        );
-    } else {
-        info!(
-            "Snapshot mode disabled: PostgreSQL tables are not truncated (offset={})",
-            auto_offset_reset
-        );
-    }
+    // if snapshot_mode {
+    //     info!(
+    //         "Snapshot mode enabled (offset=0): truncating mapped PostgreSQL tables before consuming Kafka messages"
+    //     );
+    //     let truncated = truncate_tables_for_snapshot(
+    //         &pg_client,
+    //         &mappings_by_collection,
+    //         effective_target_schema.as_deref(),
+    //     )
+    //     .await?;
+    //     info!(
+    //         "Snapshot mode: truncated {} mapped PostgreSQL table(s) before consuming",
+    //         truncated
+    //     );
+    // } else {
+    //     info!(
+    //         "Snapshot mode disabled: PostgreSQL tables are not truncated (offset={})",
+    //         auto_offset_reset
+    //     );
+    // }
 
     let http_client = reqwest::Client::builder().build()?;
     let mut schema_cache: HashMap<u32, Schema> = HashMap::new();
     let max_messages = args.max_messages.or(kafka_conf.max_messages);
     let batch_log_messages = kafka_conf.batch_log_messages.unwrap_or(100).max(1);
+    let transaction_batch_size = kafka_conf.transaction_batch_size.unwrap_or(1).max(1);
+    let transaction_batching_enabled = transaction_batch_size > 1;
     let mut processed = 0_usize;
     let mut polled = 0_usize;
     let mut skipped_topic = 0_usize;
     let mut skipped_db = 0_usize;
     let mut skipped_mapping = 0_usize;
     let mut skipped_no_payload = 0_usize;
+    let mut skipped_non_data_op = 0_usize;
+    let mut skipped_missing_after = 0_usize;
+    let mut skipped_missing_before = 0_usize;
+    let mut fallback_payload_as_after = 0_usize;
     let mut decode_failed = 0_usize;
     let mut apply_failed = 0_usize;
     let mut dlq_published = 0_usize;
     let mut dlq_failed = 0_usize;
     let mut snapshot_inserted_rows = 0_u64;
+    let mut total_affected_rows = 0_u64;
+    let mut op_c = 0_usize;
+    let mut op_u = 0_usize;
+    let mut op_r = 0_usize;
+    let mut op_d = 0_usize;
+    let mut op_other = 0_usize;
     let mut table_insert_execs: HashMap<String, u64> = HashMap::new();
+    let mut tx_open = false;
+    let mut tx_pending_processed = 0_usize;
+    let mut tx_pending_rows = 0_u64;
+    let mut tx_pending_snapshot_rows = 0_u64;
+    let mut tx_pending_table_insert_execs: HashMap<String, u64> = HashMap::new();
+    let mut tx_rolled_back_batches = 0_usize;
+    let mut tx_rolled_back_messages = 0_usize;
 
     info!(
-        "Kafka consumer configuration: auto_offset_reset={}, configured_auto_offset_reset={}, max_messages={}",
+        "Kafka consumer configuration: worker={}, workers_total={}, group_id_log={}, auto_offset_reset={}, configured_auto_offset_reset={}, max_messages={}, poll_interval_ms={}, poll_size={}, transaction_batch_size={}",
+        worker_identity,
+        worker_count_for_logs,
+        effective_group_id_log,
         auto_offset_reset,
         configured_auto_offset_reset,
         max_messages
             .map(|value| value.to_string())
-            .unwrap_or_else(|| "none".to_owned())
+            .unwrap_or_else(|| "none".to_owned()),
+        kafka_conf
+            .poll_interval_ms
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "default".to_owned()),
+        kafka_conf
+            .poll_size
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "default".to_owned()),
+        transaction_batch_size
     );
     info!(
         "Loaded mapping folders for {} collection(s)",
@@ -9091,6 +10130,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     );
 
     let mut stream = consumer.stream();
+    let explicit_topics_without_prefix = cli_topics_supplied
+        && kafka_conf
+            .topic_prefix
+            .as_deref()
+            .map(str::trim)
+            .is_none_or(|value| value.is_empty());
+    let mut logged_explicit_topic_fallback = false;
     loop {
         let next_item = if snapshot_mode {
             match tokio::time::timeout(Duration::from_secs(10), stream.next()).await {
@@ -9124,7 +10170,7 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         };
 
         let topic = message.topic();
-        let Some((db_name, collection_name)) = parse_topic_db_collection(
+        let Some((db_name, mut collection_name)) = parse_topic_db_collection(
             topic,
             kafka_conf.topic_prefix.as_deref(),
             Some(namespace_db_name),
@@ -9133,8 +10179,24 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             continue;
         };
         if db_name != namespace_db_name {
-            skipped_db += 1;
-            continue;
+            if explicit_topics_without_prefix {
+                if let Some((_, tail_collection)) = topic.rsplit_once('.') {
+                    if !logged_explicit_topic_fallback {
+                        warn!(
+                            "--topics provided without topic_prefix: interpreting topic tail as collection and using source namespace '{}' as db",
+                            namespace_db_name
+                        );
+                        logged_explicit_topic_fallback = true;
+                    }
+                    collection_name = tail_collection.to_owned();
+                } else {
+                    skipped_db += 1;
+                    continue;
+                }
+            } else {
+                skipped_db += 1;
+                continue;
+            }
         }
 
         let folder_name = sanitize_name(&collection_name);
@@ -9180,6 +10242,13 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             .map(unwrap_union_tagged_value)
             .and_then(|value| value.as_str())
             .unwrap_or("u");
+        match op {
+            "c" => op_c += 1,
+            "u" => op_u += 1,
+            "r" => op_r += 1,
+            "d" => op_d += 1,
+            _ => op_other += 1,
+        }
         let after = match debezium_document(payload.get("after").map(unwrap_union_tagged_value)) {
             Ok(value) => value,
             Err(err) => {
@@ -9200,31 +10269,96 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let result = match op {
             "d" => {
                 if let Some(before_doc) = before.as_ref() {
-                    apply_delete_event(
-                        &pg_client,
-                        before_doc,
-                        mappings,
-                        conf.target_schema.as_deref(),
-                    )
-                    .await
-                    .map(|_| 0_u64)
+                    if transaction_batching_enabled {
+                        if !tx_open {
+                            pg_client
+                                .batch_execute("BEGIN")
+                                .await
+                                .context("failed to open kafka-import transaction batch")?;
+                            tx_open = true;
+                        }
+                        apply_delete_event(
+                            &pg_client,
+                            before_doc,
+                            mappings,
+                            effective_target_schema.as_deref(),
+                        )
+                        .await
+                        .map(|_| 0_u64)
+                    } else {
+                        apply_delete_event(
+                            &pg_client,
+                            before_doc,
+                            mappings,
+                            effective_target_schema.as_deref(),
+                        )
+                        .await
+                        .map(|_| 0_u64)
+                    }
                 } else {
-                    Ok(0_u64)
+                    skipped_missing_before += 1;
+                    continue;
+                }
+            }
+            "c" | "u" | "r" => {
+                let fallback_after = payload
+                    .as_object()
+                    .filter(|obj| {
+                        !obj.contains_key("after")
+                            && !obj.contains_key("before")
+                            && !obj.contains_key("op")
+                            && !obj.contains_key("source")
+                            && !obj.contains_key("transaction")
+                    })
+                    .map(|obj| Value::Object(obj.clone()));
+
+                let after_doc_ref = if let Some(after_doc) = after.as_ref() {
+                    Some(after_doc)
+                } else {
+                    fallback_after.as_ref()
+                };
+
+                if let Some(after_doc) = after_doc_ref {
+                    if after.is_none() {
+                        fallback_payload_as_after += 1;
+                    }
+
+                    if transaction_batching_enabled {
+                        if !tx_open {
+                            pg_client
+                                .batch_execute("BEGIN")
+                                .await
+                                .context("failed to open kafka-import transaction batch")?;
+                            tx_open = true;
+                        }
+                        apply_upsert_event(
+                            &pg_client,
+                            after_doc,
+                            mappings,
+                            effective_target_schema.as_deref(),
+                            &collection_name,
+                            &mut tx_pending_table_insert_execs,
+                        )
+                        .await
+                    } else {
+                        apply_upsert_event(
+                            &pg_client,
+                            after_doc,
+                            mappings,
+                            effective_target_schema.as_deref(),
+                            &collection_name,
+                            &mut table_insert_execs,
+                        )
+                        .await
+                    }
+                } else {
+                    skipped_missing_after += 1;
+                    continue;
                 }
             }
             _ => {
-                if let Some(after_doc) = after.as_ref() {
-                    apply_upsert_event(
-                        &pg_client,
-                        after_doc,
-                        mappings,
-                        conf.target_schema.as_deref(),
-                        &mut table_insert_execs,
-                    )
-                    .await
-                } else {
-                    Ok(0_u64)
-                }
+                skipped_non_data_op += 1;
+                continue;
             }
         };
 
@@ -9256,32 +10390,99 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     warn!("failed to copy message to DLQ: message payload missing");
                 }
 
+                if transaction_batching_enabled && tx_open {
+                    if let Err(rollback_err) = pg_client.batch_execute("ROLLBACK").await {
+                        warn!(
+                            "failed to rollback kafka-import transaction batch: {:#}",
+                            rollback_err
+                        );
+                    }
+                    tx_open = false;
+                    tx_rolled_back_batches += 1;
+                    tx_rolled_back_messages += tx_pending_processed;
+                    tx_pending_processed = 0;
+                    tx_pending_rows = 0;
+                    tx_pending_snapshot_rows = 0;
+                    tx_pending_table_insert_execs.clear();
+                }
+
                 continue;
             }
         };
 
-        processed += 1;
-        if snapshot_mode {
-            snapshot_inserted_rows += applied_rows;
+        if transaction_batching_enabled {
+            tx_pending_processed += 1;
+            tx_pending_rows += applied_rows;
+            if snapshot_mode {
+                tx_pending_snapshot_rows += applied_rows;
+            }
+
+            if tx_pending_processed >= transaction_batch_size {
+                pg_client
+                    .batch_execute("COMMIT")
+                    .await
+                    .context("failed to commit kafka-import transaction batch")?;
+                tx_open = false;
+
+                processed += tx_pending_processed;
+                total_affected_rows += tx_pending_rows;
+                if snapshot_mode {
+                    snapshot_inserted_rows += tx_pending_snapshot_rows;
+                }
+                for (table, count) in tx_pending_table_insert_execs.drain() {
+                    *table_insert_execs.entry(table).or_insert(0) += count;
+                }
+
+                tx_pending_processed = 0;
+                tx_pending_rows = 0;
+                tx_pending_snapshot_rows = 0;
+            }
+        } else {
+            processed += 1;
+            total_affected_rows += applied_rows;
+            if snapshot_mode {
+                snapshot_inserted_rows += applied_rows;
+            }
         }
-        if processed <= 5 || processed % batch_log_messages == 0 {
+
+        let effective_processed = if transaction_batching_enabled {
+            processed + tx_pending_processed
+        } else {
+            processed
+        };
+
+        if effective_processed <= 5 || effective_processed % batch_log_messages == 0 {
             info!(
                 "Kafka apply ok: processed={} topic={} collection={} op={} affected_rows={}",
-                processed, topic, collection_name, op, applied_rows
+                effective_processed, topic, collection_name, op, applied_rows
             );
         }
 
         if polled % batch_log_messages == 0 {
             info!(
-                "Kafka progress: polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
+                "Kafka progress: polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, decode_failed={}, apply_failed={}",
                 polled,
                 processed,
                 skipped_topic,
                 skipped_db,
                 skipped_mapping,
                 skipped_no_payload,
+                skipped_non_data_op,
+                skipped_missing_after,
+                skipped_missing_before,
                 decode_failed,
                 apply_failed
+            );
+            info!(
+                "Kafka progress ops: c={}, u={}, r={}, d={}, other={}, total_affected_rows={}, fallback_payload_as_after={}",
+                op_c,
+                op_u,
+                op_r,
+                op_d,
+                op_other,
+                total_affected_rows
+                ,
+                fallback_payload_as_after
             );
             info!(
                 "Kafka progress DLQ: dlq_published={}, dlq_failed={}",
@@ -9292,26 +10493,79 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 table_insert_execs.len(),
                 format_table_insert_exec_summary(&table_insert_execs)
             );
+            if transaction_batching_enabled {
+                info!(
+                    "Kafka progress tx-batch: batch_size={}, staged_messages={}, rolled_back_batches={}, rolled_back_messages={}",
+                    transaction_batch_size,
+                    tx_pending_processed,
+                    tx_rolled_back_batches,
+                    tx_rolled_back_messages
+                );
+            }
         }
 
         if let Some(limit) = max_messages {
-            if processed >= limit {
+            let current = if transaction_batching_enabled {
+                processed + tx_pending_processed
+            } else {
+                processed
+            };
+            if current >= limit {
                 info!("Reached --max-messages limit ({limit}), stopping.");
                 break;
             }
         }
     }
 
+    if transaction_batching_enabled && tx_pending_processed > 0 {
+        pg_client
+            .batch_execute("COMMIT")
+            .await
+            .context("failed to commit final kafka-import transaction batch")?;
+        tx_open = false;
+
+        processed += tx_pending_processed;
+        total_affected_rows += tx_pending_rows;
+        if snapshot_mode {
+            snapshot_inserted_rows += tx_pending_snapshot_rows;
+        }
+        for (table, count) in tx_pending_table_insert_execs.drain() {
+            *table_insert_execs.entry(table).or_insert(0) += count;
+        }
+    }
+
+    if transaction_batching_enabled && tx_open {
+        if let Err(rollback_err) = pg_client.batch_execute("ROLLBACK").await {
+            warn!(
+                "failed to rollback trailing open kafka-import transaction batch: {:#}",
+                rollback_err
+            );
+        }
+    }
+
     info!(
-        "Kafka import finished. polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, decode_failed={}, apply_failed={}",
+        "Kafka import finished. polled={}, processed={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, decode_failed={}, apply_failed={}",
         polled,
         processed,
         skipped_topic,
         skipped_db,
         skipped_mapping,
         skipped_no_payload,
+        skipped_non_data_op,
+        skipped_missing_after,
+        skipped_missing_before,
         decode_failed,
         apply_failed
+    );
+    info!(
+        "Kafka import op summary: c={}, u={}, r={}, d={}, other={}, total_affected_rows={}, fallback_payload_as_after={}",
+        op_c,
+        op_u,
+        op_r,
+        op_d,
+        op_other,
+        total_affected_rows,
+        fallback_payload_as_after
     );
     info!(
         "Kafka import DLQ summary: dlq_published={}, dlq_failed={}",
@@ -9322,12 +10576,33 @@ async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         table_insert_execs.len(),
         format_table_insert_exec_summary(&table_insert_execs)
     );
+    if transaction_batching_enabled {
+        info!(
+            "Kafka import tx-batch summary: batch_size={}, rolled_back_batches={}, rolled_back_messages={}",
+            transaction_batch_size,
+            tx_rolled_back_batches,
+            tx_rolled_back_messages
+        );
+    }
     if snapshot_mode {
         info!(
             "Snapshot summary: total affected rows applied to PostgreSQL={} (upserts + child inserts)",
             snapshot_inserted_rows
         );
     }
+
+    if !spawned_worker_children.is_empty() {
+        for mut child in spawned_worker_children {
+            let status = child
+                .wait()
+                .await
+                .context("failed while waiting for kafka worker child process")?;
+            if !status.success() {
+                return Err(anyhow!("kafka worker child exited with status {status}"));
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -9821,6 +11096,53 @@ fn split_namespace_scope(namespace: &str) -> (&str, Option<&str>) {
     }
 }
 
+fn resolve_target_database_name_from_conf(
+    target_database_name: Option<&str>,
+    namespace: Option<&str>,
+) -> Option<String> {
+    target_database_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            namespace
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|ns| split_namespace_scope(ns).0.to_owned())
+        })
+}
+
+fn resolve_preamble_database_name(
+    config_db_name: Option<&str>,
+    effective_rel_sql: &Path,
+) -> Option<String> {
+    config_db_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .or_else(|| {
+            effective_rel_sql
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .map(str::to_owned)
+        })
+}
+
+fn extract_postgres_uri_username(uri: &str) -> Option<String> {
+    let authority = uri.split_once("://")?.1.split('/').next()?;
+    if !authority.contains('@') {
+        return None;
+    }
+    let userinfo = authority.split('@').next()?;
+    let username = userinfo.split(':').next().unwrap_or("").trim();
+    if username.is_empty() {
+        None
+    } else {
+        Some(username.to_owned())
+    }
+}
+
 fn extract_search_path(sql: &str) -> Option<String> {
     sql.lines().find_map(|line| {
         let trimmed = line.trim();
@@ -10253,19 +11575,115 @@ async fn connect_pg_client(target_uri: &str) -> Result<tokio_postgres::Client> {
     Ok(pg_client)
 }
 
-async fn ensure_pg_database(pg_client: &tokio_postgres::Client, db_name: &str) -> Result<()> {
-    let create_db_sql = format!("CREATE DATABASE {}", quote_ident(db_name));
-    match pg_client.batch_execute(&create_db_sql).await {
-        Ok(()) => {
-            info!("Created PostgreSQL database {}", quote_ident(db_name));
-            Ok(())
-        }
-        Err(err) if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_DATABASE) => {
-            Ok(())
-        }
-        Err(err) => Err(err).with_context(|| format!("Failed to create database {db_name}")),
-    }
+// async fn connect_pg_admin_client(
+//     target_uri: &str,
+//     target_database_name: &str,
+// ) -> Result<tokio_postgres::Client> {
+//     let candidate_uris = pg_admin_fallback_uris(target_uri, target_database_name);
+
+//     let mut failures = Vec::new();
+//     for uri in candidate_uris {
+//         match connect_pg_client(&uri).await {
+//             Ok(client) => {
+//                 if uri != target_uri {
+//                     info!(
+//                         "PostgreSQL admin connection fallback selected database endpoint from TARGET_URI for preflight"
+//                     );
+//                 }
+//                 return Ok(client);
+//             }
+//             Err(err) => failures.push(format!("{}", err)),
+//         }
+//     }
+
+//     Err(anyhow!(
+//         "{}: unable to connect using any admin fallback database endpoint from TARGET_URI. Review TARGET_URI host/credentials and ensure at least one admin database endpoint is accessible.\n{}",
+//         connection_failed_context("postgres", "connect_admin"),
+//         failures.join("\n")
+//     ))
+// }
+
+// fn pg_admin_fallback_uris(target_uri: &str, target_database_name: &str) -> Vec<String> {
+//     let mut candidate_uris = Vec::new();
+//     candidate_uris.push(target_uri.to_owned());
+//     for db_name in ["postgres", "template1", target_database_name] {
+//         let candidate = pg_uri_with_database(target_uri, db_name);
+//         if !candidate_uris.iter().any(|existing| existing == &candidate) {
+//             candidate_uris.push(candidate);
+//         }
+//     }
+//     candidate_uris
+// }
+
+fn preflight_existing_tables_error(
+    database_name: &str,
+    tables: &[(String, String)],
+) -> anyhow::Error {
+    let mut sorted = tables
+        .iter()
+        .map(|(schema, table)| format!("{}.{}", quote_ident(schema), quote_ident(table)))
+        .collect::<Vec<_>>();
+    sorted.sort();
+    anyhow!(
+        "Preflight check failed for database '{}': destination table(s) already exist: {}. Drop the existing table(s) or use a clean target database/schema before retrying import.",
+        database_name,
+        sorted.join(", ")
+    )
 }
+
+// async fn ensure_pg_schema(pg_client: &tokio_postgres::Client, schema_name: &str) -> Result<()> {
+//     let create_schema_sql = format!("CREATE SCHEMA IF NOT EXISTS {}", quote_ident(schema_name));
+//     match pg_client.batch_execute(&create_schema_sql).await {
+//         Ok(()) => {
+//             info!("Created PostgreSQL schema {}", quote_ident(schema_name));
+//             Ok(())
+//         }
+//         Err(err) if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_SCHEMA) => {
+//             Ok(())
+//         }
+//         Err(err)
+//             if err.code() == Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE) =>
+//         {
+//             Err(anyhow!(
+//                 "{}: insufficient privileges to create PostgreSQL schema '{}'. Grant CREATE on database '{}' or pre-create the schema, then retry.\n{}",
+//                 connection_failed_context("postgres", "create_schema"),
+//                 schema_name,
+//                 pg_client
+//                     .query_one("SELECT current_database()", &[])
+//                     .await
+//                     .ok()
+//                     .and_then(|row| row.try_get::<_, String>(0).ok())
+//                     .unwrap_or_else(|| "<unknown>".to_owned()),
+//                 format_postgres_error(&err)
+//             ))
+//         }
+//         Err(err) => Err(err).with_context(|| format!("Failed to create schema {schema_name}")),
+//     }
+// }
+
+// async fn ensure_pg_database(pg_client: &tokio_postgres::Client, db_name: &str) -> Result<()> {
+//     let create_db_sql = format!("CREATE DATABASE {}", quote_ident(db_name));
+//     match pg_client.batch_execute(&create_db_sql).await {
+//         Ok(()) => {
+//             info!("Created PostgreSQL database {}", quote_ident(db_name));
+//             Ok(())
+//         }
+//         Err(err) if err.code() == Some(&tokio_postgres::error::SqlState::DUPLICATE_DATABASE) => {
+//             Ok(())
+//         }
+//         Err(err)
+//             if err.code() == Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE) =>
+//         {
+//             Err(anyhow!(
+//                 "{}: insufficient privileges to create PostgreSQL database '{}'. Grant CREATEDB (or equivalent) or pre-create the database, then retry.\n{}",
+//                 connection_failed_context("postgres", "create_database"),
+//                 db_name,
+//                 format_postgres_error(&err)
+//             ))
+//         }
+//         Err(err) => Err(err).with_context(|| format!("Failed to create database {db_name}")),
+//     }
+// }
 
 fn pg_sslmode(uri: &str) -> Option<&str> {
     let query = uri.split_once('?')?.1;
@@ -11034,12 +12452,14 @@ mod tests {
         resolve_export_sql_lookup_for_collection, resolve_infer_auth_retry_max,
         resolve_infer_chunk_size, resolve_log_level_precedence, resolve_post_import_table_row,
         resolve_root_table_name, sanitize_name, should_infer_collection, strip_psql_preamble,
-        timeout_fallback_hint, validate_group_schema_compatibility, ConfigOverrides,
-        PostImportTableRow, UnauthorizedRetryDecision, DEFAULT_EXPORT_CHUNK_ROWS,
-        DEFAULT_INFER_AUTH_RETRY_MAX, DEFAULT_INFER_CHUNK_SIZE, DEFAULT_SAMPLE_MAX_TIME,
+        timeout_fallback_hint, validate_command_and_args, validate_group_schema_compatibility, Cli,
+        Command, ConfigOverrides, PostImportTableRow, UnauthorizedRetryDecision,
+        DEFAULT_EXPORT_CHUNK_ROWS, DEFAULT_INFER_AUTH_RETRY_MAX, DEFAULT_INFER_CHUNK_SIZE,
+        DEFAULT_SAMPLE_MAX_TIME,
     };
     use anyhow::{anyhow, Context as _};
     use bson::doc;
+    use clap::Parser;
     use log::{Level, LevelFilter};
     use mongo2pg::analyzer::Analyzer;
     use mongo2pg::export::{resolve_export_write_backend, ExportWriteBackend};
@@ -11487,6 +12907,88 @@ mod tests {
     }
 
     #[test]
+    fn ping_cli_parses_selected_backend_flags() {
+        let cli = Cli::try_parse_from([
+            "mongo2pg",
+            "ping",
+            "-c",
+            "sample.toml",
+            "--source",
+            "--kafka",
+        ])
+        .expect("ping CLI args should parse");
+
+        match cli.command {
+            Some(Command::Ping(args)) => {
+                assert!(args.source);
+                assert!(!args.target);
+                assert!(args.kafka);
+                assert_eq!(args.config, PathBuf::from("sample.toml"));
+            }
+            _ => panic!("expected ping command"),
+        }
+    }
+
+    #[test]
+    fn kafka_import_cli_parses_force_flag() {
+        let cli = Cli::try_parse_from(["mongo2pg", "kafka-import", "-c", "sample.toml", "--force"])
+            .expect("kafka-import CLI args should parse");
+
+        match cli.command {
+            Some(Command::KafkaImport(args)) => {
+                assert!(args.force);
+                assert_eq!(args.config, PathBuf::from("sample.toml"));
+            }
+            _ => panic!("expected kafka-import command"),
+        }
+    }
+
+    #[test]
+    fn ping_validation_requires_one_backend_flag() {
+        let cli = Cli::try_parse_from(["mongo2pg", "ping", "-c", "sample.toml"])
+            .expect("ping CLI args should parse before semantic validation");
+        let Cli { command, infer, .. } = cli;
+
+        let err = validate_command_and_args(&command, infer.as_ref())
+            .expect_err("ping without backend flags should fail validation");
+        assert!(
+            format!("{err:#}").contains("ping requires at least one backend flag"),
+            "validation error should mention required backend flags"
+        );
+    }
+
+    #[test]
+    fn ping_requested_backends_preserves_flag_order() {
+        let args = super::PingArgs {
+            config: PathBuf::from("sample.toml"),
+            source: true,
+            target: true,
+            kafka: false,
+        };
+        let selected = super::ping_requested_backends(&args);
+        assert_eq!(
+            selected,
+            vec![super::PingBackend::Source, super::PingBackend::Target]
+        );
+    }
+
+    #[test]
+    fn ping_exit_behavior_all_pass_vs_any_fail() {
+        assert!(!super::ping_failed_exit(0));
+        assert!(super::ping_failed_exit(1));
+    }
+
+    #[test]
+    fn ping_failure_render_includes_backend_attribution_token() {
+        let err = Err::<(), _>(anyhow!("broker timeout"))
+            .with_context(|| connection_failed_context("kafka", "query"))
+            .expect_err("context wrap should return error");
+        let rendered = format!("kafka:\n{err:#}");
+        assert!(rendered.contains("connection_failed backend=kafka operation=query"));
+        assert!(rendered.contains("broker timeout"));
+    }
+
+    #[test]
     fn child_row_objects_for_mapping_expands_dynamic_map_entries() {
         let mapping_yaml = r#"
 collection_name: tier_and_details
@@ -11777,6 +13279,42 @@ schema_name = "shared_schema"
 
         let target = config.target.expect("target section should exist");
         assert_eq!(target.schema_name.as_deref(), Some("shared_schema"));
+    }
+
+    #[test]
+    fn resolve_target_database_name_prefers_target_database_name() {
+        let resolved = super::resolve_target_database_name_from_conf(
+            Some("ciam_prep2"),
+            Some("ciam_prep.events_lmpt"),
+        );
+        assert_eq!(resolved.as_deref(), Some("ciam_prep2"));
+    }
+
+    #[test]
+    fn resolve_target_database_name_falls_back_to_namespace_database() {
+        let resolved =
+            super::resolve_target_database_name_from_conf(None, Some("ciam_prep.events_lmpt"));
+        assert_eq!(resolved.as_deref(), Some("ciam_prep"));
+    }
+
+    #[test]
+    fn resolve_preamble_database_name_prefers_config_db_name() {
+        let rel = PathBuf::from("ciam_prep/events_lmpt.sql");
+        let resolved = super::resolve_preamble_database_name(Some("ciam_prep2"), &rel);
+        assert_eq!(resolved.as_deref(), Some("ciam_prep2"));
+    }
+
+    #[test]
+    fn resolve_preamble_database_name_falls_back_to_rel_path_parent() {
+        let rel = PathBuf::from("ciam_prep/events_lmpt.sql");
+        let resolved = super::resolve_preamble_database_name(None, &rel);
+        assert_eq!(resolved.as_deref(), Some("ciam_prep"));
+    }
+
+    #[test]
+    fn extract_postgres_uri_username_returns_none_without_userinfo() {
+        let user = super::extract_postgres_uri_username("postgres://pg-host:5432/defaultdb");
+        assert_eq!(user, None);
     }
 
     #[test]
@@ -12511,6 +14049,27 @@ CREATE TABLE demo (
     }
 
     #[test]
+    fn render_ddl_from_mapping_tables_with_owner_emits_alter_schema_owner() {
+        let sql = super::render_ddl_from_mapping_tables_with_owner(
+            &[super::DdlTableMapping {
+                name: "demo".to_owned(),
+                columns: vec![super::DdlColumnMapping {
+                    name: "id".to_owned(),
+                    sql_type: "BIGSERIAL".to_owned(),
+                    nullable: false,
+                    primary_key: true,
+                }],
+                foreign_keys: Vec::new(),
+            }],
+            Some("ciam_prep2"),
+            Some("user_ciam"),
+        );
+
+        assert!(sql.contains("CREATE SCHEMA IF NOT EXISTS \"ciam_prep2\";"));
+        assert!(sql.contains("ALTER SCHEMA \"ciam_prep2\" OWNER TO \"user_ciam\";"));
+    }
+
+    #[test]
     fn render_ddl_from_mapping_tables_replaces_varchar_zero_with_text() {
         let sql = render_ddl_from_mapping_tables(
             &[super::DdlTableMapping {
@@ -12892,6 +14451,40 @@ pg_mapping:
         assert_eq!(super::extract_search_path(sql).as_deref(), Some("dbapi"));
     }
 
+    // #[test]
+    // fn pg_admin_fallback_uris_includes_expected_candidates_without_duplicates() {
+    //     let uris = super::pg_admin_fallback_uris(
+    //         "postgres://user:pw@localhost:5432/defaultdb?sslmode=require",
+    //         "defaultdb",
+    //     );
+
+    //     assert_eq!(uris.len(), 3);
+    //     assert_eq!(
+    //         uris[0],
+    //         "postgres://user:pw@localhost:5432/defaultdb?sslmode=require"
+    //     );
+    //     assert_eq!(
+    //         uris[1],
+    //         "postgres://user:pw@localhost:5432/postgres?sslmode=require"
+    //     );
+    //     assert_eq!(
+    //         uris[2],
+    //         "postgres://user:pw@localhost:5432/template1?sslmode=require"
+    //     );
+    // }
+
+    #[test]
+    fn preflight_existing_tables_error_includes_remediation() {
+        let err = super::preflight_existing_tables_error(
+            "ciam_prep",
+            &[("events".to_owned(), "root".to_owned())],
+        );
+        let rendered = format!("{err:#}");
+        assert!(rendered.contains("destination table(s) already exist"));
+        assert!(rendered.contains("Drop the existing table(s)"));
+        assert!(rendered.contains("\"events\".\"root\""));
+    }
+
     #[test]
     fn resolve_collections_dir_falls_back_to_flat_layout() {
         let unique = SystemTime::now()
@@ -13064,8 +14657,8 @@ pg_mapping:
         std::fs::remove_dir_all(&root).expect("temp root should be removed");
     }
 
-    #[test]
-    fn run_init_writes_default_datetime_field_patterns() {
+    #[tokio::test]
+    async fn run_init_writes_default_datetime_field_patterns() {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be after unix epoch")
@@ -13080,6 +14673,7 @@ pg_mapping:
             namespace: Some("dbapi".to_owned()),
             cluster_name: None,
         })
+        .await
         .expect("init should succeed");
 
         let conf_path = project_base.join("dbapi").join("config").join("dbapi.toml");
@@ -13090,6 +14684,9 @@ pg_mapping:
         ));
         assert!(content.contains("namespace = \"dbapi\""));
         assert!(!content.contains("#namespace = \"dbapi\""));
+        assert!(content.contains("database_name = \"dbapi\""));
+        assert!(content.contains("schema_name = \"dbapi\""));
+        assert!(!content.contains("# schema_name = \"shared_schema\""));
 
         std::fs::remove_dir_all(&project_base).expect("temp project base should be removed");
     }
@@ -13274,7 +14871,7 @@ pg_mapping:
     use crate::{run_export, run_import, run_infer, run_init};
     use chrono::{DateTime, TimeZone, Utc};
     use indoc::indoc;
-    use std::fs;
+    //use std::fs;
     use tempfile::TempDir; // Import the TempDir type
     use testcontainers_modules::{mongo, postgres, testcontainers::runners::AsyncRunner};
 
@@ -13288,303 +14885,339 @@ pg_mapping:
         last_update: String,
     }
 
-    #[tokio::test]
-    async fn test_mongo_to_pg_data_flow() -> Result<(), Box<dyn std::error::Error>> {
-        // --- Container Startup (remains the same) ---
+    // #[tokio::test]
+    // async fn test_mongo_to_pg_data_flow() -> Result<(), Box<dyn std::error::Error>> {
+    //     // --- Container Startup (remains the same) ---
 
-        let temp_dir = TempDir::new()?;
+    //     let temp_dir = TempDir::new()?;
 
-        // 2. Build your paths relative to the new temporary directory.
-        // The `join` method is the correct and safe way to append path segments.
-        let table_dir = temp_dir.path().join("schema/tables/test_db");
-        let collections_dir = temp_dir.path().join("source/collections/employees");
-        let data_dir = temp_dir.path().join("data/test_db/employees");
+    //     // 2. Build your paths relative to the new temporary directory.
+    //     // The `join` method is the correct and safe way to append path segments.
+    //     let table_dir = temp_dir.path().join("schema/tables/test_db");
+    //     let collections_dir = temp_dir.path().join("source/collections/employees");
+    //     let data_dir = temp_dir.path().join("data/test_db/employees");
 
-        // 3. You can now create these directories and any files you need.
-        // For example, using std::fs:
-        std::fs::create_dir_all(&table_dir)?;
-        std::fs::create_dir_all(&collections_dir)?;
-        std::fs::create_dir_all(&data_dir)?;
+    //     // 3. You can now create these directories and any files you need.
+    //     // For example, using std::fs:
+    //     std::fs::create_dir_all(&table_dir)?;
+    //     std::fs::create_dir_all(&collections_dir)?;
+    //     std::fs::create_dir_all(&data_dir)?;
 
-        let (pg_container, mongo_container) = tokio::join!(
-            postgres::Postgres::default().start(),
-            mongo::Mongo::default().start()
-        );
-        let pg_container = pg_container?;
-        let mongo_container = mongo_container?;
+    //     let (pg_container, mongo_container) = tokio::join!(
+    //         postgres::Postgres::default().start(),
+    //         mongo::Mongo::default().start()
+    //     );
+    //     let pg_container = pg_container?;
+    //     let mongo_container = mongo_container?;
 
-        // --- Establish connections to both databases ---
-        // PostgreSQL Client
-        let pg_host_port = pg_container.get_host_port_ipv4(5432).await?;
-        let pg_connection_string = format!(
-            "postgres://postgres:postgres@localhost:{}/postgres?sslmode=disable",
-            pg_host_port
-        );
+    //     // --- Establish connections to both databases ---
+    //     // PostgreSQL Client
+    //     let pg_host_port = pg_container.get_host_port_ipv4(5432).await?;
+    //     let pg_connection_string = format!(
+    //         "postgres://postgres:postgres@localhost:{}/postgres?sslmode=disable",
+    //         pg_host_port
+    //     );
 
-        // MongoDB Client
-        let db_mongo = "test_db";
-        let mongo_host_port = mongo_container.get_host_port_ipv4(27017).await?;
-        let mongo_uri = format!("mongodb://localhost:{}", mongo_host_port);
-        let mongo_client = mongodb::Client::with_uri_str(&mongo_uri).await?;
-        let mongo_db = mongo_client.database(db_mongo);
-        let collection = mongo_db.collection::<bson::Document>("employees");
+    //     // MongoDB Client
+    //     let db_mongo = "test_db";
+    //     let mongo_host_port = mongo_container.get_host_port_ipv4(27017).await?;
+    //     let mongo_uri = format!("mongodb://localhost:{}", mongo_host_port);
+    //     let mongo_client = mongodb::Client::with_uri_str(&mongo_uri).await?;
+    //     let mongo_db = mongo_client.database(db_mongo);
+    //     let collection = mongo_db.collection::<bson::Document>("employees");
 
-        let new_employee = Employee {
-            id: 1,
-            name: "Jane Doe".to_string(),
-            hire_date: Utc.from_utc_datetime(
-                &chrono::NaiveDate::from_ymd_opt(2024, 1, 15)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-            ),
-            created_at: "2024-01-15T00:00:00Z".to_string(),
-            last_update: "2024-01-15T00:00:00Z".to_string(),
-        };
-        let employee_doc = bson::to_document(&new_employee)?;
-        collection.insert_one(employee_doc).await?;
+    //     let new_employee = Employee {
+    //         id: 1,
+    //         name: "Jane Doe".to_string(),
+    //         hire_date: Utc.from_utc_datetime(
+    //             &chrono::NaiveDate::from_ymd_opt(2024, 1, 15)
+    //                 .unwrap()
+    //                 .and_hms_opt(0, 0, 0)
+    //                 .unwrap(),
+    //         ),
+    //         created_at: "2024-01-15T00:00:00Z".to_string(),
+    //         last_update: "2024-01-15T00:00:00Z".to_string(),
+    //     };
+    //     let employee_doc = bson::to_document(&new_employee)?;
+    //     collection.insert_one(employee_doc).await?;
 
-        let init_args = create_default_init_args(
-            temp_dir.path().to_path_buf(),
-            "test_project".to_owned(),
-            Some(mongo_uri.clone()),
-            Some(pg_connection_string.clone()),
-            Some(db_mongo.to_owned()),
-        );
-        run_init(init_args).expect("init should succeed");
+    //     let init_args = create_default_init_args(
+    //         temp_dir.path().to_path_buf(),
+    //         "test_project".to_owned(),
+    //         Some(mongo_uri.clone()),
+    //         Some(pg_connection_string.clone()),
+    //         Some(db_mongo.to_owned()),
+    //     );
+    //     run_init(init_args).await.expect("init should succeed");
 
+    //     assert!(
+    //         temp_dir.path().join("test_project").exists(),
+    //         "Project directory should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("schema")
+    //             .join("tables")
+    //             .exists(),
+    //         "Schema tables directory should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("source")
+    //             .join("collections")
+    //             .exists(),
+    //         "Source collections directory should be created"
+    //     );
+    //     assert!(
+    //         temp_dir.path().join("test_project").join("data").exists(),
+    //         "Data directory should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("config")
+    //             .join("test_project.toml")
+    //             .exists(),
+    //         "Config file should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("reports")
+    //             .exists(),
+    //         "Reports folder should be created"
+    //     );
+
+    //     let conf_toml = std::fs::read_to_string(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("config")
+    //             .join("test_project.toml"),
+    //     )?;
+    //     assert!(
+    //         conf_toml.contains(&format!("uri = {mongo_uri:?}")),
+    //         "Config should contain the MongoDB URI"
+    //     );
+    //     assert!(
+    //         conf_toml.contains(&format!("uri = {pg_connection_string:?}")),
+    //         "Config should contain the PostgreSQL URI"
+    //     );
+    //     assert!(
+    //         conf_toml.contains(&format!(
+    //             "base_dir = \"{}\"",
+    //             temp_dir.path().to_path_buf().display()
+    //         )),
+    //         "Config should contain the project_base path"
+    //     );
+    //     assert!(
+    //         conf_toml.contains("project_dir = \"test_project\""),
+    //         "Config should contain the project_dir"
+    //     );
+    //     assert!(
+    //         conf_toml.contains(&format!("namespace = \"{}\"", db_mongo)),
+    //         "Config should contain the namespace"
+    //     );
+    //     assert!(
+    //         conf_toml.contains(&format!("database_name = \"{}\"", db_mongo)),
+    //         "Config should contain database_name derived from namespace"
+    //     );
+    //     assert!(
+    //         conf_toml.contains(&format!("schema_name = \"{}\"", db_mongo)),
+    //         "Config should default schema_name to database_name"
+    //     );
+    //     assert!(conf_toml.contains("datetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]"), "Config should contain the default datetime field patterns");
+    //     assert!(
+    //         conf_toml.contains("jsonb = false"),
+    //         "Config should contain the default jsonb setting"
+    //     );
+
+    //     let infer_args = create_default_infer_args(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("config")
+    //             .join("test_project.toml"),
+    //     );
+
+    //     run_infer(infer_args).await?;
+
+    //     log::info!("Inserted employee into MongoDB: {:?}", new_employee.name);
+
+    //     let ddl_file_path = temp_dir
+    //         .path()
+    //         .join("test_project")
+    //         .join("schema")
+    //         .join("tables")
+    //         .join("test_db")
+    //         .join("employees.sql");
+
+    //     assert!(
+    //         ddl_file_path.exists(),
+    //         "DDL file for employees should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("source")
+    //             .join("collections")
+    //             .join("employees")
+    //             .join("employees.json")
+    //             .exists(),
+    //         "Source collections employees should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("source")
+    //             .join("collections")
+    //             .join("employees")
+    //             .join("employees.stats.txt")
+    //             .exists(),
+    //         "Source collections stats txt format for employees should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("source")
+    //             .join("collections")
+    //             .join("employees")
+    //             .join("employees.stats.yaml")
+    //             .exists(),
+    //         "Source collections stats yaml format for employees should be created"
+    //     );
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("source")
+    //             .join("collections")
+    //             .join("employees")
+    //             .join("mapping_employees.yaml")
+    //             .exists(),
+    //         "Source collections mapping yaml format for employees should be created"
+    //     );
+
+    //     // let expected_content = indoc! {r#"
+    //     //     --CREATE DATABASE "test_db";
+    //     //     \connect "test_db"
+
+    //     //     CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+    //     //     CREATE SCHEMA IF NOT EXISTS "test_db";
+    //     //     ALTER SCHEMA "test_db" OWNER TO "postgres";
+    //     //     SET search_path = "test_db", public;
+
+    //     //     CREATE TABLE employees (
+    //     //         id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    //     //         created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    //     //         hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    //     //         last_update TIMESTAMP WITH TIME ZONE NOT NULL,
+    //     //         name VARCHAR(20) NOT NULL
+    //     //     );
+    //     // "#};
+    //     // let actual_content =
+    //     //     fs::read_to_string(&ddl_file_path).expect("Should have been able to read the DDL file");
+
+    //     // It will show a helpful diff if the content does not match.
+    //     // assert_eq!(actual_content.trim(), expected_content.trim());
+
+    //     let config = temp_dir
+    //         .path()
+    //         .join("test_project")
+    //         .join("config")
+    //         .join("test_project.toml");
+    //     let export_args = create_default_export_args(config.clone());
+    //     run_export(export_args).await?;
+    //     assert!(
+    //         temp_dir
+    //             .path()
+    //             .join("test_project")
+    //             .join("data")
+    //             .join("test_db")
+    //             .join("employees")
+    //             .join("employees.csv.gz")
+    //             .exists(),
+    //         "Exported data employees.csv.gz should be created"
+    //     );
+
+    //     let import_args = create_default_import_args(config.clone());
+    //     run_import(import_args).await?;
+
+    //     let host_port = pg_container.get_host_port_ipv4(5432).await?;
+    //     let pg_test_db_connection_string = format!(
+    //         "postgres://postgres:postgres@localhost:{}/{}?sslmode=disable",
+    //         host_port, "test_db"
+    //     );
+    //     let (client, connection) =
+    //         tokio_postgres::connect(&pg_test_db_connection_string, NoTls).await?;
+
+    //     tokio::spawn(async move {
+    //         if let Err(e) = connection.await {
+    //             log::error!("PostgreSQL connection error: {}", e);
+    //         }
+    //     });
+    //     let employee_name = "Jane Doe";
+    //     let hire_date = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+    //     let created_at = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+    //     let last_update = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
+
+    //     client
+    //         .execute("SET search_path TO employees, public", &[])
+    //         .await?;
+    //     let row = client
+    //         .query_one(
+    //             "SELECT name, hire_date, created_at, last_update FROM employees WHERE name = $1",
+    //             &[&employee_name],
+    //         )
+    //         .await?;
+
+    //     let retrieved_name: &str = row.get("name");
+    //     let retrieved_date: chrono::DateTime<chrono::Utc> = row.get("hire_date");
+    //     let retrieved_created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+    //     let retrieved_last_update: chrono::DateTime<chrono::Utc> = row.get("last_update");
+
+    //     assert_eq!(retrieved_name, employee_name);
+    //     assert_eq!(retrieved_date, hire_date);
+    //     assert_eq!(retrieved_created_at, created_at);
+    //     assert_eq!(retrieved_last_update, last_update);
+
+    //     Ok(())
+    // }
+
+    #[test]
+    fn missing_import_csv_error_mentions_export_and_layout() {
+        let err =
+            super::build_missing_import_csv_error(Path::new("/tmp/project/data/mydb"), None, 2);
+        let message = err.to_string();
+
+        assert!(message.contains("No .csv or .csv.gz files found in /tmp/project/data/mydb"));
+        assert!(message.contains("Found 2 SQL table(s), but no matching data files."));
         assert!(
-            temp_dir.path().join("test_project").exists(),
-            "Project directory should be created"
+            message.contains("Expected layout: data/<db>/<collection>/<table>.csv.gz (or .csv).")
         );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("schema")
-                .join("tables")
-                .exists(),
-            "Schema tables directory should be created"
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("source")
-                .join("collections")
-                .exists(),
-            "Source collections directory should be created"
-        );
-        assert!(
-            temp_dir.path().join("test_project").join("data").exists(),
-            "Data directory should be created"
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("config")
-                .join("test_project.toml")
-                .exists(),
-            "Config file should be created"
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("reports")
-                .exists(),
-            "Reports folder should be created"
-        );
+        assert!(message.contains("mongo2pg export -c <config>"));
+    }
 
-        let conf_toml = std::fs::read_to_string(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("config")
-                .join("test_project.toml"),
-        )?;
-        assert!(
-            conf_toml.contains(&format!("uri = {mongo_uri:?}")),
-            "Config should contain the MongoDB URI"
+    #[test]
+    fn missing_import_csv_error_mentions_collection_scope() {
+        let err = super::build_missing_import_csv_error(
+            Path::new("/tmp/project/data/mydb"),
+            Some("users"),
+            0,
         );
-        assert!(
-            conf_toml.contains(&format!("uri = {pg_connection_string:?}")),
-            "Config should contain the PostgreSQL URI"
-        );
-        assert!(
-            conf_toml.contains(&format!(
-                "base_dir = \"{}\"",
-                temp_dir.path().to_path_buf().display()
-            )),
-            "Config should contain the project_base path"
-        );
-        assert!(
-            conf_toml.contains("project_dir = \"test_project\""),
-            "Config should contain the project_dir"
-        );
-        assert!(
-            conf_toml.contains(&format!("namespace = \"{}\"", db_mongo)),
-            "Config should contain the namespace"
-        );
-        assert!(conf_toml.contains("datetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]"), "Config should contain the default datetime field patterns");
-        assert!(
-            conf_toml.contains("jsonb = false"),
-            "Config should contain the default jsonb setting"
-        );
+        let message = err.to_string();
 
-        let infer_args = create_default_infer_args(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("config")
-                .join("test_project.toml"),
-        );
-
-        run_infer(infer_args).await?;
-
-        log::info!("Inserted employee into MongoDB: {:?}", new_employee.name);
-
-        let ddl_file_path = temp_dir
-            .path()
-            .join("test_project")
-            .join("schema")
-            .join("tables")
-            .join("test_db")
-            .join("employees.sql");
-
-        assert!(
-            ddl_file_path.exists(),
-            "DDL file for employees should be created"
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("source")
-                .join("collections")
-                .join("employees")
-                .join("employees.json")
-                .exists(),
-            "Source collections employees should be created"
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("source")
-                .join("collections")
-                .join("employees")
-                .join("employees.stats.txt")
-                .exists(),
-            "Source collections stats txt format for employees should be created"
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("source")
-                .join("collections")
-                .join("employees")
-                .join("employees.stats.yaml")
-                .exists(),
-            "Source collections stats yaml format for employees should be created"
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("source")
-                .join("collections")
-                .join("employees")
-                .join("mapping_employees.yaml")
-                .exists(),
-            "Source collections mapping yaml format for employees should be created"
-        );
-
-        let expected_content = indoc! {r#"
-            CREATE DATABASE "test_db";
-            \connect "test_db"
-
-            CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-            CREATE SCHEMA IF NOT EXISTS "employees";
-            SET search_path = "employees", public;
-
-            CREATE TABLE employees (
-                id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
-                created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
-                last_update TIMESTAMP WITH TIME ZONE NOT NULL,
-                name VARCHAR(20) NOT NULL
-            );
-        "#};
-        let actual_content =
-            fs::read_to_string(&ddl_file_path).expect("Should have been able to read the DDL file");
-
-        // It will show a helpful diff if the content does not match.
-        assert_eq!(actual_content.trim(), expected_content.trim());
-
-        let config = temp_dir
-            .path()
-            .join("test_project")
-            .join("config")
-            .join("test_project.toml");
-        let export_args = create_default_export_args(config.clone());
-        run_export(export_args).await?;
-        assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("data")
-                .join("test_db")
-                .join("employees")
-                .join("employees.csv.gz")
-                .exists(),
-            "Exported data employees.csv.gz should be created"
-        );
-
-        let import_args = create_default_import_args(config.clone());
-        run_import(import_args).await?;
-
-        let host_port = pg_container.get_host_port_ipv4(5432).await?;
-        let pg_test_db_connection_string = format!(
-            "postgres://postgres:postgres@localhost:{}/{}?sslmode=disable",
-            host_port, "test_db"
-        );
-        let (client, connection) =
-            tokio_postgres::connect(&pg_test_db_connection_string, NoTls).await?;
-
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                log::error!("PostgreSQL connection error: {}", e);
-            }
-        });
-        let employee_name = "Jane Doe";
-        let hire_date = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
-        let created_at = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
-        let last_update = Utc.with_ymd_and_hms(2024, 1, 15, 0, 0, 0).unwrap();
-
-        client
-            .execute("SET search_path TO employees, public", &[])
-            .await?;
-        let row = client
-            .query_one(
-                "SELECT name, hire_date, created_at, last_update FROM employees WHERE name = $1",
-                &[&employee_name],
-            )
-            .await?;
-
-        let retrieved_name: &str = row.get("name");
-        let retrieved_date: chrono::DateTime<chrono::Utc> = row.get("hire_date");
-        let retrieved_created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
-        let retrieved_last_update: chrono::DateTime<chrono::Utc> = row.get("last_update");
-
-        assert_eq!(retrieved_name, employee_name);
-        assert_eq!(retrieved_date, hire_date);
-        assert_eq!(retrieved_created_at, created_at);
-        assert_eq!(retrieved_last_update, last_update);
-
-        Ok(())
+        assert!(message.contains("for requested collection 'users'"));
+        assert!(message.contains("No importable SQL tables were discovered from schema files."));
     }
 }

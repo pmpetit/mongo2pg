@@ -2,6 +2,32 @@
 
 Contributions are welcome, here is a starting process to help you to set up your env.
 
+## Step 0 — Bugfix/Feature workflow (branch + PR)
+
+For every bug fix or feature, always start from `main` and open a Pull Request.
+
+```bash
+git checkout main
+git pull --ff-only origin main
+
+# pick clear branch name
+git checkout -b fix/<short-description>
+# or
+git checkout -b feat/<short-description>
+```
+
+Then implement your changes, commit, and push:
+
+```bash
+git add -A
+git commit -m "feat: <summary>"
+# or: fix: <summary>
+git push -u origin <your-branch>
+```
+
+Create a PR from `<your-branch>` into `main` and wait for CI + review.
+After approvals, merge the PR.
+
 ## Step 1 — Start the local Docker stack
 
 ```bash
@@ -120,3 +146,56 @@ Report written to results/infer-with-jsonb/sample_weatherdata/reports/report.htm
 ```
 
 I have added the results/ folder to give you an idea of the results.
+
+---
+
+## After PR merge — create a release
+
+When your PR is merged, prepare the release with semantic versioning.
+If you cannot push to `main` (protected branch), use a release branch + PR.
+
+1. Update `CHANGELOG.md`:
+
+- Move entries from `## [Unreleased]` to a new version section, e.g. `## [0.6.4] - YYYY-MM-DD`
+- Keep the compare links at the bottom in sync
+
+1. Remove pre-release references in docs:
+
+- Replace any `0.0.0-pr.*` or preview tag examples with the final release tag (`vX.Y.Z`)
+- Ensure install snippets and version links point to the final release
+
+1. Update version in `Cargo.toml`:
+
+- Set `version = "X.Y.Z"` to the release version (for example `0.6.4`)
+
+1. Create a release preparation branch:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git checkout -b chore/release-vX.Y.Z
+git add Cargo.toml CHANGELOG.md README.md docs/
+git commit -m "chore(release): prepare vX.Y.Z"
+git push -u origin chore/release-vX.Y.Z
+```
+
+1. Open a PR from `chore/release-vX.Y.Z` into `main` and merge it.
+
+1. Tag the release (maintainer or anyone with tag permission):
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+1. Publish GitHub release (UI or CLI, after tag is pushed):
+
+```bash
+gh release create vX.Y.Z --generate-notes
+```
+
+1. Verify release assets and install command in `README.md` are aligned with the new version.
+
+If you do not have tag/release permissions, ask a maintainer to run the tag and GitHub release steps.

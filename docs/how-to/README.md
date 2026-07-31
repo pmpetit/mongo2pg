@@ -108,8 +108,10 @@ mongo2pg import -c ./projects/airbnb/config/airbnb.toml
 This command:
 
 - connects to PostgreSQL using `TARGET_URI`
-- creates the target database if needed
-- executes `schema/tables/<db>/*.sql`
+- runs preflight to ensure the target database and schema exist (creates them when allowed)
+- fails fast with actionable errors when database/schema creation lacks privileges
+- stops early if destination tables already exist and asks operators to drop/clean them before retry
+- executes `schema/tables/<db>/*.sql` only after preflight passes
 - decompresses each exported `.csv.gz` file and loads it with `COPY`
 
 ---
