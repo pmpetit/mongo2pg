@@ -6,8 +6,8 @@
             "provider": "aiven",
             "cloud": "gcp",
             "available_localizations": [
-                "virtual-adeo-dp4p-prod-google-europe-west1",
-                "virtual-adeo-dp4p-prod-google-europe-west4"
+                "google-europe-west1",
+                "google-europe-west4"
             ]
         }
     ],
@@ -17,8 +17,8 @@
             "provider": "aiven",
             "cloud": "gcp",
             "available_localizations": [
-                "virtual-adeo-dp4p-nprd-google-europe-west1",
-                "virtual-adeo-dp4p-nprd-google-europe-west4"
+                "google-europe-west1",
+                "google-europe-west4"
             ]
         }
     ]

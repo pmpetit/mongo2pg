@@ -5460,14 +5460,14 @@ mod tests {
     #[test]
     fn parse_topic_db_collection_accepts_prefix_with_trailing_dot() {
         let parsed = parse_topic_db_collection(
-            "adeo-dev-ciam-prep.events_lmfr",
-            Some("adeo-dev-ciam-prep."),
-            Some("adeo-dev-ciam-prep"),
+            "dev-prep.events_azer",
+            Some("dev-prep."),
+            Some("dev-prep"),
         );
 
         assert_eq!(
             parsed,
-            Some(("adeo-dev-ciam-prep".to_owned(), "events_lmfr".to_owned()))
+            Some(("dev-prep".to_owned(), "events_azer".to_owned()))
         );
     }
 
