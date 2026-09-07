@@ -85,8 +85,7 @@ jobs:
             ~/.cargo/git
             target
           key:
-            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')
-            }}
+            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')}}
           restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
 
       - name: Build release binary

@@ -41,7 +41,7 @@ env:
 jobs:
     prepare-matrix:
         name: Prepare database matrix
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         outputs:
             databases: ${{ steps.build.outputs.databases }}
         steps:
@@ -74,7 +74,7 @@ jobs:
     e2e-tests:
         name: Run e2e tests offline & online for ${{ matrix.database }}
         needs: prepare-matrix
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         timeout-minutes: 180
         env:
             MONGO_DATABASE: ${{ matrix.database }}
