@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use mongo2pg::checkmd5::compute_md5_summaries_for_collection;
+use mongo2pg::engine::checksum::compute_md5_summaries_for_collection;
 
 fn sample_training_config_path() -> PathBuf {
     std::env::var("MONGO2PG_SAMPLE_TRAINING_CONFIG")

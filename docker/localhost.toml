@@ -1,7 +1,7 @@
 [project]
 title = "Mongo2Pg Project migration"
 base_dir = "results"
-project_dir = "localhost"
+project_name = "sample_training"
 
 [source]
 uri = "mongodb://user:pass@localhost:27017/?authSource=admin&directConnection=true"
@@ -12,6 +12,9 @@ jsonb = false
 # include = ["collection_a", "collection_b"]
 # exclude = ["collection_to_skip"]
 datetime_field = ["created_at", "last_update", "updated_at", "*_date", "date"]
+log_level = "info"
+log_format = "text"
+add_grouped_key = true
 
 [target]
 uri = "postgres://myuser:x@localhost:5432/postgres?sslmode=disable"
@@ -20,12 +23,21 @@ schema_name = "sample_training"
 
 [kafka]
 bootstrap_servers = "localhost:9092"
-group_id = "mongo2pg-sample_training_group"
+group_id = "s3-sample_training_group"
 # topics = ["mongo2pg_sample_training.sample_training.listingsAndReviews"]
 # ...or use only a Debezium topic prefix and let kafka-import parse db/collection from topics.
-topic_prefix = "mongo2pg.sample_supplies"
+topic_prefix = "s3.sample_supplies"
 schema_registry_url = "http://localhost:8081"
 batch_log_messages = 1000
+transaction_batch_size = 2000
+copy_mode = true
+worker_count = 1
+offset = "earliest"
+flush_batch_after = "1500ms"
+stop_on_no_lag = true
+group_id_log_suffix = true
+idle_timeout_ms = 1500
+
 # schema_registry_username = ""
 # schema_registry_password = ""
 # offset = "latest"

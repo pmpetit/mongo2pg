@@ -5,49 +5,104 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0](https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.5.5...mongo2pg-v0.6.0) (2026-07-16)
-
-
-### Features
-
-* add cluster-level migrability score and cluster-report subcommand ([d2594f1](https://github.com/pmpetit/mongo2pg/commit/d2594f180fbb2d4914c19c4472e5e22ef0949ad2))
-* add docker compose ([93d541c](https://github.com/pmpetit/mongo2pg/commit/93d541c7d6d812bbc9c112305700e5aa139d9bd8))
-* add docker compose for kafka ([d1404a5](https://github.com/pmpetit/mongo2pg/commit/d1404a527389c41fd47c0af993896e469577aa06))
-* add docker compose for kafka ([8dd9964](https://github.com/pmpetit/mongo2pg/commit/8dd996478258d8840ac7a191a0b10496a7fc0e42))
-* add exclude/include properties, fix number to double ([8732808](https://github.com/pmpetit/mongo2pg/commit/873280839c7af4f7d4c206ed418726cfb52ef6d7))
-* add wf to build package ([79ee354](https://github.com/pmpetit/mongo2pg/commit/79ee354fb8882360e27d2602e59b70e4117bd927))
-* add wf to build package ([25619ad](https://github.com/pmpetit/mongo2pg/commit/25619ad78e75f911a6cf1c866c6ead8fdd5fc914))
-* add wf to build package ([571db32](https://github.com/pmpetit/mongo2pg/commit/571db32ef7530873d0dd9dfd5284fae73e091f94))
-* **branch:** add count(*) ([8f3c5f3](https://github.com/pmpetit/mongo2pg/commit/8f3c5f3500d07dcffdd70ed3b75d80ea83302d4d))
-* branching factors with tests ([1e75d31](https://github.com/pmpetit/mongo2pg/commit/1e75d3100861d8a6963eeb4f2fa8cdf7f5e7fc8a))
-* branching factors with tests ([d212aac](https://github.com/pmpetit/mongo2pg/commit/d212aacb9818369f14777c44047002613155bc28))
-* cluster-level migrability score and `cluster-report` subcommand ([f5a0da4](https://github.com/pmpetit/mongo2pg/commit/f5a0da4de044b147d1da43c062d275b06fdf3ee1))
-* **export:** add export command ([3c3ce49](https://github.com/pmpetit/mongo2pg/commit/3c3ce49ca2259e258d467d81c5406a20ad6bdbad))
-* infer all user databases when namespace is omitted ([9898a96](https://github.com/pmpetit/mongo2pg/commit/9898a96ae18d7eaf1eb218d9e86e15b6187e5608))
-* **infer:** enumerate all user databases when --namespace is omitted ([b56c7d9](https://github.com/pmpetit/mongo2pg/commit/b56c7d95d570a359533dad89f23eed33b6144cfc))
-* merge some report command ([c4b0025](https://github.com/pmpetit/mongo2pg/commit/c4b002531cc8476022594cfcb0de356e9cc72556))
-* **reports:** ora2pg like ([7fb2a3e](https://github.com/pmpetit/mongo2pg/commit/7fb2a3e8c876e12b83b82b0408c21926dad5c30f))
-* **score:** add collection score ([ccfb47e](https://github.com/pmpetit/mongo2pg/commit/ccfb47e66b2b23c0362519019c1150cd2e729ea4))
-* **score:** to help cluster choice, add a complexity score ([d5a1e02](https://github.com/pmpetit/mongo2pg/commit/d5a1e02884ea6ce0261246b1e8eb13f995468172))
-* **to-pg:** from json generate sql file ([6126c86](https://github.com/pmpetit/mongo2pg/commit/6126c86bdbcccb08e69c68400b3c3589cd357b9d))
-* **version:** bump to 0.5.1 ([b8190c3](https://github.com/pmpetit/mongo2pg/commit/b8190c306bb9cb7ce3297694902be23caeb8b6f6))
-* **warnings:** add warnings on fields ([2290439](https://github.com/pmpetit/mongo2pg/commit/2290439ecca510f5d4685db5d54506f542a15732))
-
-
-### Bug Fixes
-
-* add namespace to export cmd ([5c761b7](https://github.com/pmpetit/mongo2pg/commit/5c761b792d8ff1d15b5b23c3b008955a4fafb38f))
-* convert error & sort on disk ([8cf59c7](https://github.com/pmpetit/mongo2pg/commit/8cf59c7857898860d689c2f11bdbfeca7dc3baf9))
-* convert error & sort on disk ([2eecfb0](https://github.com/pmpetit/mongo2pg/commit/2eecfb07c2fb9d4e760136e4a8fcd422ee15b6ed))
-* convert error & sort on disk ([87a23a0](https://github.com/pmpetit/mongo2pg/commit/87a23a035e965c44e73f8143c44906bbad39632c))
-* error 292 ([30ccfa9](https://github.com/pmpetit/mongo2pg/commit/30ccfa984fdf9644fbd5f0b35a6a2b48ad9bea73))
-* error 292 ([e75ab15](https://github.com/pmpetit/mongo2pg/commit/e75ab15e84c6ba1fdab537aa84c90c21c7ccf135))
-* **export:** export command failure with CamelCase collection ([6622665](https://github.com/pmpetit/mongo2pg/commit/66226652ca46c12974db208224d492decd495e56))
-* filename.sql in lowercase instead of CamelCase ([89aa56b](https://github.com/pmpetit/mongo2pg/commit/89aa56b027ef97a70387c95fef12b67cb5e80212))
-* filename.sql in lowercase instead of CamelCase, modify the changelog ([583b701](https://github.com/pmpetit/mongo2pg/commit/583b701bdf815fb0ae18447d2c7a9e1cb245934b))
-* **stats:** analytics stats, add warning about collection name ([6a8d993](https://github.com/pmpetit/mongo2pg/commit/6a8d99337781fa5d56af03b78006d085143c03d1))
-
 ## [Unreleased]
+
+## [0.7.3] - 2026-09-07
+
+### Changed
+
+- **Command preflight connectivity checks**: `infer` now validates MongoDB source connectivity before schema sampling, `to-pg` validates PostgreSQL target connectivity before DDL generation (config mode), and `kafka-import` validates source + target + Kafka before processing.
+- **Grouping gate behavior**: automatic collection grouping in `to-pg` now runs only when `source.add_grouped_key = true`; with default/false settings, versioned collections (for example `_v3` / `_v4`) remain separate SQL targets.
+- **Ping failure diagnostics context**: backend ping failures now include safe connection context (`type`, `host`, `port`, `username`, redacted `url`) to speed up troubleshooting without exposing credentials.
+- **Ping process network context**: ping failures now also include `process_ip`, showing the runtime egress/local process IP used to reach the target endpoint.
+
+### Fixed
+
+- **Export SQL lookup for grouped versioned collections**: when grouped mapping points to a versioned table name but only a shared base SQL file exists, export now falls back to that shared SQL schema instead of skipping the collection.
+
+## [0.7.2] - 2026-09-04
+
+### Added
+
+- **GCS project folder markers**: `init` now creates visible markers for the standard project prefixes in GCS.
+- **Normal report PG table details**: report collection rows can expand to show generated PostgreSQL tables and DDL from `schema/tables`.
+
+### Changed
+
+- **GCS infer pipeline**: chained `infer -c` now uploads inferred collection artifacts before running `to-pg`, then runs `report` afterward.
+- **GCS staged artifact persistence**: `to-pg` and `report` upload generated schema and report artifacts from their temporary staging directories.
+- **Schema SQL lookup**: report table discovery supports grouped table names, nested schema directories, case differences, and common `CREATE TABLE` formatting.
+
+### Fixed
+
+- **Fallback infer with GCS config**: fallback inference now uploads local artifacts before chained `to-pg` processing instead of searching an empty bucket prefix.
+- **Init namespace logging**: runtime logs now report the namespace passed to `init` instead of `unknown`.
+
+### Added
+
+- **Kafka copy-mode tuning options**: new `[kafka]` settings for copy-mode imports (`copy_mode`, `transaction_batch_size`, `flush_batch_after`, `worker_count`, `stop_on_no_lag`, `group_id_log_suffix`).
+- **Kafka write-mode diagnostics artifact**: post-import reporting now produces `kafka_import_write_mode.stats.yaml` and CI exposes it on failures.
+- **`sample_events` e2e fixtures**: added local event datasets for deterministic online test coverage.
+- **Datadog service override flag**: added global CLI option `--dd-service` to set runtime service name for telemetry output.
+- **Datadog config section support**: added optional `[DATADOG]` config key `dd_service`.
+- **Structured runtime JSON logs**: runtime logs now support JSON formatting suitable for log pipelines.
+
+### Changed
+
+- **Kafka import command layout**: moved the runtime handler into `src/commands/kafka_import.rs`, routed `KafkaImport` through the central command dispatcher, and replaced binary-relative wildcard imports with explicit module dependencies without changing CLI behavior.
+- **Kafka import behavior in copy mode**: improved flushing and multi-worker runtime handling for long-running/large topic imports.
+- **CI execution model**: refreshed self-hosted runner and release/e2e workflow wiring.
+- **Trace volume in Kafka import**: removed per-message tracing in high-throughput path and kept stage-level spans to reduce cardinality and overhead.
+- **Unified telemetry service naming**: trace and log service names now resolve through the same runtime logic (CLI override + config fallback).
+- **Telemetry context enrichment**: `project_name` and `namespace` are now emitted on runtime JSON logs and attached to retained runtime spans.
+- **Kafka tracing model**: replaced trace-file workflow with OTLP-only stage spans; no local/GCS Chrome trace artifacts are produced.
+
+### Removed
+
+- **Kafka trace-file CLI/runtime options**: removed `--trace`, `--duration`, and `--max-size` plus all related trace artifact persistence logic.
+- **`[DATADOG].dd_service` runtime dependency**: service naming now resolves from CLI/env/fallback logic without requiring DATADOG config section.
+
+### Fixed
+
+- **CI PostgreSQL client availability**: added privilege-aware package installation and docker-backed `psql` shim fallback for non-privileged runners.
+- **Debezium topic readiness checks**: fixed flaky/zero-count waits in e2e by using per-database prefixes and broker-compatible offset counting, with strict message-presence validation for online tests.
+- **Kafka `stop_on_no_lag` transparency**: added clearer wait/reset heartbeat logs so stabilization delays are visible.
+- **Kafka lag accuracy**: fixed false “stuck lag” situations when consumer position is temporarily unavailable.
+- **Local e2e seeding**: `mongodb-seed-e2e` now skips cleanly when the selected local dataset folder is missing.
+- **Observability test compatibility**: updated runtime log formatting unit tests after formatter signature expansion.
+
+## [0.6.5] - 2026-07-29
+
+### Added
+
+- **force**: add force option to kafka-import to re-use the same table in sink connector
+
+### Fixed
+
+- **import**: can choose different pg database_name and mongo database_name. To prevent having pg database `mongdb-mydb`
+
+## [0.6.4] - 2026-07-29
+
+### Added
+
+- **`ping` command**: added `mongo2pg ping -c <config> [--source] [--target] [--kafka]` to validate backend connectivity without running infer/export/import.
+- **Per-backend ping status**: ping now reports pass/fail per selected backend and exits non-zero when any selected backend check fails.
+- **Schema owner emission in generated SQL**: when `target.uri` contains a PostgreSQL username, generated DDL now includes `ALTER SCHEMA ... OWNER TO ...` after schema creation.
+
+### Changed
+
+- **Init config defaults**: `mongo2pg init` now writes `target.schema_name` as an active key (not commented) and defaults it to the same value as `target.database_name`.
+- **Release docs for contributors**: contribution guide now includes branch/PR workflow from `main` and post-merge release steps.
+- **Operational documentation refresh**: updated reference/how-to/tutorial docs to reflect import preflight behavior, Kafka topic precedence (`--topics` over `topic_prefix`), and the new `ping` command usage.
+- **Scoring context marker (`search_node`)**: infer/report now detects MongoDB Search node capability (`$listSearchIndexes`) and adds a marker in score summaries to highlight features without direct PostgreSQL equivalent.
+
+### Fixed
+
+- **`to-pg` target database selection**: SQL preamble (`CREATE DATABASE` / `\connect`) now prefers `target.database_name` from config instead of deriving database name from `source.namespace` path layout.
+- **Schema ownership mismatch**: generated schema no longer defaults to execution-role ownership when a target URI username is available; owner is explicitly set in generated SQL.
+- **Connection attribution coverage**: connection-attribution specs now include ping command failures.
+
+## [0.6.3] - 2026-07-24
 
 ### Added
 
@@ -66,7 +121,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kafka nested insert cast for serial PKs**: normalized casts so PostgreSQL does not receive `CAST(... AS BIGSERIAL|SERIAL|SMALLSERIAL)` in recursive insert paths.
 - **Post-import `check-md5` Mongo sort limit (error 13103)**: removed MongoDB-side sort-by-all-fields in MD5 collection flow and rely on local deterministic sorting to avoid "too many compound keys" failures.
 - **Post-import `check-md5` type mismatch noise**: when a MongoDB source field is string-only but the mapped PostgreSQL target type is non-text (not `TEXT`/`VARCHAR`-family), that column is now excluded from MD5 comparison to prevent false mismatches (for example `_id` string vs `BIGSERIAL`, string dates vs `TIMESTAMP`).
-- **PR preview release cleanup after merge to `main`**: preview releases/tags (`pr-<number>-preview`) are now deleted when the PR is closed by merge into `main`, and preview build/test/release jobs are skipped on close events.
 
 ## [0.5.3] - 2026-06-15
 
@@ -287,7 +341,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema analysis with type detection, nested objects, arrays, and probability scores
 - CI pipeline with GitHub Actions
 
-[Unreleased]: https://github.com/pmpetit/mongo2pg/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/pmpetit/mongo2pg/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/pmpetit/mongo2pg/compare/v0.6.3...v0.6.4
+[0.6.3]: https://github.com/pmpetit/mongo2pg/compare/v0.5.3...v0.6.3
 [0.5.3]: https://github.com/pmpetit/mongo2pg/compare/v0.4.0...v0.5.3
 [0.4.0]: https://github.com/pmpetit/mongo2pg/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/pmpetit/mongo2pg/compare/v0.3.6...v0.3.7

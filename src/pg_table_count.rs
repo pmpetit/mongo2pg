@@ -1,7 +1,7 @@
 //! Helper to count the number of PG tables for a schema (for scoring).
 
-use crate::analyzer::CollectionSchema;
-use crate::to_pg::{collect_tables, process_fields, Table};
+use crate::engine::analyzer::CollectionSchema;
+use crate::engine::ddl::{collect_tables, process_fields, Table};
 
 pub fn pg_table_count(schema: &CollectionSchema) -> usize {
     // Use a generic name since CollectionSchema does not have a name field

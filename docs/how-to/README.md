@@ -99,6 +99,39 @@ PostgreSQL table.
 
 ---
 
+## How to configure kafka-import in TOML
+
+Set Kafka options in your project config under `[kafka]`.
+
+```toml
+[kafka]
+bootstrap_servers = "localhost:9092"
+group_id = "mongo2pg-kafka-import"
+topic_prefix = "t4.sample_airbnb"
+schema_registry_url = "http://localhost:8081"
+
+batch_log_messages = 1000
+transaction_batch_size = 2000
+flush_batch_after = "1500ms"
+
+copy_mode = true
+worker_count = 4
+stop_on_no_lag = true
+group_id_log_suffix = true
+```
+
+Guidance:
+
+- Use `topic_prefix` for Debezium topic discovery; use `topics` only when you want explicit topic subscription.
+- `copy_mode=true` and `transaction_batch_size` tune throughput for large streams.
+- `flush_batch_after` limits latency during low traffic by flushing partial batches.
+- `worker_count` enables multi-worker consumption.
+- `stop_on_no_lag=true` makes online test runs stop automatically once lag remains stable at zero.
+
+For the complete Kafka property reference, see `docs/reference/README.md`.
+
+---
+
 ## How to load PostgreSQL objects and data
 
 ```bash
@@ -108,8 +141,10 @@ mongo2pg import -c ./projects/airbnb/config/airbnb.toml
 This command:
 
 - connects to PostgreSQL using `TARGET_URI`
-- creates the target database if needed
-- executes `schema/tables/<db>/*.sql`
+- runs preflight to ensure the target database and schema exist (creates them when allowed)
+- fails fast with actionable errors when database/schema creation lacks privileges
+- stops early if destination tables already exist and asks operators to drop/clean them before retry
+- executes `schema/tables/<db>/*.sql` only after preflight passes
 - decompresses each exported `.csv.gz` file and loads it with `COPY`
 
 ---

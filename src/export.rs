@@ -993,7 +993,7 @@ fn build_tree_with_grouped_root(
 
 #[cfg(test)]
 fn grouped_root_table_sources(
-    schema: &crate::analyzer::CollectionSchema,
+    schema: &crate::engine::analyzer::CollectionSchema,
     coll_name: &str,
 ) -> HashMap<String, Vec<String>> {
     crate::util::grouped_root_array_object_fields(&schema.object)
@@ -1014,7 +1014,7 @@ fn grouped_root_table_sources(
 #[cfg(test)]
 fn flattened_grouped_root_for_export(
     sql_tables: &[SqlTable],
-    schema: &crate::analyzer::CollectionSchema,
+    schema: &crate::engine::analyzer::CollectionSchema,
     coll_name: &str,
 ) -> Option<(Vec<String>, String)> {
     let group = crate::util::flatten_grouped_root_array_object_fields(schema)?;
@@ -2542,6 +2542,13 @@ pub async fn export_collections_to_sql(
 
     let mut all_rows: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
     let mut counters: HashMap<String, u64> = HashMap::new();
+    let mut use_no_cursor_timeout = true;
+
+    let no_cursor_timeout_rejected = |err: &mongodb::error::Error| {
+        let lower = err.to_string().to_ascii_lowercase();
+        lower.contains("notimeout cursors are disallowed")
+            || (lower.contains("notimeout") && lower.contains("disallowed"))
+    };
 
     let total_sources = coll_names.len();
     for (source_index, coll_name) in coll_names.iter().enumerate() {
@@ -2596,11 +2603,48 @@ pub async fn export_collections_to_sql(
                 None => bson::doc! {},
             };
 
-            let mut cursor = collection
-                .find(find_filter)
-                .no_cursor_timeout(true)
-                .await
-                .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?;
+            let mut cursor = if use_no_cursor_timeout {
+                match collection
+                    .find(find_filter.clone())
+                    .no_cursor_timeout(true)
+                    .await
+                {
+                    Ok(cursor) => cursor,
+                    Err(no_cursor_timeout_err) => {
+                        if no_cursor_timeout_rejected(&no_cursor_timeout_err) {
+                            use_no_cursor_timeout = false;
+                            info!(
+                                "query option no_cursor_timeout=true not supported by server tier; disabling for remaining export sources (first seen on {}.{})",
+                                db_name,
+                                coll_name
+                            );
+                            debug!(
+                                "no_cursor_timeout rejection details for {}.{}: {:#}",
+                                db_name, coll_name, no_cursor_timeout_err
+                            );
+                        } else {
+                            warn!(
+                                "query with no_cursor_timeout=true failed for {}.{}; retrying without option: {:#}",
+                                db_name,
+                                coll_name,
+                                no_cursor_timeout_err
+                            );
+                        }
+
+                        collection.find(find_filter).await.with_context(|| {
+                            format!(
+                                "Failed to query {db_name}.{coll_name} (with and without no_cursor_timeout). initial error: {:#}",
+                                no_cursor_timeout_err
+                            )
+                        })?
+                    }
+                }
+            } else {
+                collection
+                    .find(find_filter)
+                    .await
+                    .with_context(|| format!("Failed to query {db_name}.{coll_name}"))?
+            };
 
             loop {
                 let next_doc = match cursor.try_next().await {
@@ -2759,7 +2803,7 @@ mod tests {
         flattened_grouped_root_for_export, flush_chunk_buffers, gcs_object_key,
         grouped_root_table_sources, unquote_sql_ident, CloudWriteErrorCategory,
     };
-    use crate::analyzer::Analyzer;
+    use crate::engine::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
     use bson::{doc, Bson};
     use flate2::read::MultiGzDecoder;
@@ -2815,8 +2859,8 @@ CREATE TABLE security_logs (
         let mut counters = HashMap::new();
         let doc = doc! {
             "_id": {
-                "projectid": "FRAS-P-SAM-FRTERR2",
-                "provider": "atlas",
+                "projectid": "NPRD-P-SAM-FRTERR2",
+                "provider": "provider2",
                 "log_type": "dbAccessHistory"
             },
             "last_execution": "2023-07-13T09:02:15.833170"
@@ -2835,8 +2879,8 @@ CREATE TABLE security_logs (
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].len(), 4);
         assert_eq!(rows[0][0].as_deref(), Some("dbAccessHistory"));
-        assert_eq!(rows[0][1].as_deref(), Some("FRAS-P-SAM-FRTERR2"));
-        assert_eq!(rows[0][2].as_deref(), Some("atlas"));
+        assert_eq!(rows[0][1].as_deref(), Some("NPRD-P-SAM-FRTERR2"));
+        assert_eq!(rows[0][2].as_deref(), Some("provider2"));
         assert_eq!(rows[0][3].as_deref(), Some("2023-07-13T09:02:15.833170"));
     }
 
@@ -2950,7 +2994,7 @@ CREATE TABLE activity_feed (
         let doc = doc! {
             "_id": "6267ddea9270b5e839a81ac4",
             "activity": "Project created",
-            "targetid": "FRAS-D-NLX-FEATURE1",
+            "targetid": "NPRD-D-NLX-FEATURE1",
             "targettype": "project",
             "timestamp": 1650468505.273496,
             "who": "me"
@@ -2969,7 +3013,7 @@ CREATE TABLE activity_feed (
         assert_eq!(rows.len(), 1);
         assert!(rows[0][0].as_deref().is_some_and(|value| !value.is_empty()));
         assert_eq!(rows[0][1].as_deref(), Some("Project created"));
-        assert_eq!(rows[0][2].as_deref(), Some("FRAS-D-NLX-FEATURE1"));
+        assert_eq!(rows[0][2].as_deref(), Some("NPRD-D-NLX-FEATURE1"));
     }
 
     #[test]
@@ -3248,12 +3292,12 @@ CREATE TABLE communities_available_localizations (
         analyzer.process_document(&doc! {
             "_id": "community-1",
             "dev": [{
-                "provider": "aiven",
+                "provider": "provider1",
                 "cloud": "gcp",
                 "network_exposition": "private_platform"
             }],
             "prod": [{
-                "provider": "atlas",
+                "provider": "provider2",
                 "cloud": "azure",
                 "network_exposition": "public"
             }]
@@ -3276,13 +3320,13 @@ CREATE TABLE communities_available_localizations (
             "_id": "community-1",
             "dev": [{
                 "available_localizations": ["eu-west-1"],
-                "provider": "aiven",
+                "provider": "provider1",
                 "cloud": "gcp",
                 "network_exposition": "private_platform"
             }],
             "prod": [{
                 "available_localizations": ["eu-west-2"],
-                "provider": "atlas",
+                "provider": "provider2",
                 "cloud": "azure",
                 "network_exposition": "public"
             }]
@@ -3441,73 +3485,62 @@ CREATE TABLE tier_and_details (
             .any(|row| row[2].as_deref() == Some("false") && row[4].as_deref() == Some("silver")));
     }
 
-    //     #[test]
-    //     fn export_container_object_without_payload_keeps_child_document_context() {
-    //         let sql = r#"
-    // CREATE TABLE companies (
-    //     id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
-    //     name TEXT NOT NULL
-    // );
+    #[test]
+    fn export_container_object_without_payload_skips_empty_child_rows() {
+        let sql = r#"
+CREATE TABLE companies (
+    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    name TEXT NOT NULL
+);
 
-    // CREATE TABLE companies_investments (
-    //     id BIGSERIAL PRIMARY KEY,
-    //     companies_id UUID NOT NULL,
-    //     FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
-    // );
+CREATE TABLE companies_investments (
+    id BIGSERIAL PRIMARY KEY,
+    companies_id UUID NOT NULL,
+    FOREIGN KEY (companies_id) REFERENCES companies (id) DEFERRABLE INITIALLY DEFERRED
+);
 
-    // CREATE TABLE financial_org (
-    //     id BIGSERIAL PRIMARY KEY,
-    //     companies_investments_id BIGINT NOT NULL,
-    //     name TEXT NOT NULL,
-    //     permalink TEXT NOT NULL,
-    //     FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
-    // );
-    // "#;
+CREATE TABLE financial_org (
+    id BIGSERIAL PRIMARY KEY,
+    companies_investments_id BIGINT NOT NULL,
+    name TEXT NOT NULL,
+    permalink TEXT NOT NULL,
+    FOREIGN KEY (companies_investments_id) REFERENCES companies_investments (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
 
-    //         let tables = parse_sql(sql);
-    //         let roots = build_tree(&tables, None, &HashMap::new());
-    //         let mut all_rows = HashMap::new();
-    //         let mut counters = HashMap::new();
-    //         let doc = doc! {
-    //             "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
-    //             "name": "Wetpaint",
-    //             "companies_investments": {
-    //                 "company": Bson::Null,
-    //                 "financial_org": {
-    //                     "name": "Frazier Technology Ventures",
-    //                     "permalink": "frazier-technology-ventures"
-    //                 },
-    //                 "person": Bson::Null
-    //             }
-    //         };
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("5ca4bbcea2dd94ee58162a84").unwrap(),
+            "name": "Wetpaint",
+            "companies_investments": {
+                "company": Bson::Null,
+                "financial_org": {
+                    "name": "Frazier Technology Ventures",
+                    "permalink": "frazier-technology-ventures"
+                },
+                "person": Bson::Null
+            }
+        };
 
-    //         extract_rows(
-    //             &Bson::Document(doc),
-    //             &roots[0],
-    //             None,
-    //             true,
-    //             &mut all_rows,
-    //             &mut counters,
-    //         );
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
 
-    //         let investment_rows = all_rows
-    //             .get("companies_investments")
-    //             .expect("companies_investments rows missing");
-    //         assert_eq!(investment_rows.len(), 1);
-
-    //         let financial_rows = all_rows
-    //             .get("financial_org")
-    //             .expect("financial_org rows missing");
-    //         assert_eq!(financial_rows.len(), 1);
-    //         assert_eq!(
-    //             financial_rows[0][2].as_deref(),
-    //             Some("Frazier Technology Ventures")
-    //         );
-    //         assert_eq!(
-    //             financial_rows[0][3].as_deref(),
-    //             Some("frazier-technology-ventures")
-    //         );
-    //     }
+        assert!(all_rows
+            .get("companies_investments")
+            .map_or(true, |rows| rows.is_empty()));
+        assert!(all_rows
+            .get("financial_org")
+            .map_or(true, |rows| rows.is_empty()));
+    }
 
     #[test]
     fn export_skips_empty_embedded_review_scores_object() {
@@ -3596,9 +3629,9 @@ CREATE TABLE projects_providers_metadata (
         let doc = doc! {
             "_id": "project-1",
             "providers": [{
-                "namespace": "fras-t-dba-176c358",
-                "namespace_id": "fras-t-dba-176c358",
-                "provider": "aiven",
+                "namespace": "nprd-t-dba-176c358",
+                "namespace_id": "nprd-t-dba-176c358",
+                "provider": "provider1",
                 "metadata": {
                     "creation_date": "2025-08-11T00:00:00Z",
                     "status": "created"

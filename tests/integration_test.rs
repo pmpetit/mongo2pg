@@ -4,12 +4,12 @@
 //! live MongoDB connection is required.
 
 use bson::{doc, Bson};
-use mongo2pg::analyzer::{Analyzer, CollectionSchema};
-use mongo2pg::mapping_path::mapping_mongo_path_for_segments;
+use mongo2pg::engine::analyzer::{Analyzer, CollectionSchema};
+use mongo2pg::engine::mapping::mapping_mongo_path_for_segments;
 use mongo2pg::report::{
     compute_cluster_score, render_cluster_html, DatabaseScore, SYSTEM_DATABASES,
 };
-use mongo2pg::stats::SchemaStats;
+use mongo2pg::engine::stats::SchemaStats;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -459,7 +459,7 @@ fn test_build_mongo_mermaid_output() {
 #[test]
 fn test_schema_to_ddl_and_collect_rows_table_count_match_for_camel_case() {
     use mongo2pg::report::collect_rows;
-    use mongo2pg::to_pg::schema_to_ddl;
+    use mongo2pg::engine::ddl::schema_to_ddl;
     use std::{fs, path::PathBuf};
 
     // Schema with a nested object → produces a root table + one child table.

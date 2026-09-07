@@ -3,7 +3,7 @@
 use crate::pg_table_count::pg_table_count;
 use serde::{Deserialize, Serialize};
 
-use crate::analyzer::{CollectionSchema, FieldSchema, TYPE_ARRAY};
+use crate::engine::analyzer::{CollectionSchema, FieldSchema, TYPE_ARRAY};
 
 /// Summary statistics for a [`CollectionSchema`].
 #[derive(Debug, Clone, PartialEq)]
@@ -271,7 +271,7 @@ fn top_level_type_summary(schema: &CollectionSchema) -> String {
             let dominant = field
                 .types
                 .iter()
-                .filter(|(t, _)| t.as_str() != crate::analyzer::TYPE_UNDEFINED)
+                .filter(|(t, _)| t.as_str() != crate::engine::analyzer::TYPE_UNDEFINED)
                 .max_by(|(_, a), (_, b)| {
                     a.probability
                         .partial_cmp(&b.probability)
@@ -348,6 +348,12 @@ pub struct StatsYaml {
     pub infer_warnings: Vec<InferWarningYaml>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read_ops: Option<CollectionReadOpsYaml>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub has_search_node: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -363,6 +369,7 @@ pub fn stats_to_yaml(
     total_docs: Option<u64>,
     infer_warnings: &[InferWarningYaml],
     read_ops: Option<CollectionReadOpsYaml>,
+    has_search_node: bool,
 ) -> StatsYaml {
     let s = SchemaStats::compute(schema);
 
@@ -380,7 +387,7 @@ pub fn stats_to_yaml(
             let dominant = field
                 .types
                 .iter()
-                .filter(|(t, _)| t.as_str() != crate::analyzer::TYPE_UNDEFINED)
+                .filter(|(t, _)| t.as_str() != crate::engine::analyzer::TYPE_UNDEFINED)
                 .max_by(|(_, a), (_, b)| {
                     a.probability
                         .partial_cmp(&b.probability)
@@ -421,13 +428,14 @@ pub fn stats_to_yaml(
         migrability_score: score,
         infer_warnings: infer_warnings.to_vec(),
         read_ops,
+        has_search_node,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::{CollectionSchema, FieldSchema, TypeSchema};
+    use crate::engine::analyzer::{CollectionSchema, FieldSchema, TypeSchema};
     use indexmap::IndexMap;
 
     fn simple_schema() -> CollectionSchema {
@@ -509,7 +517,7 @@ mod tests {
         let schema = two_field_schema();
         // width=2, avg_fields_per_doc = 1.0 + 0.5 = 1.5
         // distinct_over_avg = 2 / 1.5 ≈ 1.3333
-        let yaml = stats_to_yaml(&schema, Some(2), &[], None);
+        let yaml = stats_to_yaml(&schema, Some(2), &[], None, false);
         let expected = (2.0_f64 / 1.5 * 10000.0).round() / 10000.0;
         assert!(
             (yaml.distinct_fields_over_avg_fields_per_doc - expected).abs() < 1e-9,
@@ -526,7 +534,7 @@ mod tests {
             sampled: 0,
             object: IndexMap::new(),
         };
-        let yaml = stats_to_yaml(&empty, None, &[], None);
+        let yaml = stats_to_yaml(&empty, None, &[], None, false);
         assert_eq!(
             yaml.distinct_fields_over_avg_fields_per_doc, 0.0,
             "should be 0 when avg_fields_per_doc is 0"
@@ -554,7 +562,7 @@ mod tests {
             }],
         }];
 
-        let yaml = stats_to_yaml(&schema, Some(2), &warnings, None);
+        let yaml = stats_to_yaml(&schema, Some(2), &warnings, None, false);
 
         assert_eq!(yaml.infer_warnings, warnings);
     }

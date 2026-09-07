@@ -17,7 +17,7 @@ use std::path::Path;
 use serde::Deserialize;
 use strsim::jaro_winkler;
 
-use crate::analyzer::CollectionSchema;
+use crate::engine::analyzer::CollectionSchema;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public data structures

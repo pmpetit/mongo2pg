@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  URI: "mongodb://user:pass@localhost:2717/?authSource=admin"
+  URI: "mongodb://user:pass@localhost:27017/?authSource=admin"
   RESULTS_DIR: results
   BIN: "{{.ROOT_DIR}}/target/debug/mongo2pg"
   DATABASES: >-
@@ -12,6 +12,11 @@ vars:
     sample_supplies
     sample_training
     sample_weatherdata
+    sample_events
+  TOPIC_PREFIX: "t4"
+
+env:
+  PGPASSWORD: "x"
 
 tasks:
   build:
@@ -30,6 +35,7 @@ tasks:
     silent: true
     cmds:
       - |
+        failures=""
         for path in \
           target/flycheck0 \
           target/debug/build \
@@ -49,9 +55,34 @@ tasks:
           target/release/mongo2pg.d \
           target/release/libmongo2pg.d
         do
-          rm -rf "$path"
+          # Retry once to handle transient ENOTEMPTY when another process writes concurrently.
+          if [ -e "$path" ]; then
+            rm -rf "$path" 2>/dev/null || true
+            if [ -e "$path" ]; then
+              rm -rf "$path" 2>/dev/null || true
+            fi
+            if [ -e "$path" ]; then
+              failures="$failures $path"
+            fi
+          fi
         done
+        if [ -n "$failures" ]; then
+          echo "⚠️  could not fully remove:$failures"
+        fi
       - echo "🧹 cleaned Rust temp artifacts"
+
+  clean-testcontainers:
+    desc: Remove leftover testcontainers containers/networks/volumes
+    silent: true
+    cmds:
+      - |
+        ids="$(docker ps -aq --filter label=org.testcontainers=true)"
+        if [ -n "$ids" ]; then
+          docker rm -f $ids >/dev/null 2>&1 || true
+        fi
+        docker network prune -f --filter label=org.testcontainers=true >/dev/null 2>&1 || true
+        docker volume prune -f --filter label=org.testcontainers=true >/dev/null 2>&1 || true
+      - echo "🧽 cleaned leftover testcontainers resources"
 
   infer:
     desc: Infer schemas for all sample databases, generate SQL DDL into {{.RESULTS_DIR}}/infer/
@@ -63,12 +94,16 @@ tasks:
     cmds:
       - mkdir -p "{{.OUT}}"
       - |
+        import_pids=""
         for db in {{.DBS_TO_PROCESS}}
         do
           echo "📁 init $db"
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
-          cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"          
+          cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^database_name = .*/database_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^schema_name = .*/schema_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
           echo "📐 infer $db"
           "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output
         done
@@ -109,17 +144,19 @@ tasks:
   tests-all:
     desc: Infer/export/Import for all sample databases
     silent: true
-    deps: [build]
     vars:
       OUT: "{{.RESULTS_DIR}}"
       DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
     cmds:
       - mkdir -p "{{.OUT}}"
       - |
+        import_pids=""
         for db in {{.DBS_TO_PROCESS}}
         do
           echo "🗑️  database $db"
+          psql -U myuser -d mydb -h localhost -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid();"
           psql -U myuser -d mydb -h localhost -c "DROP DATABASE IF EXISTS $db"
+          psql -U myuser -d mydb -h localhost -c "CREATE DATABASE $db"
           echo "📁 init $db"
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
@@ -136,33 +173,437 @@ tasks:
   tests-kafka-all:
     desc: kafka-import for all sample databases
     silent: true
-    deps: [build]
     vars:
       OUT: "{{.RESULTS_DIR}}"
       DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
     cmds:
+      #- task kafka-reset-and-seed -- {{.DBS_TO_PROCESS}}
       - mkdir -p "{{.OUT}}"
       - |
         for db in {{.DBS_TO_PROCESS}}
         do
           echo "🗑️  database $db"
+          psql -U myuser -d mydb -h localhost -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid();"
           psql -U myuser -d mydb -h localhost -c "DROP DATABASE IF EXISTS $db"
+          psql -U myuser -d mydb -h localhost -c "CREATE DATABASE $db"
           echo "📁 init $db"
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
           cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^project_name = .*/project_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^database_name = .*/database_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^schema_name = .*/schema_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s|^topic_prefix = .*|topic_prefix = \"{{.TOPIC_PREFIX}}\"|" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^group_id = .*/group_id = \"{{.TOPIC_PREFIX}}-$db-group\"/" "{{.OUT}}/$db/config/$db.toml"
+          if grep -q '^stop_on_no_lag\s*=' "{{.OUT}}/$db/config/$db.toml"; then
+            sed -i "s/^stop_on_no_lag = .*/stop_on_no_lag = true/" "{{.OUT}}/$db/config/$db.toml"
+          else
+            printf "\nstop_on_no_lag = true\n" >> "{{.OUT}}/$db/config/$db.toml"
+          fi
           echo "📐 infer $db"
-          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output        
-          echo "🗄️ ➔ 🔍 ➔ 🪵 ➔ 🐘 kafka import $db"
-          "{{.BIN}}" kafka-import -c "{{.OUT}}/$db/config/$db.toml" --group-id "$db-group" --topic-prefix "mongo2pg.$db" --project-dir $db --database-name $db --schema-name $db &
-        done
-        wait
-      - echo "👉 results in {{.OUT}}"
+          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output
 
-  report-kafka-all:
+          echo "⏳ waiting for Debezium topics to be filled with prefix '{{.TOPIC_PREFIX}}.$db.'"
+          REQUIRE_MESSAGES=true task TOPIC_PREFIX="{{.TOPIC_PREFIX}}.$db" kafka-wait-for-topics-filled
+
+          echo "🗄️ ➔ 🔍 ➔ 🪵 ➔ 🐘 kafka import $db"
+          "{{.BIN}}" kafka-import -c "{{.OUT}}/$db/config/$db.toml" --group-id "$db-group" --topic-prefix "{{.TOPIC_PREFIX}}.$db" --project-dir $db --database-name $db --schema-name $db
+        done
+      - task: report-post-import-all
+        vars:
+          CLI_ARGS: "{{.DBS_TO_PROCESS}}"
+      - task: kafka-delete-debezium-connectors
+
+  kafka-clean-groups:
+    desc: Delete consumer groups for processed databases.
+    silent: true
+    vars:
+      DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
+    cmds:
+      - |
+        # Kill lingering import background processes
+        pkill -f "kafka-import" 2>/dev/null || true
+
+        for db in {{.DBS_TO_PROCESS}}
+        do
+          group_id="$db-group"
+          echo "🗑️ Deleting group $group_id"
+
+          # Reset offsets to allow clean deletion
+          docker exec kafka_broker kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --group "$group_id" \
+            --reset-offsets --to-earliest --all-topics --execute 2>/dev/null || true
+
+          # Delete group
+          docker exec kafka_broker kafka-consumer-groups \
+            --bootstrap-server localhost:29092 \
+            --delete \
+            --group "$group_id" 2>/dev/null || true
+        done
+
+  kafka-delete-debezium-connectors:
+    desc: Delete all Debezium connectors (and their tasks) from Kafka Connect
+    silent: true
+    cmds:
+      - |
+        echo "🧹 discovering Debezium connectors on Kafka Connect"
+
+        connectors_json="$(curl -sS http://localhost:8083/connectors || echo '[]')"
+        connector_names="$(echo "$connectors_json" | jq -r '.[]?' 2>/dev/null || true)"
+
+        if [ -z "$connector_names" ]; then
+          echo "ℹ️ no connectors found"
+          exit 0
+        fi
+
+        deleted=0
+        for name in $connector_names
+        do
+          connector_class="$(curl -sS "http://localhost:8083/connectors/$name/config" | jq -r '.["connector.class"] // ""' 2>/dev/null || true)"
+          if echo "$connector_class" | grep -qi debezium; then
+            echo "🗑️ deleting Debezium connector: $name ($connector_class)"
+            curl -sS -X DELETE "http://localhost:8083/connectors/$name" >/dev/null || true
+
+            for _ in 1 2 3 4 5 6 7 8 9 10
+            do
+              status_code="$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8083/connectors/$name" || echo 000)"
+              if [ "$status_code" = "404" ]; then
+                break
+              fi
+              sleep 1
+            done
+
+            final_code="$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8083/connectors/$name" || echo 000)"
+            if [ "$final_code" != "404" ]; then
+              echo "::warning::Connector $name delete not fully confirmed (HTTP $final_code)"
+            fi
+
+            deleted=$((deleted + 1))
+          fi
+        done
+
+        if [ "$deleted" -eq 0 ]; then
+          echo "ℹ️ no Debezium connectors found"
+        else
+          echo "✅ deleted $deleted Debezium connector(s)"
+        fi
+
+  kafka-reset-and-seed:
+    desc: Empty Kafka topics, clear Debezium connect storage topics, and reseed from MongoDB snapshot
+    silent: true
+    vars:
+      DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
+    cmds:
+      - |
+        echo "🧹 step 1/3 empty non-internal Kafka topics"
+        topics="$(docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --list --exclude-internal 2>/dev/null || true)"
+        for topic in $topics
+        do
+          [ -z "$topic" ] && continue
+          docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --delete --topic "$topic" >/dev/null 2>&1 || true
+        done
+
+      - |
+        echo "🧹 step 2/3 empty connect config/offset/status topics"
+        docker compose -f docker/docker-compose.yml stop kafkaconnect kafkaui >/dev/null 2>&1 || true
+
+        requested_dbs="{{.DBS_TO_PROCESS}}"
+        db_count=0
+        seed_db=""
+        for db in $requested_dbs
+        do
+          [ -n "$db" ] || continue
+          db_count=$((db_count + 1))
+          if [ "$db_count" -eq 1 ]; then
+            seed_db="$db"
+          fi
+        done
+        if [ "$db_count" -ne 1 ]; then
+          seed_db=""
+        fi
+
+        seed_service="${MONGO_SEED_SERVICE:-mongodb-seed}"
+        echo "🌱 reseed MongoDB using service: $seed_service"
+        if [ -n "$seed_db" ]; then
+          echo "🎯 limiting seed to dataset: $seed_db"
+        else
+          echo "🌐 seeding all datasets"
+        fi
+        if [ "$seed_service" = "mongodb-seed-e2e" ]; then
+          docker compose -f docker/docker-compose.yml --profile e2e-local-seed rm -sf mongodb-seed-e2e >/dev/null 2>&1 || true
+          if [ -n "$seed_db" ]; then
+            MONGO_DATABASE="$seed_db" docker compose -f docker/docker-compose.yml --profile e2e-local-seed up -d mongodb-seed-e2e >/dev/null
+          else
+            docker compose -f docker/docker-compose.yml --profile e2e-local-seed up -d mongodb-seed-e2e >/dev/null
+          fi
+          seed_exit_code="$(docker wait mongodb_seed_e2e 2>/dev/null || echo 1)"
+          if [ "$seed_exit_code" != "0" ]; then
+            echo "::error::mongodb-seed-e2e failed with exit code $seed_exit_code"
+            docker logs mongodb_seed_e2e --tail 100 || true
+            exit 1
+          fi
+        else
+          docker compose -f docker/docker-compose.yml rm -sf mongodb-seed >/dev/null 2>&1 || true
+          if [ -n "$seed_db" ]; then
+            MONGO_DATABASE="$seed_db" docker compose -f docker/docker-compose.yml up -d mongodb-seed >/dev/null
+          else
+            docker compose -f docker/docker-compose.yml up -d mongodb-seed >/dev/null
+          fi
+          seed_exit_code="$(docker wait mongodb_seed 2>/dev/null || echo 1)"
+          if [ "$seed_exit_code" != "0" ]; then
+            echo "::error::mongodb-seed failed with exit code $seed_exit_code"
+            docker logs mongodb_seed --tail 100 || true
+            exit 1
+          fi
+        fi
+
+
+        echo "🧹 remove all Kafka consumer groups"
+        groups="$(docker exec kafka_broker kafka-consumer-groups --bootstrap-server localhost:29092 --list 2>/dev/null) || true"
+        for group in $groups
+        do
+          [ -z "$group" ] && continue
+          docker exec kafka_broker kafka-consumer-groups --bootstrap-server localhost:29092 --delete --group "$group" >/dev/null 2>&1 || true
+        done
+
+        for topic in debezium_connect_configs debezium_connect_offsets debezium_connect_statuses
+        do
+          docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --delete --topic "$topic" >/dev/null 2>&1 || true
+        done
+
+        # Wait until topic deletions are visible before re-creating connector state.
+        for topic in debezium_connect_configs debezium_connect_offsets debezium_connect_statuses
+        do
+          for _ in 1 2 3 4 5 6 7 8 9 10
+          do
+            if ! docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --describe --topic "$topic" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+        done
+
+        # Recreate required Kafka Connect internal topics explicitly.
+        docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --create --if-not-exists --topic debezium_connect_configs --partitions 1 --replication-factor 1 --config cleanup.policy=compact >/dev/null 2>&1 || true
+        docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --create --if-not-exists --topic debezium_connect_offsets --partitions 25 --replication-factor 1 --config cleanup.policy=compact >/dev/null 2>&1 || true
+        docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --create --if-not-exists --topic debezium_connect_statuses --partitions 5 --replication-factor 1 --config cleanup.policy=compact >/dev/null 2>&1 || true
+
+        # Start services with MONGO_DBNAME set
+        docker compose -f docker/docker-compose.yml up -d kafkaconnect kafkaui >/dev/null
+
+      - |
+        echo "🌱 step 3/3 seed topics from MongoDB via Debezium snapshot"
+
+        requested_dbs="{{.DBS_TO_PROCESS}}"
+        db_count=0
+        connector_scope_db=""
+        for db in $requested_dbs
+        do
+          [ -n "$db" ] || continue
+          db_count=$((db_count + 1))
+          if [ "$db_count" -eq 1 ]; then
+            connector_scope_db="$db"
+          fi
+        done
+        if [ "$db_count" -ne 1 ]; then
+          connector_scope_db=""
+        fi
+
+        topic_wait_prefix="{{.TOPIC_PREFIX}}"
+        if [ -n "$connector_scope_db" ]; then
+          topic_wait_prefix="{{.TOPIC_PREFIX}}.$connector_scope_db"
+          echo "🎯 Debezium connector scoped to database: $connector_scope_db"
+        else
+          echo "🌐 Debezium connector scoped to all databases"
+        fi
+
+        MAX_RETRIES=24
+        COUNT=0
+
+        until curl -s http://localhost:8083/connectors >/dev/null 2>&1; do
+          COUNT=$((COUNT + 1))
+          if [ "$COUNT" -ge "$MAX_RETRIES" ]; then
+            echo "::error::Kafka Connect failed to start within $((MAX_RETRIES * 5)) seconds!"
+            docker logs kafka_connect --tail 50 || true
+            exit 1
+          fi
+          echo "Waiting for Kafka Connect to be ready (attempt $COUNT/$MAX_RETRIES)..."
+          sleep 5
+        done
+
+        # Delete existing connector safely without throwing 404
+        curl -s -X DELETE http://localhost:8083/connectors/mongodb2pg >/dev/null 2>&1 || true
+
+        extra_db_filter=""
+        if [ -n "$connector_scope_db" ]; then
+          extra_db_filter=$(printf ',\n          "database.include.list": "%s"' "$connector_scope_db")
+        fi
+
+        payload="{
+          \"connector.class\": \"io.debezium.connector.mongodb.MongoDbConnector\",
+          \"tasks.max\": \"1\",
+          \"mongodb.connection.string\": \"mongodb://user:pass@mongodb:27017/?replicaSet=rs0&authSource=admin\",
+          \"topic.prefix\": \"{{.TOPIC_PREFIX}}\",
+          \"topic.creation.default.partitions\": \"4\",
+          \"topic.creation.default.replication.factor\": \"1\",
+          \"snapshot.mode\": \"initial\"${extra_db_filter}
+        }"
+
+        http_code="000"
+        for _ in 1 2 3 4 5 6 7 8 9 10
+        do
+          http_code="$(curl -sS -o /tmp/mongo2pg-kafka-reset-response.json -w "%{http_code}" -X PUT \
+            -H 'Content-Type: application/json' \
+            http://localhost:8083/connectors/mongodb2pg/config \
+            -d "$payload" || echo 000)"
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            break
+          fi
+          sleep 2
+        done
+
+        if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+          echo "Connector create failed with HTTP $http_code"
+          cat /tmp/mongo2pg-kafka-reset-response.json
+          exit 1
+        fi
+
+        # Polling status loop safely handling 404 and running tasks state
+        for _ in $(seq 1 15); do
+          status_code=$(curl -s -o /tmp/status.json -w "%{http_code}" http://localhost:8083/connectors/mongodb2pg/status || echo "000")
+          if [ "$status_code" = "200" ] && grep -q '"state":"RUNNING"' /tmp/status.json && ! grep -q '"tasks":\[\]' /tmp/status.json; then
+            break
+          fi
+          sleep 2
+        done
+
+        if ! grep -q '"state":"RUNNING"' /tmp/status.json 2>/dev/null; then
+          echo "Connector is not running or has no tasks; check kafka_connect logs"
+          cat /tmp/status.json 2>/dev/null || true
+          exit 1
+        fi
+        REQUIRE_MESSAGES=true task TOPIC_PREFIX="$topic_wait_prefix" kafka-wait-for-topics-filled
+
+  kafka-wait-for-topics-filled:
+    desc: Wait for Kafka topics to stabilize (no message count changes for 2 minutes)
+    silent: true
+    cmds: 
+      - |
+        echo "⏳ Waiting for message production to complete across all '{{.TOPIC_PREFIX}}.*' topics..."
+        
+        PREV_TOTAL=-1
+        STABLE_CHECKS=0
+        REQUIRED_STABLE_CHECKS=6  # 6 * 5s = 30s (2 minutes)
+        CHECK_INTERVAL=5
+        MAX_WAIT_ITERATIONS=60
+        WARNED_COUNT_FAILURE=0
+        COUNT_FAILURE_STREAK=0
+        MAX_COUNT_FAILURE_STREAK=3
+        WAIT_RESULT="timeout"
+        REQUIRE_MESSAGES="${REQUIRE_MESSAGES:-false}"
+        MAX_TOTAL_MESSAGES=0
+
+        count_messages_via_broker() {
+          local matched_topics
+          matched_topics=$(docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null \
+            | grep -E '^{{.TOPIC_PREFIX}}\.' || true)
+
+          if [ -z "$matched_topics" ]; then
+            echo "0"
+            return 0
+          fi
+
+          printf "%s\n" "$matched_topics" \
+            | while IFS= read -r topic; do
+                [ -n "$topic" ] || continue
+                docker exec kafka_broker bash -lc "
+                  if command -v kafka-get-offsets >/dev/null 2>&1; then
+                    kafka-get-offsets --bootstrap-server localhost:29092 --topic '$topic' --time latest
+                  else
+                    kafka-run-class org.apache.kafka.tools.GetOffsetShell --broker-list localhost:29092 --topic '$topic' --time -1
+                  fi
+                " 2>/dev/null || true
+              done \
+            | awk -F: 'NF >= 3 {sum += $3} END {print sum + 0}'
+        }
+
+        count_messages_via_kafdrop() {
+          local topics_json
+          topics_json=$(curl -fsS "http://localhost:8080/api/clusters/local/topics?perPage=1000" 2>/dev/null || true)
+          if [ -z "$topics_json" ]; then
+            return 1
+          fi
+
+          printf "%s" "$topics_json" \
+            | jq -er '[(.topics[]? // .[]?) | select(.name? // "" | startswith("{{.TOPIC_PREFIX}}.")) | .partitions[]? | ((.offsetMax // 0) - (.offsetMin // 0))] | add // 0' 2>/dev/null
+        }
+
+        for iteration in $(seq 1 $MAX_WAIT_ITERATIONS); do
+          TOTAL_MESSAGES=$(count_messages_via_broker 2>/dev/null || true)
+          if ! [[ "$TOTAL_MESSAGES" =~ ^[0-9]+$ ]]; then
+            TOTAL_MESSAGES=$(count_messages_via_kafdrop 2>/dev/null || true)
+          fi
+
+          if ! [[ "$TOTAL_MESSAGES" =~ ^[0-9]+$ ]]; then
+            COUNT_FAILURE_STREAK=$((COUNT_FAILURE_STREAK + 1))
+            if [ "$WARNED_COUNT_FAILURE" -eq 0 ]; then
+              echo "::warning::Could not parse topic counts from Kafka broker/Kafdrop API; treating as zero until source is ready"
+              WARNED_COUNT_FAILURE=1
+            fi
+            if [ "$COUNT_FAILURE_STREAK" -ge "$MAX_COUNT_FAILURE_STREAK" ]; then
+              echo "::warning::Topic count source unavailable after ${COUNT_FAILURE_STREAK} checks; skipping stabilization wait and proceeding"
+              WAIT_RESULT="count-unavailable"
+              break
+            fi
+            TOTAL_MESSAGES=0
+          else
+            COUNT_FAILURE_STREAK=0
+          fi
+
+          echo "  ├─ Total messages across '{{.TOPIC_PREFIX}}.*' topics: $TOTAL_MESSAGES"
+          if [ "$TOTAL_MESSAGES" -gt "$MAX_TOTAL_MESSAGES" ]; then
+            MAX_TOTAL_MESSAGES="$TOTAL_MESSAGES"
+          fi
+
+          if [ "$TOTAL_MESSAGES" -gt 0 ]; then
+            if [ "$TOTAL_MESSAGES" -eq "$PREV_TOTAL" ]; then
+              STABLE_CHECKS=$((STABLE_CHECKS + 1))
+              ELAPSED_SEC=$((STABLE_CHECKS * CHECK_INTERVAL))
+              echo "  ├─ Messages stable at $TOTAL_MESSAGES ($ELAPSED_SEC/30 sec required)..."
+              
+              if [ "$STABLE_CHECKS" -ge "$REQUIRED_STABLE_CHECKS" ]; then
+                echo "✅ Message count unchanged for 30 seconds ($TOTAL_MESSAGES total messages)!"
+                WAIT_RESULT="stable"
+                break
+              fi
+            else
+              STABLE_CHECKS=0
+              PREV_TOTAL=$TOTAL_MESSAGES
+              echo "  ├─ Active message growth detected..."
+            fi
+          else
+            echo "  ├─ Waiting for messages to arrive in '{{.TOPIC_PREFIX}}.*' topics..."
+            STABLE_CHECKS=0
+          fi
+
+          sleep $CHECK_INTERVAL
+        done
+
+        if [ "$WAIT_RESULT" = "timeout" ]; then
+          echo "::warning::Timed out waiting for message count to stabilize! Proceeding anyway..."
+        fi
+
+        if [ "$REQUIRE_MESSAGES" = "true" ] && [ "$MAX_TOTAL_MESSAGES" -eq 0 ]; then
+          echo "::error::No messages observed for topic prefix '{{.TOPIC_PREFIX}}.*' during wait window"
+          exit 1
+        fi
+
+  report-post-import-all:
     desc: report --post-import for all sample databases
     silent: true
-    deps: [build]
+    # deps: [build]
     vars:
       OUT: "{{.RESULTS_DIR}}"
       DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
@@ -171,7 +612,15 @@ tasks:
       - |
         for db in {{.DBS_TO_PROCESS}}
         do
+          if [ ! -f "{{.OUT}}/$db/config/$db.toml" ]; then
+            echo "⚙️  config $db (create)"
+            mkdir -p "{{.OUT}}/$db/config"
+            cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
+          fi
+          sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^database_name = .*/database_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          sed -i "s/^schema_name = .*/schema_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
           echo "📈 report --post-import $db"
           "{{.BIN}}" report --post-import -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db
         done
-      - echo "👉 results in {{.OUT}}"      
+      - echo "👉 results in {{.OUT}}"
