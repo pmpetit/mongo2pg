@@ -107,6 +107,16 @@ jobs:
           path: ${{ matrix.artifact }}
           retention-days: 7
 
+  e2e-tests:
+    name: Run E2E tests
+    needs: test
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    uses: ./.github/workflows/e2e_tests.yml
+    with:
+      database: sample_analytics
+      release_tag: pre-tag
+    secrets: inherit
+
   preview-release:
     name: Publish PR preview release
     if: github.event_name != 'pull_request' || github.event.action != 'closed'

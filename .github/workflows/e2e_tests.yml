@@ -18,6 +18,16 @@ on:
                 required: false
                 type: string
                 default: pre-tag
+    workflow_call:
+        inputs:
+            database:
+                required: false
+                type: string
+                default: "sample_analytics"
+            release_tag:
+                required: false
+                type: string
+                default: pre-tag
 
 concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
