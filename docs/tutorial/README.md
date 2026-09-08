@@ -161,8 +161,11 @@ Run:
 mongo2pg import -c docker_tutorial/mycluster/config/mycluster.toml
 ```
 
-This command connects to PostgreSQL using `TARGET_URI`, creates the database
-if needed, executes the generated SQL files in `schema/tables/<db>/`, and then
+This command connects to PostgreSQL using `TARGET_URI`, runs a preflight that
+creates the target database/schema when permitted, fails fast with actionable
+errors when privileges are missing, and stops early if destination tables
+already exist. After preflight passes, it executes the generated SQL files in
+`schema/tables/<db>/`, and then
 decompresses every exported `.csv.gz` file and loads it with `COPY`.
 It also regenerates `reports/post_report.html` automatically once the import
 completes.

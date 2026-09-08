@@ -18,7 +18,7 @@ mongo2pg init --project-base <dir>
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `--project-base` | Base directory where the project folder will be created |
 | `--project-name` | Project name |
 | `--cluster-name` | Optional cluster segment appended after project name in generated paths |
@@ -67,7 +67,7 @@ mongo2pg infer -c <config>
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `--source-uri` | MongoDB source connection URI |
 | `--namespace` | One collection, one database, or omitted to enumerate all user databases |
 | `--number` | Number of documents to sample |
@@ -94,7 +94,7 @@ mongo2pg export [collection] -c <config> [--output-dir <dir>] [--namespace <db-o
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `[collection]` | Optional collection name |
 | `-c, --config` | Project config file |
 | `--output-dir` | CSV output directory override |
@@ -114,7 +114,7 @@ mongo2pg report [--collections-dir <dir> | -c <config>] [--output <file>] [--nam
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `-c, --config` | Project config file |
 | `--collections-dir` | Path to `source/collections/` |
 | `--output` | HTML output file |
@@ -133,13 +133,47 @@ mongo2pg import [collection] -c <config> [--namespace <db-or-db.collection>]
 ```
 
 | Flag | Description |
-|---|---|
+| --- | --- |
 | `[collection]` | Optional collection name |
 | `-c, --config` | Project config file |
 | `--namespace` | Database or fully qualified collection namespace |
 
 With `-c <config>`, `[source].include` / `[source].exclude` filters are also
 applied before import.
+
+Import preflight behavior:
+
+- Ensures target database exists before connecting to the destination database session.
+- Ensures target schema exists before executing destination table DDL.
+- Fails fast with actionable errors when database/schema creation is denied by PostgreSQL privileges.
+- Stops early if any destination tables already exist; drop or clean destination tables before retrying.
+
+---
+
+## `mongo2pg ping`
+
+Checks backend connectivity for selected dependencies without running infer/export/import flows.
+
+```text
+mongo2pg ping -c <config> [--source] [--target] [--kafka]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-c, --config` | Project config file |
+| `--source` | Validate MongoDB SOURCE_URI connectivity |
+| `--target` | Validate PostgreSQL TARGET_URI connectivity |
+| `--kafka` | Validate Kafka bootstrap/auth reachability |
+
+At least one backend flag is required. The command prints one pass/fail line per selected backend and exits non-zero if any selected backend fails.
+
+Examples:
+
+```bash
+mongo2pg ping -c ./projects/airbnb/config/airbnb.toml --source
+mongo2pg ping -c ./projects/airbnb/config/airbnb.toml --target
+mongo2pg ping -c ./projects/airbnb/config/airbnb.toml --kafka
+```
 
 ---
 
@@ -163,10 +197,16 @@ schema_registry_url = "http://localhost:8081"
 # auto_offset_reset = "earliest"  # legacy key still supported
 # max_messages = 1000
 # batch_log_messages = 100
+# transaction_batch_size = 200
+# flush_batch_after = "1000ms"
+# copy_mode = true
+# worker_count = 4
+# stop_on_no_lag = true
+# group_id_log_suffix = true
 ```
 
 | Property | Required | Description |
-|---|---|---|
+| --- | --- | --- |
 | `bootstrap_servers` | Yes | Kafka bootstrap servers (for example `localhost:9092`) |
 | `group_id` | No | Consumer group id. Default: `mongo2pg-kafka-import` |
 | `topics` | Yes* | Explicit topic list consumed by `kafka-import` |
@@ -178,6 +218,12 @@ schema_registry_url = "http://localhost:8081"
 | `auto_offset_reset` | No | Legacy alias for offset policy when `offset` is absent |
 | `max_messages` | No | Stop after this many successfully applied messages |
 | `batch_log_messages` | No | Progress log interval for `kafka-import`. Default: `100` |
+| `transaction_batch_size` | No | Flush/commit threshold by message count. Default: `1` |
+| `flush_batch_after` | No | Time-based flush threshold for partial batches. Accepts `ms`, `s`, `m` (example: `1000ms`). Disabled by default |
+| `copy_mode` | No | Enables COPY-based apply path for Kafka import batches. Default: auto (`true` when `enable_auto_commit=true` and `transaction_batch_size>1`, otherwise `false`) |
+| `worker_count` | No | Number of Kafka-import worker processes. Default: `1` |
+| `stop_on_no_lag` | No | Stops kafka-import once lag remains stable at zero for enough idle checks. Default: `false` |
+| `group_id_log_suffix` | No | Adds worker suffix to group id in logs for multi-worker runs. Default: `true` |
 
 `*` `topics` can be omitted when either:
 
@@ -188,6 +234,7 @@ schema_registry_url = "http://localhost:8081"
 
 - With `topic_prefix` set, topic names must start with `<topic_prefix>.`.
 - If `topics` is empty, `kafka-import` auto-discovers broker topics starting with `<topic_prefix>.` and subscribes to them.
+- If `--topics` is passed while `topic_prefix` is also set, `kafka-import` logs a warning and ignores `topic_prefix` (explicit topics take precedence).
 - The prefix is removed, then the last two segments are interpreted as `<db>.<collection>`.
 - Messages whose topic does not match the prefix are skipped.
 
@@ -196,3 +243,23 @@ schema_registry_url = "http://localhost:8081"
 - `offset = "latest"` starts from latest offset when no committed group offset exists.
 - `offset = "earliest"` starts from earliest offset when no committed group offset exists.
 - `offset = "0"` enables snapshot-equivalent mode: fresh group id, earliest consumption, mapped-table truncate before apply, idle timeout stop.
+
+### Copy mode and stop behavior
+
+- `copy_mode = true` enables COPY-based flushing for buffered Kafka messages.
+- `worker_count > 1` starts child worker processes and shares one effective consumer group id.
+- `stop_on_no_lag = true` waits for lag to stay stable at zero before stopping.
+- For multi-worker runs, enable `group_id_log_suffix = true` to simplify worker-specific log triage.
+
+### Kafka-import module ownership
+
+- CLI parsing remains in `src/cli`, and command dispatch is centralized in `src/commands/mod.rs`.
+- Kafka-import runtime implementation is isolated in `src/commands/kafka_import.rs` alongside the other command handlers.
+- Keep behavior changes in dedicated feature changesets; extraction-oriented edits should preserve existing stage/counter semantics.
+
+### Kafka-import refactor validation checklist
+
+- Build binary: `cargo build`.
+- Run kafka-focused unit tests in binary: `cargo test --bin mongo2pg kafka_`.
+- Run COPY/fallback parity tests: `cargo test --test kafka_snapshot_copy_test`.
+- Run container-backed parity tests when Docker is available: `cargo test --test kafka_snapshot_copy_test -- --ignored --nocapture`.

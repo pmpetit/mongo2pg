@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  tests-unit:
     name: Test
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
@@ -44,7 +44,7 @@ jobs:
   build:
     name: Build – ${{ matrix.target }}
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
-    needs: test
+    needs: tests-e2e
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -84,9 +84,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key:
-            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')
-            }}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')}}
           restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
 
       - name: Build release binary
@@ -107,13 +105,23 @@ jobs:
           path: ${{ matrix.artifact }}
           retention-days: 7
 
+  tests-e2e:
+    name: Run E2E tests
+    needs: tests-unit
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    uses: ./.github/workflows/e2e_tests.yml
+    with:
+      database: sample_analytics
+      release_tag: pre-tag
+    secrets: inherit
+
   preview-release:
     name: Publish PR preview release
-    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    if: (github.event_name != 'pull_request' || github.event.action != 'closed') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: build
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -185,7 +193,7 @@ jobs:
     steps:
       - name: Delete preview release and tag
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
         run: |
           TAG="pr-${{ github.event.pull_request.number }}-preview"
           gh release delete "$TAG" --repo ${{ github.repository }} --yes 2>/dev/null || true

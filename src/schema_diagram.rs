@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::analyzer::CollectionSchema;
+use crate::engine::analyzer::CollectionSchema;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Data model

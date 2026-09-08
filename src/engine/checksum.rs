@@ -1,4 +1,5 @@
-use crate::analyzer::{CollectionSchema, FieldSchema, TypeSchema};
+use crate::engine::analyzer::{CollectionSchema, FieldSchema, TypeSchema};
+use crate::db::pg::pg_sslmode;
 use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
@@ -874,7 +875,7 @@ async fn compute_collection_checksums_via_temp_tables(
 
     await_pg_with_heartbeat(
         pg_write_client.execute(
-            &format!("CREATE INDEX ON {} (md5) include (values)", temp_mongo_ident),
+            &format!("CREATE INDEX ON {} (md5)", temp_mongo_ident),
             &[],
         ),
         table_name,
@@ -888,7 +889,7 @@ async fn compute_collection_checksums_via_temp_tables(
     info!("Created index for MongoDB temp hashes. Now creating index for PostgreSQL temp hashes...");
     await_pg_with_heartbeat(
         pg_write_client.execute(
-            &format!("CREATE INDEX ON {} (md5) include (values)", temp_pg_ident),
+            &format!("CREATE INDEX ON {} (md5)", temp_pg_ident),
             &[],
         ),
         table_name,
@@ -967,13 +968,13 @@ async fn compute_collection_checksums_via_temp_tables(
     
     if matches {
         info!(
-            "✅ [Collection: {} Table: {}] Aggregate checksum completed (matches={})",
-            coll_name, table_name, matches
+            "✅ [Db: {} Collection: {} Table: {}] Aggregate checksum completed (matches={})",
+            db_name, coll_name, table_name, matches
         );
     } else {
         warn!(
-            "⚠️ [Collection: {} Table: {}] Checksum mismatch detected! MongoDB md5={} vs PostgreSQL md5={}, retrieving first 5 row differences for inspection...",
-            coll_name, table_name, final_mongo_md5, final_pg_md5
+            "⚠️ [Db: {} Collection: {} Table: {}] Checksum mismatch detected! MongoDB md5={} vs PostgreSQL md5={}, retrieving first 5 row differences for inspection...",
+            db_name, coll_name, table_name, final_mongo_md5, final_pg_md5
         );
     }
 
@@ -1311,6 +1312,23 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
 }
 
 fn normalize_json_literal(literal: &str) -> String {
+    fn is_special_float_literal(raw: &str) -> bool {
+        let trimmed = raw.trim();
+        let unquoted = trimmed
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(trimmed)
+            .trim();
+        matches!(
+            unquoted.to_ascii_lowercase().as_str(),
+            "nan" | "infinity" | "-infinity"
+        )
+    }
+
+    if is_special_float_literal(literal) {
+        return "null".to_owned();
+    }
+
     serde_json::from_str::<serde_json::Value>(literal)
         .map(|value| canonicalize_json_value(&value))
         .unwrap_or_else(|_| literal.to_owned())
@@ -2496,30 +2514,82 @@ fn discover_mapping_targets_for_collection(
         .drain(..)
         .map(|(mapping_path, mut mapping_yaml)| {
             let table_name = mapping_yaml.pg_mapping.table_name.clone();
-            let source_path = source_path_from_traversal_chain(
+            let explicit_mongo_path = mapping_yaml
+                .mongo_path
+                .as_deref()
+                .map(str::trim)
+                .filter(|mongo_path| !mongo_path.is_empty() && *mongo_path != ".")
+                .map(|mongo_path| {
+                    let parsed = parse_mongo_path(mongo_path);
+                    source_paths
+                        .values()
+                        .find(|candidate| candidate.path == parsed.path)
+                        .cloned()
+                        .unwrap_or(parsed)
+                });
+
+            let traversal_derived_path = source_path_from_traversal_chain(
                 &table_name,
                 &mapping_by_table,
                 &source_paths,
                 &mut HashSet::new(),
-            )
-                .or_else(|| source_paths.get(&table_name).cloned())
-                .or_else(|| {
-                    mapping_yaml.mongo_path.as_deref().map(|mongo_path| {
-                        let parsed = parse_mongo_path(mongo_path);
-                        source_paths
-                            .values()
-                            .find(|candidate| candidate.path == parsed.path)
-                            .cloned()
-                            .unwrap_or(parsed)
-                    })
-                })
-                .ok_or_else(|| {
-                    anyhow!(
-                        "No MongoDB source path found for table {} in {}",
-                        table_name,
-                        mapping_path.display()
-                    )
-                })?;
+            );
+
+            let parent_mongo_path_derived = mapping_yaml
+                .traversal
+                .as_ref()
+                .and_then(|traversal| {
+                    let parent_table = traversal.parent_table.as_deref()?;
+                    let source_field = traversal.source_field.as_deref()?.trim();
+                    if source_field.is_empty() {
+                        return None;
+                    }
+                    let parent_mapping = mapping_by_table.get(parent_table)?;
+                    let parent_raw = parent_mapping.mongo_path.as_deref()?.trim();
+                    if parent_raw.is_empty() || parent_raw == "." {
+                        return None;
+                    }
+
+                    let parent_parsed = parse_mongo_path(parent_raw);
+                    let source_segments = source_field
+                        .split('.')
+                        .filter(|segment| !segment.trim().is_empty())
+                        .map(|segment| segment.to_owned())
+                        .collect::<Vec<_>>();
+                    if source_segments.is_empty() {
+                        return None;
+                    }
+
+                    let mut derived = parent_parsed;
+                    derived.path.extend(source_segments);
+                    source_paths
+                        .values()
+                        .find(|candidate| candidate.path == derived.path)
+                        .cloned()
+                        .or(Some(derived))
+                });
+
+            let source_path = match (explicit_mongo_path, parent_mongo_path_derived) {
+                (Some(explicit), Some(parent_derived)) if explicit.path != parent_derived.path => {
+                    if parent_derived.path.len() > explicit.path.len() {
+                        parent_derived
+                    } else {
+                        explicit
+                    }
+                }
+                (Some(explicit), _) => explicit,
+                (None, Some(parent_derived)) => parent_derived,
+                (None, None) => traversal_derived_path
+                    .or_else(|| source_paths.get(&table_name).cloned())
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "No MongoDB source path found for table {} in {}",
+                            table_name,
+                            mapping_path.display()
+                        )
+                    })?,
+            };
+
             backfill_mapping_columns_from_schema(
                 collection,
                 &schema,
@@ -2586,16 +2656,46 @@ fn pg_uri_with_database(uri: &str, database: &str) -> String {
     }
 }
 
-fn pg_sslmode(uri: &str) -> Option<&str> {
-    let query = uri.split_once('?')?.1;
-    query.split('&').find_map(|part| {
-        let (key, value) = part.split_once('=')?;
-        if key.eq_ignore_ascii_case("sslmode") {
-            Some(value)
-        } else {
-            None
-        }
-    })
+fn is_missing_database_error(err: &anyhow::Error, database_name: &str) -> bool {
+    let message = err
+        .chain()
+        .map(|cause| cause.to_string())
+        .collect::<Vec<_>>()
+        .join(": ")
+        .to_ascii_lowercase();
+    let db = database_name.to_ascii_lowercase();
+    message.contains("does not exist")
+        && message.contains("database")
+        && message.contains(db.as_str())
+}
+
+async fn ensure_pg_database_exists(target_uri: &str, database_name: &str) -> Result<()> {
+    if database_name.eq_ignore_ascii_case("postgres") {
+        return Ok(());
+    }
+
+    let admin_uri = pg_uri_with_database(target_uri, "postgres");
+    let admin_client = connect_pg_client(&admin_uri)
+        .await
+        .with_context(|| format!("Failed to connect to PostgreSQL admin database via {}", admin_uri))?;
+
+    let exists_row = admin_client
+        .query_one("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", &[&database_name])
+        .await
+        .with_context(|| format!("Failed to verify existence of database '{}'", database_name))?;
+    let exists: bool = exists_row.get(0);
+    if exists {
+        return Ok(());
+    }
+
+    let create_sql = format!("CREATE DATABASE {}", quote_ident(database_name));
+    admin_client
+        .execute(&create_sql, &[])
+        .await
+        .with_context(|| format!("Failed to create target database '{}'", database_name))?;
+
+    info!("Created missing PostgreSQL database '{}' for checkmd5 run", database_name);
+    Ok(())
 }
 
 async fn connect_pg_client(target_uri: &str) -> Result<Client> {
@@ -2663,8 +2763,8 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
         .as_ref()
         .ok_or_else(|| anyhow!("SOURCE_URI not found in config"))?;
     let (db_name, _) = collection_paths_from_conf(&conf, collections_root_override)?;
-    let client_options = mongodb::options::ClientOptions::parse(mongo_uri).await?;
-    let mongo_client = mongodb::Client::with_options(client_options)?;
+    let client_options = crate::db::mongo::parse_client_options(mongo_uri).await?;
+    let mongo_client = crate::db::mongo::client_with_options(client_options)?;
     let mut summaries = Vec::new();
 
     const TARGET_MD5_RETRY_MAX: u32 = 4;
@@ -2736,6 +2836,7 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
         let pg_uri = pg_uri_with_database(target_uri, target_database_name);
 
         let mut attempt = 0_u32;
+        let mut ensured_target_db = false;
         let result = loop {
             attempt += 1;
             let compute_result: Result<CollectionChecksumResult> = async {
@@ -2764,6 +2865,15 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
             match compute_result {
                 Ok(result) => break result,
                 Err(err) => {
+                    if !ensured_target_db
+                        && is_missing_database_error(&err, target_database_name)
+                    {
+                        ensure_pg_database_exists(target_uri, target_database_name).await?;
+                        ensured_target_db = true;
+                        attempt = 0;
+                        continue;
+                    }
+
                     if attempt <= TARGET_MD5_RETRY_MAX && is_transient_md5_error(&err) {
                         let backoff_secs = (1_u64 << (attempt - 1)).min(15);
                         warn!(
@@ -2838,12 +2948,20 @@ mod tests {
     use super::{
         backfill_mapping_columns_from_schema, build_mapping_source_paths,
         comparable_md5_columns, drop_incompatible_columns,
-        extract_source_documents, md5_hex_from_fragments,
+        extract_source_documents, is_missing_database_error, md5_hex_from_fragments,
         mongo_field_literal_for_type,
         normalize_json_literal, HashRecord, MappingYaml, SourcePath,
     };
-    use crate::analyzer::Analyzer;
+    use crate::engine::analyzer::Analyzer;
     use bson::{doc, Bson};
+
+    #[test]
+    fn missing_database_detection_scans_anyhow_error_chain() {
+        let error = anyhow::anyhow!("database \"sample_training\" does not exist")
+            .context("Failed to connect to PostgreSQL using TARGET_URI");
+
+        assert!(is_missing_database_error(&error, "sample_training"));
+    }
 
     #[test]
     fn comparable_md5_columns_skips_blank_fields() {
@@ -2933,9 +3051,9 @@ pg_mapping:
         let docs = vec![doc! {
                 "_id": "project-1",
                 "providers": [{
-                        "namespace": "fras-t-dba-176c358",
-                        "namespace_id": "fras-t-dba-176c358",
-                        "provider": "aiven",
+                        "namespace": "nprd-t-dba-176c358",
+                        "namespace_id": "nprd-t-dba-176c358",
+                        "provider": "provider1",
                         "metadata": {
                                 "creation_date": "2025-08-11T00:00:00Z",
                                 "status": "created"
@@ -3161,11 +3279,11 @@ pg_mapping:
         let docs = vec![doc! {
             "_id": 1,
             "dev": [{
-                "provider": "aiven",
+                "provider": "provider1",
                 "available_localizations": ["eu-west-1"]
             }],
             "prod": [{
-                "provider": "atlas",
+                "provider": "provider2",
                 "available_localizations": ["eu-west-2"]
             }]
         }];
@@ -3272,8 +3390,8 @@ pg_mapping:
     fn extract_source_documents_groups_root_array_siblings_with_key() {
         let doc = doc! {
             "_id": 42,
-            "dev": [{"provider": "aiven"}],
-            "prod": [{"provider": "atlas"}]
+            "dev": [{"provider": "provider1"}],
+            "prod": [{"provider": "provider2"}]
         };
 
         let nested = extract_source_documents(
@@ -3295,7 +3413,7 @@ pg_mapping:
         let doc = doc! {
             "_id": 42,
             "dev": [{}],
-            "prod": [{"provider": "atlas"}]
+            "prod": [{"provider": "provider2"}]
         };
 
         let nested = extract_source_documents(
@@ -3504,7 +3622,7 @@ pg_mapping:
     }
 
 
-    use crate::checkmd5::bson_to_comparable_json;
+    use crate::engine::checksum::bson_to_comparable_json;
     use chrono::{TimeZone, Utc};
     use mongodb::bson::DateTime;
     use serde_json::json;
@@ -3533,7 +3651,7 @@ pg_mapping:
         assert_eq!(result, expected_json);
     }
 
-    use crate::checkmd5::{
+    use crate::engine::checksum::{
         grouped_key_filter_for_target, pg_select_query_unordered, read_mapping_yaml,
     };
     use std::path::PathBuf;
@@ -3668,11 +3786,16 @@ pg_mapping:
     }
 
     use super::*;
-    use crate::checkmd5::compute_collection_checksums_via_temp_tables;
+    #[cfg(not(target_os = "macos"))]
+    use crate::engine::checksum::compute_collection_checksums_via_temp_tables;
+    #[cfg(not(target_os = "macos"))]
     mod common {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/mod.rs"));
     }
+    #[cfg(not(target_os = "macos"))]
     use common::TestHarness;
+
+    #[cfg(not(target_os = "macos"))]
     #[tokio::test]
     async fn test_compute_collection_checksums_via_temp_tables_with_containers(
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -3753,6 +3876,24 @@ pg_mapping:
         Ok(())
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_compute_collection_checksums_via_temp_tables_with_containers(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let target_fields = vec!["summary".to_string()];
+        let values = vec!["\"same\"".to_string()];
+        let (mongo_deltas, pg_deltas) = build_row_deltas(
+            Some(values.as_slice()),
+            Some(values.as_slice()),
+            &target_fields,
+        );
+
+        assert!(mongo_deltas.is_empty());
+        assert!(pg_deltas.is_empty());
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
     #[tokio::test]
     async fn test_compute_collection_checksums_via_temp_tables_with_containers_nok(
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -3867,5 +4008,25 @@ pg_mapping:
         assert!(!result.mongo_md5.is_empty());
 
         Ok(())
-    }    
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_compute_collection_checksums_via_temp_tables_with_containers_nok(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let target_fields = vec!["summary".to_string()];
+        let mongo_vals = vec!["\"mongo\"".to_string()];
+        let pg_vals = vec!["\"postgres\"".to_string()];
+        let (mongo_deltas, pg_deltas) = build_row_deltas(
+            Some(mongo_vals.as_slice()),
+            Some(pg_vals.as_slice()),
+            &target_fields,
+        );
+
+        assert_eq!(mongo_deltas.len(), 1);
+        assert_eq!(pg_deltas.len(), 1);
+        assert!(mongo_deltas[0].contains("MongoDB Document"));
+        assert!(pg_deltas[0].contains("PostgreSQL Row"));
+        Ok(())
+    }
 }

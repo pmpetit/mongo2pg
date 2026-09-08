@@ -1,0 +1,420 @@
+name: e2e tests
+
+permissions:
+  contents: read
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs:
+      database:
+        description: "Database list to test (supports newline, space, or comma separated values)"
+        required: true
+        type: string
+        default: "sample_analytics"
+      release_tag:
+        description: "GitHub Release tag to use for mongo2pg binary (optional, supports prerelease tags)"
+        required: false
+        type: string
+        default: pre-tag
+  workflow_call:
+    inputs:
+      database:
+        required: false
+        type: string
+        default: "sample_analytics"
+      release_tag:
+        required: false
+        type: string
+        default: pre-tag
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PGPASSWORD: x
+  TOPIC_PREFIX: t4
+  PRE_RELEASE_TAG: ${{ github.event.inputs.release_tag != '' && github.event.inputs.release_tag || 'pre-tag' }}
+
+jobs:
+  prepare-matrix:
+    name: Prepare database matrix
+    runs-on: ubuntu-latest
+    outputs:
+      databases: ${{ steps.build.outputs.databases }}
+    steps:
+      - name: Build matrix payload
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DEFAULT='["sample_analytics","sample_airbnb","sample_geospatial","sample_mflix","sample_supplies","sample_training","sample_weatherdata", "sample_events"]'
+          INPUT_DATABASES="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.database || '' }}"
+
+          if [ -z "${INPUT_DATABASES}" ]; then
+            echo "databases=${DEFAULT}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          DATABASES_JSON="$(printf '%s' "${INPUT_DATABASES}" \
+            | tr ',\n\t' '   ' \
+            | xargs -n1 \
+            | sed '/^$/d' \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+
+          if [ "${DATABASES_JSON}" = "[]" ]; then
+            echo "databases=${DEFAULT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "databases=${DATABASES_JSON}" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e-tests:
+    name: Run e2e tests offline & online for ${{ matrix.database }}
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      MONGO_DATABASE: ${{ matrix.database }}
+      MONGO_DBNAME: ${{ matrix.database }}
+    strategy:
+      fail-fast: false
+      matrix:
+        database: ${{ fromJSON(needs.prepare-matrix.outputs.databases) }}
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_USER: myuser
+          POSTGRES_PASSWORD: x
+          POSTGRES_DB: mydb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U myuser -d mydb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure PostgreSQL client is available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if command -v psql >/dev/null 2>&1; then
+            echo "psql already available: $(psql --version)"
+            exit 0
+          fi
+
+          echo "psql not found; attempting to install PostgreSQL client"
+
+          can_run_privileged() {
+            if [ "$(id -u)" -eq 0 ]; then
+              return 0
+            fi
+
+            if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+              return 0
+            fi
+
+            return 1
+          }
+
+          run_privileged() {
+            if [ "$(id -u)" -eq 0 ]; then
+              "$@"
+              return
+            fi
+
+            if command -v sudo >/dev/null 2>&1; then
+              if sudo -n true >/dev/null 2>&1; then
+                sudo -n "$@"
+                return
+              fi
+            fi
+
+            echo "Cannot run privileged install command non-interactively: $*"
+            echo "Runner must be root or have passwordless sudo configured."
+            exit 1
+          }
+
+          install_via_package_manager() {
+            if ! can_run_privileged; then
+              echo "No root/passwordless sudo. Skipping package-manager install for psql."
+              return 1
+            fi
+
+            if command -v apt-get >/dev/null 2>&1; then
+              run_privileged apt-get update
+              run_privileged apt-get install -y --no-install-recommends postgresql-client
+            elif command -v dnf >/dev/null 2>&1; then
+              run_privileged dnf install -y postgresql
+            elif command -v yum >/dev/null 2>&1; then
+              run_privileged yum install -y postgresql
+            elif command -v apk >/dev/null 2>&1; then
+              run_privileged apk add --no-cache postgresql-client
+            else
+              echo "No supported package manager found to install psql"
+              return 1
+            fi
+
+            return 0
+          }
+
+          if ! install_via_package_manager; then
+            echo "Falling back to docker-backed psql shim"
+
+            if command -v docker >/dev/null 2>&1; then
+              SHIM_BIN_DIR="$HOME/.local/bin"
+              mkdir -p "${SHIM_BIN_DIR}"
+              printf '%s\n' \
+                '#!/usr/bin/env bash' \
+                'set -euo pipefail' \
+                'exec docker run --rm --network host -e PGPASSWORD="${PGPASSWORD:-}" postgres:16-alpine psql "$@"' \
+                > "${SHIM_BIN_DIR}/psql"
+              chmod +x "${SHIM_BIN_DIR}/psql"
+              echo "${SHIM_BIN_DIR}" >> "$GITHUB_PATH"
+              export PATH="${SHIM_BIN_DIR}:$PATH"
+            else
+              echo "docker unavailable; cannot provide psql fallback"
+            fi
+          fi
+
+          command -v psql >/dev/null 2>&1 || {
+            echo "psql still unavailable after installation attempt"
+            exit 1
+          }
+
+          psql --version
+
+      - name: Prepare mongo2pg binary from GitHub Release
+        run: |
+          set -euo pipefail
+
+          REQUESTED_RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          if [ -n "${REQUESTED_RELEASE_TAG}" ]; then
+            RELEASE_TAG="${REQUESTED_RELEASE_TAG}"
+          else
+            RELEASE_TAG="${{ env.PRE_RELEASE_TAG }}"
+          fi
+          CUSTOM_RELEASE_TAG_REQUIRED=false
+          if [ -n "${REQUESTED_RELEASE_TAG}" ] && [ "${REQUESTED_RELEASE_TAG}" != "${{ env.PRE_RELEASE_TAG }}" ]; then
+            CUSTOM_RELEASE_TAG_REQUIRED=true
+          fi
+
+          echo "Using mongo2pg release tag: ${RELEASE_TAG}"
+
+          DOWNLOAD_DIR=/tmp/mongo2pg-release-bin
+          ASSET_NAME=mongo2pg-linux-x86_64.tar.gz
+          mkdir -p "${DOWNLOAD_DIR}"
+
+          release_exists() {
+            local api_url http_code
+            api_url="https://api.github.com/repos/${{ github.repository }}/releases/tags/${RELEASE_TAG}"
+            http_code="$(curl -sS -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/vnd.github+json" \
+              "${api_url}" || echo 000)"
+            [ "${http_code}" = "200" ]
+          }
+
+          fallback_to_local_build() {
+            echo "Release tag '${RELEASE_TAG}' not available. Falling back to local cargo build."
+            cargo build
+            target/debug/mongo2pg --version
+          }
+
+          download_with_gh() {
+            command -v gh >/dev/null 2>&1 || return 1
+            gh release download "${RELEASE_TAG}" \
+              --repo "${{ github.repository }}" \
+              --pattern "${ASSET_NAME}" \
+              --dir "${DOWNLOAD_DIR}"
+          }
+
+          download_with_api() {
+            local api_url asset_url release_json
+            api_url="https://api.github.com/repos/${{ github.repository }}/releases/tags/${RELEASE_TAG}"
+
+            release_json="$(curl -fsSL \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/vnd.github+json" \
+              "${api_url}")"
+
+            if command -v jq >/dev/null 2>&1; then
+              asset_url="$(printf '%s' "${release_json}" | jq -r --arg asset "${ASSET_NAME}" '.assets[] | select(.name == $asset) | .url' || true)"
+            else
+              asset_url="$(printf '%s' "${release_json}" | tr -d '\n' | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"'"${ASSET_NAME}"'"[^}]*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+            fi
+
+            if [ -z "${asset_url}" ] || [ "${asset_url}" = "null" ]; then
+              return 1
+            fi
+
+            curl -fsSL \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/octet-stream" \
+              "${asset_url}" \
+              -o "${DOWNLOAD_DIR}/${ASSET_NAME}"
+          }
+
+          if ! release_exists; then
+            if [ "${CUSTOM_RELEASE_TAG_REQUIRED}" = true ]; then
+              echo "Release tag '${RELEASE_TAG}' not found (explicit input)."
+              exit 1
+            fi
+            fallback_to_local_build
+            exit 0
+          fi
+
+          MAX_DOWNLOAD_ATTEMPTS=4
+          RETRY_DELAY_SECONDS=5
+          for i in $(seq 1 "${MAX_DOWNLOAD_ATTEMPTS}"); do
+            if download_with_gh || download_with_api; then
+              break
+            fi
+            if [ "$i" -eq "${MAX_DOWNLOAD_ATTEMPTS}" ]; then
+              if [ "${CUSTOM_RELEASE_TAG_REQUIRED}" = true ]; then
+                echo "Failed to download release asset for explicit tag ${RELEASE_TAG} after ${i} attempts"
+                exit 1
+              fi
+              fallback_to_local_build
+              exit 0
+            fi
+            echo "Waiting for release asset availability... (${i}/${MAX_DOWNLOAD_ATTEMPTS})"
+            sleep "${RETRY_DELAY_SECONDS}"
+          done
+
+          mkdir -p target/debug
+          tar -xzf "${DOWNLOAD_DIR}/${ASSET_NAME}" -C "${DOWNLOAD_DIR}"
+          cp "${DOWNLOAD_DIR}/mongo2pg-linux-x86_64" target/debug/mongo2pg
+          chmod +x target/debug/mongo2pg
+          target/debug/mongo2pg --version
+
+      - name: Start Docker services (MongoDB, Kafka, Kafka Connect, Kafka UI)
+        run: |
+          cd docker
+          dc() { docker compose "$@"; }
+          if ! docker compose version >/dev/null 2>&1; then
+            dc() { docker-compose "$@"; }
+          fi
+
+          dc -f docker-compose.yml pull || true
+          # Start core infra first. Defer Kafka Connect startup so it does not
+          # implicitly trigger mongodb-seed through compose depends_on.
+          dc -f docker-compose.yml up -d mongodb mongodb-init kafka schema-registry
+
+          # Wait for core services to be ready
+          for service in mongodb:27017 kafka:29092; do
+            for i in {1..60}; do
+              case $service in
+                mongodb:27017)
+                  if docker exec mongodb_db mongosh 'mongodb://user:pass@localhost:27017/admin?authSource=admin' --eval 'db.runCommand({ping: 1})' --quiet 2>/dev/null; then
+                    echo "MongoDB is ready"
+                    break
+                  fi
+                  ;;
+                kafka:29092)
+                  if docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --list >/dev/null 2>&1; then
+                    echo "Kafka is ready"
+                    break
+                  fi
+                  ;;
+              esac
+              echo "Waiting for services... ($i/60)"
+              sleep 5
+            done
+          done
+
+          # Seed MongoDB with sample standard data
+          if [ "${{ matrix.database }}" = "sample_events" ]; then
+            echo "Skipping mongodb-seed for sample_events (local e2e dataset only)"
+          else
+            dc -f docker-compose.yml up mongodb-seed
+          fi
+
+          # Seed MongoDB with sample specific data
+          dc -f docker-compose.yml up mongodb-seed-e2e
+
+      - name: Run mongo2pg offline tests
+        run: task tests-all -- ${{ matrix.database }}
+
+      - name: Reset Kafka and initialize Debezium
+        run: |
+          dc() { docker compose "$@"; }
+          if ! docker compose version >/dev/null 2>&1; then
+            dc() { docker-compose "$@"; }
+          fi
+
+          # Stop Kafka Connect
+          echo "Stopping Kafka Connect..."
+          dc -f docker/docker-compose.yml stop kafkaconnect 2>/dev/null || true
+
+          echo "Resetting Kafka topics..."
+          # Delete all Kafka topics
+          docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --list --exclude-internal 2>/dev/null | \
+            xargs -I {} docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --delete --topic {} 2>/dev/null || true
+
+          echo "Resetting Debezium connectors..."
+          # Restart Kafka Connect without dependencies to avoid re-triggering mongodb-seed.
+          dc -f docker/docker-compose.yml up -d --no-deps kafkaconnect
+
+          echo "Waiting for Kafka Connect to be ready..."
+          # Wait for Kafka Connect to be ready
+          until curl -fsS http://localhost:8083/connectors >/dev/null 2>&1; do sleep 5; done
+
+          echo "Initializing Debezium connector..."
+          # Initialize Debezium connector
+          OUT=$(curl -fsS -X PUT -H 'Content-Type: application/json' \
+            http://localhost:8083/connectors/mongodb2pg/config \
+            -d '{"connector.class":"io.debezium.connector.mongodb.MongoDbConnector","tasks.max":"1","mongodb.connection.string":"mongodb://user:pass@mongodb:27017/?replicaSet=rs0&authSource=admin","topic.prefix":"${{ env.TOPIC_PREFIX }}","topic.creation.default.partitions":"4","topic.creation.default.replication.factor":"1","snapshot.mode":"initial"}')
+
+          echo "Debezium connector initialized. Topic fill validation runs in tests-kafka-all."
+
+      - name: Run mongo2pg online tests
+        run: task tests-kafka-all -- ${{ matrix.database }}
+
+      - name: Upload post-import report artifact on failure
+        if: failure()
+        id: upload_post_report_artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: post-import-report-${{ matrix.database }}
+          path: |
+            results/${{ matrix.database }}/reports/post_report.html
+            results/${{ matrix.database }}/reports/post_reports.html
+            results/${{ matrix.database }}/reports/kafka_import_write_mode.stats.yaml
+          if-no-files-found: warn
+
+      - name: Print post-import report artifact link
+        if: failure() && steps.upload_post_report_artifact.outputs.artifact-id != ''
+        run: |
+          URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_post_report_artifact.outputs.artifact-id }}"
+          YAML_PATH="results/${{ matrix.database }}/reports/kafka_import_write_mode.stats.yaml"
+          echo "Post-import report artifact for ${{ matrix.database }}: $URL"
+          echo "Kafka import write-mode stats (.yaml) for ${{ matrix.database }}: $URL (file: $YAML_PATH)"
+          echo "Post-import report artifact for ${{ matrix.database }}: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Kafka import write-mode stats (.yaml) for ${{ matrix.database }}: $URL (file: $YAML_PATH)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd docker
+          dc() { docker compose "$@"; }
+          if ! docker compose version >/dev/null 2>&1; then
+            dc() { docker-compose "$@"; }
+          fi
+          dc -f docker-compose.yml down -v || true

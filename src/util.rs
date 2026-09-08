@@ -1,9 +1,16 @@
-use crate::analyzer::{CollectionSchema, FieldSchema, TypeSchema};
+use crate::engine::analyzer::{CollectionSchema, FieldSchema, TypeSchema};
 use anyhow::{anyhow, Context, Result};
 use indexmap::IndexMap;
-use serde::Deserialize;
+use log::warn;
+use serde::{Deserialize, Deserializer};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+
+/// Stable, greppable prefix used in error/log messages for connector failures
+/// (e.g. `connection_failed backend=mongo operation=connect`).
+pub fn connection_failed_context(backend: &str, operation: &str) -> String {
+    format!("connection_failed backend={backend} operation={operation}")
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConfData {
@@ -22,12 +29,14 @@ pub struct ConfData {
     pub chunk_size: Option<u64>,
     pub auth_retry_max: Option<u32>,
     pub log_level: Option<String>,
+    pub log_format: Option<String>,
     pub add_grouped_key: bool,
     pub jsonb: bool,
     pub timestamp_fields: Vec<String>,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub kafka: Option<KafkaConfData>,
+    pub datadog: Option<DatadogConfData>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -36,6 +45,14 @@ pub struct KafkaConfData {
     pub group_id: Option<String>,
     pub topics: Vec<String>,
     pub topic_prefix: Option<String>,
+    pub security_protocol: Option<String>,
+    pub sasl_mechanism: Option<String>,
+    pub sasl_username: Option<String>,
+    pub sasl_password: Option<String>,
+    pub ssl_ca_location: Option<String>,
+    pub ssl_certificate_location: Option<String>,
+    pub ssl_key_location: Option<String>,
+    pub ssl_key_password: Option<String>,
     pub schema_registry_url: Option<String>,
     pub schema_registry_username: Option<String>,
     pub schema_registry_password: Option<String>,
@@ -43,6 +60,26 @@ pub struct KafkaConfData {
     pub auto_offset_reset: Option<String>,
     pub max_messages: Option<usize>,
     pub batch_log_messages: Option<usize>,
+    pub poll_size: Option<usize>,
+    pub fetch_min_bytes: Option<usize>,
+    pub fetch_wait_max_ms: Option<u64>,
+    pub idle_timeout_ms: Option<u64>,
+    pub max_partition_fetch_bytes: Option<usize>,
+    pub fetch_max_bytes: Option<usize>,
+    pub transaction_batch_size: Option<usize>,
+    pub flush_batch_after: Option<String>,
+    pub worker_count: Option<usize>,
+    pub group_id_log_suffix: Option<bool>,
+    pub debug: Option<String>,
+    pub queued_max_messages_kbytes: Option<usize>,
+    pub enable_auto_commit: Option<bool>,
+    pub copy_mode: Option<bool>,
+    pub stop_on_no_lag: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DatadogConfData {
+    pub dd_service: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,6 +95,9 @@ struct TomlProjectConfig {
     #[serde(default)]
     #[serde(alias = "Kafka", alias = "KAFKA")]
     kafka: Option<TomlKafkaSection>,
+    #[serde(default)]
+    #[serde(alias = "Datadog", alias = "DATADOG")]
+    datadog: Option<TomlDatadogSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,8 +109,12 @@ struct TomlProjectSection {
     #[serde(default)]
     #[serde(alias = "CLUSTER_NAME", alias = "ClusterName", alias = "clusterName")]
     cluster_name: Option<String>,
+    #[serde(default)]
     #[serde(alias = "PROJECT_DIR", alias = "ProjectDir", alias = "projectDir")]
-    project_dir: String,
+    project_dir: Option<String>,
+    #[serde(default)]
+    #[serde(alias = "PROJECT_NAME", alias = "ProjectName", alias = "projectName")]
+    project_name: Option<String>,
 }
 
 pub fn configured_project_root(conf: &ConfData) -> PathBuf {
@@ -100,11 +144,26 @@ struct TomlSourceSection {
     max_time_ms: Option<u64>,
     #[serde(alias = "CHUNK_SIZE", alias = "ChunkSize", alias = "chunkSize")]
     chunk_size: Option<u64>,
-    #[serde(alias = "AUTH_RETRY_MAX", alias = "AuthRetryMax", alias = "authRetryMax")]
+    #[serde(
+        alias = "AUTH_RETRY_MAX",
+        alias = "AuthRetryMax",
+        alias = "authRetryMax"
+    )]
     auth_retry_max: Option<u32>,
     #[serde(alias = "LOG_LEVEL", alias = "LogLevel", alias = "logLevel")]
     log_level: Option<String>,
-    #[serde(alias = "ADD_GROUPED_KEY", alias = "AddGroupedKey", alias = "addGroupedKey")]
+    #[serde(
+        alias = "LOG_FORMAT",
+        alias = "LogFormat",
+        alias = "logFormat",
+        alias = "log-format"
+    )]
+    log_format: Option<String>,
+    #[serde(
+        alias = "ADD_GROUPED_KEY",
+        alias = "AddGroupedKey",
+        alias = "addGroupedKey"
+    )]
     add_grouped_key: Option<bool>,
     #[serde(alias = "JSONB", alias = "Jsonb")]
     jsonb: Option<bool>,
@@ -138,7 +197,11 @@ pub fn default_timestamp_fields() -> Vec<String> {
 struct TomlTargetSection {
     #[serde(alias = "TARGET_URI", alias = "URI", alias = "Uri")]
     uri: Option<String>,
-    #[serde(alias = "TARGET_DATABASE_NAME", alias = "DATABASE_NAME", alias = "databaseName")]
+    #[serde(
+        alias = "TARGET_DATABASE_NAME",
+        alias = "DATABASE_NAME",
+        alias = "databaseName"
+    )]
     database_name: Option<String>,
     #[serde(alias = "TARGET_SCHEMA", alias = "SCHEMA_NAME", alias = "schemaName")]
     schema_name: Option<String>,
@@ -155,33 +218,351 @@ struct TomlKafkaSection {
     topics: Vec<String>,
     #[serde(alias = "TOPIC_PREFIX", alias = "topicPrefix")]
     topic_prefix: Option<String>,
+    #[serde(alias = "SECURITY_PROTOCOL", alias = "securityProtocol")]
+    security_protocol: Option<String>,
+    #[serde(alias = "SASL_MECHANISM", alias = "saslMechanism")]
+    sasl_mechanism: Option<String>,
+    #[serde(alias = "SASL_USERNAME", alias = "saslUsername")]
+    sasl_username: Option<String>,
+    #[serde(alias = "SASL_PASSWORD", alias = "saslPassword")]
+    sasl_password: Option<String>,
+    #[serde(alias = "SSL_CA_LOCATION", alias = "sslCaLocation")]
+    ssl_ca_location: Option<String>,
+    #[serde(alias = "SSL_CERTIFICATE_LOCATION", alias = "sslCertificateLocation")]
+    ssl_certificate_location: Option<String>,
+    #[serde(alias = "SSL_KEY_LOCATION", alias = "sslKeyLocation")]
+    ssl_key_location: Option<String>,
+    #[serde(alias = "SSL_KEY_PASSWORD", alias = "sslKeyPassword")]
+    ssl_key_password: Option<String>,
     #[serde(alias = "SCHEMA_REGISTRY_URL", alias = "schemaRegistryUrl")]
     schema_registry_url: Option<String>,
     #[serde(alias = "SCHEMA_REGISTRY_USERNAME", alias = "schemaRegistryUsername")]
     schema_registry_username: Option<String>,
     #[serde(alias = "SCHEMA_REGISTRY_PASSWORD", alias = "schemaRegistryPassword")]
     schema_registry_password: Option<String>,
-    #[serde(alias = "OFFSET")]
+    #[serde(
+        alias = "OFFSET",
+        default,
+        deserialize_with = "deserialize_optional_string_or_number"
+    )]
     offset: Option<String>,
-    #[serde(alias = "AUTO_OFFSET_RESET", alias = "autoOffsetReset")]
+    #[serde(
+        alias = "AUTO_OFFSET_RESET",
+        alias = "autoOffsetReset",
+        default,
+        deserialize_with = "deserialize_optional_string_or_number"
+    )]
     auto_offset_reset: Option<String>,
     #[serde(alias = "MAX_MESSAGES", alias = "maxMessages")]
     max_messages: Option<usize>,
     #[serde(alias = "BATCH_LOG_MESSAGES", alias = "batchLogMessages")]
     batch_log_messages: Option<usize>,
+    #[serde(
+        alias = "POLL_SIZE",
+        alias = "pollSize",
+        alias = "max.poll.records",
+        alias = "consumer.override.max.poll.records"
+    )]
+    poll_size: Option<usize>,
+    #[serde(
+        alias = "FETCH_MIN_BYTES",
+        alias = "fetchMinBytes",
+        alias = "fetch.min.bytes"
+    )]
+    fetch_min_bytes: Option<usize>,
+    #[serde(
+        alias = "FETCH_WAIT_MAX_MS",
+        alias = "fetchWaitMaxMs",
+        alias = "fetch.wait.max.ms"
+    )]
+    fetch_wait_max_ms: Option<u64>,
+    #[serde(
+        alias = "IDLE_TIMEOUT_MS",
+        alias = "idleTimeoutMs",
+        alias = "idle.timeout.ms",
+        alias = "idle_timeout_ms"
+    )]
+    idle_timeout_ms: Option<u64>,
+    #[serde(
+        alias = "MAX_PARTITION_FETCH_BYTES",
+        alias = "maxPartitionFetchBytes",
+        alias = "max.partition.fetch.bytes"
+    )]
+    max_partition_fetch_bytes: Option<usize>,
+    #[serde(
+        alias = "FETCH_MAX_BYTES",
+        alias = "fetchMaxBytes",
+        alias = "fetch.max.bytes"
+    )]
+    fetch_max_bytes: Option<usize>,
+    #[serde(alias = "TRANSACTION_BATCH_SIZE", alias = "transactionBatchSize")]
+    transaction_batch_size: Option<usize>,
+    #[serde(
+        alias = "FLUSH_BATCH_AFTER",
+        alias = "flushBatchAfter",
+        default,
+        deserialize_with = "deserialize_optional_string_or_number"
+    )]
+    flush_batch_after: Option<String>,
+    #[serde(alias = "WORKER_COUNT", alias = "workerCount", alias = "worker_count")]
+    worker_count: Option<usize>,
+    #[serde(alias = "GROUP_ID_LOG_SUFFIX", alias = "groupIdLogSuffix")]
+    group_id_log_suffix: Option<bool>,
+    #[serde(alias = "DEBUG", alias = "debug")]
+    debug: Option<String>,
+    #[serde(
+        alias = "QUEUED_MAX_MESSAGES_KBYTES",
+        alias = "queuedMaxMessagesKbytes",
+        alias = "queued.max.messages.kbytes",
+        alias = "consumer.override.queued.max.messages.kbytes",
+        alias = "queued_max_messages_kbytes"
+    )]
+    queued_max_messages_kbytes: Option<usize>,
+    #[serde(
+        alias = "ENABLE_AUTO_COMMIT",
+        alias = "enableAutoCommit",
+        alias = "enable.auto.commit",
+        alias = "consumer.override.enable.auto.commit",
+        alias = "enable_auto_commit"
+    )]
+    enable_auto_commit: Option<bool>,
+    #[serde(
+        alias = "COPY_MODE",
+        alias = "copyMode",
+        alias = "copy.mode",
+        alias = "copy_mode"
+    )]
+    copy_mode: Option<bool>,
+    #[serde(
+        alias = "STOP_ON_NO_LAG",
+        alias = "stopOnNoLag",
+        alias = "stop.on.no.lag",
+        alias = "stop_on_no_lag"
+    )]
+    stop_on_no_lag: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct TomlDatadogSection {
+    #[serde(alias = "DD_SERVICE", alias = "service")]
+    dd_service: Option<String>,
+}
+
+fn deserialize_optional_string_or_number<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Debug, Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        Str(String),
+        Signed(i64),
+        Unsigned(u64),
+    }
+
+    let parsed = Option::<StringOrNumber>::deserialize(deserializer)?;
+    Ok(parsed.map(|value| match value {
+        StringOrNumber::Str(s) => s,
+        StringOrNumber::Signed(n) => n.to_string(),
+        StringOrNumber::Unsigned(n) => n.to_string(),
+    }))
+}
+
+fn normalize_conf_key(raw: &str) -> String {
+    raw.chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(|ch| ch.to_lowercase())
+        .collect()
+}
+
+fn allowed_conf_key_set(keys: &[&str]) -> HashSet<String> {
+    keys.iter().map(|key| normalize_conf_key(key)).collect()
+}
+
+fn warn_unknown_keys_in_table(
+    path: &Path,
+    section_label: &str,
+    table: &toml::value::Table,
+    allowed_keys: &HashSet<String>,
+) {
+    for key in table.keys() {
+        if !allowed_keys.contains(&normalize_conf_key(key)) {
+            warn!(
+                "Unknown config key '{}' in [{}] section of {}. This key is ignored.",
+                key,
+                section_label,
+                path.display()
+            );
+        }
+    }
+}
+
+fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
+    let Some(root) = parsed_doc.as_table() else {
+        return;
+    };
+
+    let allowed_root =
+        allowed_conf_key_set(&["project", "source", "target", "kafka", "datadog"]);
+    for key in root.keys() {
+        if !allowed_root.contains(&normalize_conf_key(key)) {
+            warn!(
+                "Unknown top-level config section '{}' in {}. This section is ignored.",
+                key,
+                path.display()
+            );
+        }
+    }
+
+    let section_rules: [(&str, &[&str]); 5] = [
+        (
+            "project",
+            &[
+                "title",
+                "base_dir",
+                "cluster_name",
+                "project_dir",
+                "project_name",
+            ],
+        ),
+        (
+            "source",
+            &[
+                "uri",
+                "source_uri",
+                "namespace",
+                "number",
+                "percent",
+                "max_time_ms",
+                "chunk_size",
+                "auth_retry_max",
+                "log_level",
+                "log_format",
+                "add_grouped_key",
+                "jsonb",
+                "timestamp_field",
+                "datetime_field",
+                "include",
+                "exclude",
+            ],
+        ),
+        (
+            "target",
+            &[
+                "uri",
+                "target_uri",
+                "target_database_name",
+                "database_name",
+                "target_schema",
+                "schema_name",
+            ],
+        ),
+        (
+            "kafka",
+            &[
+                "bootstrap_servers",
+                "group_id",
+                "topics",
+                "topic_prefix",
+                "security_protocol",
+                "sasl_mechanism",
+                "sasl_username",
+                "sasl_password",
+                "ssl_ca_location",
+                "ssl_certificate_location",
+                "ssl_key_location",
+                "ssl_key_password",
+                "schema_registry_url",
+                "schema_registry_username",
+                "schema_registry_password",
+                "offset",
+                "auto_offset_reset",
+                "max_messages",
+                "batch_log_messages",
+                "poll_size",
+                "max.poll.records",
+                "consumer.override.max.poll.records",
+                "fetch_min_bytes",
+                "fetch.min.bytes",
+                "fetch_wait_max_ms",
+                "fetch.wait.max.ms",
+                "idle_timeout_ms",
+                "idle.timeout.ms",
+                "max_partition_fetch_bytes",
+                "max.partition.fetch.bytes",
+                "fetch_max_bytes",
+                "fetch.max.bytes",
+                "transaction_batch_size",
+                "flush_batch_after",
+                "worker_count",
+                "group_id_log_suffix",
+                "debug",
+                "queued_max_messages_kbytes",
+                "queued.max.messages.kbytes",
+                "consumer.override.queued.max.messages.kbytes",
+                "enable_auto_commit",
+                "enable.auto.commit",
+                "consumer.override.enable.auto.commit",
+                "copy_mode",
+                "stop_on_no_lag",
+                "stop.on.no.lag",
+            ],
+        ),
+        (
+            "datadog",
+            &["dd_service", "service"],
+        ),
+    ];
+
+    for (section_name, allowed_list) in section_rules {
+        if let Some(section_value) = root.get(section_name) {
+            if let Some(section_table) = section_value.as_table() {
+                let allowed = allowed_conf_key_set(allowed_list);
+                warn_unknown_keys_in_table(path, section_name, section_table, &allowed);
+            }
+        }
+    }
 }
 
 pub fn read_conf(path: &Path) -> Result<ConfData> {
     fn parse_toml_conf(path: &Path, content: &str) -> Result<ConfData> {
-        let parsed: TomlProjectConfig = toml::from_str(content)
+        let parsed_doc: toml::Value = toml::from_str(content)
+            .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
+        warn_unknown_toml_keys(path, &parsed_doc);
+        let has_project = parsed_doc.get("project").is_some();
+        let has_kafka = parsed_doc.get("kafka").is_some();
+        if has_kafka && !has_project {
+            return Err(anyhow!(
+                "Invalid config {}: found [kafka] section but missing required [project] section. \
+This often means the config file was truncated or overwritten. Provide full config with [project], [source], [target], and [kafka] sections.",
+                path.display()
+            ));
+        }
+
+        let parsed: TomlProjectConfig = parsed_doc
+            .clone()
+            .try_into()
             .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
         let source = parsed.source.unwrap_or_default();
         let target = parsed.target.unwrap_or_default();
+        let datadog = parsed.datadog.map(|d| DatadogConfData {
+            dd_service: d.dd_service,
+        });
         let kafka = parsed.kafka.map(|k| KafkaConfData {
             bootstrap_servers: k.bootstrap_servers,
             group_id: k.group_id,
             topics: k.topics,
             topic_prefix: k.topic_prefix,
+            security_protocol: k.security_protocol,
+            sasl_mechanism: k.sasl_mechanism,
+            sasl_username: k.sasl_username,
+            sasl_password: k.sasl_password,
+            ssl_ca_location: k.ssl_ca_location,
+            ssl_certificate_location: k.ssl_certificate_location,
+            ssl_key_location: k.ssl_key_location,
+            ssl_key_password: k.ssl_key_password,
             schema_registry_url: k.schema_registry_url,
             schema_registry_username: k.schema_registry_username,
             schema_registry_password: k.schema_registry_password,
@@ -189,13 +570,43 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             auto_offset_reset: k.auto_offset_reset,
             max_messages: k.max_messages,
             batch_log_messages: k.batch_log_messages,
+            poll_size: k.poll_size,
+            fetch_min_bytes: k.fetch_min_bytes,
+            fetch_wait_max_ms: k.fetch_wait_max_ms,
+            idle_timeout_ms: k.idle_timeout_ms,
+            max_partition_fetch_bytes: k.max_partition_fetch_bytes,
+            fetch_max_bytes: k.fetch_max_bytes,
+            transaction_batch_size: k.transaction_batch_size,
+            flush_batch_after: k.flush_batch_after,
+            worker_count: k.worker_count,
+            group_id_log_suffix: k.group_id_log_suffix,
+            debug: k.debug,
+            queued_max_messages_kbytes: k.queued_max_messages_kbytes,
+            enable_auto_commit: k.enable_auto_commit,
+            copy_mode: k.copy_mode,
+            stop_on_no_lag: k.stop_on_no_lag,
         });
+
+        let project_dir = parsed
+            .project
+            .project_name
+            .as_deref()
+            .or(parsed.project.project_dir.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Invalid config {}: [project] requires project_name or project_dir",
+                    path.display()
+                )
+            })?;
 
         Ok(ConfData {
             base_dir: parsed.project.base_dir,
             cluster_name: parsed.project.cluster_name,
             title: parsed.project.title,
-            project_dir: parsed.project.project_dir,
+            project_dir,
             source_uri: source.uri,
             target_uri: target.uri,
             target_database_name: target.database_name,
@@ -207,12 +618,14 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             chunk_size: source.chunk_size,
             auth_retry_max: source.auth_retry_max,
             log_level: source.log_level,
+            log_format: source.log_format,
             add_grouped_key: source.add_grouped_key.unwrap_or(false),
             jsonb: source.jsonb.unwrap_or(false),
             timestamp_fields: source.datetime_field,
             include: source.include,
             exclude: source.exclude,
             kafka,
+            datadog,
         })
     }
 
@@ -244,6 +657,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
         let mut chunk_size: Option<u64> = None;
         let mut auth_retry_max: Option<u32> = None;
         let mut log_level: Option<String> = None;
+        let mut log_format: Option<String> = None;
         let mut add_grouped_key: bool = false;
         let mut jsonb: bool = false;
 
@@ -255,6 +669,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
                     "TITLE" => title = parsed,
                     "CLUSTER_NAME" => cluster_name = Some(parsed),
                     "PROJECT_DIR" => project_dir = Some(parsed),
+                    "PROJECT_NAME" => project_dir = Some(parsed),
                     "SOURCE_URI" => source_uri = Some(parsed),
                     "TARGET_URI" => target_uri = Some(parsed),
                     "TARGET_DATABASE_NAME" => target_database_name = Some(parsed),
@@ -266,6 +681,7 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
                     "CHUNK_SIZE" => chunk_size = parsed.parse().ok(),
                     "AUTH_RETRY_MAX" => auth_retry_max = parsed.parse().ok(),
                     "LOG_LEVEL" => log_level = Some(parsed),
+                    "LOG_FORMAT" => log_format = Some(parsed),
                     "ADD_GROUPED_KEY" => {
                         add_grouped_key =
                             matches!(parsed.to_lowercase().as_str(), "true" | "1" | "yes")
@@ -299,12 +715,14 @@ pub fn read_conf(path: &Path) -> Result<ConfData> {
             chunk_size,
             auth_retry_max,
             log_level,
+            log_format,
             add_grouped_key,
             jsonb,
             timestamp_fields: default_timestamp_fields(),
             include: Vec::new(),
             exclude: Vec::new(),
             kafka: None,
+            datadog: None,
         })
     }
 
@@ -931,6 +1349,7 @@ project_dir = "dbapi"
 uri = "mongodb://example"
 datetime_field = ["last_update", "*_date"]
 log_level = "debug"
+log-format = "json"
 chunk_size = 1000000
 auth_retry_max = 3
 "#,
@@ -940,6 +1359,7 @@ auth_retry_max = 3
         let conf = read_conf(&config_path).expect("config should parse");
         assert_eq!(conf.timestamp_fields, vec!["last_update", "*_date"]);
         assert_eq!(conf.log_level.as_deref(), Some("debug"));
+        assert_eq!(conf.log_format.as_deref(), Some("json"));
         assert_eq!(conf.chunk_size, Some(1_000_000));
         assert_eq!(conf.auth_retry_max, Some(3));
 
@@ -1087,12 +1507,14 @@ BASE_DIR=/tmp
 PROJECT_DIR=dbapi
 SOURCE_URI=mongodb://example
 LOG_LEVEL=trace
+LOG_FORMAT=json
 "#,
         )
         .expect("write config");
 
         let conf = read_conf(&config_path).expect("config should parse");
         assert_eq!(conf.log_level.as_deref(), Some("trace"));
+    assert_eq!(conf.log_format.as_deref(), Some("json"));
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);
@@ -1154,6 +1576,78 @@ uri = "mongodb://example"
 
         let conf = read_conf(&config_path).expect("config should parse");
         assert!(!conf.add_grouped_key);
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_integer_kafka_offset() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+
+[kafka]
+bootstrap_servers = "localhost:9092"
+offset = 0
+auto_offset_reset = 0
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        let kafka = conf.kafka.expect("kafka section should parse");
+        assert_eq!(kafka.offset.as_deref(), Some("0"));
+        assert_eq!(kafka.auto_offset_reset.as_deref(), Some("0"));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_kafka_copy_mode() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-util-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+
+[kafka]
+bootstrap_servers = "localhost:9092"
+copy_mode = true
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        let kafka = conf.kafka.expect("kafka section should parse");
+        assert_eq!(kafka.copy_mode, Some(true));
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);

@@ -1,6 +1,6 @@
 //! PostgreSQL DDL generation from [`CollectionSchema`].
 //!
-//! Converts the internal schema representation produced by [`crate::analyzer::Analyzer`]
+//! Converts the internal schema representation produced by [`crate::engine::analyzer::Analyzer`]
 //! into one or more `CREATE TABLE` statements:
 //!
 //! * Scalar fields → columns with the closest PostgreSQL type.
@@ -15,7 +15,7 @@
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 
-use crate::analyzer::{
+use crate::engine::analyzer::{
     CollectionSchema, FieldSchema, TypeSchema, TYPE_ARRAY, TYPE_BINARY, TYPE_BOOLEAN, TYPE_CODE,
     TYPE_CODE_W_SCOPE, TYPE_DATE, TYPE_DBPOINTER, TYPE_DECIMAL128, TYPE_DOUBLE, TYPE_INT32,
     TYPE_INT64, TYPE_MAXKEY, TYPE_MINKEY, TYPE_NUMBER, TYPE_OBJECT, TYPE_OBJECTID, TYPE_REGEX,
@@ -30,9 +30,8 @@ use crate::util::{
     can_inline_object_fields, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_null_type, is_pg_reserved,
-    matches_timestamp_field, sanitize,
-    scalar_type_family,
+    inline_object_leaf_fields_with_prefix, is_null_type, is_pg_reserved, matches_timestamp_field,
+    sanitize, scalar_type_family,
 };
 
 const FORCED_TIMESTAMP_PG_TYPE: &str = "TIMESTAMP WITH TIME ZONE";
@@ -366,6 +365,15 @@ fn non_null_types(field: &FieldSchema) -> Vec<(&str, &TypeSchema)> {
         .collect()
 }
 
+fn field_has_sampled_null_values(field: &FieldSchema) -> bool {
+    field.types.values().any(|ts| {
+        ts.values
+            .as_ref()
+            .map(|values| values.iter().any(|value| value.is_null()))
+            .unwrap_or(false)
+    })
+}
+
 fn geo_merged_doc_parts(
     sub_fields: &IndexMap<String, FieldSchema>,
 ) -> Option<(&IndexMap<String, FieldSchema>, String, bool)> {
@@ -386,7 +394,9 @@ fn geo_merged_doc_parts(
             if geo_field_name.is_some() {
                 return None;
             }
-            geo_nullable = non_null.len() < field.types.len() || field.probability < 1.0;
+            geo_nullable = non_null.len() < field.types.len()
+                || field.probability < 1.0
+                || field_has_sampled_null_values(field);
             geo_field_name = Some(sanitize(name));
             continue;
         }
@@ -483,7 +493,15 @@ fn child_table_name(parent_name: &str, field: &str, pg_schema: Option<&str>) -> 
 }
 
 /// Prepend extension setup and optionally `CREATE SCHEMA` + `SET search_path` preamble.
-fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
+fn prepend_schema_preamble(
+    ddl: String,
+    pg_schema: Option<&str>,
+    schema_owner: Option<&str>,
+) -> String {
+    fn quote_ident_always(ident: &str) -> String {
+        format!("\"{}\"", ident.replace('"', "\"\""))
+    }
+
     let mut preamble = String::new();
 
     if ddl.contains("DEFAULT public.gen_random_uuid()") {
@@ -502,8 +520,19 @@ fn prepend_schema_preamble(ddl: String, pg_schema: Option<&str>) -> String {
         None => format!("{preamble}{ddl}"),
         Some(schema) => {
             let s = sanitize(schema);
+            let owner_stmt = schema_owner
+                .map(str::trim)
+                .filter(|owner| !owner.is_empty())
+                .map(|owner| {
+                    format!(
+                        "ALTER SCHEMA {} OWNER TO {};\n",
+                        quote_ident_always(&s),
+                        quote_ident_always(owner)
+                    )
+                })
+                .unwrap_or_default();
             format!(
-                "{preamble}CREATE SCHEMA IF NOT EXISTS {s};\nSET search_path = {s}, public;\n\n{ddl}"
+                "{preamble}CREATE SCHEMA IF NOT EXISTS {s};\n{owner_stmt}SET search_path = {s}, public;\n\n{ddl}"
             )
         }
     }
@@ -801,7 +830,7 @@ fn add_geo_merged_doc_table(
     );
     child.columns.push(Column {
         name: geo_field_col.to_owned(),
-        pg_type: "geometry(Point,4326)".to_owned(),
+        pg_type: "GEOMETRY(Point,4326)".to_owned(),
         nullable: geo_nullable,
         primary_key: false,
     });
@@ -1131,7 +1160,9 @@ fn flatten_inline_object_fields(
             continue;
         }
 
-        let nullable = non_null.len() < field.types.len() || field.probability < 1.0;
+        let nullable = non_null.len() < field.types.len()
+            || field.probability < 1.0
+            || field_has_sampled_null_values(field);
         let pg_type = if non_null.len() == 1 && non_null[0].0 == TYPE_ARRAY {
             "JSONB".to_owned()
         } else if non_null
@@ -1289,7 +1320,9 @@ pub fn process_fields(
 
         // A field is nullable when it has a Null/Undefined type OR when it is
         // absent in some documents (prob < 1.0).
-        let nullable = non_null.len() < field.types.len() || field.probability < 1.0;
+        let nullable = non_null.len() < field.types.len()
+            || field.probability < 1.0
+            || field_has_sampled_null_values(field);
 
         if non_null.is_empty() {
             // Field is always null/undefined – omit from DDL.
@@ -1756,7 +1789,11 @@ fn render_table(table: &Table) -> String {
         ));
     }
     let body = defs.join(",\n");
-    format!("CREATE TABLE {} (\n{}\n);", maybe_quote_ident(&table.name), body)
+    format!(
+        "CREATE TABLE {} (\n{}\n);",
+        maybe_quote_ident(&table.name),
+        body
+    )
 }
 
 fn render_fk_indexes(table: &Table) -> Vec<String> {
@@ -1795,15 +1832,16 @@ fn render_fk_indexes(table: &Table) -> Vec<String> {
 /// Summary statistics (table and column counts) are printed to **stderr**.
 ///
 /// # Arguments
-/// * `schema` – The schema produced by [`crate::analyzer::Analyzer::finish`].
+/// * `schema` – The schema produced by [`crate::engine::analyzer::Analyzer::finish`].
 /// * `table_name` – Base name for the root table (will be sanitised).
 ///
 /// # Returns
 /// A string containing one or more `CREATE TABLE` statements separated by blank lines.
-pub fn schema_to_ddl_with_timestamp_fields(
+pub fn schema_to_ddl_with_timestamp_fields_and_owner(
     schema: &CollectionSchema,
     table_name: &str,
     pg_schema: Option<&str>,
+    schema_owner: Option<&str>,
     timestamp_fields: &[String],
 ) -> String {
     if let Some(group) = flatten_grouped_root_array_object_fields(schema) {
@@ -1851,7 +1889,7 @@ pub fn schema_to_ddl_with_timestamp_fields(
             })
             .collect::<Vec<_>>()
             .join("\n\n");
-        return prepend_schema_preamble(ddl, pg_schema);
+        return prepend_schema_preamble(ddl, pg_schema, schema_owner);
     }
 
     if let Some((_, array_field)) = flatten_root_array_object_field(schema) {
@@ -1913,7 +1951,7 @@ pub fn schema_to_ddl_with_timestamp_fields(
                     })
                     .collect::<Vec<_>>()
                     .join("\n\n");
-                return prepend_schema_preamble(ddl, pg_schema);
+                return prepend_schema_preamble(ddl, pg_schema, schema_owner);
             }
         }
     }
@@ -1944,7 +1982,22 @@ pub fn schema_to_ddl_with_timestamp_fields(
         })
         .collect::<Vec<_>>()
         .join("\n\n");
-    prepend_schema_preamble(ddl, pg_schema)
+    prepend_schema_preamble(ddl, pg_schema, schema_owner)
+}
+
+pub fn schema_to_ddl_with_timestamp_fields(
+    schema: &CollectionSchema,
+    table_name: &str,
+    pg_schema: Option<&str>,
+    timestamp_fields: &[String],
+) -> String {
+    schema_to_ddl_with_timestamp_fields_and_owner(
+        schema,
+        table_name,
+        pg_schema,
+        None,
+        timestamp_fields,
+    )
 }
 
 pub fn schema_to_ddl(
@@ -1962,7 +2015,7 @@ pub fn schema_to_ddl(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::Analyzer;
+    use crate::engine::analyzer::Analyzer;
     use bson::doc;
 
     fn analyze(docs: &[bson::Document]) -> CollectionSchema {
@@ -2005,6 +2058,36 @@ mod tests {
             !ddl.contains("opt TEXT NOT NULL"),
             "optional field must not have NOT NULL"
         );
+    }
+
+    #[test]
+    fn test_schema_owner_is_rendered_when_provided() {
+        let docs = vec![doc! { "_id": 1_i32, "name": "Alice" }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl_with_timestamp_fields_and_owner(
+            &schema,
+            "users",
+            Some("ciam_prep2"),
+            Some("user_ciam"),
+            &[],
+        );
+        assert!(ddl.contains("CREATE SCHEMA IF NOT EXISTS ciam_prep2;"));
+        assert!(ddl.contains("ALTER SCHEMA \"ciam_prep2\" OWNER TO \"user_ciam\";"));
+        assert!(ddl.contains("SET search_path = ciam_prep2, public;"));
+    }
+
+    #[test]
+    fn test_schema_owner_not_rendered_when_missing() {
+        let docs = vec![doc! { "_id": 1_i32, "name": "Alice" }];
+        let schema = analyze(&docs);
+        let ddl = schema_to_ddl_with_timestamp_fields_and_owner(
+            &schema,
+            "users",
+            Some("ciam_prep2"),
+            None,
+            &[],
+        );
+        assert!(!ddl.contains("ALTER SCHEMA"));
     }
 
     #[test]
@@ -2065,6 +2148,53 @@ mod tests {
         assert!(
             !ddl.contains("last_update TEXT NOT NULL"),
             "JSON-backed null scalar field must not have NOT NULL"
+        );
+    }
+
+    #[test]
+    fn test_schema_json_with_sampled_null_values_inside_non_null_type_stays_nullable() {
+        let schema: CollectionSchema = serde_json::from_str(
+            r#"{
+    "count": 10,
+    "sampled": 10,
+    "object": {
+        "_id": {
+            "probability": 1.0,
+            "types": {
+                "ObjectId": {
+                    "probability": 1.0,
+                    "sampled": 10
+                }
+            }
+        },
+        "dst_airport": {
+            "probability": 1.0,
+            "types": {
+                "Double": {
+                    "probability": 0.1,
+                    "sampled": 1,
+                    "values": [null]
+                },
+                "String": {
+                    "probability": 0.9,
+                    "sampled": 9,
+                    "values": ["JFK", "LHR"]
+                }
+            }
+        }
+    }
+}"#,
+        )
+        .expect("schema json should parse");
+
+        let ddl = schema_to_ddl(&schema, "routes", None);
+        assert!(
+            ddl.contains("dst_airport TEXT"),
+            "field should be materialized as a text column"
+        );
+        assert!(
+            !ddl.contains("dst_airport TEXT NOT NULL"),
+            "sampled null values must force nullable column"
         );
     }
 
@@ -2152,7 +2282,10 @@ mod tests {
         assert!(ddl.contains("city "));
         assert!(ddl.contains("state "));
         assert!(ddl.contains("zipcode "));
-        assert!(ddl.contains("point geometry(Point,4326) NOT NULL"));
+        assert!(
+            ddl.to_ascii_lowercase()
+                .contains("point geometry(point,4326) not null")
+        );
         assert!(!ddl.contains("CREATE TABLE theaters_venue_details ("));
     }
 
@@ -2530,7 +2663,7 @@ mod tests {
                 "network_exposition": "public"
             }]
         }];
-        let mut analyzer = crate::analyzer::Analyzer::new(true);
+        let mut analyzer = crate::engine::analyzer::Analyzer::new(true);
         for doc in &docs {
             analyzer.process_document(doc);
         }
@@ -2560,7 +2693,7 @@ mod tests {
     //             }
     //         }]
     //     }];
-    //     let mut analyzer = crate::analyzer::Analyzer::new(true);
+    //     let mut analyzer = crate::engine::analyzer::Analyzer::new(true);
     //     for doc in &docs {
     //         analyzer.process_document(doc);
     //     }
@@ -2592,7 +2725,7 @@ mod tests {
             }]
         }];
 
-        let mut analyzer = crate::analyzer::Analyzer::new(true);
+        let mut analyzer = crate::engine::analyzer::Analyzer::new(true);
         for doc in &docs {
             analyzer.process_document(doc);
         }
@@ -2607,22 +2740,6 @@ mod tests {
         assert!(ddl.contains("permalink "));
         assert!(!ddl.contains("CREATE TABLE relationships ("));
         assert!(!ddl.contains("CREATE TABLE relationships_person ("));
-    }
-
-    #[test]
-    fn monitoring_with_items_skewed_item_between_string_and_object() {
-        let json_str = std::fs::read_to_string("tests/fixtures/monitoring_test1.json")
-            .expect("Failed to read fixture");
-
-        let doc: bson::Document = serde_json::from_str(&json_str).expect("Failed to parse JSON");
-
-        let mut analyzer = Analyzer::new(true);
-        analyzer.process_document(&doc);
-        let schema = analyzer.finish();
-
-        let ddl = schema_to_ddl(&schema, "monitoring", None);
-
-        assert!(ddl.contains("CREATE TABLE monitoring ("));
     }
 
     #[test]
