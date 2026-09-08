@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  tests-unit:
     name: Test
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
@@ -44,7 +44,7 @@ jobs:
   build:
     name: Build – ${{ matrix.target }}
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
-    needs: e2e-tests
+    needs: tests-e2e
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -84,8 +84,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key:
-            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')}}
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')}}
           restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
 
       - name: Build release binary
@@ -106,9 +105,9 @@ jobs:
           path: ${{ matrix.artifact }}
           retention-days: 7
 
-  e2e-tests:
+  tests-e2e:
     name: Run E2E tests
-    needs: test
+    needs: tests-unit
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
     uses: ./.github/workflows/e2e_tests.yml
     with:
@@ -118,7 +117,7 @@ jobs:
 
   preview-release:
     name: Publish PR preview release
-    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    if: (github.event_name != 'pull_request' || github.event.action != 'closed') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     needs: build
     runs-on: ubuntu-latest
     env:
