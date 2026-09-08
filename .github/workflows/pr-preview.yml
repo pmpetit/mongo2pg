@@ -53,15 +53,15 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: mongo2pg-linux-x86_64
-          # - os: ubuntu-24.04-arm
-          #   target: aarch64-unknown-linux-gnu
-          #   artifact: mongo2pg-linux-aarch64
-          # - os: macos-26-intel
-          #   target: x86_64-apple-darwin
-          #   artifact: mongo2pg-macos-x86_64
-          # - os: macos-latest
-          #   target: aarch64-apple-darwin
-          #   artifact: mongo2pg-macos-aarch64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: mongo2pg-linux-aarch64
+          - os: macos-26-intel
+            target: x86_64-apple-darwin
+            artifact: mongo2pg-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: mongo2pg-macos-aarch64
           # - os: windows-latest
           #   target: x86_64-pc-windows-msvc
           #   artifact: mongo2pg-windows-x86_64.exe
@@ -105,15 +105,15 @@ jobs:
           path: ${{ matrix.artifact }}
           retention-days: 7
 
-  # tests-e2e:
-  #   name: Run E2E tests
-  #   needs: tests-unit
-  #   if: github.event_name != 'pull_request' || github.event.action != 'closed'
-  #   uses: ./.github/workflows/e2e_tests.yml
-  #   with:
-  #     database: sample_analytics
-  #     release_tag: pre-tag
-  #   secrets: inherit
+  tests-e2e:
+    name: Run E2E tests
+    needs: tests-unit
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    uses: ./.github/workflows/e2e_tests.yml
+    with:
+      database: sample_analytics
+      release_tag: pre-tag
+    secrets: inherit
 
   preview-release:
     name: Publish PR preview release
