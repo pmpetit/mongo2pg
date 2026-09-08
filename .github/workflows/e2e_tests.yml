@@ -51,7 +51,8 @@ jobs:
               run: |
                   set -euo pipefail
 
-                  DEFAULT='["sample_analytics","sample_airbnb","sample_geospatial","sample_mflix","sample_supplies","sample_training","sample_weatherdata", "sample_events"]'
+                  #DEFAULT='["sample_analytics","sample_airbnb","sample_geospatial","sample_mflix","sample_supplies","sample_training","sample_weatherdata", "sample_events"]'
+                  DEFAULT='["sample_geospatial"]'
                   INPUT_DATABASES="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.database || '' }}"
 
                   if [ -z "${INPUT_DATABASES}" ]; then
