@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-08
+
+### Changed
+
+- **CI workflow sequencing**: PR preview pipeline now runs unit tests and reusable E2E validation before packaging preview artifacts.
+- **CI workflow refresh**: updated workflow runner and build/release wiring in preview automation.
+- **PR preview workflow job naming**: renamed the unit test job key from `test` to `tests-unit` and the reusable E2E job key from `e2e-tests` to `tests-e2e` for clearer CI graph naming.
+
+### Fixed
+
+- **PR preview release authorization**: preview release and cleanup steps now prefer `RELEASE_PAT` (with fallback to `GITHUB_TOKEN`) to avoid `HTTP 403: Resource not accessible by integration` on release API calls in restricted-token contexts.
+- **Fork PR release failures**: preview release publication now runs only for same-repository pull requests, preventing release creation attempts in fork PR runs where release permissions are unavailable.
+
 ## [0.7.3] - 2026-09-07
 
 ### Changed

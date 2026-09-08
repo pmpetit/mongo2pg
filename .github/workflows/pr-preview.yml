@@ -44,7 +44,7 @@ jobs:
   build:
     name: Build – ${{ matrix.target }}
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
-    # needs: tests-e2e
+    needs: tests-e2e
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
