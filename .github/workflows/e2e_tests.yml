@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       database:
-        description: "Database list to test (supports newline, space, or comma separated values)"
+        description: "Database list to test (supports newline, space, or comma separated values)."
         required: true
         type: string
         default: "sample_analytics"
