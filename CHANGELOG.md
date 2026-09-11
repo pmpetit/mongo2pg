@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * add cluster-level migrability score and cluster-report subcommand ([d2594f1](https://github.com/pmpetit/mongo2pg/commit/d2594f180fbb2d4914c19c4472e5e22ef0949ad2))
 * add docker compose ([93d541c](https://github.com/pmpetit/mongo2pg/commit/93d541c7d6d812bbc9c112305700e5aa139d9bd8))
-* add docker compose for kafka ([d1404a5](https://github.com/pmpetit/mongo2pg/commit/d1404a527389c41fd47c0af993896e469577aa06))
-* add docker compose for kafka ([8dd9964](https://github.com/pmpetit/mongo2pg/commit/8dd996478258d8840ac7a191a0b10496a7fc0e42))
+* add docker compose for Kafka ([d1404a5](https://github.com/pmpetit/mongo2pg/commit/d1404a527389c41fd47c0af993896e469577aa06))
+* add docker compose for Kafka ([8dd9964](https://github.com/pmpetit/mongo2pg/commit/8dd996478258d8840ac7a191a0b10496a7fc0e42))
 * add exclude/include properties, fix number to double ([8732808](https://github.com/pmpetit/mongo2pg/commit/873280839c7af4f7d4c206ed418726cfb52ef6d7))
 * add wf to build package ([79ee354](https://github.com/pmpetit/mongo2pg/commit/79ee354fb8882360e27d2602e59b70e4117bd927))
 * add wf to build package ([25619ad](https://github.com/pmpetit/mongo2pg/commit/25619ad78e75f911a6cf1c866c6ead8fdd5fc914))
