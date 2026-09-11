@@ -6,18 +6,18 @@ on:
   push:
     tags:
       - v*
-  # workflow_dispatch:
-  #   inputs:
-  #     database:
-  #       description: "Database list to test (supports newline, space, or comma separated values)"
-  #       required: true
-  #       type: string
-  #       default: "sample_analytics"
-  #     release_tag:
-  #       description: "GitHub Release tag to use for mongo2pg binary (optional, supports prerelease tags)"
-  #       required: false
-  #       type: string
-  #       default: pre-tag
+  workflow_dispatch:
+    inputs:
+      database:
+        description: "Database list to test (supports newline, space, or comma separated values)"
+        required: true
+        type: string
+        default: "sample_analytics"
+      release_tag:
+        description: "GitHub Release tag to use for mongo2pg binary (optional, supports prerelease tags)"
+        required: false
+        type: string
+        default: pre-tag
   workflow_call:
     inputs:
       database:
