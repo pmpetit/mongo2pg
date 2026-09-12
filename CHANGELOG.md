@@ -401,8 +401,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * CI pipeline with GitHub Actions
 
 [Unreleased]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.8.0...HEAD
-[0.6.4]: https://github.com/pmpetit/mongo2pg/compare/v0.6.3...v0.6.4
-[0.6.3]: https://github.com/pmpetit/mongo2pg/compare/v0.5.3...v0.6.3
+[0.8.0]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.7.0...mongo2pg-v0.8.0
+[0.7.3]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.7.2...mongo2pg-v0.7.3
+[0.7.2]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.7.0...mongo2pg-v0.7.2
+[0.7.0]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.6.0...mongo2pg-v0.7.0
+[0.6.5]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.6.4...mongo2pg-v0.6.5
+[0.6.4]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.6.3...mongo2pg-v0.6.4
+[0.6.3]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.5.3...mongo2pg-v0.6.3
+[0.6.1]: https://github.com/pmpetit/mongo2pg/compare/mongo2pg-v0.6.0...mongo2pg-v0.6.1
 [0.5.3]: https://github.com/pmpetit/mongo2pg/compare/v0.4.0...v0.5.3
 [0.4.0]: https://github.com/pmpetit/mongo2pg/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/pmpetit/mongo2pg/compare/v0.3.6...v0.3.7
