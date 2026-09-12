@@ -5,6 +5,12 @@ on:
     tags:
       - "v*.*.*"
       - "mongo2pg-v*.*.*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to build/upload assets for"
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -45,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_call' && inputs.tag || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -94,6 +100,6 @@ jobs:
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v3.0.2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event_name == 'workflow_call' && inputs.tag || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
           files: artifacts/*
           generate_release_notes: true
