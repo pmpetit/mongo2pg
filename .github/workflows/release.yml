@@ -98,7 +98,7 @@ jobs:
           merge-multiple: true
 
       - name: Create release and upload assets
-        uses: softprops/action-gh-release@v3.0.2
+        uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ github.event_name == 'workflow_call' && inputs.tag || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
           target_commitish: ${{ github.event_name == 'workflow_call' && inputs.tag || github.sha }}
