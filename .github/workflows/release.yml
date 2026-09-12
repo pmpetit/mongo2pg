@@ -101,5 +101,7 @@ jobs:
         uses: softprops/action-gh-release@v3.0.2
         with:
           tag_name: ${{ github.event_name == 'workflow_call' && inputs.tag || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.event_name == 'workflow_call' && inputs.tag || github.sha }}
           files: artifacts/*
           generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
