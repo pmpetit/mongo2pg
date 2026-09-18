@@ -5539,28 +5539,28 @@ mod tests {
     #[test]
     fn parse_topic_db_collection_accepts_prefix_with_trailing_dot() {
         let parsed = parse_topic_db_collection(
-            "adeo-dev-ciam-prep.events_lmfr",
-            Some("adeo-dev-ciam-prep."),
-            Some("adeo-dev-ciam-prep"),
+            "acme-dev-idm-prep.events_lmfr",
+            Some("acme-dev-idm-prep."),
+            Some("acme-dev-idm-prep"),
         );
 
         assert_eq!(
             parsed,
-            Some(("adeo-dev-ciam-prep".to_owned(), "events_lmfr".to_owned()))
+            Some(("acme-dev-idm-prep".to_owned(), "events_lmfr".to_owned()))
         );
     }
 
     #[test]
     fn parse_topic_db_collection_accepts_prefix_without_trailing_dot() {
         let parsed = parse_topic_db_collection(
-            "adeo-dev-ciam-prep.events_lmfr",
-            Some("adeo-dev-ciam-prep"),
-            Some("adeo-dev-ciam-prep"),
+            "acme-dev-idm-prep.events_lmfr",
+            Some("acme-dev-idm-prep"),
+            Some("acme-dev-idm-prep"),
         );
 
         assert_eq!(
             parsed,
-            Some(("adeo-dev-ciam-prep".to_owned(), "events_lmfr".to_owned()))
+            Some(("acme-dev-idm-prep".to_owned(), "events_lmfr".to_owned()))
         );
     }
 }

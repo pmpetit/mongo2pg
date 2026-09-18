@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
     let runtime_namespace = resolve_runtime_namespace(&cli);
     let (log_level, log_format) = resolve_effective_runtime_log_settings(&cli)?;
     let otel_provider = if dd_agent_host_is_configured() {
-        let provider = adeo_basics_rs::set_opentelemetry(&runtime_service_name).map_err(|err| {
+        let provider = acme_basics_rs::set_opentelemetry(&runtime_service_name).map_err(|err| {
             anyhow!(
                 "OpenTelemetry init failed for service '{}': {}",
                 runtime_service_name,
@@ -1174,7 +1174,7 @@ mod tests {
             "events_lmza".to_owned(),
             "events_bcit".to_owned(),
             "users".to_owned(),
-            "ciam_prod".to_owned(),
+            "idm_prod".to_owned(),
         ];
         let groups = detect_candidate_groups(&names);
         assert_eq!(groups.len(), 1, "only 'events' prefix should form a group");
@@ -1918,31 +1918,31 @@ schema_name = "shared_schema"
     #[test]
     fn resolve_target_database_name_prefers_target_database_name() {
         let resolved = super::resolve_target_database_name_from_conf(
-            Some("ciam_prep2"),
-            Some("ciam_prep.events_lmpt"),
+            Some("idm_prep2"),
+            Some("idm_prep.events_lmpt"),
         );
-        assert_eq!(resolved.as_deref(), Some("ciam_prep2"));
+        assert_eq!(resolved.as_deref(), Some("idm_prep2"));
     }
 
     #[test]
     fn resolve_target_database_name_falls_back_to_namespace_database() {
         let resolved =
-            super::resolve_target_database_name_from_conf(None, Some("ciam_prep.events_lmpt"));
-        assert_eq!(resolved.as_deref(), Some("ciam_prep"));
+            super::resolve_target_database_name_from_conf(None, Some("idm_prep.events_lmpt"));
+        assert_eq!(resolved.as_deref(), Some("idm_prep"));
     }
 
     #[test]
     fn resolve_preamble_database_name_prefers_config_db_name() {
-        let rel = PathBuf::from("ciam_prep/events_lmpt.sql");
-        let resolved = super::resolve_preamble_database_name(Some("ciam_prep2"), &rel);
-        assert_eq!(resolved.as_deref(), Some("ciam_prep2"));
+        let rel = PathBuf::from("idm_prep/events_lmpt.sql");
+        let resolved = super::resolve_preamble_database_name(Some("idm_prep2"), &rel);
+        assert_eq!(resolved.as_deref(), Some("idm_prep2"));
     }
 
     #[test]
     fn resolve_preamble_database_name_falls_back_to_rel_path_parent() {
-        let rel = PathBuf::from("ciam_prep/events_lmpt.sql");
+        let rel = PathBuf::from("idm_prep/events_lmpt.sql");
         let resolved = super::resolve_preamble_database_name(None, &rel);
-        assert_eq!(resolved.as_deref(), Some("ciam_prep"));
+        assert_eq!(resolved.as_deref(), Some("idm_prep"));
     }
 
     #[test]
@@ -2905,12 +2905,12 @@ pg_mapping:
                 }],
                 foreign_keys: Vec::new(),
             }],
-            Some("ciam_prep2"),
-            Some("user_ciam"),
+            Some("idm_prep2"),
+            Some("user_idm"),
         );
 
-        assert!(sql.contains("CREATE SCHEMA IF NOT EXISTS \"ciam_prep2\";"));
-        assert!(sql.contains("ALTER SCHEMA \"ciam_prep2\" OWNER TO \"user_ciam\";"));
+        assert!(sql.contains("CREATE SCHEMA IF NOT EXISTS \"idm_prep2\";"));
+        assert!(sql.contains("ALTER SCHEMA \"idm_prep2\" OWNER TO \"user_idm\";"));
     }
 
     #[test]
@@ -3325,7 +3325,7 @@ pg_mapping:
     #[test]
     fn preflight_existing_tables_error_includes_remediation() {
         let err = super::preflight_existing_tables_error(
-            "ciam_prep",
+            "idm_prep",
             &[("events".to_owned(), "root".to_owned())],
         );
         let rendered = format!("{err:#}");

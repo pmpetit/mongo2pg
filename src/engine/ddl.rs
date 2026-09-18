@@ -2067,13 +2067,13 @@ mod tests {
         let ddl = schema_to_ddl_with_timestamp_fields_and_owner(
             &schema,
             "users",
-            Some("ciam_prep2"),
-            Some("user_ciam"),
+            Some("idm_prep2"),
+            Some("user_idm"),
             &[],
         );
-        assert!(ddl.contains("CREATE SCHEMA IF NOT EXISTS ciam_prep2;"));
-        assert!(ddl.contains("ALTER SCHEMA \"ciam_prep2\" OWNER TO \"user_ciam\";"));
-        assert!(ddl.contains("SET search_path = ciam_prep2, public;"));
+        assert!(ddl.contains("CREATE SCHEMA IF NOT EXISTS idm_prep2;"));
+        assert!(ddl.contains("ALTER SCHEMA \"idm_prep2\" OWNER TO \"user_idm\";"));
+        assert!(ddl.contains("SET search_path = idm_prep2, public;"));
     }
 
     #[test]
@@ -2083,7 +2083,7 @@ mod tests {
         let ddl = schema_to_ddl_with_timestamp_fields_and_owner(
             &schema,
             "users",
-            Some("ciam_prep2"),
+            Some("idm_prep2"),
             None,
             &[],
         );

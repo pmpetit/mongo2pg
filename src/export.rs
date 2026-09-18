@@ -2837,8 +2837,8 @@ mod tests {
 
     #[test]
     fn gcs_object_key_keeps_grouped_export_layout() {
-        let key = gcs_object_key("team/prefix", "ciam_prep", "events", "events.csv.gz");
-        assert_eq!(key, "team/prefix/data/ciam_prep/events/events.csv.gz");
+        let key = gcs_object_key("team/prefix", "idm_prep", "events", "events.csv.gz");
+        assert_eq!(key, "team/prefix/data/idm_prep/events/events.csv.gz");
     }
 
     #[test]
