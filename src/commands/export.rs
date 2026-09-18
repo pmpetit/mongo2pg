@@ -2,6 +2,7 @@
 //! artifacts alongside the generated schema tables.
 
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
@@ -11,7 +12,8 @@ use strsim::jaro_winkler;
 
 use crate::cli::ExportArgs;
 use crate::commands::shared::{
-    apply_config_overrides, ensure_output_prefix_segments, resolve_collections_dir,
+    apply_config_overrides, ensure_output_prefix_segments, multi_db_data_dir,
+    multi_db_schema_tables_dir, multi_db_source_collections_dir, resolve_collections_dir,
     resolve_export_chunk_size, split_namespace_scope, stage_export_metadata_from_gcs,
     ConfigOverrides,
 };
@@ -20,7 +22,8 @@ use crate::export::{
     ExportWriteBackend,
 };
 use crate::util::{
-    configured_project_root, connection_failed_context, read_conf, should_infer_collection,
+    configured_project_root, connection_failed_context, read_conf,
+    resolve_target_mapping_for_namespace_index, should_infer_collection,
 };
 
 pub fn sanitize_export_lookup_name(name: &str) -> String {
@@ -79,10 +82,115 @@ pub fn plan_export_jobs_for_collections(
 }
 
 pub async fn run_export(args: ExportArgs) -> Result<()> {
+    fn has_collection_json_files(root: &Path) -> bool {
+        let mut pending_dirs = vec![root.to_path_buf()];
+        while let Some(dir) = pending_dirs.pop() {
+            let Ok(entries) = fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.filter_map(|entry| entry.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending_dirs.push(path);
+                    continue;
+                }
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     let conf = args
         .config
         .as_ref()
         .ok_or_else(|| anyhow!("Provide -c <config>"))?;
+
+    let initial_conf = read_conf(conf)?;
+    if args.namespace.is_none() && initial_conf.namespace_databases.len() > 1 {
+        let mut failures: Vec<String> = Vec::new();
+        let local_project_root = configured_project_root(&initial_conf);
+        let is_local_backend = matches!(
+            resolve_export_write_backend(&initial_conf.base_dir)?,
+            ExportWriteBackend::LocalFs
+        );
+
+        for (idx, db_name) in initial_conf.namespace_databases.iter().enumerate() {
+            if is_local_backend {
+                let collections_dir = multi_db_source_collections_dir(&local_project_root, db_name);
+                if !collections_dir.is_dir() || !has_collection_json_files(&collections_dir) {
+                    warn!(
+                        "Skipping export for database '{}': no inferred collection JSON files found under {}",
+                        db_name,
+                        collections_dir.display()
+                    );
+                    continue;
+                }
+            }
+
+            let (mapped_db, mapped_schema) =
+                resolve_target_mapping_for_namespace_index(&initial_conf, idx, db_name);
+            let effective_db = args
+                .database_name
+                .clone()
+                .unwrap_or_else(|| mapped_db.clone());
+            let effective_schema = args
+                .schema_name
+                .clone()
+                .unwrap_or_else(|| mapped_schema.clone());
+
+            let stage_dir = tempfile::Builder::new()
+                .prefix("mongo2pg-export-conf-")
+                .tempdir()
+                .context("Failed to create temporary config dir for multi-db export")?;
+            let staged_conf = stage_dir.path().join("db.toml");
+            std::fs::copy(conf, &staged_conf).with_context(|| {
+                format!(
+                    "Failed to stage config {} to {}",
+                    conf.display(),
+                    staged_conf.display()
+                )
+            })?;
+
+            apply_config_overrides(
+                &staged_conf,
+                &ConfigOverrides {
+                    project_dir: args.project_dir.clone(),
+                    source_uri: args.mongo.source_uri.clone(),
+                    namespace: Some(db_name.clone()),
+                    chunk_size: args.chunk_size,
+                    target_database_name: Some(effective_db),
+                    target_schema_name: Some(effective_schema),
+                    ..ConfigOverrides::default()
+                },
+            )?;
+
+            let mut child_args = args.clone();
+            child_args.config = Some(staged_conf.clone());
+            child_args.namespace = Some(db_name.clone());
+            child_args.database_name = None;
+            child_args.schema_name = None;
+
+            if let Err(err) = Box::pin(run_export(child_args)).await {
+                failures.push(format!("{}: {:#}", db_name, err));
+            }
+        }
+
+        if !failures.is_empty() {
+            return Err(anyhow!(
+                "Export failed for {} configured database(s): {}",
+                failures.len(),
+                failures.join(" | ")
+            ));
+        }
+
+        return Ok(());
+    }
 
     apply_config_overrides(
         conf,
@@ -149,18 +257,37 @@ pub async fn run_export(args: ExportArgs) -> Result<()> {
 
     let mut export_metadata_stage: Option<tempfile::TempDir> = None;
     let project_root: PathBuf;
-    // Use <project_root>/schema/tables/<db_name> for SQL files
-    let tables_dir: PathBuf;
+    // Use <project_root>/schema/tables/<db_name> for SQL files, or
+    // <project_root>/<db_name>/schema/tables when multiple databases are
+    // configured (`[source].namespace` array with 2+ entries).
+    let is_multi_db = c.namespace_databases.len() > 1;
+    let mut use_multi_db_layout = false;
+    let mut tables_dir: PathBuf;
     let collections_dir: PathBuf;
 
     match &storage_backend {
         ExportWriteBackend::LocalFs => {
             project_root = configured_project_root(&c);
-            tables_dir = project_root
-                .join("schema")
-                .join("tables")
-                .join(tables_db_name);
-            collections_dir = resolve_collections_dir(&project_root, namespace_db_name);
+            let multi_db_tables_candidate =
+                multi_db_schema_tables_dir(&project_root, namespace_db_name);
+            let multi_db_collections_candidate =
+                multi_db_source_collections_dir(&project_root, namespace_db_name);
+
+            if multi_db_tables_candidate.is_dir() && multi_db_collections_candidate.is_dir() {
+                tables_dir = multi_db_tables_candidate;
+                collections_dir = multi_db_collections_candidate;
+                use_multi_db_layout = true;
+            } else if is_multi_db {
+                tables_dir = multi_db_schema_tables_dir(&project_root, namespace_db_name);
+                collections_dir = multi_db_source_collections_dir(&project_root, namespace_db_name);
+                use_multi_db_layout = true;
+            } else {
+                tables_dir = project_root
+                    .join("schema")
+                    .join("tables")
+                    .join(tables_db_name);
+                collections_dir = resolve_collections_dir(&project_root, namespace_db_name);
+            }
         }
         ExportWriteBackend::Gcs { bucket, prefix } => {
             let Some(stage) = stage_export_metadata_from_gcs(
@@ -194,6 +321,26 @@ pub async fn run_export(args: ExportArgs) -> Result<()> {
         }
     }
 
+    // Backward/forward compatibility: grouped to-pg may place SQL files under
+    // <tables_dir>/<target_db>/*.sql. If no SQL exists at the root, descend.
+    let has_sql_in_tables_root = fs::read_dir(&tables_dir)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
+        .any(|entry| {
+            entry
+                .path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"))
+        });
+    if !has_sql_in_tables_root {
+        let nested_tables_dir = tables_dir.join(tables_db_name);
+        if nested_tables_dir.is_dir() {
+            tables_dir = nested_tables_dir;
+        }
+    }
+
     if !tables_dir.is_dir() {
         return Err(anyhow!(
             "Cannot read SQL tables directory {}",
@@ -218,6 +365,9 @@ pub async fn run_export(args: ExportArgs) -> Result<()> {
     let (data_dir, cleanup_staging_after_export) = match (&storage_backend, args.output_dir.clone())
     {
         (_, Some(dir)) => (dir, false),
+        (ExportWriteBackend::LocalFs, None) if use_multi_db_layout => {
+            (multi_db_data_dir(&project_root, namespace_db_name), false)
+        }
         (ExportWriteBackend::LocalFs, None) => (project_root.join("data"), false),
         (ExportWriteBackend::Gcs { .. }, None) => {
             let staging_dir = std::env::temp_dir().join(format!(

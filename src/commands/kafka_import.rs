@@ -22,12 +22,13 @@ use tracing::Instrument;
 use crate::cli::KafkaImportArgs;
 use crate::commands::ping::kafka_worker_child_extra_args;
 use crate::commands::shared::{
+    apply_config_overrides,
     child_row_objects_for_mapping, extract_psql_database_name, extract_search_path,
     format_postgres_error, is_missing_postgis_control_file, normalize_pg_identifier,
     pg_uri_with_database, preflight_existing_tables_error, quote_ident, resolve_collections_dir,
     resolve_local_project_root_from_config, sanitize_name, split_namespace_scope,
     stage_export_metadata_from_gcs, strip_postgis_extension_statement, strip_psql_preamble,
-    CollectionMapping, DdlForeignKeyMapping,
+    CollectionMapping, ConfigOverrides, DdlForeignKeyMapping,
 };
 #[cfg(test)]
 use crate::commands::shared::{default_ddl_editing_guidance, DdlTableMapping, PgMapping};
@@ -37,6 +38,7 @@ use crate::export::{resolve_export_write_backend, ExportWriteBackend};
 use crate::schema_diagram::parse_sql;
 use crate::util::{
     configured_project_root, connection_failed_context, objectid_hex_to_uuid, read_conf,
+    resolve_target_mapping_for_namespace_index,
 };
 
 fn is_root_mapping(mapping: &CollectionMapping) -> bool {
@@ -1935,12 +1937,24 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         };
 
         let mut tables_root = project_root.join("schema").join("tables");
-        let mut tables_dir = if tables_root.join(db_name).is_dir() {
+        let multi_db_tables_dir =
+            crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
+        let mut tables_dir = if multi_db_tables_dir.is_dir() {
+            multi_db_tables_dir
+        } else if tables_root.join(db_name).is_dir() {
             tables_root.join(db_name)
         } else {
             tables_root.clone()
         };
-        let mut collections_dir = resolve_collections_dir(&project_root, db_name);
+        let mut collections_dir = {
+            let multi_db_collections_dir =
+                crate::commands::shared::multi_db_source_collections_dir(&project_root, db_name);
+            if multi_db_collections_dir.is_dir() {
+                multi_db_collections_dir
+            } else {
+                resolve_collections_dir(&project_root, db_name)
+            }
+        };
         let mut metadata_stage = None;
 
         if matches!(&storage_backend, ExportWriteBackend::Gcs { .. }) {
@@ -3508,6 +3522,71 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         conf.project_dir = project_dir;
     }
 
+    if conf.namespace_databases.len() > 1 {
+        if !args.topics.is_empty() {
+            return Err(anyhow!(
+                "kafka-import with multi-database namespace arrays does not support --topics; use kafka.topic_prefix or run one database at a time"
+            ));
+        }
+
+        let mut failures: Vec<String> = Vec::new();
+        for (idx, db_name) in conf.namespace_databases.iter().enumerate() {
+            let (mapped_db, mapped_schema) =
+                resolve_target_mapping_for_namespace_index(&conf, idx, db_name);
+            let effective_db = args
+                .database_name
+                .clone()
+                .unwrap_or_else(|| mapped_db.clone());
+            let effective_schema = args
+                .schema_name
+                .clone()
+                .unwrap_or_else(|| mapped_schema.clone());
+
+            let stage_dir = tempfile::Builder::new()
+                .prefix("mongo2pg-kafka-import-conf-")
+                .tempdir()
+                .context("Failed to create temporary config dir for multi-db kafka-import")?;
+            let staged_conf = stage_dir.path().join("db.toml");
+            std::fs::copy(&args.config, &staged_conf).with_context(|| {
+                format!(
+                    "Failed to stage config {} to {}",
+                    args.config.display(),
+                    staged_conf.display()
+                )
+            })?;
+
+            apply_config_overrides(
+                &staged_conf,
+                &ConfigOverrides {
+                    project_dir: args.project_dir.clone(),
+                    namespace: Some(db_name.clone()),
+                    target_database_name: Some(effective_db),
+                    target_schema_name: Some(effective_schema),
+                    ..ConfigOverrides::default()
+                },
+            )?;
+
+            let mut child_args = args.clone();
+            child_args.config = staged_conf;
+            child_args.database_name = None;
+            child_args.schema_name = None;
+
+            if let Err(err) = Box::pin(run_kafka_import(child_args)).await {
+                failures.push(format!("{}: {:#}", db_name, err));
+            }
+        }
+
+        if !failures.is_empty() {
+            return Err(anyhow!(
+                "kafka-import failed for {} configured database(s): {}",
+                failures.len(),
+                failures.join(" | ")
+            ));
+        }
+
+        return Ok(());
+    }
+
     let mut kafka_conf = conf
         .kafka
         .clone()
@@ -4108,26 +4187,26 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let mut copy_skipped_empty_columns = 0_usize;
     let mut copy_unconvertible_literal_samples: Vec<String> = Vec::new();
     let mut copy_allowed_cache: HashMap<String, bool> = HashMap::new();
-    let global_span_rate_per_sec = std::env::var("M2PG_SPAN_RATE_GLOBAL_PER_SEC")
+    let global_span_rate_per_sec = std::env::var("M2PG_OTEL_SPAN_RATE_GLOBAL_PER_SEC")
         .ok()
         .and_then(|raw| raw.trim().parse::<f64>().ok())
         .filter(|value| value.is_finite() && *value > 0.0)
         .unwrap_or(15.0);
     let workers_for_rate = worker_count_for_logs.max(1) as f64;
     let db_write_span_rate_per_worker = global_span_rate_per_sec / workers_for_rate;
-    let db_write_span_burst_per_worker = std::env::var("M2PG_SPAN_BURST_PER_WORKER")
+    let db_write_span_burst_per_worker = std::env::var("M2PG_OTEL_SPAN_BURST_PER_WORKER")
         .ok()
         .and_then(|raw| raw.trim().parse::<f64>().ok())
         .filter(|value| value.is_finite() && *value > 0.0)
         .unwrap_or_else(|| db_write_span_rate_per_worker.max(1.0).ceil());
-    let read_decode_rate_global_per_sec = std::env::var("M2PG_SPAN_RATE_READ_DECODE_PER_SEC")
+    let read_decode_rate_global_per_sec = std::env::var("M2PG_OTEL_SPAN_RATE_READ_DECODE_PER_SEC")
         .ok()
         .and_then(|raw| raw.trim().parse::<f64>().ok())
         .filter(|value| value.is_finite() && *value > 0.0)
         .unwrap_or(2.0);
     let read_decode_span_rate_per_worker = read_decode_rate_global_per_sec / workers_for_rate;
     let read_decode_span_burst_per_worker =
-        std::env::var("M2PG_SPAN_BURST_READ_DECODE_PER_WORKER")
+        std::env::var("M2PG_OTEL_SPAN_BURST_READ_DECODE_PER_WORKER")
             .ok()
             .and_then(|raw| raw.trim().parse::<f64>().ok())
             .filter(|value| value.is_finite() && *value > 0.0)
@@ -5460,28 +5539,28 @@ mod tests {
     #[test]
     fn parse_topic_db_collection_accepts_prefix_with_trailing_dot() {
         let parsed = parse_topic_db_collection(
-            "dev-prep.events_azer",
-            Some("dev-prep."),
-            Some("dev-prep"),
+            "adeo-dev-ciam-prep.events_lmfr",
+            Some("adeo-dev-ciam-prep."),
+            Some("adeo-dev-ciam-prep"),
         );
 
         assert_eq!(
             parsed,
-            Some(("dev-prep".to_owned(), "events_azer".to_owned()))
+            Some(("adeo-dev-ciam-prep".to_owned(), "events_lmfr".to_owned()))
         );
     }
 
     #[test]
     fn parse_topic_db_collection_accepts_prefix_without_trailing_dot() {
         let parsed = parse_topic_db_collection(
-            "dev-events.events_azer",
-            Some("dev-events"),
-            Some("dev-events"),
+            "adeo-dev-ciam-prep.events_lmfr",
+            Some("adeo-dev-ciam-prep"),
+            Some("adeo-dev-ciam-prep"),
         );
 
         assert_eq!(
             parsed,
-            Some(("dev-events".to_owned(), "events_azer".to_owned()))
+            Some(("adeo-dev-ciam-prep".to_owned(), "events_lmfr".to_owned()))
         );
     }
 }

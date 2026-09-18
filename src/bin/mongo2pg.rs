@@ -26,6 +26,9 @@ use log::{Level, LevelFilter};
 // use mongo2pg::engine::checksum::run_check_md5;
 use mongo2pg::util::read_conf;
 use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::Layer;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI definition (see mongo2pg::cli::{args, commands})
@@ -83,6 +86,20 @@ async fn main() -> Result<()> {
     let runtime_project_name = resolve_runtime_project_name(&cli);
     let runtime_namespace = resolve_runtime_namespace(&cli);
     let (log_level, log_format) = resolve_effective_runtime_log_settings(&cli)?;
+    let otel_provider = if dd_agent_host_is_configured() {
+        let provider = adeo_basics_rs::set_opentelemetry(&runtime_service_name).map_err(|err| {
+            anyhow!(
+                "OpenTelemetry init failed for service '{}': {}",
+                runtime_service_name,
+                err
+            )
+        })?;
+        init_otel_tracing_layer(&runtime_service_name, log_level)?;
+        Some(provider)
+    } else {
+        None
+    };
+
     init_runtime_logger(
         log_level,
         log_format,
@@ -107,10 +124,21 @@ async fn main() -> Result<()> {
         .instrument(root_span)
         .await;
 
+    if let Some(provider) = otel_provider {
+        let _ = provider.shutdown();
+    }
     result
 }
 
-fn normalize_project_name(raw: &str) -> Option<String> {
+fn dd_agent_host_is_configured() -> bool {
+    dd_agent_host_is_configured_from(std::env::var("DD_AGENT_HOST").ok().as_deref())
+}
+
+fn dd_agent_host_is_configured_from(raw: Option<&str>) -> bool {
+    raw.map(|value| !value.trim().is_empty()).unwrap_or(false)
+}
+
+fn normalize_otel_project_name(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         None
@@ -121,41 +149,41 @@ fn normalize_project_name(raw: &str) -> Option<String> {
 
 fn project_name_from_command(command: &Option<Command>) -> Option<String> {
     match command {
-        Some(Command::Init(args)) => normalize_project_name(&args.project_name),
+        Some(Command::Init(args)) => normalize_otel_project_name(&args.project_name),
         Some(Command::Infer(args)) => args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name),
+            .and_then(normalize_otel_project_name),
         Some(Command::ToPg(args)) => args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name),
+            .and_then(normalize_otel_project_name),
         Some(Command::Report(args)) => args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name),
+            .and_then(normalize_otel_project_name),
         Some(Command::Export(args)) => args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name),
+            .and_then(normalize_otel_project_name),
         Some(Command::Import(args)) => args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name),
+            .and_then(normalize_otel_project_name),
         Some(Command::KafkaImport(args)) => args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name),
+            .and_then(normalize_otel_project_name),
         Some(Command::ClusterReport(args)) => {
             let first = args.configs.first()?;
             let conf = read_conf(first).ok()?;
-            normalize_project_name(&conf.project_dir)
+            normalize_otel_project_name(&conf.project_dir)
         }
         Some(Command::Ping(_)) | None => None,
     }
 }
 
-fn resolve_default_service_name(cli: &Cli) -> String {
+fn resolve_otel_service_name(cli: &Cli) -> String {
     if let Some(project_name) = project_name_from_command(&cli.command) {
         return format!("m2pg-{}", project_name);
     }
@@ -164,7 +192,7 @@ fn resolve_default_service_name(cli: &Cli) -> String {
         if let Some(project_name) = args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name)
+            .and_then(normalize_otel_project_name)
         {
             return format!("m2pg-{}", project_name);
         }
@@ -172,7 +200,7 @@ fn resolve_default_service_name(cli: &Cli) -> String {
 
     if let Some(conf_path) = config_path_from_cli(cli) {
         if let Ok(conf) = read_conf(conf_path) {
-            if let Some(project_name) = normalize_project_name(&conf.project_dir) {
+            if let Some(project_name) = normalize_otel_project_name(&conf.project_dir) {
                 return format!("m2pg-{}", project_name);
             }
         }
@@ -191,6 +219,7 @@ fn resolve_runtime_service_name(cli: &Cli) -> String {
 
     for key in [
         "M2PG_SERVICE_NAME",
+        "OTEL_SERVICE_NAME",
         "DD_SERVICE",
         "K8S_CRONJOB_NAME",
         "CRONJOB_NAME",
@@ -203,7 +232,7 @@ fn resolve_runtime_service_name(cli: &Cli) -> String {
         }
     }
 
-    resolve_default_service_name(cli)
+    resolve_otel_service_name(cli)
 }
 
 fn normalize_runtime_namespace(raw: &str) -> Option<String> {
@@ -250,7 +279,7 @@ fn namespace_from_command(command: &Option<Command>) -> Option<String> {
 fn resolve_runtime_project_name(cli: &Cli) -> String {
     if let Some(conf_path) = config_path_from_cli(cli) {
         if let Ok(conf) = read_conf(conf_path) {
-            if let Some(project_name) = normalize_project_name(&conf.project_dir) {
+            if let Some(project_name) = normalize_otel_project_name(&conf.project_dir) {
                 return project_name;
             }
         }
@@ -264,7 +293,7 @@ fn resolve_runtime_project_name(cli: &Cli) -> String {
         if let Some(project_name) = args
             .project_dir
             .as_deref()
-            .and_then(normalize_project_name)
+            .and_then(normalize_otel_project_name)
         {
             return project_name;
         }
@@ -316,6 +345,40 @@ fn command_name_from_command(command: &Option<Command>) -> &'static str {
         Some(Command::Ping(_)) => "ping",
         None => "infer",
     }
+}
+
+fn tracing_level_enabled(level_filter: LevelFilter, level: &tracing::Level) -> bool {
+    match level_filter {
+        LevelFilter::Off => false,
+        LevelFilter::Error => *level <= tracing::Level::ERROR,
+        LevelFilter::Warn => *level <= tracing::Level::WARN,
+        LevelFilter::Info => *level <= tracing::Level::INFO,
+        LevelFilter::Debug => *level <= tracing::Level::DEBUG,
+        LevelFilter::Trace => *level <= tracing::Level::TRACE,
+    }
+}
+
+fn otel_metadata_allowed(metadata: &tracing::Metadata<'_>, level_filter: LevelFilter) -> bool {
+    if !tracing_level_enabled(level_filter, metadata.level()) {
+        return false;
+    }
+
+    let target = metadata.target();
+    let name = metadata.name();
+    target.starts_with("mongo2pg")
+        || name.starts_with("mongo2pg.")
+        || name.starts_with("kafka_import.")
+}
+
+fn init_otel_tracing_layer(service_name: &str, level_filter: LevelFilter) -> Result<()> {
+    let tracer = opentelemetry::global::tracer(service_name.to_owned());
+    let otel_filter = tracing_subscriber::filter::filter_fn(move |metadata| {
+        otel_metadata_allowed(metadata, level_filter)
+    });
+    let otel_layer = OpenTelemetryLayer::new(tracer).with_filter(otel_filter);
+    let subscriber = tracing_subscriber::registry().with(otel_layer);
+    tracing::subscriber::set_global_default(subscriber)
+        .map_err(|err| anyhow!("failed to install global tracing subscriber: {}", err))
 }
 
 fn parse_log_level(raw: &str) -> Result<LevelFilter> {
@@ -1390,6 +1453,39 @@ mod tests {
     }
 
     #[test]
+    fn init_cli_parses_legacy_base_dir_percent_and_log_format() {
+        let cli = Cli::try_parse_from([
+            "mongo2pg",
+            "init",
+            "--project-name",
+            "project",
+            "--cluster-name",
+            "cluster",
+            "--namespace",
+            "database",
+            "--base-dir",
+            "gs://bucket/",
+            "--percent",
+            "100.0",
+            "--log-format",
+            "json",
+        ])
+        .expect("init CLI args should parse");
+
+        match cli.command {
+            Some(Command::Init(args)) => {
+                assert_eq!(args.project_base, PathBuf::from("gs://bucket/"));
+                assert_eq!(args.project_name, "project");
+                assert_eq!(args.cluster_name.as_deref(), Some("cluster"));
+                assert_eq!(args.namespace.as_deref(), Some("database"));
+                assert_eq!(args.percent, Some(100.0));
+                assert_eq!(args.log_format.as_deref(), Some("json"));
+            }
+            _ => panic!("expected init command"),
+        }
+    }
+
+    #[test]
     fn kafka_import_cli_parses_force_flag() {
         let cli = Cli::try_parse_from(["mongo2pg", "kafka-import", "-c", "sample.toml", "--force"])
             .expect("kafka-import CLI args should parse");
@@ -1424,6 +1520,21 @@ mod tests {
             .windows(2)
             .any(|w| w == ["--topics", "topic.a,topic.b"]));
         assert!(child_args.windows(2).any(|w| w == ["--offset", "earliest"]));
+    }
+
+    #[test]
+    fn dd_agent_host_gating_enabled_for_non_empty_value() {
+        assert!(super::dd_agent_host_is_configured_from(Some("127.0.0.1")));
+        assert!(super::dd_agent_host_is_configured_from(Some(
+            " datadog-agent.local "
+        )));
+    }
+
+    #[test]
+    fn dd_agent_host_gating_disabled_for_missing_or_empty_value() {
+        assert!(!super::dd_agent_host_is_configured_from(None));
+        assert!(!super::dd_agent_host_is_configured_from(Some("")));
+        assert!(!super::dd_agent_host_is_configured_from(Some("   ")));
     }
 
     #[test]
@@ -1695,6 +1806,7 @@ pg_mapping:
 
         apply_collection_property_filters(
             &mut schema,
+            "sample_airbnb",
             "projects",
             &[],
             &["projects.archived_services".to_owned()],
@@ -1722,6 +1834,7 @@ pg_mapping:
 
         apply_collection_property_filters(
             &mut schema,
+            "sample_airbnb",
             "projects",
             &["projects.archived_services".to_owned()],
             &[],
@@ -1730,6 +1843,38 @@ pg_mapping:
         assert_eq!(schema.object.len(), 2);
         assert!(schema.object.contains_key("_id"));
         assert!(schema.object.contains_key("archived_services"));
+    }
+
+    #[test]
+    fn apply_collection_property_filters_supports_multi_db_prefixed_property_entries() {
+        let docs = vec![doc! {
+            "_id": 1,
+            "name": "project-a",
+            "archived_services": [{"name": "svc-a"}],
+            "tags": ["critical"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let mut schema = analyzer.finish();
+
+        apply_collection_property_filters(
+            &mut schema,
+            "sample_airbnb",
+            "projects",
+            &[
+                "sample_airbnb.projects.name".to_owned(),
+                "sample_airbnb.projects.archived_services".to_owned(),
+                "sample_mflix.projects.tags".to_owned(),
+            ],
+            &["sample_airbnb.projects.archived_services".to_owned()],
+        );
+
+        assert!(schema.object.contains_key("_id"));
+        assert!(schema.object.contains_key("name"));
+        assert!(!schema.object.contains_key("archived_services"));
+        assert!(!schema.object.contains_key("tags"));
     }
 
     #[test]
@@ -3375,6 +3520,10 @@ pg_mapping:
             source_uri: None,
             target_uri: None,
             namespace: Some("dbapi".to_owned()),
+            database_name: None,
+            schema_name: None,
+            percent: None,
+            log_format: None,
             cluster_name: None,
         })
         .await
@@ -3393,6 +3542,46 @@ pg_mapping:
         assert!(!content.contains("# schema_name = \"shared_schema\""));
 
         std::fs::remove_dir_all(&project_base).expect("temp project base should be removed");
+    }
+
+    #[tokio::test]
+    async fn run_init_writes_percent_and_log_format_to_config() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let project_base = std::env::temp_dir().join(format!("mongo2pg-init-test-{unique}"));
+
+        super::run_init(super::InitArgs {
+            project_base: project_base.clone(),
+            project_name: "project".to_owned(),
+            source_uri: None,
+            target_uri: None,
+            namespace: Some("database".to_owned()),
+            database_name: None,
+            schema_name: None,
+            percent: Some(100.0),
+            log_format: Some("json".to_owned()),
+            cluster_name: Some("cluster".to_owned()),
+        })
+        .await
+        .expect("init should succeed");
+
+        let config_path = project_base
+            .join("project")
+            .join("cluster")
+            .join("config")
+            .join("cluster.toml");
+        let content = std::fs::read_to_string(&config_path).expect("config should be readable");
+
+        assert!(content.contains("base_dir = "));
+        assert!(content.contains("project_dir = \"project\""));
+        assert!(content.contains("namespace = \"database\""));
+        assert!(content.contains("percent = 100"));
+        assert!(content.contains("log_format = \"json\""));
+        assert!(!content.contains("number = 1000"));
+
+        std::fs::remove_dir_all(&project_base).expect("temporary project should be removed");
     }
 
     #[test]
@@ -3526,6 +3715,10 @@ pg_mapping:
             source_uri,
             target_uri,
             namespace,
+            database_name: None,
+            schema_name: None,
+            percent: None,
+            log_format: None,
             cluster_name: None,
         }
     }

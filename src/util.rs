@@ -22,7 +22,10 @@ pub struct ConfData {
     pub target_uri: Option<String>,
     pub target_database_name: Option<String>,
     pub target_schema: Option<String>,
+    pub target_database_names: Vec<String>,
+    pub target_schemas: Vec<String>,
     pub namespace: Option<String>,
+    pub namespace_databases: Vec<String>,
     pub number: Option<u64>,
     pub percent: Option<f64>,
     pub max_time_ms: Option<u64>,
@@ -135,7 +138,7 @@ struct TomlSourceSection {
     #[serde(alias = "SOURCE_URI", alias = "URI", alias = "Uri")]
     uri: Option<String>,
     #[serde(alias = "NAMESPACE", alias = "Namespace")]
-    namespace: Option<String>,
+    namespace: Option<NamespaceConfig>,
     #[serde(alias = "NUMBER", alias = "Number")]
     number: Option<u64>,
     #[serde(alias = "PERCENT", alias = "Percent")]
@@ -183,6 +186,38 @@ struct TomlSourceSection {
     exclude: Vec<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum NamespaceConfig {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl NamespaceConfig {
+    fn into_databases(self) -> Vec<String> {
+        match self {
+            Self::Single(database) => vec![database],
+            Self::Multiple(databases) => databases,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum StringOrArrayConfig {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl StringOrArrayConfig {
+    fn into_values(self) -> Vec<String> {
+        match self {
+            Self::Single(value) => vec![value],
+            Self::Multiple(values) => values,
+        }
+    }
+}
+
 pub fn default_timestamp_fields() -> Vec<String> {
     vec![
         "created_at".to_owned(),
@@ -202,9 +237,9 @@ struct TomlTargetSection {
         alias = "DATABASE_NAME",
         alias = "databaseName"
     )]
-    database_name: Option<String>,
+    database_name: Option<StringOrArrayConfig>,
     #[serde(alias = "TARGET_SCHEMA", alias = "SCHEMA_NAME", alias = "schemaName")]
-    schema_name: Option<String>,
+    schema_name: Option<StringOrArrayConfig>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -404,8 +439,7 @@ fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
         return;
     };
 
-    let allowed_root =
-        allowed_conf_key_set(&["project", "source", "target", "kafka", "datadog"]);
+    let allowed_root = allowed_conf_key_set(&["project", "source", "target", "kafka", "datadog"]);
     for key in root.keys() {
         if !allowed_root.contains(&normalize_conf_key(key)) {
             warn!(
@@ -510,10 +544,7 @@ fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
                 "stop.on.no.lag",
             ],
         ),
-        (
-            "datadog",
-            &["dd_service", "service"],
-        ),
+        ("datadog", &["dd_service", "service"]),
     ];
 
     for (section_name, allowed_list) in section_rules {
@@ -547,6 +578,41 @@ This often means the config file was truncated or overwritten. Provide full conf
             .with_context(|| format!("Failed to parse TOML config {}", path.display()))?;
         let source = parsed.source.unwrap_or_default();
         let target = parsed.target.unwrap_or_default();
+        let namespace_databases = source
+            .namespace
+            .clone()
+            .map(NamespaceConfig::into_databases)
+            .unwrap_or_default();
+        let target_databases = target
+            .database_name
+            .clone()
+            .map(StringOrArrayConfig::into_values)
+            .unwrap_or_default();
+        let target_schemas = target
+            .schema_name
+            .clone()
+            .map(StringOrArrayConfig::into_values)
+            .unwrap_or_default();
+
+        if namespace_databases.len() > 1 {
+            if target_databases.len() > 1 && target_databases.len() != namespace_databases.len() {
+                return Err(anyhow!(
+                    "Invalid config {}: [target].database_name has {} entries but [source].namespace has {} entries. Provide matching array lengths or a scalar target database_name.",
+                    path.display(),
+                    target_databases.len(),
+                    namespace_databases.len()
+                ));
+            }
+
+            if target_schemas.len() > 1 && target_schemas.len() != namespace_databases.len() {
+                return Err(anyhow!(
+                    "Invalid config {}: [target].schema_name has {} entries but [source].namespace has {} entries. Provide matching array lengths or a scalar target schema_name.",
+                    path.display(),
+                    target_schemas.len(),
+                    namespace_databases.len()
+                ));
+            }
+        }
         let datadog = parsed.datadog.map(|d| DatadogConfData {
             dd_service: d.dd_service,
         });
@@ -609,9 +675,12 @@ This often means the config file was truncated or overwritten. Provide full conf
             project_dir,
             source_uri: source.uri,
             target_uri: target.uri,
-            target_database_name: target.database_name,
-            target_schema: target.schema_name,
-            namespace: source.namespace,
+            target_database_name: target_databases.first().cloned(),
+            target_schema: target_schemas.first().cloned(),
+            target_database_names: target_databases,
+            target_schemas,
+            namespace: namespace_databases.first().cloned(),
+            namespace_databases,
             number: source.number,
             percent: source.percent,
             max_time_ms: source.max_time_ms,
@@ -706,9 +775,12 @@ This often means the config file was truncated or overwritten. Provide full conf
             project_dir,
             source_uri,
             target_uri,
-            target_database_name,
-            target_schema,
-            namespace,
+            target_database_name: target_database_name.clone(),
+            target_schema: target_schema.clone(),
+            target_database_names: target_database_name.into_iter().collect(),
+            target_schemas: target_schema.into_iter().collect(),
+            namespace: namespace.clone(),
+            namespace_databases: namespace.into_iter().collect(),
             number,
             percent,
             max_time_ms,
@@ -781,6 +853,121 @@ fn split_collection_property_filter(entry: &str) -> (&str, Option<&str>) {
     }
 }
 
+/// Collection selection for multi-database configurations, where `include`/
+/// `exclude` entries are required to be database-prefixed (`<db>.<collection>`
+/// or the wildcard `<db>.*` for every collection in that database). Exclude
+/// takes precedence over include, matching [`should_infer_collection`].
+pub fn should_infer_collection_for_database(
+    db_name: &str,
+    coll_name: &str,
+    include: &[String],
+    exclude: &[String],
+) -> bool {
+    fn matches(entry: &str, db_name: &str, coll_name: &str) -> bool {
+        let Some((entry_db, entry_coll)) = entry.split_once('.') else {
+            return false;
+        };
+        entry_db == db_name && (entry_coll == "*" || entry_coll == coll_name)
+    }
+
+    if exclude
+        .iter()
+        .any(|entry| matches(entry, db_name, coll_name))
+    {
+        return false;
+    }
+
+    if include.is_empty() {
+        true
+    } else {
+        include
+            .iter()
+            .any(|entry| matches(entry, db_name, coll_name))
+    }
+}
+
+/// Resolve target database/schema for one namespace index.
+///
+/// Rules:
+/// - Array value at index takes priority when present.
+/// - Otherwise fallback to scalar target value.
+/// - Otherwise fallback to source database name for target database.
+/// - Schema falls back to resolved target database name when unset.
+pub fn resolve_target_mapping_for_namespace_index(
+    conf: &ConfData,
+    namespace_index: usize,
+    source_db_name: &str,
+) -> (String, String) {
+    let target_db = conf
+        .target_database_names
+        .get(namespace_index)
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            conf.target_database_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+        })
+        .unwrap_or_else(|| source_db_name.to_owned());
+
+    let target_schema = conf
+        .target_schemas
+        .get(namespace_index)
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            conf.target_schema
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+        })
+        .unwrap_or_else(|| target_db.clone());
+
+    (target_db, target_schema)
+}
+
+/// Validates that `include`/`exclude` entries are database-prefixed
+/// (`<database_name>.*` or `<database_name>.<collection>`) when more than one
+/// database is configured. Returns an error naming the offending entry.
+pub fn validate_multi_db_filter_entries(
+    databases: &[String],
+    include: &[String],
+    exclude: &[String],
+) -> Result<()> {
+    if databases.len() <= 1 {
+        return Ok(());
+    }
+
+    for entry in include.iter().chain(exclude.iter()) {
+        if !entry.contains('.') {
+            return Err(anyhow!(
+                "Invalid source.include/source.exclude entry '{entry}': multi-database configurations \
+require entries prefixed with '<database_name>.', for example '{}.*' to select every collection \
+in that database, or '{}.<collection>' for a single collection.",
+                databases[0],
+                databases[0]
+            ));
+        }
+
+        let Some((entry_db, _)) = entry.split_once('.') else {
+            continue;
+        };
+        if !databases.iter().any(|db| db == entry_db) {
+            return Err(anyhow!(
+                "Invalid source.include/source.exclude entry '{entry}': '{entry_db}' is not one of the configured source databases ({})",
+                databases.join(", ")
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 pub fn property_filter_entries_for_collection<'a>(
     collection: &str,
     entries: &'a [String],
@@ -792,6 +979,27 @@ pub fn property_filter_entries_for_collection<'a>(
             (entry_collection == collection)
                 .then_some(property)
                 .flatten()
+        })
+        .collect()
+}
+
+pub fn property_filter_entries_for_database_collection<'a>(
+    database: &str,
+    collection: &str,
+    entries: &'a [String],
+) -> Vec<&'a str> {
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let Some((entry_db, entry_tail)) = entry.split_once('.') else {
+                return None;
+            };
+            if entry_db != database {
+                return None;
+            }
+
+            let (entry_collection, property) = split_collection_property_filter(entry_tail);
+            (entry_collection == collection).then_some(property).flatten()
         })
         .collect()
 }
@@ -1323,9 +1531,12 @@ pub fn objectid_hex_to_uuid(hex: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        objectid_hex_to_uuid, property_filter_entries_for_collection, read_conf,
-        should_infer_collection,
+        default_timestamp_fields, objectid_hex_to_uuid,
+        property_filter_entries_for_collection, property_filter_entries_for_database_collection,
+        read_conf, resolve_target_mapping_for_namespace_index, should_infer_collection,
+        should_infer_collection_for_database, validate_multi_db_filter_entries, ConfData,
     };
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -1365,6 +1576,232 @@ auth_retry_max = 3
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_namespace_array_in_declared_order() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-namespace-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+namespace = ["orders", "catalog"]
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert_eq!(conf.namespace, Some("orders".to_owned()));
+        assert_eq!(conf.namespace_databases, ["orders", "catalog"]);
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_accepts_target_database_and_schema_arrays() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-target-array-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+namespace = ["orders", "catalog"]
+
+[target]
+database_name = ["orders", "catalog"]
+schema_name = ["orders", "catalog"]
+"#,
+        )
+        .expect("write config");
+
+        let conf = read_conf(&config_path).expect("config should parse");
+        assert_eq!(conf.namespace_databases, ["orders", "catalog"]);
+        assert_eq!(conf.target_database_name.as_deref(), Some("orders"));
+        assert_eq!(conf.target_schema.as_deref(), Some("orders"));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_rejects_target_database_array_length_mismatch() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-target-array-mismatch-db-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+namespace = ["orders", "catalog"]
+
+[target]
+database_name = ["orders", "catalog", "extra"]
+schema_name = ["orders", "catalog"]
+"#,
+        )
+        .expect("write config");
+
+        let err = read_conf(&config_path).expect_err("config should be rejected");
+        assert!(err
+            .to_string()
+            .contains("[target].database_name has 3 entries but [source].namespace has 2 entries"));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_rejects_target_schema_array_length_mismatch() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-target-array-mismatch-schema-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+namespace = ["orders", "catalog"]
+
+[target]
+database_name = ["orders", "catalog"]
+schema_name = ["orders", "catalog", "extra"]
+"#,
+        )
+        .expect("write config");
+
+        let err = read_conf(&config_path).expect_err("config should be rejected");
+        assert!(err
+            .to_string()
+            .contains("[target].schema_name has 3 entries but [source].namespace has 2 entries"));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn resolve_target_mapping_for_namespace_index_prefers_array_values() {
+        let conf = ConfData {
+            base_dir: PathBuf::from("/tmp"),
+            cluster_name: None,
+            title: "t".to_owned(),
+            project_dir: "p".to_owned(),
+            source_uri: None,
+            target_uri: None,
+            target_database_name: Some("fallback_db".to_owned()),
+            target_schema: Some("fallback_schema".to_owned()),
+            target_database_names: vec!["db_a".to_owned(), "db_b".to_owned()],
+            target_schemas: vec!["sc_a".to_owned(), "sc_b".to_owned()],
+            namespace: Some("src_a".to_owned()),
+            namespace_databases: vec!["src_a".to_owned(), "src_b".to_owned()],
+            number: None,
+            percent: None,
+            max_time_ms: None,
+            chunk_size: None,
+            auth_retry_max: None,
+            log_level: None,
+            log_format: None,
+            add_grouped_key: false,
+            jsonb: false,
+            timestamp_fields: default_timestamp_fields(),
+            include: Vec::new(),
+            exclude: Vec::new(),
+            kafka: None,
+            datadog: None,
+        };
+
+        let (db0, schema0) = resolve_target_mapping_for_namespace_index(&conf, 0, "src_a");
+        assert_eq!(db0, "db_a");
+        assert_eq!(schema0, "sc_a");
+
+        let (db1, schema1) = resolve_target_mapping_for_namespace_index(&conf, 1, "src_b");
+        assert_eq!(db1, "db_b");
+        assert_eq!(schema1, "sc_b");
+    }
+
+    #[test]
+    fn resolve_target_mapping_for_namespace_index_falls_back_to_scalar_then_source() {
+        let conf = ConfData {
+            base_dir: PathBuf::from("/tmp"),
+            cluster_name: None,
+            title: "t".to_owned(),
+            project_dir: "p".to_owned(),
+            source_uri: None,
+            target_uri: None,
+            target_database_name: Some("fallback_db".to_owned()),
+            target_schema: Some("fallback_schema".to_owned()),
+            target_database_names: vec!["db_a".to_owned()],
+            target_schemas: Vec::new(),
+            namespace: Some("src_a".to_owned()),
+            namespace_databases: vec!["src_a".to_owned(), "src_b".to_owned()],
+            number: None,
+            percent: None,
+            max_time_ms: None,
+            chunk_size: None,
+            auth_retry_max: None,
+            log_level: None,
+            log_format: None,
+            add_grouped_key: false,
+            jsonb: false,
+            timestamp_fields: default_timestamp_fields(),
+            include: Vec::new(),
+            exclude: Vec::new(),
+            kafka: None,
+            datadog: None,
+        };
+
+        let (db1, schema1) = resolve_target_mapping_for_namespace_index(&conf, 1, "src_b");
+        assert_eq!(db1, "fallback_db");
+        assert_eq!(schema1, "fallback_schema");
+
+        let conf_no_target = ConfData {
+            target_database_name: None,
+            target_schema: None,
+            target_database_names: Vec::new(),
+            target_schemas: Vec::new(),
+            ..conf
+        };
+        let (db2, schema2) = resolve_target_mapping_for_namespace_index(&conf_no_target, 1, "src_b");
+        assert_eq!(db2, "src_b");
+        assert_eq!(schema2, "src_b");
     }
 
     #[test]
@@ -1514,7 +1951,7 @@ LOG_FORMAT=json
 
         let conf = read_conf(&config_path).expect("config should parse");
         assert_eq!(conf.log_level.as_deref(), Some("trace"));
-    assert_eq!(conf.log_format.as_deref(), Some("json"));
+        assert_eq!(conf.log_format.as_deref(), Some("json"));
 
         let _ = std::fs::remove_file(&config_path);
         let _ = std::fs::remove_dir(&dir);
@@ -1681,6 +2118,94 @@ copy_mode = true
     }
 
     #[test]
+    fn should_infer_collection_for_database_accepts_wildcard_entries() {
+        let include = vec!["orders.*".to_owned()];
+
+        assert!(should_infer_collection_for_database(
+            "orders",
+            "invoices",
+            &include,
+            &[]
+        ));
+        assert!(!should_infer_collection_for_database(
+            "catalog",
+            "invoices",
+            &include,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn should_infer_collection_for_database_matches_exact_qualified_collection() {
+        let include = vec!["orders.invoices".to_owned()];
+
+        assert!(should_infer_collection_for_database(
+            "orders",
+            "invoices",
+            &include,
+            &[]
+        ));
+        assert!(!should_infer_collection_for_database(
+            "orders",
+            "customers",
+            &include,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn should_infer_collection_for_database_exclude_overrides_include() {
+        let include = vec!["orders.*".to_owned()];
+        let exclude = vec!["orders.invoices".to_owned()];
+
+        assert!(!should_infer_collection_for_database(
+            "orders", "invoices", &include, &exclude
+        ));
+        assert!(should_infer_collection_for_database(
+            "orders",
+            "customers",
+            &include,
+            &exclude
+        ));
+    }
+
+    #[test]
+    fn validate_multi_db_filter_entries_rejects_unprefixed_entries_for_multiple_databases() {
+        let databases = vec!["orders".to_owned(), "catalog".to_owned()];
+        let include = vec!["invoices".to_owned()];
+
+        let err = validate_multi_db_filter_entries(&databases, &include, &[])
+            .expect_err("unprefixed entry should be rejected");
+        assert!(err.to_string().contains("invoices"));
+    }
+
+    #[test]
+    fn validate_multi_db_filter_entries_accepts_prefixed_entries() {
+        let databases = vec!["orders".to_owned(), "catalog".to_owned()];
+        let include = vec!["orders.*".to_owned(), "catalog.customers".to_owned()];
+
+        assert!(validate_multi_db_filter_entries(&databases, &include, &[]).is_ok());
+    }
+
+    #[test]
+    fn validate_multi_db_filter_entries_rejects_unknown_database_prefix() {
+        let databases = vec!["orders".to_owned(), "catalog".to_owned()];
+        let include = vec!["billing.invoices".to_owned()];
+
+        let err = validate_multi_db_filter_entries(&databases, &include, &[])
+            .expect_err("unknown database prefix should be rejected");
+        assert!(err.to_string().contains("billing"));
+    }
+
+    #[test]
+    fn validate_multi_db_filter_entries_skips_validation_for_single_database() {
+        let databases = vec!["orders".to_owned()];
+        let include = vec!["invoices".to_owned()];
+
+        assert!(validate_multi_db_filter_entries(&databases, &include, &[]).is_ok());
+    }
+
+    #[test]
     fn property_filter_entries_for_collection_returns_only_matching_properties() {
         let entries = vec![
             "projects.archived_services".to_owned(),
@@ -1692,6 +2217,21 @@ copy_mode = true
         assert_eq!(
             property_filter_entries_for_collection("projects", &entries),
             vec!["archived_services", "tags"]
+        );
+    }
+
+    #[test]
+    fn property_filter_entries_for_database_collection_matches_db_prefixed_entries() {
+        let entries = vec![
+            "orders.invoices.total".to_owned(),
+            "orders.invoices.currency".to_owned(),
+            "orders.customers.segment".to_owned(),
+            "catalog.invoices.total".to_owned(),
+        ];
+
+        assert_eq!(
+            property_filter_entries_for_database_collection("orders", "invoices", &entries),
+            vec!["total", "currency"]
         );
     }
 }

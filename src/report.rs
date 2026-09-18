@@ -37,7 +37,7 @@ pub struct DatabaseScore {
 /// Aggregated migrability scores for a whole cluster, derived from
 /// per-database [`DatabaseScore`] values.
 pub struct ClusterScore {
-    /// Total cluster complexity: `1.5 × D + Σ score_db_j` (D = database count).
+  /// Global cluster complexity: `0.6 × max(score_db) + 0.4 × avg(score_db)`.
     pub score_total: f64,
     /// Total-document-weighted average of per-database `score_avg` values.
     pub score_avg: f64,
@@ -93,9 +93,14 @@ pub fn compute_db_score(name: &str, rows: &[CollectionRow]) -> DatabaseScore {
 
 /// Compute a [`ClusterScore`] from a slice of [`DatabaseScore`]s.
 pub fn compute_cluster_score(dbs: &[DatabaseScore]) -> ClusterScore {
-    let d = dbs.len() as f64;
-    let score_db_sum: f64 = dbs.iter().map(|db| db.score_db).sum();
-    let score_total = ((1.5 * d + score_db_sum) * 100.0).round() / 100.0;
+  let score_db_sum: f64 = dbs.iter().map(|db| db.score_db).sum();
+  let score_max: f64 = dbs.iter().map(|db| db.score_db).fold(0.0_f64, f64::max);
+  let score_avg_simple = if dbs.is_empty() {
+    0.0
+  } else {
+    score_db_sum / dbs.len() as f64
+  };
+  let score_total = ((0.6 * score_max + 0.4 * score_avg_simple) * 100.0).round() / 100.0;
 
     let total_docs: u64 = dbs.iter().map(|db| db.total_docs).sum();
     let total_weighted: f64 = dbs
@@ -107,8 +112,6 @@ pub fn compute_cluster_score(dbs: &[DatabaseScore]) -> ClusterScore {
     } else {
         0.0
     };
-
-    let score_max: f64 = dbs.iter().map(|db| db.score_db).fold(0.0_f64, f64::max);
 
     ClusterScore {
         score_total,
@@ -452,9 +455,9 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
         .map(|r| {
             let docs_cell = render_documents_cell(&r.stats);
 
-            let score_color = if r.stats.migrability_score < 3.0 {
+            let score_color = if r.stats.migrability_score < 5.0 {
                 "#27ae60"
-            } else if r.stats.migrability_score < 8.0 {
+            } else if r.stats.migrability_score < 10.0 {
                 "#e67e22"
             } else {
                 "#c0392b"
@@ -608,6 +611,9 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
     }}
     h1 {{ color: #2c3e50; margin-bottom: 0.25rem; }}
     .subtitle {{ color: #7f8c8d; font-size: 0.9rem; margin-bottom: 2rem; }}
+    .origin-links {{ color: #5d6d7e; font-size: 0.82rem; margin: -1.35rem 0 1.6rem; }}
+    .origin-links a {{ color: #2471a3; text-decoration: none; }}
+    .origin-links a:hover {{ text-decoration: underline; }}
     .summary-grid {{
       display: flex;
       gap: 1rem;
@@ -770,6 +776,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
 <body>
   <h1>mongo2pg – Migration Report {title}</h1>
   <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Database: <strong>{namespace}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+  <p class="origin-links">Report source: <a href="../">project root</a> &nbsp;|&nbsp; <a href="../config/">config folder</a></p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">{count}</div></div>
@@ -792,6 +799,7 @@ pub fn render_html(rows: &[CollectionRow], namespace: &str, cluster: &str, title
   <p class="score-explainer">
     <strong>Complexity score</strong> per collection:
     <code>C = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.
+    Collection score colors: 0–5 Green · 5–10 Orange · &gt;10 Red.<br>
     DB total: <code>1.5 × collections + Σ C<sub>i</sub></code>.
     Thresholds: &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
     Effective: {count} collections, Σ C<sub>i</sub> = {score_sum:.2} &nbsp;→&nbsp;
@@ -1359,6 +1367,9 @@ pub fn render_post_import_html(
     }}
     h1 {{ color: #2c3e50; margin-bottom: 0.25rem; }}
     .subtitle {{ color: #7f8c8d; font-size: 0.9rem; margin-bottom: 2rem; }}
+    .origin-links {{ color: #5d6d7e; font-size: 0.82rem; margin: -1.35rem 0 1.6rem; }}
+    .origin-links a {{ color: #2471a3; text-decoration: none; }}
+    .origin-links a:hover {{ text-decoration: underline; }}
     .summary-grid {{ display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }}
     .card {{
       background: white;
@@ -1558,6 +1569,7 @@ pub fn render_post_import_html(
 <body>
   <h1>mongo2pg – Post-Import Report</h1>
   <p class="subtitle">MongoDB: <strong>{mongo_cluster}</strong> &nbsp;|&nbsp; PostgreSQL: <strong>{pg_target}</strong> &nbsp;|&nbsp; Namespace: <strong>{namespace}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+  <p class="origin-links">Report source: <a href="../">project root</a> &nbsp;|&nbsp; <a href="../config/">config folder</a></p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Collections</div><div class="value">{collection_count}</div></div>
@@ -1608,7 +1620,263 @@ pub fn render_post_import_html(
     )
 }
 
-/// Render a cluster-level HTML report from a slice of [`DatabaseScore`]s.
+/// Render one combined post-import HTML report with one navigable tab per
+/// database. Each database's tab reuses [`render_post_import_html`]'s body
+/// verbatim (isolated per tab), so styling and interactive behavior stay
+/// identical to the single-database report.
+pub fn render_post_import_multi_db_html(
+    entries: &[(&str, &[PostImportCollectionRow])],
+    mongo_cluster: &str,
+    pg_target: &str,
+) -> String {
+    let mut head_html = String::new();
+  let mut bodies: Vec<(String, String)> = Vec::new();
+
+  fn count_pg_tables(node: &PostImportNode) -> usize {
+    usize::from(node.pg_table_name.is_some()) + node.children.iter().map(count_pg_tables).sum::<usize>()
+  }
+
+  fn sum_pg_rows(node: &PostImportNode) -> i64 {
+    node.pg_row_count.unwrap_or(0) + node.children.iter().map(sum_pg_rows).sum::<i64>()
+  }
+
+  fn extract_collection_sections_only(body_inner: &str) -> String {
+    let start = body_inner.find(r#"<div class="collection-section""#);
+    let end = body_inner.find("<footer>");
+    match (start, end) {
+      (Some(s), Some(e)) if e > s => body_inner[s..e].to_owned(),
+      _ => body_inner.to_owned(),
+    }
+  }
+
+    for (db_name, rows) in entries {
+        let doc = render_post_import_html(rows, db_name, mongo_cluster, pg_target);
+        if head_html.is_empty() {
+            if let (Some(start), Some(end)) = (doc.find("<head>"), doc.find("</head>")) {
+                head_html = doc[start..end + "</head>".len()].to_owned();
+            }
+        }
+        let body_inner = doc
+            .find("<body>")
+            .zip(doc.find("</body>"))
+            .map(|(start, end)| doc[start + "<body>".len()..end].to_owned())
+            .unwrap_or_default();
+        let collection_sections = extract_collection_sections_only(&body_inner);
+        bodies.push(((*db_name).to_owned(), collection_sections));
+    }
+
+      let now = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
+
+      let total_collections: usize = entries.iter().map(|(_, rows)| rows.len()).sum();
+      let total_docs: u64 = entries
+        .iter()
+        .flat_map(|(_, rows)| rows.iter())
+        .map(|row| row.document_count)
+        .sum();
+      let total_mongo_rows: u64 = entries
+        .iter()
+        .flat_map(|(_, rows)| rows.iter())
+        .map(|row| row.root.mongo_count)
+        .sum();
+      let total_tables: usize = entries
+        .iter()
+        .flat_map(|(_, rows)| rows.iter())
+        .map(|row| count_pg_tables(&row.root))
+        .sum();
+      let total_pg_rows: i64 = entries
+        .iter()
+        .flat_map(|(_, rows)| rows.iter())
+        .map(|row| sum_pg_rows(&row.root))
+        .sum();
+
+      let db_summary_rows: String = entries
+        .iter()
+        .map(|(db_name, rows)| {
+          let table_count: usize = rows.iter().map(|row| count_pg_tables(&row.root)).sum();
+          let pg_rows: i64 = rows.iter().map(|row| sum_pg_rows(&row.root)).sum();
+          let documents: u64 = rows.iter().map(|row| row.document_count).sum();
+          format!(
+            r##"<tr class="collection-row">
+          <td class="name"><a href="#" onclick="showDbTab('{db_name}'); return false;">{db_name}</a></td>
+          <td class="num">{collections}</td>
+          <td class="num">{documents}</td>
+          <td class="num">{tables}</td>
+          <td class="num">{pg_rows}</td>
+        </tr>"##,
+            db_name = escape_html(db_name),
+            collections = rows.len(),
+            documents = documents,
+            tables = table_count,
+            pg_rows = pg_rows,
+          )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let db_tabs: String = bodies
+        .iter()
+        .enumerate()
+        .map(|(index, (name, _))| {
+            format!(
+                r#"<button type="button" class="db-tab-btn{active}" id="tab-btn-{name}" onclick="showDbTab('{name}')">{name}</button>"#,
+                name = name,
+                active = if index == 0 { " active" } else { "" },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let db_sections: String = bodies
+        .iter()
+        .enumerate()
+        .map(|(index, (name, body))| {
+          let rows = entries
+            .iter()
+            .find_map(|(db_name, rows)| (*db_name == name).then_some(*rows))
+            .unwrap_or(&[]);
+          let db_documents: u64 = rows.iter().map(|row| row.document_count).sum();
+          let db_mongo_rows: u64 = rows.iter().map(|row| row.root.mongo_count).sum();
+          let db_tables: usize = rows.iter().map(|row| count_pg_tables(&row.root)).sum();
+            let db_pg_rows: i64 = rows.iter().map(|row| sum_pg_rows(&row.root)).sum();
+            format!(
+            r#"<div class="db-section{active}" id="{name}">
+      <h2 class="db-heading">Database: {name}</h2>
+      <div class="summary-grid" style="margin-bottom:1rem">
+      <div class="card"><div class="label">Collections</div><div class="value">{collections}</div></div>
+      <div class="card"><div class="label">MongoDB Documents</div><div class="value">{documents}</div></div>
+      <div class="card"><div class="label">MongoDB Expanded Rows</div><div class="value">{mongo_rows}</div></div>
+      <div class="card"><div class="label">PostgreSQL Tables</div><div class="value">{tables}</div></div>
+      <div class="card"><div class="label">PostgreSQL Rows</div><div class="value">{pg_rows}</div></div>
+      </div>
+      {body}
+    </div>"#,
+                name = name,
+                body = body,
+            collections = rows.len(),
+            documents = db_documents,
+            mongo_rows = db_mongo_rows,
+            tables = db_tables,
+            pg_rows = db_pg_rows,
+                active = if index == 0 { " active" } else { "" },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+{head}
+<body>
+  <h1>mongo2pg – Post-Import Report</h1>
+  <p class="subtitle">MongoDB: <strong>{mongo_cluster}</strong> &nbsp;|&nbsp; PostgreSQL: <strong>{pg_target}</strong> &nbsp;|&nbsp; Databases: <strong>{db_count}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+  <p class="origin-links">Report source: <a href="../">project root</a> &nbsp;|&nbsp; <a href="../config/">config folder</a></p>
+
+  <div class="summary-grid">
+    <div class="card"><div class="label">Databases</div><div class="value">{db_count}</div></div>
+    <div class="card"><div class="label">Collections</div><div class="value">{total_collections}</div></div>
+    <div class="card"><div class="label">MongoDB Documents</div><div class="value">{total_docs}</div></div>
+    <div class="card"><div class="label">MongoDB Expanded Rows</div><div class="value">{total_mongo_rows}</div></div>
+    <div class="card"><div class="label">PostgreSQL Tables</div><div class="value">{total_tables}</div></div>
+    <div class="card"><div class="label">PostgreSQL Rows</div><div class="value">{total_pg_rows}</div></div>
+  </div>
+
+  <h2>Databases</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Database</th>
+        <th class="num">Collections</th>
+        <th class="num">MongoDB Documents</th>
+        <th class="num">PostgreSQL Tables</th>
+        <th class="num">PostgreSQL Rows</th>
+      </tr>
+    </thead>
+    <tbody>
+      {db_summary_rows}
+    </tbody>
+  </table>
+
+  <div class="db-tabs">
+    {db_tabs}
+  </div>
+
+  {db_sections}
+
+  <style>
+    .db-section {{ display: none; }}
+    .db-section.active {{ display: block; }}
+    .db-section {{ margin-top: 2rem; }}
+    .db-tabs {{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }}
+    .db-tab-btn {{
+      padding: 0.5rem 1rem;
+      border: 1px solid #bdc3c7;
+      border-radius: 6px 6px 0 0;
+      background: #ecf0f1;
+      color: #2c3e50;
+      font-weight: 600;
+      cursor: pointer;
+    }}
+    .db-tab-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
+    .db-heading {{
+      font-size: 1.3rem;
+      color: #2c3e50;
+      padding-bottom: 0.35rem;
+      border-bottom: 2px solid #bdc3c7;
+      margin-bottom: 1rem;
+    }}
+  </style>
+  <script>
+    function showDbTab(name) {{
+      document.querySelectorAll('.db-section').forEach(function(section) {{
+        section.classList.toggle('active', section.id === name);
+      }});
+      document.querySelectorAll('.db-tab-btn').forEach(function(btn) {{
+        btn.classList.toggle('active', btn.id === 'tab-btn-' + name);
+      }});
+    }}
+    function toggleNode(id) {{
+      var row = document.getElementById('children-' + id);
+      var icon = document.getElementById('arrow-' + id);
+      if (!row) return;
+      var open = row.style.display !== 'none';
+      row.style.display = open ? 'none' : '';
+      if (open) {{ icon.classList.remove('open'); }}
+      else      {{ icon.classList.add('open'); }}
+    }}
+
+    function openMd5DiffWindow(templateId) {{
+      var tpl = document.getElementById(templateId);
+      if (!tpl) return;
+      var popup = window.open('', '_blank');
+      if (!popup) return;
+      popup.document.open();
+      popup.document.write(tpl.innerHTML);
+      popup.document.close();
+    }}
+  </script>
+</body>
+</html>
+"#,
+        head = head_html,
+        mongo_cluster = escape_html(mongo_cluster),
+        pg_target = escape_html(pg_target),
+        db_count = entries.len(),
+        now = now,
+        total_collections = total_collections,
+        total_docs = total_docs,
+        total_mongo_rows = total_mongo_rows,
+        total_tables = total_tables,
+        total_pg_rows = total_pg_rows,
+        db_summary_rows = db_summary_rows,
+        db_tabs = db_tabs,
+        db_sections = db_sections,
+    )
+}
+
+
 ///
 /// The report shows one row per database and summary cards for the cluster score,
 /// doc-weighted average, and the worst-database score.
@@ -1623,14 +1891,16 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
     let total_docs: u64 = dbs.iter().map(|db| db.total_docs).sum();
     let total_collections: usize = dbs.iter().map(|db| db.collection_count).sum();
     let score_db_sum: f64 = (dbs.iter().map(|db| db.score_db).sum::<f64>() * 100.0).round() / 100.0;
+    let score_db_avg: f64 = if dbs.is_empty() {
+      0.0
+    } else {
+      (score_db_sum / dbs.len() as f64 * 100.0).round() / 100.0
+    };
 
-    // Use score_total / D against the same fixed 30/80 thresholds as the DB level,
-    // so cluster and database complexity labels are on the same scale.
-    let d = dbs.len() as f64;
-    let score_per_db = if d > 0.0 { cs.score_total / d } else { 0.0 };
-    let complexity_label = if score_per_db < 30.0 {
+    // Complexity label/color follows the displayed cluster score value.
+    let complexity_label = if cs.score_total < 30.0 {
         ("Easy", "#27ae60")
-    } else if score_per_db < 80.0 {
+    } else if cs.score_total < 80.0 {
         ("Medium", "#e67e22")
     } else {
         ("Hard", "#c0392b")
@@ -1685,6 +1955,9 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
     }}
     h1 {{ color: #2c3e50; margin-bottom: 0.25rem; }}
     .subtitle {{ color: #7f8c8d; font-size: 0.9rem; margin-bottom: 2rem; }}
+    .origin-links {{ color: #5d6d7e; font-size: 0.82rem; margin: -1.35rem 0 1.6rem; }}
+    .origin-links a {{ color: #2471a3; text-decoration: none; }}
+    .origin-links a:hover {{ text-decoration: underline; }}
     .summary-grid {{
       display: flex;
       gap: 1rem;
@@ -1742,6 +2015,7 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
 <body>
   <h1>mongo2pg – Cluster Report</h1>
   <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+  <p class="origin-links">Report source: <a href="../">project root</a> &nbsp;|&nbsp; <a href="../config/">config folder</a></p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Databases</div><div class="value">{db_count}</div></div>
@@ -1764,9 +2038,9 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
   <p class="score-explainer">
     <strong>DB complexity score</strong>: <code>1.5 × collections + Σ C<sub>i</sub></code>
     where <code>C<sub>i</sub> = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.<br>
-    <strong>Cluster score</strong>: <code>1.5 × databases + Σ score_db<sub>j</sub></code><br>
-    &nbsp;&nbsp;&nbsp;= <code>1.5 × {db_count} + {score_db_sum:.2}</code> = <strong>{score_total:.2}</strong>.<br>
-    Thresholds (per database): &lt;30 Easy · 30–80 Medium · &gt;80 Hard (scaled by database count for the cluster).
+    <strong>Global score</strong>: <code>0.6 × max(score_db) + 0.4 × avg(score_db)</code><br>
+    &nbsp;&nbsp;&nbsp;= <code>0.6 × {score_max:.2} + 0.4 × {score_db_avg:.2}</code> = <strong>{score_total:.2}</strong>.<br>
+    Thresholds (cluster score): &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
   </p>
 
   <table>
@@ -1797,22 +2071,67 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
         score_total = cs.score_total,
         score_avg = cs.score_avg,
         score_max = cs.score_max,
+        score_db_avg = score_db_avg,
         complexity_label = complexity_label.0,
         complexity_color = complexity_label.1,
         table_rows = table_rows,
-        score_db_sum = score_db_sum,
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        render_html, render_post_import_html, CollectionRow, CollectionStatsYaml,
+        render_html, render_multi_db_html, render_post_import_html,
+        render_post_import_multi_db_html, CollectionRow, CollectionStatsYaml,
         PostImportCollectionRow, PostImportCountDiffRow, PostImportMd5Column,
         PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode,
         PostImportSnapshotSkipSummary,
     };
     use crate::engine::stats::{InferWarningMinorityYaml, InferWarningTypeYaml, InferWarningYaml};
+
+    fn minimal_collection_row(name: &str) -> CollectionRow {
+        CollectionRow {
+            name: name.to_owned(),
+            stats: CollectionStatsYaml {
+                documents_in_collection: serde_yaml::Value::Number(1_u64.into()),
+                documents_sampled: 1,
+                width_top_level: 1,
+                width_max: 1.0,
+                width_max_level: 1,
+                depth_max: 1,
+                branch_total: 1.0,
+                branch_per_level: indexmap::IndexMap::from([("L1".to_owned(), 1.0)]),
+                array_field_count: 0,
+                avg_fields_per_doc: 1.0,
+                migrability_score: 1.0,
+                infer_warnings: Vec::new(),
+                read_ops: None,
+                has_search_node: false,
+            },
+            pg_target_table: None,
+            table_names: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn render_multi_db_html_renders_one_tab_per_database_isolated_from_others() {
+        let orders_rows = vec![minimal_collection_row("invoices")];
+        let catalog_rows = vec![minimal_collection_row("products")];
+        let entries: Vec<(&str, &[CollectionRow])> = vec![
+            ("orders", orders_rows.as_slice()),
+            ("catalog", catalog_rows.as_slice()),
+        ];
+
+        let html = render_multi_db_html(&entries, "cluster0", "project", "Report");
+
+        assert!(html.contains(r#"id="tab-btn-orders""#));
+        assert!(html.contains(r#"id="tab-btn-catalog""#));
+        assert!(html.contains(r#"class="db-section active" id="orders""#));
+        assert!(html.contains(r#"class="db-section" id="catalog""#));
+        assert!(html.contains("invoices"));
+        assert!(html.contains("products"));
+        assert!(html.contains("function showDbTab(name)"));
+    }
 
     #[test]
     fn render_html_highlights_collections_with_infer_warnings() {
@@ -2133,6 +2452,44 @@ mod tests {
         assert!(html.contains("MongoDB Search node capability detected"));
     }
 
+    fn minimal_post_import_row(collection_name: &str) -> PostImportCollectionRow {
+        PostImportCollectionRow {
+            name: collection_name.to_owned(),
+            document_count: 1,
+            root: PostImportNode {
+                name: collection_name.to_owned(),
+                is_array: false,
+                mongo_count: 1,
+                pg_table_name: Some(collection_name.to_owned()),
+                pg_row_count: Some(1),
+                md5_summary: None,
+                snapshot_skip_summary: None,
+                count_diff_rows: Vec::new(),
+                children: Vec::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn render_post_import_multi_db_html_renders_one_tab_per_database_isolated_from_others() {
+        let orders_rows = vec![minimal_post_import_row("invoices")];
+        let catalog_rows = vec![minimal_post_import_row("products")];
+        let entries: Vec<(&str, &[PostImportCollectionRow])> = vec![
+            ("orders", orders_rows.as_slice()),
+            ("catalog", catalog_rows.as_slice()),
+        ];
+
+        let html = render_post_import_multi_db_html(&entries, "mongo-host", "pg-host");
+
+        assert!(html.contains(r#"id="tab-btn-orders""#));
+        assert!(html.contains(r#"id="tab-btn-catalog""#));
+        assert!(html.contains(r#"class="db-section active" id="orders""#));
+        assert!(html.contains(r#"class="db-section" id="catalog""#));
+        assert!(html.contains("invoices"));
+        assert!(html.contains("products"));
+        assert!(html.contains("function showDbTab(name)"));
+    }
+
     #[test]
     fn render_post_import_html_shows_clickable_md5_details() {
         let html = render_post_import_html(
@@ -2308,14 +2665,18 @@ pub fn render_multi_db_html(
 
     let total_collections: usize = db_scores.iter().map(|d| d.collection_count).sum();
     let total_docs: u64 = db_scores.iter().map(|d| d.total_docs).sum();
-    let score_db_sum: f64 =
-        (db_scores.iter().map(|d| d.score_db).sum::<f64>() * 100.0).round() / 100.0;
+    let score_db_avg_simple: f64 = if db_scores.is_empty() {
+      0.0
+    } else {
+      (db_scores.iter().map(|d| d.score_db).sum::<f64>() / db_scores.len() as f64 * 100.0)
+        .round()
+        / 100.0
+    };
+    let global_score = cs.score_total;
 
-    let d = db_scores.len() as f64;
-    let score_per_db = if d > 0.0 { cs.score_total / d } else { 0.0 };
-    let (complexity_label, complexity_color) = if score_per_db < 30.0 {
+    let (complexity_label, complexity_color) = if global_score < 30.0 {
         ("Easy", "#27ae60")
-    } else if score_per_db < 80.0 {
+    } else if global_score < 80.0 {
         ("Medium", "#e67e22")
     } else {
         ("Hard", "#c0392b")
@@ -2334,7 +2695,7 @@ pub fn render_multi_db_html(
             };
             format!(
                 r##"<tr class="collection-row">
-          <td class="name"><a href="#{name}">{name}</a></td>
+          <td class="name"><a href="#" onclick="showDbTab('{name}'); return false;">{name}</a></td>
           <td class="num">{collections}</td>
           <td class="num">{docs}</td>
           <td class="num"><span class="score-badge" style="color:{score_color};font-weight:700">{score_db:.2}</span></td>
@@ -2353,11 +2714,27 @@ pub fn render_multi_db_html(
         .collect::<Vec<_>>()
         .join("\n");
 
+    // ── Database tab bar: one navigable tab per database, only the active
+    //    tab's `.db-section` is visible at a time (see `showDbTab` below). ──
+    let db_tabs: String = db_scores
+        .iter()
+        .enumerate()
+        .map(|(index, db)| {
+            format!(
+                r#"<button type="button" class="db-tab-btn{active}" id="tab-btn-{name}" onclick="showDbTab('{name}')">{name}</button>"#,
+                name = db.name,
+                active = if index == 0 { " active" } else { "" },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
     // ── Per-db collection sections ────────────────────────────────────────────
     let db_sections: String = entries
         .iter()
         .zip(db_scores.iter())
-        .map(|((db_name, rows), db_score)| {
+        .enumerate()
+        .map(|(index, ((db_name, rows), db_score))| {
             let (db_complexity_label, db_complexity_color) = if db_score.score_db < 30.0 {
                 ("Easy", "#27ae60")
             } else if db_score.score_db < 80.0 {
@@ -2377,9 +2754,9 @@ pub fn render_multi_db_html(
                 .iter()
                 .map(|r| {
                     let docs_cell = render_documents_cell(&r.stats);
-                    let score_color = if r.stats.migrability_score < 3.0 {
+                    let score_color = if r.stats.migrability_score < 5.0 {
                         "#27ae60"
-                    } else if r.stats.migrability_score < 8.0 {
+                    } else if r.stats.migrability_score < 10.0 {
                         "#e67e22"
                     } else {
                         "#c0392b"
@@ -2512,7 +2889,7 @@ pub fn render_multi_db_html(
 
             let score_sum_i = ((db_score.score_db - 1.5 * db_score.collection_count as f64) * 100.0).round() / 100.0;
             format!(
-                r#"  <div class="db-section" id="{db_name}">
+                r#"  <div class="db-section{active}" id="{db_name}">
     <h2 class="db-heading">{db_name}</h2>
     <div class="summary-grid" style="margin-bottom:1rem">
       <div class="card"><div class="label">Collections</div><div class="value">{coll_count}</div></div>
@@ -2525,6 +2902,7 @@ pub fn render_multi_db_html(
     <p class="score-explainer">
       <strong>DB score</strong>: <code>1.5 × collections + Σ C<sub>i</sub></code><br>
       &nbsp;&nbsp;&nbsp;= <code>1.5 × {coll_count} + {score_sum_i:.2}</code> = <strong>{score_db:.2}</strong>.
+      <br>Collection score colors: 0–5 Green · 5–10 Orange · &gt;10 Red.
     </p>
     <table>
       <thead>
@@ -2546,6 +2924,7 @@ pub fn render_multi_db_html(
       </tbody>
     </table>
   </div>"#,
+                active = if index == 0 { " active" } else { "" },
                 db_name = db_name,
                 coll_count = db_score.collection_count,
                 docs = db_score.total_docs,
@@ -2581,6 +2960,9 @@ pub fn render_multi_db_html(
     h1 {{ color: #2c3e50; margin-bottom: 0.25rem; }}
     h2 {{ color: #2c3e50; margin-top: 0; margin-bottom: 0.75rem; font-size: 1.25rem; }}
     .subtitle {{ color: #7f8c8d; font-size: 0.9rem; margin-bottom: 2rem; }}
+    .origin-links {{ color: #5d6d7e; font-size: 0.82rem; margin: -1.35rem 0 1.6rem; }}
+    .origin-links a {{ color: #2471a3; text-decoration: none; }}
+    .origin-links a:hover {{ text-decoration: underline; }}
     .summary-grid {{
       display: flex;
       gap: 1rem;
@@ -2722,7 +3104,19 @@ pub fn render_multi_db_html(
       font-weight: 700;
       color: white;
     }}
-    .db-section {{ margin-top: 3rem; }}
+    .db-section {{ margin-top: 3rem; display: none; }}
+    .db-section.active {{ display: block; }}
+    .db-tabs {{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.5rem; }}
+    .db-tab-btn {{
+      padding: 0.5rem 1rem;
+      border: 1px solid #bdc3c7;
+      border-radius: 6px 6px 0 0;
+      background: #ecf0f1;
+      color: #2c3e50;
+      font-weight: 600;
+      cursor: pointer;
+    }}
+    .db-tab-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
     .db-heading {{
       font-size: 1.4rem;
       color: #2c3e50;
@@ -2745,15 +3139,13 @@ pub fn render_multi_db_html(
 <body>
   <h1>mongo2pg – Migration Report {title}</h1>
   <p class="subtitle">Cluster: <strong>{cluster}</strong> &nbsp;|&nbsp; Project: <strong>{project_name}</strong> &nbsp;|&nbsp; Generated: {now}</p>
+  <p class="origin-links">Report source: <a href="../">project root</a> &nbsp;|&nbsp; <a href="../config/">config folder</a></p>
 
   <div class="summary-grid">
     <div class="card"><div class="label">Databases</div><div class="value">{db_count}</div></div>
     <div class="card"><div class="label">Collections</div><div class="value">{total_collections}</div></div>
     <div class="card"><div class="label">Total Documents</div><div class="value">{total_docs}</div></div>
-    <div class="card">
-      <div class="label">Cluster Score</div>
-      <div class="value" style="color:{complexity_color}">{score_total:.1}</div>
-    </div>
+    <div class="card"><div class="label">Global Score</div><div class="value" style="color:{complexity_color}">{global_score:.1}</div></div>
     <div class="card">
       <div class="label">Complexity</div>
       <div class="value" style="font-size:1.2rem;margin-top:0.3rem">
@@ -2761,12 +3153,12 @@ pub fn render_multi_db_html(
       </div>
     </div>
     <div class="card"><div class="label">Score (avg weighted)</div><div class="value" style="font-size:1.3rem">{score_avg:.2}</div></div>
-    <div class="card"><div class="label">Score (max db)</div><div class="value" style="font-size:1.3rem">{score_max:.2}</div></div>
   </div>
 
   <p class="score-explainer">
-    <strong>Cluster score</strong>: <code>1.5 × databases + Σ score_db<sub>j</sub></code><br>
-    &nbsp;&nbsp;&nbsp;= <code>1.5 × {db_count} + {score_db_sum:.2}</code> = <strong>{score_total:.2}</strong>.
+    <strong>Global score</strong>: <code>0.6 × max(score_db) + 0.4 × avg(score_db)</code><br>
+    &nbsp;&nbsp;&nbsp;= <code>0.6 × {score_max_db:.2} + 0.4 × {score_avg_db:.2}</code> = <strong>{global_score:.2}</strong>.<br>
+    Thresholds (global score): &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
   </p>
 
   <h2>Databases</h2>
@@ -2786,11 +3178,23 @@ pub fn render_multi_db_html(
     </tbody>
   </table>
 
+  <div class="db-tabs">
+    {db_tabs}
+  </div>
+
   {db_sections}
 
   <footer>Generated by <a href="https://github.com/pmpetit/mongo2pg">mongo2pg</a></footer>
 
   <script>
+    function showDbTab(name) {{
+      document.querySelectorAll('.db-section').forEach(function(section) {{
+        section.classList.toggle('active', section.id === name);
+      }});
+      document.querySelectorAll('.db-tab-btn').forEach(function(btn) {{
+        btn.classList.toggle('active', btn.id === 'tab-btn-' + name);
+      }});
+    }}
     function toggleDetail(key) {{
       var row  = document.getElementById('detail-' + key);
       var icon = document.getElementById('icon-'   + key);
@@ -2820,13 +3224,14 @@ pub fn render_multi_db_html(
         db_count = cs.db_count,
         total_collections = total_collections,
         total_docs = total_docs,
-        score_total = cs.score_total,
+        global_score = global_score,
+        score_max_db = cs.score_max,
+        score_avg_db = score_db_avg_simple,
         score_avg = cs.score_avg,
-        score_max = cs.score_max,
-        score_db_sum = score_db_sum,
         complexity_label = complexity_label,
         complexity_color = complexity_color,
         db_summary_rows = db_summary_rows,
+        db_tabs = db_tabs,
         db_sections = db_sections,
     )
 }

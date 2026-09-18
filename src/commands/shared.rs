@@ -23,20 +23,20 @@ use toml::{map::Map as TomlMap, Value as TomlValue};
 
 use crate::db::pg::connect_client as connect_pg_client;
 use crate::engine::analyzer::FieldSchema;
-use crate::engine::checksum::compute_md5_summaries_for_collection_with_collections_root;
+use crate::engine::checksum::compute_md5_summaries_for_collection_with_overrides;
 use crate::export::{
     ensure_gcs_authentication, resolve_export_write_backend, resolve_grouped_sql_lookup_name,
     ExportWriteBackend, DEFAULT_EXPORT_CHUNK_ROWS,
 };
 use crate::report::{
-    cluster_from_uri, render_post_import_html, PostImportCollectionRow, PostImportCountDiffRow,
-    PostImportMd5Column, PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode,
-    PostImportSnapshotSkipSummary, PostImportTableRow,
+    cluster_from_uri, render_post_import_html, render_post_import_multi_db_html,
+    PostImportCollectionRow, PostImportCountDiffRow, PostImportMd5Column, PostImportMd5MismatchRow,
+    PostImportMd5Summary, PostImportNode, PostImportSnapshotSkipSummary, PostImportTableRow,
 };
 use crate::schema_diagram::{parse_sql, Table};
 use crate::util::{
     configured_project_root, connection_failed_context, is_pg_reserved, read_conf,
-    should_infer_collection,
+    resolve_target_mapping_for_namespace_index, should_infer_collection,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -836,6 +836,33 @@ pub fn resolve_collections_dir(project_root: &Path, db_name: &str) -> PathBuf {
     }
 }
 
+/// Root directory for one database's generated artifacts when a project is
+/// configured with more than one database (`[source].namespace` array with
+/// 2+ entries). `data/`, `schema/`, and `source/` live below this directory;
+/// `config/` and `reports/` remain directly under `project_root`.
+///
+/// Not used for single-database projects, which keep the flat
+/// `project_root/{data,schema,source}` layout for backward compatibility.
+pub fn multi_db_database_root(project_root: &Path, db_name: &str) -> PathBuf {
+    project_root.join(sanitize_name(db_name))
+}
+
+pub fn multi_db_source_collections_dir(project_root: &Path, db_name: &str) -> PathBuf {
+    multi_db_database_root(project_root, db_name)
+        .join("source")
+        .join("collections")
+}
+
+pub fn multi_db_schema_tables_dir(project_root: &Path, db_name: &str) -> PathBuf {
+    multi_db_database_root(project_root, db_name)
+        .join("schema")
+        .join("tables")
+}
+
+pub fn multi_db_data_dir(project_root: &Path, db_name: &str) -> PathBuf {
+    multi_db_database_root(project_root, db_name).join("data")
+}
+
 pub fn resolve_local_project_root_from_config(
     conf_path: &Path,
     conf_data: &crate::util::ConfData,
@@ -1337,6 +1364,36 @@ pub fn parse_namespace(ns: &str) -> Result<(&str, &str)> {
         .find('.')
         .ok_or_else(|| anyhow!("Namespace must be in the form <db>.<collection>, got: {ns}"))?;
     Ok((&ns[..dot], &ns[dot + 1..]))
+}
+
+/// Writes `content` to `path` by first writing to a temporary file in the
+/// same directory, then renaming it into place. `rename` is atomic on the
+/// same filesystem, so readers never observe a partially written file and a
+/// failed write leaves the previous file (if any) untouched.
+pub fn write_file_atomically(path: &Path, content: &str) -> Result<()> {
+    let dir = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(dir)
+        .with_context(|| format!("Cannot create directory {}", dir.display()))?;
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("output");
+    let tmp_path = dir.join(format!(".{file_name}.tmp-{}", std::process::id()));
+
+    std::fs::write(&tmp_path, content)
+        .with_context(|| format!("Failed to write temporary file {}", tmp_path.display()))?;
+    std::fs::rename(&tmp_path, path).with_context(|| {
+        format!(
+            "Failed to publish {} from temporary file {}",
+            path.display(),
+            tmp_path.display()
+        )
+    })?;
+    Ok(())
 }
 
 pub fn sanitize_name(name: &str) -> String {
@@ -1893,6 +1950,130 @@ pub fn should_fail_post_import_on_warnings(warning_count: usize) -> bool {
     warning_count > 0
 }
 
+/// Writes one combined `--post-import` report with one tab per database, for
+/// configurations where `[source].namespace` resolves to more than one
+/// database. Returns `Ok(false)` (without writing anything) when the
+/// configuration resolves to a single database, so callers can fall back to
+/// [`write_post_import_report`].
+pub async fn write_post_import_report_for_configured_databases(
+    conf: &Path,
+    source_uri_override: &str,
+    include_md5: bool,
+) -> Result<bool> {
+    let c = read_conf(conf)?;
+    if c.namespace_databases.len() <= 1 {
+        return Ok(false);
+    }
+
+    let storage_backend =
+        resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
+    let metadata_root = match &storage_backend {
+        ExportWriteBackend::LocalFs => configured_project_root(&c),
+        ExportWriteBackend::Gcs { .. } => resolve_local_project_root_from_config(conf, &c),
+    };
+    let reports_dir = resolve_local_project_root_from_config(conf, &c).join("reports");
+    std::fs::create_dir_all(&reports_dir)
+        .with_context(|| format!("Can't create reports dir {}", reports_dir.display()))?;
+
+    let source_uri = if source_uri_override.is_empty() {
+        c.source_uri
+            .as_deref()
+            .ok_or_else(|| anyhow!("SOURCE_URI not found in the config file"))?
+            .to_owned()
+    } else {
+        source_uri_override.to_owned()
+    };
+    let target_uri = c
+        .target_uri
+        .as_deref()
+        .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
+    let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
+    let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
+
+    let mut all_rows: Vec<(String, Vec<PostImportCollectionRow>)> = Vec::new();
+    let mut warning_entries: Vec<String> = Vec::new();
+
+    for (idx, db_name) in c.namespace_databases.iter().enumerate() {
+        let collections_dir = multi_db_source_collections_dir(&metadata_root, db_name);
+        let schema_tables_root = multi_db_schema_tables_dir(&metadata_root, db_name);
+        if !collections_dir.is_dir() {
+            warn!(
+                "Skipping post-import report for database '{db_name}': no source collections found at {}",
+                collections_dir.display()
+            );
+            continue;
+        }
+
+        let (target_db_name, _) = resolve_target_mapping_for_namespace_index(&c, idx, db_name);
+        let target_uri_for_db = pg_uri_with_database(target_uri, &target_db_name);
+
+        match build_post_import_rows(
+            conf,
+            &source_uri,
+            &target_uri_for_db,
+            db_name,
+            &conf_include,
+            &conf_exclude,
+            &reports_dir,
+            &collections_dir,
+            &schema_tables_root,
+            include_md5,
+        )
+        .await
+        {
+            Ok(rows) => {
+                warning_entries.extend(summarize_post_import_warning_entries(&rows));
+                all_rows.push((db_name.clone(), rows));
+            }
+            Err(e) => warn!("post-import row build failed for database '{db_name}': {e:#}"),
+        }
+    }
+
+    let entries: Vec<(&str, &[PostImportCollectionRow])> = all_rows
+        .iter()
+        .map(|(name, rows)| (name.as_str(), rows.as_slice()))
+        .collect();
+
+    let first_db_name = c
+        .namespace_databases
+        .first()
+        .map(String::as_str)
+        .unwrap_or("postgres");
+    let (target_db_for_label, _) = resolve_target_mapping_for_namespace_index(&c, 0, first_db_name);
+    let target_uri_for_cluster_label = pg_uri_with_database(target_uri, &target_db_for_label);
+    let html = render_post_import_multi_db_html(
+        &entries,
+        &cluster_from_uri(&source_uri),
+        &cluster_from_uri(&target_uri_for_cluster_label),
+    );
+    let output_path = reports_dir.join("post_report.html");
+    write_file_atomically(&output_path, &html)
+        .with_context(|| format!("Failed to write {}", output_path.display()))?;
+    info!("Post-import report written to {}", output_path.display());
+
+    if should_fail_post_import_on_warnings(warning_entries.len()) {
+        let preview = warning_entries
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        let suffix = if warning_entries.len() > 10 {
+            format!(", ... (+{} more)", warning_entries.len() - 10)
+        } else {
+            String::new()
+        };
+        return Err(anyhow!(
+            "post-import report contains validation warnings in {} node(s): {}{}",
+            warning_entries.len(),
+            preview,
+            suffix
+        ));
+    }
+
+    Ok(true)
+}
+
 pub async fn write_post_import_report(
     conf: &Path,
     namespace_override: &str,
@@ -2087,7 +2268,17 @@ pub async fn write_post_import_report(
             }
         }
 
-        let collections_dir = resolve_collections_dir(&metadata_root, db_name);
+        let multi_db_schema_tables_root = multi_db_schema_tables_dir(&metadata_root, db_name);
+        if multi_db_schema_tables_root.is_dir() {
+            schema_tables_root = multi_db_schema_tables_root;
+        }
+
+        let multi_db_collections_dir = multi_db_source_collections_dir(&metadata_root, db_name);
+        let collections_dir = if multi_db_collections_dir.is_dir() {
+            multi_db_collections_dir
+        } else {
+            resolve_collections_dir(&metadata_root, db_name)
+        };
         let output_path = reports_dir.join("post_report.html");
 
         log_post_import_trace(
@@ -3033,10 +3224,13 @@ pub async fn build_post_import_rows(
                     db_name,
                     coll_name
                 );
-                match compute_md5_summaries_for_collection_with_collections_root(
+                match compute_md5_summaries_for_collection_with_overrides(
                     &coll_name,
                     config_path,
                     Some(&collections_dir_for_lookup),
+                    Some(db_name),
+                    Some(target_uri),
+                    schema_name.as_deref(),
                 )
                 .await
                 {
@@ -3204,10 +3398,13 @@ pub async fn build_post_import_rows(
                         );
                     }
                 } else {
-                    match compute_md5_summaries_for_collection_with_collections_root(
+                    match compute_md5_summaries_for_collection_with_overrides(
                         &coll_name,
                         config_path,
                         Some(&collections_dir_for_lookup),
+                        Some(db_name),
+                        Some(target_uri),
+                        schema_name.as_deref(),
                     )
                     .await
                     {
@@ -3271,4 +3468,48 @@ pub async fn build_post_import_rows(
     }
 
     Ok(rows)
+}
+
+#[cfg(test)]
+mod atomic_write_tests {
+    use super::write_file_atomically;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn write_file_atomically_publishes_content_and_leaves_no_temp_file() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-atomic-write-test-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let output_path = dir.join("report.html");
+
+        write_file_atomically(&output_path, "<html>first</html>").expect("first write succeeds");
+        assert_eq!(
+            std::fs::read_to_string(&output_path).expect("read first"),
+            "<html>first</html>"
+        );
+
+        write_file_atomically(&output_path, "<html>second</html>").expect("second write succeeds");
+        assert_eq!(
+            std::fs::read_to_string(&output_path).expect("read second"),
+            "<html>second</html>"
+        );
+
+        let leftover_temp_files = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(".report.html.tmp-")
+            })
+            .count();
+        assert_eq!(leftover_temp_files, 0);
+
+        let _ = std::fs::remove_file(&output_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
 }

@@ -41,7 +41,8 @@ use crate::util::{
     can_inline_object_fields, connection_failed_context, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_pg_reserved, property_filter_entries_for_collection,
+    inline_object_leaf_fields_with_prefix, is_pg_reserved,
+    property_filter_entries_for_collection, property_filter_entries_for_database_collection,
     read_conf, sanitize, scalar_type_family, should_infer_collection,
 };
 
@@ -88,6 +89,8 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
         resolved_source_uri,
         effective_output_dir,
         conf_namespace,
+        conf_namespace_databases,
+        conf_project_root,
         conf_number,
         conf_percent,
         conf_max_time_ms,
@@ -113,6 +116,11 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
                 "--output-dir is ignored when --config is set; infer outputs are written under base_dir/project_dir/source/collections"
             );
         }
+        crate::util::validate_multi_db_filter_entries(
+            &c.namespace_databases,
+            &c.include,
+            &c.exclude,
+        )?;
         let configured_project_root = resolve_local_project_root_from_config(conf, &c);
         let configured_out_dir = configured_project_root.join("source").join("collections");
 
@@ -149,6 +157,8 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
             source_uri,
             Some(out_dir),
             c.namespace,
+            c.namespace_databases,
+            Some(local_project_root),
             c.number,
             c.percent,
             c.max_time_ms,
@@ -168,20 +178,23 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
         (
             source_uri,
             args.output_dir.clone(),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            false,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
+            None,       // conf_namespace
+            Vec::new(), // conf_namespace_databases
+            None,       // conf_project_root
+            None,       // conf_number
+            None,       // conf_percent
+            None,       // conf_max_time_ms
+            None,       // conf_chunk_size
+            None,       // conf_auth_retry_max
+            false,      // conf_jsonb
+            None,       // conf_target_schema
+            Vec::new(), // conf_timestamp_fields
+            Vec::new(), // conf_include
+            Vec::new(), // conf_exclude
         )
     };
 
+    let cli_namespace = args.namespace.clone();
     let namespace = args.namespace.clone().or(conf_namespace);
 
     let client_options = crate::db::mongo::parse_client_options(&resolved_source_uri)
@@ -237,118 +250,82 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
         ..args
     };
 
-    match namespace {
-        None => {
-            // No namespace provided: enumerate all user databases and infer each.
-            infer_all_databases(
-                &client,
-                &args,
-                &conf_include,
-                &conf_exclude,
-                &conf_timestamp_fields,
-                !quiet_infer,
-            )
-            .await?;
-        }
-        Some(ref ns) if ns.contains('.') => {
-            // Single collection: <db>.<collection>
-            let (db_name, coll_name) = parse_namespace(ns)?;
-            let existing_dbs = client.list_database_names().await.with_context(|| {
-                format!(
-                    "{}: failed to list databases",
-                    connection_failed_context("mongo", "query")
+    if cli_namespace.is_none() && conf_namespace_databases.len() > 1 {
+        // Configured `[source].namespace` array with more than one database:
+        // process the explicit, ordered list under database-scoped output
+        // directories rather than the single-namespace match arms below.
+        let project_root = conf_project_root.clone().ok_or_else(|| {
+            anyhow!("Multi-database namespace requires -c <config> so output paths can be resolved")
+        })?;
+        infer_configured_databases(
+            &client,
+            &args,
+            &project_root,
+            &conf_namespace_databases,
+            &conf_include,
+            &conf_exclude,
+            &conf_timestamp_fields,
+            !quiet_infer,
+        )
+        .await?;
+    } else {
+        match namespace {
+            None => {
+                // No namespace provided: enumerate all user databases and infer each.
+                infer_all_databases(
+                    &client,
+                    &args,
+                    &conf_include,
+                    &conf_exclude,
+                    &conf_timestamp_fields,
+                    !quiet_infer,
                 )
-            })?;
-            if !existing_dbs.iter().any(|d| d == db_name) {
-                warn!(
-                    "database '{db_name}' does not exist on the server. Available databases: {}",
-                    existing_dbs.join(", ")
-                );
+                .await?;
             }
-            let existing_colls = client
-                .database(db_name)
-                .list_collection_names()
-                .await
-                .with_context(|| {
+            Some(ref ns) if ns.contains('.') => {
+                // Single collection: <db>.<collection>
+                let (db_name, coll_name) = parse_namespace(ns)?;
+                let existing_dbs = client.list_database_names().await.with_context(|| {
                     format!(
-                        "{}: failed to list collections",
+                        "{}: failed to list databases",
                         connection_failed_context("mongo", "query")
                     )
                 })?;
-            if !existing_colls.iter().any(|c| c == coll_name) {
-                warn!(
-                    "collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
-                    existing_colls.join(", ")
-                );
-            }
-            let inferred_root_table_names = existing_colls
-                .iter()
-                .filter(|name| !name.starts_with("system."))
-                .filter(|name| should_infer_collection(name, &conf_include, &conf_exclude))
-                .map(|name| sanitize(name))
-                .collect::<HashSet<_>>();
-            if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
-                info!(
-                    "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
-                );
-                return Ok(());
-            }
-            let schema = infer_collection(
-                &client,
-                db_name,
-                coll_name,
-                coll_name,
-                conf_target_schema.as_deref(),
-                &conf_include,
-                &conf_exclude,
-                &conf_timestamp_fields,
-                &args,
-                None,
-                Some(&inferred_root_table_names),
-                Some((1, 1)),
-                !quiet_infer,
-            )
-            .await?;
-            if args.print_json && !args.no_output {
-                info!("{}", serde_json::to_string_pretty(&schema)?);
-            }
-        }
-        Some(ref ns) => {
-            // Whole single database: infer every collection.
-            let db_name = ns.as_str();
-            let existing_dbs = client.list_database_names().await.with_context(|| {
-                format!(
-                    "{}: failed to list databases",
-                    connection_failed_context("mongo", "query")
-                )
-            })?;
-            if !existing_dbs.iter().any(|d| d == db_name) {
-                warn!(
+                if !existing_dbs.iter().any(|d| d == db_name) {
+                    warn!(
                     "database '{db_name}' does not exist on the server. Available databases: {}",
                     existing_dbs.join(", ")
                 );
-            }
-            let db = client.database(db_name);
-            let coll_names = db.list_collection_names().await.with_context(|| {
-                format!(
-                    "{}: failed to list collections",
-                    connection_failed_context("mongo", "query")
-                )
-            })?;
-            let filtered_coll_names: Vec<&String> = coll_names
-                .iter()
-                .filter(|n| !n.starts_with("system."))
-                .filter(|n| should_infer_collection(n, &conf_include, &conf_exclude))
-                .collect();
-            let inferred_root_table_names = filtered_coll_names
-                .iter()
-                .map(|name| sanitize(name))
-                .collect::<HashSet<_>>();
-            let total_collections = filtered_coll_names.len();
-
-            let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
-            for (index, coll_name) in filtered_coll_names.iter().enumerate() {
-                match infer_collection(
+                }
+                let existing_colls = client
+                    .database(db_name)
+                    .list_collection_names()
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "{}: failed to list collections",
+                            connection_failed_context("mongo", "query")
+                        )
+                    })?;
+                if !existing_colls.iter().any(|c| c == coll_name) {
+                    warn!(
+                    "collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
+                    existing_colls.join(", ")
+                );
+                }
+                let inferred_root_table_names = existing_colls
+                    .iter()
+                    .filter(|name| !name.starts_with("system."))
+                    .filter(|name| should_infer_collection(name, &conf_include, &conf_exclude))
+                    .map(|name| sanitize(name))
+                    .collect::<HashSet<_>>();
+                if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
+                    info!(
+                    "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
+                );
+                    return Ok(());
+                }
+                let schema = infer_collection(
                     &client,
                     db_name,
                     coll_name,
@@ -360,19 +337,75 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
                     &args,
                     None,
                     Some(&inferred_root_table_names),
-                    Some((index + 1, total_collections)),
+                    Some((1, 1)),
                     !quiet_infer,
                 )
-                .await
-                {
-                    Ok(schema) => {
-                        all_schemas.insert((*coll_name).clone(), schema);
-                    }
-                    Err(e) => warn!(" skipping {db_name}.{coll_name}: {e:#}"),
+                .await?;
+                if args.print_json && !args.no_output {
+                    info!("{}", serde_json::to_string_pretty(&schema)?);
                 }
             }
-            if args.print_json && !args.no_output {
-                info!("{}", serde_json::to_string_pretty(&all_schemas)?);
+            Some(ref ns) => {
+                // Whole single database: infer every collection.
+                let db_name = ns.as_str();
+                let existing_dbs = client.list_database_names().await.with_context(|| {
+                    format!(
+                        "{}: failed to list databases",
+                        connection_failed_context("mongo", "query")
+                    )
+                })?;
+                if !existing_dbs.iter().any(|d| d == db_name) {
+                    warn!(
+                    "database '{db_name}' does not exist on the server. Available databases: {}",
+                    existing_dbs.join(", ")
+                );
+                }
+                let db = client.database(db_name);
+                let coll_names = db.list_collection_names().await.with_context(|| {
+                    format!(
+                        "{}: failed to list collections",
+                        connection_failed_context("mongo", "query")
+                    )
+                })?;
+                let filtered_coll_names: Vec<&String> = coll_names
+                    .iter()
+                    .filter(|n| !n.starts_with("system."))
+                    .filter(|n| should_infer_collection(n, &conf_include, &conf_exclude))
+                    .collect();
+                let inferred_root_table_names = filtered_coll_names
+                    .iter()
+                    .map(|name| sanitize(name))
+                    .collect::<HashSet<_>>();
+                let total_collections = filtered_coll_names.len();
+
+                let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+                for (index, coll_name) in filtered_coll_names.iter().enumerate() {
+                    match infer_collection(
+                        &client,
+                        db_name,
+                        coll_name,
+                        coll_name,
+                        conf_target_schema.as_deref(),
+                        &conf_include,
+                        &conf_exclude,
+                        &conf_timestamp_fields,
+                        &args,
+                        None,
+                        Some(&inferred_root_table_names),
+                        Some((index + 1, total_collections)),
+                        !quiet_infer,
+                    )
+                    .await
+                    {
+                        Ok(schema) => {
+                            all_schemas.insert((*coll_name).clone(), schema);
+                        }
+                        Err(e) => warn!(" skipping {db_name}.{coll_name}: {e:#}"),
+                    }
+                }
+                if args.print_json && !args.no_output {
+                    info!("{}", serde_json::to_string_pretty(&all_schemas)?);
+                }
             }
         }
     }
@@ -507,6 +540,30 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
 }
 
 pub fn validate_infer_artifacts_use_base_dir(conf: &Path) -> Result<()> {
+    fn has_collection_json_files(root: &Path) -> bool {
+        let mut pending_dirs = vec![root.to_path_buf()];
+        while let Some(dir) = pending_dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.filter_map(|entry| entry.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending_dirs.push(path);
+                    continue;
+                }
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     let c = read_conf(conf)?;
     if matches!(
         resolve_export_write_backend(&c.base_dir)?,
@@ -520,26 +577,66 @@ pub fn validate_infer_artifacts_use_base_dir(conf: &Path) -> Result<()> {
     }
 
     let project_root = resolve_local_project_root_from_config(conf, &c);
-    let source_collections_dir = project_root.join("source").join("collections");
-    let schema_tables_dir = project_root.join("schema").join("tables");
     let reports_main = project_root.join("reports").join("main.html");
 
-    if !source_collections_dir.is_dir() {
-        return Err(anyhow!(
-            "Infer output validation failed: source collections directory not found at {} (derived from base_dir='{}', project_dir='{}')",
-            source_collections_dir.display(),
-            c.base_dir.display(),
-            c.project_dir
-        ));
+    if c.namespace_databases.len() > 1 {
+        for db_name in &c.namespace_databases {
+            let source_collections_dir =
+                crate::commands::shared::multi_db_source_collections_dir(&project_root, db_name);
+            let schema_tables_dir =
+                crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
+
+            if !source_collections_dir.is_dir() {
+                return Err(anyhow!(
+                    "Infer output validation failed: source collections directory not found at {} for database '{}' (derived from base_dir='{}', project_dir='{}')",
+                    source_collections_dir.display(),
+                    db_name,
+                    c.base_dir.display(),
+                    c.project_dir
+                ));
+            }
+
+            if !has_collection_json_files(&source_collections_dir) {
+                warn!(
+                    "Infer artifact validation: skipping schema/tables check for database '{}' because no inferred collection JSON files were produced under {}",
+                    db_name,
+                    source_collections_dir.display()
+                );
+                continue;
+            }
+
+            if !schema_tables_dir.is_dir() {
+                return Err(anyhow!(
+                    "Infer output validation failed: schema tables directory not found at {} for database '{}' (derived from base_dir='{}', project_dir='{}')",
+                    schema_tables_dir.display(),
+                    db_name,
+                    c.base_dir.display(),
+                    c.project_dir
+                ));
+            }
+        }
+    } else {
+        let source_collections_dir = project_root.join("source").join("collections");
+        let schema_tables_dir = project_root.join("schema").join("tables");
+
+        if !source_collections_dir.is_dir() {
+            return Err(anyhow!(
+                "Infer output validation failed: source collections directory not found at {} (derived from base_dir='{}', project_dir='{}')",
+                source_collections_dir.display(),
+                c.base_dir.display(),
+                c.project_dir
+            ));
+        }
+        if !schema_tables_dir.is_dir() {
+            return Err(anyhow!(
+                "Infer output validation failed: schema tables directory not found at {} (derived from base_dir='{}', project_dir='{}')",
+                schema_tables_dir.display(),
+                c.base_dir.display(),
+                c.project_dir
+            ));
+        }
     }
-    if !schema_tables_dir.is_dir() {
-        return Err(anyhow!(
-            "Infer output validation failed: schema tables directory not found at {} (derived from base_dir='{}', project_dir='{}')",
-            schema_tables_dir.display(),
-            c.base_dir.display(),
-            c.project_dir
-        ));
-    }
+
     if !reports_main.is_file() {
         return Err(anyhow!(
             "Infer output validation failed: report file not found at {} (derived from base_dir='{}', project_dir='{}')",
@@ -549,12 +646,22 @@ pub fn validate_infer_artifacts_use_base_dir(conf: &Path) -> Result<()> {
         ));
     }
 
-    info!(
-        "Infer artifact validation succeeded under base_dir/project_dir: source={}, schema={}, report={}",
-        source_collections_dir.display(),
-        schema_tables_dir.display(),
-        reports_main.display()
-    );
+    if c.namespace_databases.len() > 1 {
+        info!(
+            "Infer artifact validation succeeded under base_dir/project_dir for {} database(s): report={}",
+            c.namespace_databases.len(),
+            reports_main.display()
+        );
+    } else {
+        let source_collections_dir = project_root.join("source").join("collections");
+        let schema_tables_dir = project_root.join("schema").join("tables");
+        info!(
+            "Infer artifact validation succeeded under base_dir/project_dir: source={}, schema={}, report={}",
+            source_collections_dir.display(),
+            schema_tables_dir.display(),
+            reports_main.display()
+        );
+    }
     Ok(())
 }
 
@@ -1486,7 +1593,130 @@ pub async fn infer_all_databases(
     Ok(())
 }
 
-/// Default maximum time we allow a single infer sampling query to run on the server.
+/// Infers an explicit list of configured databases (`[source].namespace` as
+/// an array with more than one entry), writing each database's generated
+/// `source/collections` artifacts under `<project_root>/<database_name>/`.
+///
+/// Unlike [`infer_all_databases`] (which discovers every database on the
+/// server when no namespace is configured), this processes exactly the
+/// configured databases, in their declared order, and keeps failures scoped
+/// to the database that produced them.
+pub async fn infer_configured_databases(
+    client: &Client,
+    args: &InferArgs,
+    project_root: &Path,
+    databases: &[String],
+    include: &[String],
+    exclude: &[String],
+    timestamp_fields: &[String],
+    emit_stats: bool,
+) -> Result<()> {
+    use crate::commands::shared::multi_db_source_collections_dir;
+    use crate::util::should_infer_collection_for_database;
+
+    if databases.is_empty() {
+        return Ok(());
+    }
+
+    let existing_dbs = client.list_database_names().await.with_context(|| {
+        format!(
+            "{}: failed to list databases",
+            connection_failed_context("mongo", "query")
+        )
+    })?;
+
+    info!(
+        "Inferring {} configured database(s) in declared order: {}",
+        databases.len(),
+        databases.join(", ")
+    );
+
+    let mut databases_with_collections: Vec<(String, Vec<String>)> = Vec::new();
+
+    for db_name in databases {
+        if !existing_dbs.iter().any(|d| d == db_name) {
+            warn!(
+                "database '{db_name}' does not exist on the server. Available databases: {}",
+                existing_dbs.join(", ")
+            );
+        }
+
+        let db = client.database(db_name);
+        let coll_names = match db.list_collection_names().await {
+            Ok(n) => n,
+            Err(e) => {
+                warn!("skipping database '{db_name}' (cannot list collections): {e:#}");
+                continue;
+            }
+        };
+
+        let filtered_coll_names: Vec<String> = coll_names
+            .into_iter()
+            .filter(|n| !n.starts_with("system."))
+            .filter(|n| should_infer_collection_for_database(db_name, n, include, exclude))
+            .collect();
+
+        databases_with_collections.push((db_name.clone(), filtered_coll_names));
+    }
+
+    let total_collections: usize = databases_with_collections
+        .iter()
+        .map(|(_, coll_names)| coll_names.len())
+        .sum();
+    let mut current_collection = 0usize;
+
+    for (db_name, coll_names) in &databases_with_collections {
+        let db_out_dir = multi_db_source_collections_dir(project_root, db_name);
+        std::fs::create_dir_all(&db_out_dir).with_context(|| {
+            format!(
+                "Failed to create infer output dir {} for database '{db_name}'",
+                db_out_dir.display()
+            )
+        })?;
+
+        let inferred_root_table_names = coll_names
+            .iter()
+            .map(|name| sanitize(name))
+            .collect::<HashSet<_>>();
+        let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+
+        for coll_name in coll_names {
+            current_collection += 1;
+            match infer_collection(
+                client,
+                db_name,
+                coll_name,
+                coll_name,
+                None,
+                include,
+                exclude,
+                timestamp_fields,
+                args,
+                Some(db_out_dir.as_path()),
+                Some(&inferred_root_table_names),
+                Some((current_collection, total_collections)),
+                emit_stats,
+            )
+            .await
+            {
+                Ok(schema) => {
+                    db_schemas.insert(coll_name.clone(), schema);
+                }
+                Err(e) => warn!("skipping {db_name}.{coll_name}: {e:#}"),
+            }
+        }
+
+        if args.print_json && !args.no_output {
+            info!(
+                "{}",
+                serde_json::to_string_pretty(&IndexMap::from([(db_name.clone(), &db_schemas)]))?
+            );
+        }
+    }
+
+    Ok(())
+}
+
 pub const DEFAULT_SAMPLE_MAX_TIME: Duration = Duration::from_secs(120);
 pub const DEFAULT_INFER_CHUNK_SIZE: u64 = 1_000_000;
 pub const DEFAULT_INFER_AUTH_RETRY_MAX: u32 = 3;
@@ -1768,8 +1998,10 @@ pub async fn infer_collection(
                     }
                 }
 
+                // Collection may contain fewer documents than requested sample size.
+                // Exit instead of retrying the same cursor forever without progress.
                 if chunk_docs == 0 {
-                    break;
+                    return Ok(());
                 }
 
                 last_processed_id = chunk_last_id.or(chunk_start_id);
@@ -1832,7 +2064,7 @@ pub async fn infer_collection(
     }
 
     let mut schema = analyzer.finish();
-    apply_collection_property_filters(&mut schema, coll_name, include, exclude);
+    apply_collection_property_filters(&mut schema, db_name, coll_name, include, exclude);
     let total_docs = if let Some(t) = known_total {
         t
     } else {
@@ -1970,13 +2202,40 @@ pub async fn detect_search_node_capability(
 
 pub fn apply_collection_property_filters(
     schema: &mut CollectionSchema,
+    db_name: &str,
     coll_name: &str,
     include: &[String],
     exclude: &[String],
 ) {
-    let has_collection_wide_include = include.iter().any(|entry| entry == coll_name);
-    let included_properties = property_filter_entries_for_collection(coll_name, include);
-    let excluded_properties = property_filter_entries_for_collection(coll_name, exclude);
+    let has_db_prefix = |entry: &String| {
+        entry
+            .split_once('.')
+            .map(|(prefix, _)| prefix == db_name)
+            .unwrap_or(false)
+    };
+    let has_multi_db_entries = include.iter().chain(exclude.iter()).any(has_db_prefix);
+
+    let has_collection_wide_include = if has_multi_db_entries {
+        include.iter().any(|entry| {
+            entry
+                .split_once('.')
+                .map(|(entry_db, rest)| entry_db == db_name && rest == coll_name)
+                .unwrap_or(false)
+        })
+    } else {
+        include.iter().any(|entry| entry == coll_name)
+    };
+
+    let included_properties = if has_multi_db_entries {
+        property_filter_entries_for_database_collection(db_name, coll_name, include)
+    } else {
+        property_filter_entries_for_collection(coll_name, include)
+    };
+    let excluded_properties = if has_multi_db_entries {
+        property_filter_entries_for_database_collection(db_name, coll_name, exclude)
+    } else {
+        property_filter_entries_for_collection(coll_name, exclude)
+    };
 
     if !has_collection_wide_include && !included_properties.is_empty() {
         schema.object.retain(|field_name, _| {

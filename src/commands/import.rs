@@ -17,12 +17,13 @@ use crate::commands::shared::{
     pg_uri_with_database, preflight_existing_tables_error, quote_ident,
     resolve_local_project_root_from_config, sanitize_name, split_namespace_scope,
     stage_export_metadata_from_gcs, stream_reader_to_copy, strip_postgis_extension_statement,
-    strip_psql_preamble, write_post_import_report, ConfigOverrides,
+    strip_psql_preamble, write_post_import_report,
+    write_post_import_report_for_configured_databases, ConfigOverrides,
 };
 use crate::db::pg::connect_client as connect_pg_client;
 use crate::export::{ensure_gcs_authentication, resolve_export_write_backend, ExportWriteBackend};
 use crate::schema_diagram::parse_sql;
-use crate::util::{configured_project_root, read_conf};
+use crate::util::{configured_project_root, read_conf, resolve_target_mapping_for_namespace_index};
 
 pub fn gcs_prefix_candidates_for_import_data(
     prefix: &str,
@@ -107,7 +108,140 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
         count
     }
 
+    fn has_collection_json_files(root: &Path) -> bool {
+        let mut pending_dirs = vec![root.to_path_buf()];
+        while let Some(dir) = pending_dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.filter_map(|entry| entry.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending_dirs.push(path);
+                    continue;
+                }
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn has_inferred_collections_for_database(project_root: &Path, db_name: &str) -> bool {
+        let multi_db_dir = crate::commands::shared::multi_db_source_collections_dir(project_root, db_name);
+        if multi_db_dir.is_dir() && has_collection_json_files(&multi_db_dir) {
+            return true;
+        }
+
+        let flat_db_dir = project_root.join("source").join("collections").join(db_name);
+        if flat_db_dir.is_dir() && has_collection_json_files(&flat_db_dir) {
+            return true;
+        }
+
+        let legacy_collections_root = project_root.join("source").join("collections");
+        legacy_collections_root.is_dir() && has_collection_json_files(&legacy_collections_root)
+    }
+
     log_import_stage("start");
+
+    let initial_conf = read_conf(&args.config)?;
+    if args.namespace.is_none() && initial_conf.namespace_databases.len() > 1 {
+        let mut failures: Vec<String> = Vec::new();
+        let local_project_root = configured_project_root(&initial_conf);
+        let is_local_backend = matches!(
+            resolve_export_write_backend(&initial_conf.base_dir)?,
+            ExportWriteBackend::LocalFs
+        );
+
+        for (idx, db_name) in initial_conf.namespace_databases.iter().enumerate() {
+            if is_local_backend {
+                let collections_dir = crate::commands::shared::multi_db_source_collections_dir(
+                    &local_project_root,
+                    db_name,
+                );
+                if !collections_dir.is_dir() || !has_collection_json_files(&collections_dir) {
+                    warn!(
+                        "Skipping import for database '{}': no inferred collection JSON files found under {}",
+                        db_name,
+                        collections_dir.display()
+                    );
+                    continue;
+                }
+            }
+
+            let (mapped_db, mapped_schema) =
+                resolve_target_mapping_for_namespace_index(&initial_conf, idx, db_name);
+            let effective_db = args
+                .database_name
+                .clone()
+                .unwrap_or_else(|| mapped_db.clone());
+            let effective_schema = args
+                .schema_name
+                .clone()
+                .unwrap_or_else(|| mapped_schema.clone());
+
+            let stage_dir = tempfile::Builder::new()
+                .prefix("mongo2pg-import-conf-")
+                .tempdir()
+                .context("Failed to create temporary config dir for multi-db import")?;
+            let staged_conf = stage_dir.path().join("db.toml");
+            std::fs::copy(&args.config, &staged_conf).with_context(|| {
+                format!(
+                    "Failed to stage config {} to {}",
+                    args.config.display(),
+                    staged_conf.display()
+                )
+            })?;
+
+            apply_config_overrides(
+                &staged_conf,
+                &ConfigOverrides {
+                    project_dir: args.project_dir.clone(),
+                    namespace: Some(db_name.clone()),
+                    target_database_name: Some(effective_db),
+                    target_schema_name: Some(effective_schema),
+                    ..ConfigOverrides::default()
+                },
+            )?;
+
+            let mut child_args = args.clone();
+            child_args.config = staged_conf;
+            child_args.namespace = Some(db_name.clone());
+            child_args.database_name = None;
+            child_args.schema_name = None;
+
+            if let Err(err) = Box::pin(run_import(child_args)).await {
+                failures.push(format!("{}: {:#}", db_name, err));
+            }
+        }
+
+        if !failures.is_empty() {
+            return Err(anyhow!(
+                "Import failed for {} configured database(s): {}",
+                failures.len(),
+                failures.join(" | ")
+            ));
+        }
+
+        // Build one combined post-import report with one tab per configured
+        // database after all grouped imports complete successfully.
+        let wrote_multi_db_report = write_post_import_report_for_configured_databases(
+            &args.config,
+            "",
+            true,
+        )
+        .await?;
+        if !wrote_multi_db_report {
+            write_post_import_report(&args.config, "", "", true).await?;
+        }
+
+        return Ok(());
+    }
 
     apply_config_overrides(
         &args.config,
@@ -154,11 +288,35 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
     let mut import_metadata_stage: Option<tempfile::TempDir> = None;
 
     let mut tables_root = project_root.join("schema").join("tables");
-    let mut tables_dir = if tables_root.join(db_name).is_dir() {
+    let multi_db_tables_dir =
+        crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
+    let mut tables_dir = if multi_db_tables_dir.is_dir() {
+        multi_db_tables_dir
+    } else if tables_root.join(db_name).is_dir() {
         tables_root.join(db_name)
     } else {
         tables_root.clone()
     };
+
+    // Backward/forward compatibility: grouped to-pg may place SQL files under
+    // <tables_dir>/<target_db>/*.sql. If no SQL exists at the root, descend.
+    let has_sql_in_tables_root = std::fs::read_dir(&tables_dir)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
+        .any(|entry| {
+            entry
+                .path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"))
+        });
+    if !has_sql_in_tables_root {
+        let nested_tables_dir = tables_dir.join(target_database_name);
+        if nested_tables_dir.is_dir() {
+            tables_dir = nested_tables_dir;
+        }
+    }
 
     if !tables_dir.is_dir() {
         if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
@@ -202,11 +360,26 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
     }
 
     let data_root = project_root.join("data");
-    let mut data_db_dir = if data_root.join(db_name).is_dir() {
+    let multi_db_data_dir_candidate =
+        crate::commands::shared::multi_db_data_dir(&project_root, db_name);
+    let mut data_db_dir = if multi_db_data_dir_candidate.is_dir() {
+        multi_db_data_dir_candidate
+    } else if data_root.join(db_name).is_dir() {
         data_root.join(db_name)
     } else {
         data_root.clone()
     };
+
+    if !data_db_dir.is_dir() {
+        let nested_multi_db_data_dir = crate::commands::shared::multi_db_data_dir(&project_root, db_name)
+            .join(db_name);
+        let flat_data_dir = data_root.join(db_name);
+        if nested_multi_db_data_dir.is_dir() {
+            data_db_dir = nested_multi_db_data_dir;
+        } else if flat_data_dir.is_dir() {
+            data_db_dir = flat_data_dir;
+        }
+    }
     let mut import_data_stage: Option<tempfile::TempDir> = None;
     log_import_stage("config_resolved");
 
@@ -318,7 +491,16 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
             stage.path().display()
         );
     }
+    let has_inferred_collections = has_inferred_collections_for_database(&project_root, db_name);
     if !data_db_dir.is_dir() {
+        if !has_inferred_collections {
+            warn!(
+                "Skipping import for database '{}': no data directory found at {} and no inferred collections were produced.",
+                db_name,
+                data_db_dir.display()
+            );
+            return Ok(());
+        }
         return Err(anyhow!(
             "Cannot read data directory {}",
             data_db_dir.display()
@@ -367,6 +549,14 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
     sql_files.sort();
 
     if sql_files.is_empty() {
+        if !has_inferred_collections {
+            warn!(
+                "Skipping import for database '{}': no SQL files found in {} because no collections were inferred.",
+                db_name,
+                tables_dir.display()
+            );
+            return Ok(());
+        }
         return Err(anyhow!("No SQL files found in {}", tables_dir.display()));
     }
     debug!("[debug][import] ddl_files_count={}", sql_files.len());
@@ -540,6 +730,14 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
     csv_files.sort();
 
     if csv_files.is_empty() {
+        if !has_inferred_collections {
+            warn!(
+                "Skipping import for database '{}': no CSV files found under {} because no collections were inferred.",
+                db_name,
+                data_db_dir.display()
+            );
+            return Ok(());
+        }
         return Err(build_missing_import_csv_error(
             &data_db_dir,
             requested_collection_dir.as_deref(),

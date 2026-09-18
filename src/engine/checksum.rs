@@ -2307,7 +2307,18 @@ fn collection_paths_from_conf(
                 .join("source")
                 .join("collections")
         });
-    let collections_dir = if collections_root.join(&db_name).is_dir() {
+    let multi_db_collections_dir = collections_root_override.is_none().then(|| {
+        crate::commands::shared::multi_db_source_collections_dir(
+            &crate::util::configured_project_root(conf),
+            &db_name,
+        )
+    });
+    let collections_dir = if multi_db_collections_dir
+        .as_deref()
+        .is_some_and(Path::is_dir)
+    {
+        multi_db_collections_dir.expect("checked is_some_and above")
+    } else if collections_root.join(&db_name).is_dir() {
         collections_root.join(&db_name)
     } else {
         collections_root
@@ -2698,6 +2709,37 @@ async fn ensure_pg_database_exists(target_uri: &str, database_name: &str) -> Res
     Ok(())
 }
 
+fn resolve_md5_target_pg_uri(
+    conf_target_uri: Option<&str>,
+    conf_target_database_name: Option<&str>,
+    mapping_dbname: Option<&str>,
+    mapping_mongo_dbname: Option<&str>,
+    target_uri_override: Option<&str>,
+) -> Result<String> {
+    if let Some(override_uri) = target_uri_override {
+        return Ok(override_uri.to_owned());
+    }
+
+    let target_uri = conf_target_uri.ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
+    let target_database_name = conf_target_database_name
+        .or(mapping_dbname)
+        .or(mapping_mongo_dbname)
+        .ok_or_else(|| anyhow!("TARGET_DATABASE_NAME not found in config or mapping"))?;
+
+    Ok(pg_uri_with_database(target_uri, target_database_name))
+}
+
+fn resolve_md5_target_schema_name(
+    conf_target_schema: Option<&str>,
+    mapping_schema_name: Option<&str>,
+    target_schema_override: Option<&str>,
+) -> Option<String> {
+    target_schema_override
+        .map(ToOwned::to_owned)
+        .or_else(|| mapping_schema_name.map(ToOwned::to_owned))
+        .or_else(|| conf_target_schema.map(ToOwned::to_owned))
+}
+
 async fn connect_pg_client(target_uri: &str) -> Result<Client> {
     let mut tls_builder = native_tls::TlsConnector::builder();
     if matches!(pg_sslmode(target_uri), Some(mode) if mode.eq_ignore_ascii_case("require")) {
@@ -2740,6 +2782,25 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
     config_path: &Path,
     collections_root_override: Option<&Path>,
 ) -> Result<Vec<Md5TableSummary>> {
+    compute_md5_summaries_for_collection_with_overrides(
+        collection,
+        config_path,
+        collections_root_override,
+        None,
+        None,
+        None,
+    )
+    .await
+}
+
+pub async fn compute_md5_summaries_for_collection_with_overrides(
+    collection: &str,
+    config_path: &Path,
+    collections_root_override: Option<&Path>,
+    source_db_override: Option<&str>,
+    target_uri_override: Option<&str>,
+    target_schema_override: Option<&str>,
+) -> Result<Vec<Md5TableSummary>> {
     fn is_transient_md5_error(err: &anyhow::Error) -> bool {
         let message = err.to_string().to_ascii_lowercase();
         message.contains("connection closed")
@@ -2753,6 +2814,9 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
             || message.contains("interrupted")
             || message.contains("timed out")
             || message.contains("timeout")
+            || message.contains("terminating connection due to administrator command")
+            || message.contains("admin shutdown")
+            || message.contains("57p01")
     }
 
     let conf = read_conf(config_path)?;
@@ -2762,7 +2826,8 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
         .source_uri
         .as_ref()
         .ok_or_else(|| anyhow!("SOURCE_URI not found in config"))?;
-    let (db_name, _) = collection_paths_from_conf(&conf, collections_root_override)?;
+    let (db_name_from_conf, _) = collection_paths_from_conf(&conf, collections_root_override)?;
+    let db_name = source_db_override.unwrap_or(db_name_from_conf.as_str());
     let client_options = crate::db::mongo::parse_client_options(mongo_uri).await?;
     let mongo_client = crate::db::mongo::client_with_options(client_options)?;
     let mut summaries = Vec::new();
@@ -2814,26 +2879,28 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
         }
 
         let mongo_collection = mongo_client
-            .database(&db_name)
+            .database(db_name)
             .collection::<bson::Document>(&target.source_collection);
 
-        let target_uri = conf
-            .target_uri
-            .as_ref()
-            .ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
         let target_database_name = conf
             .target_database_name
             .as_deref()
             .or(target.mapping_yaml.pg_mapping.dbname.as_deref())
-            .or(target.mapping_yaml.mongo_dbname.as_deref())
-            .ok_or_else(|| anyhow!("TARGET_DATABASE_NAME not found in config or mapping"))?;
-        let schema_name = conf
-            .target_schema
-            .as_deref()
-            .or(target.mapping_yaml.pg_mapping.schema_name.as_deref());
+            .or(target.mapping_yaml.mongo_dbname.as_deref());
+        let schema_name = resolve_md5_target_schema_name(
+            conf.target_schema.as_deref(),
+            target.mapping_yaml.pg_mapping.schema_name.as_deref(),
+            target_schema_override,
+        );
         let table_name = target.mapping_yaml.pg_mapping.table_name.clone();
         let grouped_key_filter = grouped_key_filter_for_target(&target);
-        let pg_uri = pg_uri_with_database(target_uri, target_database_name);
+        let pg_uri = resolve_md5_target_pg_uri(
+            conf.target_uri.as_deref(),
+            conf.target_database_name.as_deref(),
+            target.mapping_yaml.pg_mapping.dbname.as_deref(),
+            target.mapping_yaml.mongo_dbname.as_deref(),
+            target_uri_override,
+        )?;
 
         let mut attempt = 0_u32;
         let mut ensured_target_db = false;
@@ -2849,9 +2916,9 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
                     &mongo_collection,
                     &typed_source_fields,
                     &target.source_path,
-                    &db_name,
+                    db_name,
                     &target.source_collection,
-                    schema_name,
+                    schema_name.as_deref(),
                     &table_name,
                     &target_fields,
                     grouped_key_filter
@@ -2865,13 +2932,19 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
             match compute_result {
                 Ok(result) => break result,
                 Err(err) => {
-                    if !ensured_target_db
-                        && is_missing_database_error(&err, target_database_name)
-                    {
-                        ensure_pg_database_exists(target_uri, target_database_name).await?;
-                        ensured_target_db = true;
-                        attempt = 0;
-                        continue;
+                    if !ensured_target_db {
+                        if let Some(target_db_name) = target_database_name {
+                            if is_missing_database_error(&err, target_db_name) {
+                                let base_target_uri = conf
+                                    .target_uri
+                                    .as_deref()
+                                    .ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
+                                ensure_pg_database_exists(base_target_uri, target_db_name).await?;
+                                ensured_target_db = true;
+                                attempt = 0;
+                                continue;
+                            }
+                        }
                     }
 
                     if attempt <= TARGET_MD5_RETRY_MAX && is_transient_md5_error(&err) {
@@ -3783,6 +3856,34 @@ pg_mapping:
             grouped_key_filter_for_target(&target),
             Some(("_key".to_owned(), "dev".to_owned()))
         );
+    }
+
+    #[test]
+    fn resolve_md5_target_pg_uri_prefers_override_for_grouped_runs() {
+        let uri = resolve_md5_target_pg_uri(
+            Some("postgres://user:pwd@localhost:5432/postgres?sslmode=disable"),
+            Some("sample_analytics"),
+            Some("sample_analytics"),
+            None,
+            Some("postgres://user:pwd@localhost:5432/sample_airbnb?sslmode=disable"),
+        )
+        .expect("override URI should be accepted");
+
+        assert_eq!(
+            uri,
+            "postgres://user:pwd@localhost:5432/sample_airbnb?sslmode=disable"
+        );
+    }
+
+    #[test]
+    fn resolve_md5_target_schema_name_prefers_override_for_grouped_runs() {
+        let schema = resolve_md5_target_schema_name(
+            Some("sample_analytics"),
+            Some("sample_analytics"),
+            Some("sample_airbnb"),
+        );
+
+        assert_eq!(schema.as_deref(), Some("sample_airbnb"));
     }
 
     use super::*;
