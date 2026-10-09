@@ -4,6 +4,7 @@ use crate::engine::stats::InferWarningYaml;
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use log::warn;
 use serde::Deserialize;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -37,7 +38,7 @@ pub struct DatabaseScore {
 /// Aggregated migrability scores for a whole cluster, derived from
 /// per-database [`DatabaseScore`] values.
 pub struct ClusterScore {
-  /// Global cluster complexity: `0.6 × max(score_db) + 0.4 × avg(score_db)`.
+    /// Global cluster complexity: `1.5 × database count + Σ score_db`.
     pub score_total: f64,
     /// Total-document-weighted average of per-database `score_avg` values.
     pub score_avg: f64,
@@ -93,14 +94,9 @@ pub fn compute_db_score(name: &str, rows: &[CollectionRow]) -> DatabaseScore {
 
 /// Compute a [`ClusterScore`] from a slice of [`DatabaseScore`]s.
 pub fn compute_cluster_score(dbs: &[DatabaseScore]) -> ClusterScore {
-  let score_db_sum: f64 = dbs.iter().map(|db| db.score_db).sum();
-  let score_max: f64 = dbs.iter().map(|db| db.score_db).fold(0.0_f64, f64::max);
-  let score_avg_simple = if dbs.is_empty() {
-    0.0
-  } else {
-    score_db_sum / dbs.len() as f64
-  };
-  let score_total = ((0.6 * score_max + 0.4 * score_avg_simple) * 100.0).round() / 100.0;
+    let score_db_sum: f64 = dbs.iter().map(|db| db.score_db).sum();
+    let score_max: f64 = dbs.iter().map(|db| db.score_db).fold(0.0_f64, f64::max);
+    let score_total = ((1.5 * dbs.len() as f64 + score_db_sum) * 100.0).round() / 100.0;
 
     let total_docs: u64 = dbs.iter().map(|db| db.total_docs).sum();
     let total_weighted: f64 = dbs
@@ -195,6 +191,7 @@ pub struct PostImportMd5Column {
 #[derive(Clone)]
 pub struct PostImportMd5MismatchRow {
     pub row_index: usize,
+  pub mongo_object_id: Option<String>,
     pub mongo_values: Option<Vec<String>>,
     pub pg_values: Option<Vec<String>>,
 }
@@ -202,6 +199,7 @@ pub struct PostImportMd5MismatchRow {
 #[derive(Clone)]
 pub struct PostImportCountDiffRow {
     pub row_index: usize,
+  pub mongo_object_id: Option<String>,
     pub mongo_values: Option<Vec<String>>,
     pub pg_values: Option<Vec<String>>,
 }
@@ -312,10 +310,32 @@ pub fn collect_rows(base: &Path, tables_dir: Option<&Path>) -> Result<Vec<Collec
         if !yaml_path.exists() {
             continue;
         }
-        let content = std::fs::read_to_string(&yaml_path)
-            .with_context(|| format!("Cannot read {}", yaml_path.display()))?;
-        let stats: CollectionStatsYaml = serde_yaml::from_str(&content)
-            .with_context(|| format!("Cannot parse {}", yaml_path.display()))?;
+        let content = match std::fs::read_to_string(&yaml_path)
+          .with_context(|| format!("Cannot read {}", yaml_path.display()))
+        {
+          Ok(content) => content,
+          Err(err) => {
+            warn!(
+              "Skipping report row for collection '{}' ({}): {err:#}",
+              name,
+              yaml_path.display()
+            );
+            continue;
+          }
+        };
+        let stats: CollectionStatsYaml = match serde_yaml::from_str(&content)
+          .with_context(|| format!("Cannot parse {}", yaml_path.display()))
+        {
+          Ok(stats) => stats,
+          Err(err) => {
+            warn!(
+              "Skipping report row for collection '{}' ({}): {err:#}",
+              name,
+              yaml_path.display()
+            );
+            continue;
+          }
+        };
 
         let grouped_table_name = crate::export::resolve_grouped_sql_lookup_name(base, &name);
         let table_names: Vec<(String, String)> = tables_dir
@@ -997,6 +1017,11 @@ pub fn render_post_import_html(
         let mismatch_rows = rows
             .iter()
             .map(|mismatch| {
+            let mongo_object_id = mismatch
+              .mongo_object_id
+              .as_ref()
+              .map(|value| escape_html(value))
+              .unwrap_or_else(|| "-".to_owned());
                 let mongo_values = mismatch
                     .mongo_values
                     .as_ref()
@@ -1008,15 +1033,15 @@ pub fn render_post_import_html(
                     .map(|values| escape_html(&format!("[{}]", values.join(", "))))
                     .unwrap_or_else(|| "missing row".to_owned());
                 format!(
-                    r#"<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td></tr>"#,
-                    mismatch.row_index, mongo_values, pg_values,
+                  r#"<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td></tr>"#,
+                  mismatch.row_index, mongo_object_id, mongo_values, pg_values,
                 )
             })
             .collect::<Vec<_>>()
             .join("");
 
         format!(
-            r#"<details class="count-detail"><summary class="count-summary match-badge is-mismatch">delta {:+}</summary><div class="count-popover"><div class="count-mismatch-label">First 5 differences by mapped row values</div><table class="count-mismatch-table"><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{}</tbody></table></div></details>"#,
+              r#"<details class="count-detail"><summary class="count-summary match-badge is-mismatch">delta {:+}</summary><div class="count-popover"><div class="count-mismatch-label">First 5 differences by mapped row values</div><table class="count-mismatch-table"><thead><tr><th>Row</th><th>Mongo ObjectId</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{}</tbody></table></div></details>"#,
             delta, mismatch_rows,
         )
     }
@@ -1065,6 +1090,11 @@ pub fn render_post_import_html(
             .mismatches
             .iter()
             .map(|mismatch| {
+            let mongo_object_id = mismatch
+              .mongo_object_id
+              .as_ref()
+              .map(|value| escape_html(value))
+              .unwrap_or_else(|| "-".to_owned());
                 let mongo_values = mismatch
                     .mongo_values
                     .as_ref()
@@ -1076,8 +1106,8 @@ pub fn render_post_import_html(
                     .map(|values| escape_html(&format!("[{}]", values.join(", "))))
                     .unwrap_or_else(|| "missing row".to_owned());
                 format!(
-                    r#"<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td></tr>"#,
-                    mismatch.row_index, mongo_values, pg_values,
+                  r#"<tr><td>{}</td><td><code>{}</code></td><td><code>{}</code></td><td><code>{}</code></td></tr>"#,
+                  mismatch.row_index, mongo_object_id, mongo_values, pg_values,
                 )
             })
             .collect::<Vec<_>>()
@@ -1086,7 +1116,7 @@ pub fn render_post_import_html(
             String::new()
         } else {
             format!(
-                r#"<button type="button" class="md5-open-window" onclick="openMd5DiffWindow('{detail_id}')">Open diff in new page</button><template id="{detail_id}"><!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mongo2pg md5 mismatch</title><style>body{{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;padding:1.25rem;background:#f8fafc;color:#1f2937}}h1{{margin:.2rem 0 .5rem;font-size:1.1rem}}.meta{{margin:0 0 1rem;font-size:.9rem;color:#475569}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{border:1px solid #cbd5e1;padding:.45rem .5rem;vertical-align:top;text-align:left;font-size:.85rem;line-height:1.35}}th{{background:#e2e8f0;color:#0f172a}}code{{white-space:pre-wrap;word-break:break-word}}</style></head><body><h1>First 5 non-corresponding rows</h1><p class="meta"><strong>MongoDB:</strong> {mongo_md5}<br><strong>PostgreSQL:</strong> {pg_md5}</p><table><thead><tr><th>Row</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{mismatch_rows}</tbody></table></body></html></template>"#,
+              r#"<button type="button" class="md5-open-window" onclick="openMd5DiffWindow('{detail_id}')">Open diff in new page</button><template id="{detail_id}"><!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mongo2pg md5 mismatch</title><style>body{{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0;padding:1.25rem;background:#f8fafc;color:#1f2937}}h1{{margin:.2rem 0 .5rem;font-size:1.1rem}}.meta{{margin:0 0 1rem;font-size:.9rem;color:#475569}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{border:1px solid #cbd5e1;padding:.45rem .5rem;vertical-align:top;text-align:left;font-size:.85rem;line-height:1.35}}th{{background:#e2e8f0;color:#0f172a}}code{{white-space:pre-wrap;word-break:break-word}}</style></head><body><h1>First 5 non-corresponding rows</h1><p class="meta"><strong>MongoDB:</strong> {mongo_md5}<br><strong>PostgreSQL:</strong> {pg_md5}</p><table><thead><tr><th>Row</th><th>Mongo ObjectId</th><th>MongoDB</th><th>PostgreSQL</th></tr></thead><tbody>{mismatch_rows}</tbody></table></body></html></template>"#,
                 detail_id = detail_id,
                 mongo_md5 = escape_html(&md5_summary.mongo_md5),
                 pg_md5 = escape_html(&md5_summary.pg_md5),
@@ -1891,11 +1921,6 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
     let total_docs: u64 = dbs.iter().map(|db| db.total_docs).sum();
     let total_collections: usize = dbs.iter().map(|db| db.collection_count).sum();
     let score_db_sum: f64 = (dbs.iter().map(|db| db.score_db).sum::<f64>() * 100.0).round() / 100.0;
-    let score_db_avg: f64 = if dbs.is_empty() {
-      0.0
-    } else {
-      (score_db_sum / dbs.len() as f64 * 100.0).round() / 100.0
-    };
 
     // Complexity label/color follows the displayed cluster score value.
     let complexity_label = if cs.score_total < 30.0 {
@@ -2038,8 +2063,8 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
   <p class="score-explainer">
     <strong>DB complexity score</strong>: <code>1.5 × collections + Σ C<sub>i</sub></code>
     where <code>C<sub>i</sub> = depth/2 + array_fields + distinct_fields/avg_fields_per_doc</code>.<br>
-    <strong>Global score</strong>: <code>0.6 × max(score_db) + 0.4 × avg(score_db)</code><br>
-    &nbsp;&nbsp;&nbsp;= <code>0.6 × {score_max:.2} + 0.4 × {score_db_avg:.2}</code> = <strong>{score_total:.2}</strong>.<br>
+    <strong>Global score</strong>: <code>1.5 × databases + Σ score_db</code><br>
+    &nbsp;&nbsp;&nbsp;= <code>1.5 × {db_count} + {score_db_sum:.2}</code> = <strong>{score_total:.2}</strong>.<br>
     Thresholds (cluster score): &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
   </p>
 
@@ -2071,7 +2096,7 @@ pub fn render_cluster_html(dbs: &[DatabaseScore], cluster: &str) -> String {
         score_total = cs.score_total,
         score_avg = cs.score_avg,
         score_max = cs.score_max,
-        score_db_avg = score_db_avg,
+        score_db_sum = score_db_sum,
         complexity_label = complexity_label.0,
         complexity_color = complexity_label.1,
         table_rows = table_rows,
@@ -2583,6 +2608,7 @@ mod tests {
                         }],
                         mismatches: vec![PostImportMd5MismatchRow {
                             row_index: 1,
+                          mongo_object_id: Some("675858a337cd0d883efc4b7b".to_owned()),
                             mongo_values: Some(vec!["12.5".to_owned()]),
                             pg_values: Some(vec!["\"12.5\"".to_owned()]),
                         }],
@@ -2619,6 +2645,7 @@ mod tests {
                     snapshot_skip_summary: None,
                     count_diff_rows: vec![PostImportCountDiffRow {
                         row_index: 2,
+                      mongo_object_id: Some("675858a337cd0d883efc4b7b".to_owned()),
                         mongo_values: Some(vec!["\"acc-a\"".to_owned(), "true".to_owned()]),
                         pg_values: None,
                     }],
@@ -2665,13 +2692,7 @@ pub fn render_multi_db_html(
 
     let total_collections: usize = db_scores.iter().map(|d| d.collection_count).sum();
     let total_docs: u64 = db_scores.iter().map(|d| d.total_docs).sum();
-    let score_db_avg_simple: f64 = if db_scores.is_empty() {
-      0.0
-    } else {
-      (db_scores.iter().map(|d| d.score_db).sum::<f64>() / db_scores.len() as f64 * 100.0)
-        .round()
-        / 100.0
-    };
+    let score_db_sum: f64 = (db_scores.iter().map(|db| db.score_db).sum::<f64>() * 100.0).round() / 100.0;
     let global_score = cs.score_total;
 
     let (complexity_label, complexity_color) = if global_score < 30.0 {
@@ -3156,8 +3177,8 @@ pub fn render_multi_db_html(
   </div>
 
   <p class="score-explainer">
-    <strong>Global score</strong>: <code>0.6 × max(score_db) + 0.4 × avg(score_db)</code><br>
-    &nbsp;&nbsp;&nbsp;= <code>0.6 × {score_max_db:.2} + 0.4 × {score_avg_db:.2}</code> = <strong>{global_score:.2}</strong>.<br>
+    <strong>Global score</strong>: <code>1.5 × databases + Σ score_db</code><br>
+    &nbsp;&nbsp;&nbsp;= <code>1.5 × {db_count} + {score_db_sum:.2}</code> = <strong>{global_score:.2}</strong>.<br>
     Thresholds (global score): &lt;30 Easy · 30–80 Medium · &gt;80 Hard.
   </p>
 
@@ -3225,8 +3246,7 @@ pub fn render_multi_db_html(
         total_collections = total_collections,
         total_docs = total_docs,
         global_score = global_score,
-        score_max_db = cs.score_max,
-        score_avg_db = score_db_avg_simple,
+        score_db_sum = score_db_sum,
         score_avg = cs.score_avg,
         complexity_label = complexity_label,
         complexity_color = complexity_color,

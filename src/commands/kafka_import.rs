@@ -17,7 +17,6 @@ use rdkafka::ClientConfig;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::pin::pin;
-use tracing::Instrument;
 
 use crate::cli::KafkaImportArgs;
 use crate::commands::ping::kafka_worker_child_extra_args;
@@ -114,6 +113,34 @@ fn parse_topic_db_collection(
     None
 }
 
+fn topic_prefix_with_database_suffix(base_prefix: Option<&str>, database_name: &str) -> Option<String> {
+    let base = base_prefix
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let db = database_name.trim();
+    if db.is_empty() {
+        return Some(base.to_owned());
+    }
+
+    let normalized_base = base.trim_end_matches('.');
+    if normalized_base
+        .split('.')
+        .next_back()
+        .is_some_and(|segment| segment == db)
+    {
+        Some(normalized_base.to_owned())
+    } else {
+        Some(format!("{normalized_base}.{db}"))
+    }
+}
+
+fn is_missing_sql_files_error(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        let msg = cause.to_string();
+        msg.contains("No SQL files found in") && msg.contains("Run to-pg first")
+    })
+}
+
 pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     enum ReadStageEvent<T> {
         Message(T),
@@ -124,49 +151,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     enum WriteStageOutcome {
         Applied(u64),
         Skipped,
-    }
-
-    struct SpanRateLimiter {
-        rate_per_sec: f64,
-        burst: f64,
-        tokens: f64,
-        last_refill: Instant,
-    }
-
-    impl SpanRateLimiter {
-        fn new(rate_per_sec: f64, burst: f64) -> Self {
-            let normalized_rate = if rate_per_sec.is_finite() && rate_per_sec > 0.0 {
-                rate_per_sec
-            } else {
-                0.0
-            };
-            let normalized_burst = if burst.is_finite() && burst > 0.0 {
-                burst
-            } else {
-                1.0
-            };
-
-            Self {
-                rate_per_sec: normalized_rate,
-                burst: normalized_burst,
-                tokens: normalized_burst,
-                last_refill: Instant::now(),
-            }
-        }
-
-        fn allow(&mut self) -> bool {
-            let now = Instant::now();
-            let elapsed = now.duration_since(self.last_refill).as_secs_f64();
-            self.last_refill = now;
-            self.tokens = (self.tokens + elapsed * self.rate_per_sec).min(self.burst);
-
-            if self.tokens >= 1.0 {
-                self.tokens -= 1.0;
-                true
-            } else {
-                false
-            }
-        }
     }
 
     fn normalize_kafka_bootstrap_servers(raw: &str) -> Result<String> {
@@ -1921,6 +1905,30 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         conf: &crate::util::ConfData,
         db_name: &str,
     ) -> Result<(PathBuf, PathBuf, Option<tempfile::TempDir>)> {
+        let has_sql_files = |dir: &Path| -> bool {
+            let mut stack = vec![dir.to_path_buf()];
+            while let Some(current) = stack.pop() {
+                let Ok(entries) = std::fs::read_dir(&current) else {
+                    continue;
+                };
+                for entry in entries.filter_map(std::result::Result::ok) {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        stack.push(path);
+                        continue;
+                    }
+                    if path
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"))
+                    {
+                        return true;
+                    }
+                }
+            }
+            false
+        };
+
         let storage_backend =
             resolve_export_write_backend(&conf.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
 
@@ -1939,10 +1947,16 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let mut tables_root = project_root.join("schema").join("tables");
         let multi_db_tables_dir =
             crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
-        let mut tables_dir = if multi_db_tables_dir.is_dir() {
+        let flat_db_tables_dir = tables_root.join(db_name);
+        let mut tables_dir = if multi_db_tables_dir.is_dir() && has_sql_files(&multi_db_tables_dir) {
             multi_db_tables_dir
-        } else if tables_root.join(db_name).is_dir() {
-            tables_root.join(db_name)
+        } else if flat_db_tables_dir.is_dir() && has_sql_files(&flat_db_tables_dir) {
+            flat_db_tables_dir
+        } else if multi_db_tables_dir.is_dir() {
+            // Keep backward-compatible error paths when only nested directory exists.
+            multi_db_tables_dir
+        } else if has_sql_files(&tables_root) {
+            tables_root.clone()
         } else {
             tables_root.clone()
         };
@@ -1970,8 +1984,21 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 {
                     project_root = stage.path().to_path_buf();
                     tables_root = project_root.join("schema").join("tables");
-                    tables_dir = if tables_root.join(db_name).is_dir() {
-                        tables_root.join(db_name)
+                    let staged_multi_db_tables_dir =
+                        crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
+                    let staged_flat_db_tables_dir = tables_root.join(db_name);
+                    tables_dir = if staged_multi_db_tables_dir.is_dir()
+                        && has_sql_files(&staged_multi_db_tables_dir)
+                    {
+                        staged_multi_db_tables_dir
+                    } else if staged_flat_db_tables_dir.is_dir()
+                        && has_sql_files(&staged_flat_db_tables_dir)
+                    {
+                        staged_flat_db_tables_dir
+                    } else if staged_multi_db_tables_dir.is_dir() {
+                        staged_multi_db_tables_dir
+                    } else if has_sql_files(&tables_root) {
+                        tables_root.clone()
                     } else {
                         tables_root.clone()
                     };
@@ -2446,12 +2473,22 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             ));
         }
 
-        let mut sql_files: Vec<PathBuf> = std::fs::read_dir(tables_dir)
-            .with_context(|| format!("Cannot read {}", tables_dir.display()))?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("sql"))
-            .collect();
+        let mut sql_files: Vec<PathBuf> = Vec::new();
+        let mut stack = vec![tables_dir.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            let entries = std::fs::read_dir(&current)
+                .with_context(|| format!("Cannot read {}", current.display()))?;
+            for entry in entries.filter_map(std::result::Result::ok) {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|ext| ext.to_str()) == Some("sql") {
+                    sql_files.push(path);
+                }
+            }
+        }
         sql_files.sort();
 
         if sql_files.is_empty() {
@@ -3541,6 +3578,12 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 .schema_name
                 .clone()
                 .unwrap_or_else(|| mapped_schema.clone());
+            let base_topic_prefix = args
+                .topic_prefix
+                .as_deref()
+                .or_else(|| conf.kafka.as_ref().and_then(|kafka| kafka.topic_prefix.as_deref()));
+            let per_db_topic_prefix =
+                topic_prefix_with_database_suffix(base_topic_prefix, &effective_db);
 
             let stage_dir = tempfile::Builder::new()
                 .prefix("mongo2pg-kafka-import-conf-")
@@ -3562,6 +3605,7 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     namespace: Some(db_name.clone()),
                     target_database_name: Some(effective_db),
                     target_schema_name: Some(effective_schema),
+                    kafka_topic_prefix: per_db_topic_prefix,
                     ..ConfigOverrides::default()
                 },
             )?;
@@ -3570,8 +3614,19 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             child_args.config = staged_conf;
             child_args.database_name = None;
             child_args.schema_name = None;
+            // Use per-database topic_prefix written to staged config.
+            // Keeping parent's CLI --topic-prefix (e.g. "t4") would override
+            // it and make each child consume unrelated databases.
+            child_args.topic_prefix = None;
 
             if let Err(err) = Box::pin(run_kafka_import(child_args)).await {
+                if is_missing_sql_files_error(&err) {
+                    warn!(
+                        "Skipping database '{}' in multi-db kafka-import: no SQL files generated (likely empty dataset / no collections)",
+                        db_name
+                    );
+                    continue;
+                }
                 failures.push(format!("{}: {:#}", db_name, err));
             }
         }
@@ -4093,15 +4148,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         effective_group_id.clone()
     };
 
-    let _kafka_import_span = tracing::info_span!(
-        "kafka_import.run",
-        worker = worker_identity,
-        workers_total = worker_count_for_logs as u64,
-        snapshot_mode = snapshot_mode,
-        project_name = conf.project_dir.as_str(),
-        namespace = namespace.as_str()
-    )
-    .entered();
 
     info!(
         "Kafka import started. worker={}, workers_total={}, group_id={}, topics={}, target_db={}, snapshot_mode={}, offset={}",
@@ -4187,40 +4233,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let mut copy_skipped_empty_columns = 0_usize;
     let mut copy_unconvertible_literal_samples: Vec<String> = Vec::new();
     let mut copy_allowed_cache: HashMap<String, bool> = HashMap::new();
-    let global_span_rate_per_sec = std::env::var("M2PG_OTEL_SPAN_RATE_GLOBAL_PER_SEC")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite() && *value > 0.0)
-        .unwrap_or(15.0);
-    let workers_for_rate = worker_count_for_logs.max(1) as f64;
-    let db_write_span_rate_per_worker = global_span_rate_per_sec / workers_for_rate;
-    let db_write_span_burst_per_worker = std::env::var("M2PG_OTEL_SPAN_BURST_PER_WORKER")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite() && *value > 0.0)
-        .unwrap_or_else(|| db_write_span_rate_per_worker.max(1.0).ceil());
-    let read_decode_rate_global_per_sec = std::env::var("M2PG_OTEL_SPAN_RATE_READ_DECODE_PER_SEC")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite() && *value > 0.0)
-        .unwrap_or(2.0);
-    let read_decode_span_rate_per_worker = read_decode_rate_global_per_sec / workers_for_rate;
-    let read_decode_span_burst_per_worker =
-        std::env::var("M2PG_OTEL_SPAN_BURST_READ_DECODE_PER_WORKER")
-            .ok()
-            .and_then(|raw| raw.trim().parse::<f64>().ok())
-            .filter(|value| value.is_finite() && *value > 0.0)
-            .unwrap_or_else(|| read_decode_span_rate_per_worker.max(1.0).ceil());
-    let mut db_write_span_rate_limiter = SpanRateLimiter::new(
-        db_write_span_rate_per_worker,
-        db_write_span_burst_per_worker,
-    );
-    let mut read_decode_span_rate_limiter = SpanRateLimiter::new(
-        read_decode_span_rate_per_worker,
-        read_decode_span_burst_per_worker,
-    );
-    let mut span_emitted = 0_u64;
-    let mut span_suppressed = 0_u64;
 
     info!(
         "Kafka consumer configuration: worker={}, workers_total={}, group_id_log={}, auto_offset_reset={}, configured_auto_offset_reset={}, max_messages={}, fetch_wait_max_ms={}, poll_size={}, queued_max_messages_kbytes={}, transaction_batch_size={}, flush_batch_after={}",
@@ -4254,16 +4266,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         configured_write_mode, snapshot_copy_enabled
     );
     info!(
-        "Kafka trace span rate limiter: db_write_global_rate_per_sec={}, read_decode_global_rate_per_sec={}, workers_total={}, db_write_per_worker_rate_per_sec={:.3}, db_write_per_worker_burst={}, read_decode_per_worker_rate_per_sec={:.3}, read_decode_per_worker_burst={}",
-        global_span_rate_per_sec,
-        read_decode_rate_global_per_sec,
-        worker_count_for_logs,
-        db_write_span_rate_per_worker,
-        db_write_span_burst_per_worker,
-        read_decode_span_rate_per_worker,
-        read_decode_span_burst_per_worker
-    );
-    info!(
         "Loaded mapping folders for {} collection(s)",
         mappings_by_collection.len()
     );
@@ -4278,14 +4280,14 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let mut tx_batch_started_at: Option<Instant> = None;
     let mut snapshot_buffer_started_at: Option<Instant> = None;
     let mut stop_on_no_lag_streak = 0usize;
-    let stop_on_no_lag_required_streak = if worker_count_for_logs > 1 { 3 } else { 10 };
+    let stop_on_no_lag_required_streak = if worker_count_for_logs > 1 { 3 } else { 4 };
     let mut stop_on_no_lag_seen_end_offsets = false;
     let mut stop_on_no_lag_no_assignment_streak = 0usize;
     let mut stop_on_no_lag_had_assignment = false;
     let stop_on_no_lag_min_runtime = if worker_count_for_logs > 1 {
-        Duration::from_secs(60)
-    } else {
         Duration::from_secs(30)
+    } else {
+        Duration::from_secs(15)
     };
     let stop_on_no_lag_no_assignment_grace = stop_on_no_lag_min_runtime;
     let stop_on_no_lag_heartbeat_interval = Duration::from_secs(5);
@@ -4328,25 +4330,7 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
     loop {
         // 1. Wait for the next message with an idle timeout
-        let with_kafka_read_span = read_decode_span_rate_limiter.allow();
-        if with_kafka_read_span {
-            span_emitted += 1;
-        } else {
-            span_suppressed += 1;
-        }
-        let read_future = read_msg_from_topics(&mut stream, idle_timeout);
-        let next_item = match if with_kafka_read_span {
-            read_future
-                .instrument(tracing::info_span!(
-                    "kafka_import.stage.kafka_read.poll",
-                    worker = worker_identity.as_str(),
-                    project_name = conf.project_dir.as_str(),
-                    namespace = namespace.as_str()
-                ))
-                .await
-        } else {
-            read_future.await
-        } {
+        let next_item = match read_msg_from_topics(&mut stream, idle_timeout).await {
             ReadStageEvent::Message(msg_res) => msg_res,
             ReadStageEvent::StreamEnded => {
                 if snapshot_copy_enabled {
@@ -4681,8 +4665,8 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     };
                     let effective_processed = processed + buffered_inflight;
                     info!(
-                        "Kafka progress: polled={}, processed={}({}), flushed_processed={}, buffered_inflight={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, skipped_missing_required_snapshot={}, decode_failed={}, apply_failed={}, commit_failed={}, trace_spans_emitted={}, trace_spans_suppressed={}",
-                        polled, effective_processed, processed_mode, processed, buffered_inflight, skipped_topic, skipped_db, skipped_mapping, skipped_no_payload, skipped_non_data_op, skipped_missing_after, skipped_missing_before, skipped_missing_required_snapshot, decode_failed, apply_failed, commit_failed, span_emitted, span_suppressed
+                        "Kafka progress: polled={}, processed={}({}), flushed_processed={}, buffered_inflight={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, skipped_missing_required_snapshot={}, decode_failed={}, apply_failed={}, commit_failed={}",
+                        polled, effective_processed, processed_mode, processed, buffered_inflight, skipped_topic, skipped_db, skipped_mapping, skipped_no_payload, skipped_non_data_op, skipped_missing_after, skipped_missing_before, skipped_missing_required_snapshot, decode_failed, apply_failed, commit_failed
                     );
                     debug!(
                         "Kafka progress ops: c={}, u={}, r={}, d={}, other={}, total_affected_rows={}, fallback_payload_as_after={}",
@@ -4835,34 +4819,16 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             maybe_log_progress!();
             continue;
         };
-        let with_decode_span = read_decode_span_rate_limiter.allow();
-        if with_decode_span {
-            span_emitted += 1;
-        } else {
-            span_suppressed += 1;
-        }
-        let decode_future = decode_message_value(
+        let decoded = match decode_message_value(
             bytes,
             kafka_conf.schema_registry_url.as_deref(),
             kafka_conf.schema_registry_username.as_deref(),
             kafka_conf.schema_registry_password.as_deref(),
             &http_client,
             &mut schema_cache,
-        );
-        let decoded = match if with_decode_span {
-            decode_future
-                .instrument(tracing::info_span!(
-                    "kafka_import.stage.decode.message",
-                    worker = worker_identity.as_str(),
-                    topic = topic,
-                    collection = collection_name.as_str(),
-                    project_name = conf.project_dir.as_str(),
-                    namespace = namespace.as_str()
-                ))
-                .await
-        } else {
-            decode_future.await
-        } {
+        )
+        .await
+        {
             Ok(value) => value,
             Err(err) => {
                 decode_failed += 1;
@@ -4937,13 +4903,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     (false, true) => "time_elapsed",
                     (false, false) => "unknown",
                 };
-                let with_span = db_write_span_rate_limiter.allow();
-                if with_span {
-                    span_emitted += 1;
-                } else {
-                    span_suppressed += 1;
-                }
-                let buffered_messages = snapshot_buffer.len() as u64;
                 flush_snapshot_copy_buffer(
                     &pg_client,
                     &dlq_producer,
@@ -4982,18 +4941,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     &mut copy_skipped_empty_columns,
                     &mut copy_unconvertible_literal_samples,
                 )
-                .instrument(if with_span {
-                    tracing::info_span!(
-                        "kafka_import.stage.db_write.copy_mode",
-                        worker = worker_identity.as_str(),
-                        flush_reason = flush_reason,
-                        buffered_messages = buffered_messages,
-                        project_name = conf.project_dir.as_str(),
-                        namespace = namespace.as_str()
-                    )
-                } else {
-                    tracing::Span::none()
-                })
                 .await?;
                 snapshot_buffer_started_at = None;
             }
@@ -5010,21 +4957,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             continue;
         }
 
-        // 2. Open PostgreSQL transaction if not already open
-        if transaction_batching_enabled && !tx_open {
-            if let Err(err) = pg_client.batch_execute("BEGIN").await {
-                error!("Failed to BEGIN transaction batch: {:?}", err);
-                return Err(anyhow!(err));
-            }
-            tx_open = true;
-        }
-
-        let with_span = db_write_span_rate_limiter.allow();
-        if with_span {
-            span_emitted += 1;
-        } else {
-            span_suppressed += 1;
-        }
         let write_outcome = write_to_pg(
             &pg_client,
             &payload,
@@ -5046,19 +4978,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             &mut skipped_missing_required_snapshot_samples,
             &mut skipped_non_data_op,
         )
-        .instrument(if with_span {
-            tracing::info_span!(
-                "kafka_import.stage.db_write.sql_apply",
-                worker = worker_identity.as_str(),
-                topic = topic,
-                collection = collection_name.as_str(),
-                op = op,
-                project_name = conf.project_dir.as_str(),
-                namespace = namespace.as_str(),
-            )
-        } else {
-            tracing::Span::none()
-        })
         .await;
 
         let applied_rows = match write_outcome {
@@ -5259,7 +5178,7 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     }
 
     info!(
-        "Kafka import finished. polled={}, processed={}({}), skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, skipped_missing_required_snapshot={}, decode_failed={}, apply_failed={}, commit_failed={}, trace_spans_emitted={}, trace_spans_suppressed={}",
+        "Kafka import finished. polled={}, processed={}({}), skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, skipped_missing_required_snapshot={}, decode_failed={}, apply_failed={}, commit_failed={}",
         polled,
         processed,
         processed_mode,
@@ -5274,8 +5193,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         decode_failed,
         apply_failed,
         commit_failed,
-        span_emitted,
-        span_suppressed
     );
     // info!(
     //     "Kafka import op summary: c={}, u={}, r={}, d={}, other={}, total_affected_rows={}, fallback_payload_as_after={}",
@@ -5359,8 +5276,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     struct KafkaImportWriteModeStatsYaml {
         snapshot_copy_enabled: bool,
         transaction_batch_size: usize,
-        trace_spans_emitted: u64,
-        trace_spans_suppressed: u64,
         copy_attempts: usize,
         copy_failed: usize,
         fallback_replay_attempts: usize,
@@ -5389,8 +5304,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     let kafka_import_write_mode_stats = KafkaImportWriteModeStatsYaml {
         snapshot_copy_enabled,
         transaction_batch_size,
-        trace_spans_emitted: span_emitted,
-        trace_spans_suppressed: span_suppressed,
         copy_attempts,
         copy_failed,
         fallback_replay_attempts,
@@ -5539,28 +5452,41 @@ mod tests {
     #[test]
     fn parse_topic_db_collection_accepts_prefix_with_trailing_dot() {
         let parsed = parse_topic_db_collection(
-            "acme-dev-idm-prep.events_lmfr",
-            Some("acme-dev-idm-prep."),
-            Some("acme-dev-idm-prep"),
+            "krit-dev-even-prep.events_lmfr",
+            Some("krit-dev-even-prep."),
+            Some("krit-dev-even-prep"),
         );
 
         assert_eq!(
             parsed,
-            Some(("acme-dev-idm-prep".to_owned(), "events_lmfr".to_owned()))
+            Some(("krit-dev-even-prep".to_owned(), "events_lmfr".to_owned()))
         );
     }
 
     #[test]
     fn parse_topic_db_collection_accepts_prefix_without_trailing_dot() {
         let parsed = parse_topic_db_collection(
-            "acme-dev-idm-prep.events_lmfr",
-            Some("acme-dev-idm-prep"),
-            Some("acme-dev-idm-prep"),
+            "krit-dev-even-prep.events_lmfr",
+            Some("krit-dev-even-prep"),
+            Some("krit-dev-even-prep"),
         );
 
         assert_eq!(
             parsed,
-            Some(("acme-dev-idm-prep".to_owned(), "events_lmfr".to_owned()))
+            Some(("krit-dev-even-prep".to_owned(), "events_lmfr".to_owned()))
         );
+    }
+
+    #[test]
+    fn topic_prefix_with_database_suffix_appends_database() {
+        let result = topic_prefix_with_database_suffix(Some("t4"), "sample_airbnb");
+        assert_eq!(result.as_deref(), Some("t4.sample_airbnb"));
+    }
+
+    #[test]
+    fn topic_prefix_with_database_suffix_keeps_existing_suffix() {
+        let result =
+            topic_prefix_with_database_suffix(Some("t4.sample_airbnb"), "sample_airbnb");
+        assert_eq!(result.as_deref(), Some("t4.sample_airbnb"));
     }
 }

@@ -31,6 +31,7 @@ pub struct ConfData {
     pub max_time_ms: Option<u64>,
     pub chunk_size: Option<u64>,
     pub auth_retry_max: Option<u32>,
+    pub infer_mode: Option<String>,
     pub log_level: Option<String>,
     pub log_format: Option<String>,
     pub add_grouped_key: bool,
@@ -39,7 +40,6 @@ pub struct ConfData {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
     pub kafka: Option<KafkaConfData>,
-    pub datadog: Option<DatadogConfData>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -80,10 +80,6 @@ pub struct KafkaConfData {
     pub stop_on_no_lag: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct DatadogConfData {
-    pub dd_service: Option<String>,
-}
 
 #[derive(Debug, Deserialize)]
 struct TomlProjectConfig {
@@ -98,9 +94,6 @@ struct TomlProjectConfig {
     #[serde(default)]
     #[serde(alias = "Kafka", alias = "KAFKA")]
     kafka: Option<TomlKafkaSection>,
-    #[serde(default)]
-    #[serde(alias = "Datadog", alias = "DATADOG")]
-    datadog: Option<TomlDatadogSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,6 +146,8 @@ struct TomlSourceSection {
         alias = "authRetryMax"
     )]
     auth_retry_max: Option<u32>,
+    #[serde(alias = "INFER_MODE", alias = "InferMode", alias = "inferMode")]
+    infer_mode: Option<String>,
     #[serde(alias = "LOG_LEVEL", alias = "LogLevel", alias = "logLevel")]
     log_level: Option<String>,
     #[serde(
@@ -377,11 +372,6 @@ struct TomlKafkaSection {
     stop_on_no_lag: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Default)]
-struct TomlDatadogSection {
-    #[serde(alias = "DD_SERVICE", alias = "service")]
-    dd_service: Option<String>,
-}
 
 fn deserialize_optional_string_or_number<'de, D>(
     deserializer: D,
@@ -439,7 +429,7 @@ fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
         return;
     };
 
-    let allowed_root = allowed_conf_key_set(&["project", "source", "target", "kafka", "datadog"]);
+    let allowed_root = allowed_conf_key_set(&["project", "source", "target", "kafka"]);
     for key in root.keys() {
         if !allowed_root.contains(&normalize_conf_key(key)) {
             warn!(
@@ -450,7 +440,7 @@ fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
         }
     }
 
-    let section_rules: [(&str, &[&str]); 5] = [
+    let section_rules: [(&str, &[&str]); 4] = [
         (
             "project",
             &[
@@ -472,6 +462,7 @@ fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
                 "max_time_ms",
                 "chunk_size",
                 "auth_retry_max",
+                "infer_mode",
                 "log_level",
                 "log_format",
                 "add_grouped_key",
@@ -544,7 +535,6 @@ fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
                 "stop.on.no.lag",
             ],
         ),
-        ("datadog", &["dd_service", "service"]),
     ];
 
     for (section_name, allowed_list) in section_rules {
@@ -594,28 +584,23 @@ This often means the config file was truncated or overwritten. Provide full conf
             .map(StringOrArrayConfig::into_values)
             .unwrap_or_default();
 
-        if namespace_databases.len() > 1 {
-            if target_databases.len() > 1 && target_databases.len() != namespace_databases.len() {
-                return Err(anyhow!(
-                    "Invalid config {}: [target].database_name has {} entries but [source].namespace has {} entries. Provide matching array lengths or a scalar target database_name.",
-                    path.display(),
-                    target_databases.len(),
-                    namespace_databases.len()
-                ));
-            }
-
-            if target_schemas.len() > 1 && target_schemas.len() != namespace_databases.len() {
-                return Err(anyhow!(
-                    "Invalid config {}: [target].schema_name has {} entries but [source].namespace has {} entries. Provide matching array lengths or a scalar target schema_name.",
-                    path.display(),
-                    target_schemas.len(),
-                    namespace_databases.len()
-                ));
-            }
+        if target_databases.len() > 1 && target_databases.len() != namespace_databases.len() {
+            return Err(anyhow!(
+                "Invalid config {}: [target].database_name has {} entries but [source].namespace has {} entries. Provide matching array lengths and configure [source].namespace as an ordered list.",
+                path.display(),
+                target_databases.len(),
+                namespace_databases.len()
+            ));
         }
-        let datadog = parsed.datadog.map(|d| DatadogConfData {
-            dd_service: d.dd_service,
-        });
+
+        if target_schemas.len() > 1 && target_schemas.len() != namespace_databases.len() {
+            return Err(anyhow!(
+                "Invalid config {}: [target].schema_name has {} entries but [source].namespace has {} entries. Provide matching array lengths and configure [source].namespace as an ordered list.",
+                path.display(),
+                target_schemas.len(),
+                namespace_databases.len()
+            ));
+        }
         let kafka = parsed.kafka.map(|k| KafkaConfData {
             bootstrap_servers: k.bootstrap_servers,
             group_id: k.group_id,
@@ -686,6 +671,7 @@ This often means the config file was truncated or overwritten. Provide full conf
             max_time_ms: source.max_time_ms,
             chunk_size: source.chunk_size,
             auth_retry_max: source.auth_retry_max,
+            infer_mode: source.infer_mode,
             log_level: source.log_level,
             log_format: source.log_format,
             add_grouped_key: source.add_grouped_key.unwrap_or(false),
@@ -694,7 +680,6 @@ This often means the config file was truncated or overwritten. Provide full conf
             include: source.include,
             exclude: source.exclude,
             kafka,
-            datadog,
         })
     }
 
@@ -727,6 +712,7 @@ This often means the config file was truncated or overwritten. Provide full conf
         let mut auth_retry_max: Option<u32> = None;
         let mut log_level: Option<String> = None;
         let mut log_format: Option<String> = None;
+        let mut infer_mode: Option<String> = None;
         let mut add_grouped_key: bool = false;
         let mut jsonb: bool = false;
 
@@ -749,6 +735,7 @@ This often means the config file was truncated or overwritten. Provide full conf
                     "MAX_TIME_MS" => max_time_ms = parsed.parse().ok(),
                     "CHUNK_SIZE" => chunk_size = parsed.parse().ok(),
                     "AUTH_RETRY_MAX" => auth_retry_max = parsed.parse().ok(),
+                    "INFER_MODE" => infer_mode = Some(parsed),
                     "LOG_LEVEL" => log_level = Some(parsed),
                     "LOG_FORMAT" => log_format = Some(parsed),
                     "ADD_GROUPED_KEY" => {
@@ -786,6 +773,7 @@ This often means the config file was truncated or overwritten. Provide full conf
             max_time_ms,
             chunk_size,
             auth_retry_max,
+            infer_mode,
             log_level,
             log_format,
             add_grouped_key,
@@ -794,7 +782,6 @@ This often means the config file was truncated or overwritten. Provide full conf
             include: Vec::new(),
             exclude: Vec::new(),
             kafka: None,
-            datadog: None,
         })
     }
 
@@ -864,10 +851,12 @@ pub fn should_infer_collection_for_database(
     exclude: &[String],
 ) -> bool {
     fn matches(entry: &str, db_name: &str, coll_name: &str) -> bool {
-        let Some((entry_db, entry_coll)) = entry.split_once('.') else {
-            return false;
-        };
-        entry_db == db_name && (entry_coll == "*" || entry_coll == coll_name)
+        match entry.split_once('.') {
+            Some((entry_db, entry_coll)) => {
+                entry_db == db_name && (entry_coll == "*" || entry_coll == coll_name)
+            }
+            None => entry == coll_name,
+        }
     }
 
     if exclude
@@ -932,21 +921,22 @@ pub fn resolve_target_mapping_for_namespace_index(
 }
 
 /// Validates that `include`/`exclude` entries are database-prefixed
-/// (`<database_name>.*` or `<database_name>.<collection>`) when more than one
-/// database is configured. Returns an error naming the offending entry.
+/// (`<database_name>.*` or `<database_name>.<collection>`) when one or more
+/// configured databases are present. Returns an error naming the offending
+/// entry.
 pub fn validate_multi_db_filter_entries(
     databases: &[String],
     include: &[String],
     exclude: &[String],
 ) -> Result<()> {
-    if databases.len() <= 1 {
+    if databases.is_empty() {
         return Ok(());
     }
 
     for entry in include.iter().chain(exclude.iter()) {
         if !entry.contains('.') {
             return Err(anyhow!(
-                "Invalid source.include/source.exclude entry '{entry}': multi-database configurations \
+                "Invalid source.include/source.exclude entry '{entry}': configured namespace lists \
 require entries prefixed with '<database_name>.', for example '{}.*' to select every collection \
 in that database, or '{}.<collection>' for a single collection.",
                 databases[0],
@@ -1718,6 +1708,79 @@ schema_name = ["orders", "catalog", "extra"]
     }
 
     #[test]
+    fn read_conf_rejects_target_database_array_without_source_namespace_list() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("mongo2pg-target-array-missing-namespace-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+uri = "mongodb://example"
+
+[target]
+database_name = ["orders", "catalog"]
+schema_name = "orders"
+"#,
+        )
+        .expect("write config");
+
+        let err = read_conf(&config_path).expect_err("config should be rejected");
+        assert!(err
+            .to_string()
+            .contains("[target].database_name has 2 entries but [source].namespace has 0 entries"));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn read_conf_rejects_target_schema_array_for_single_source_namespace() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("mongo2pg-target-schema-single-namespace-{unique}"));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        let config_path = dir.join("dbapi.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[project]
+title = "Test Project"
+base_dir = "/tmp"
+project_dir = "dbapi"
+
+[source]
+namespace = "orders"
+
+[target]
+database_name = "orders"
+schema_name = ["orders", "catalog"]
+"#,
+        )
+        .expect("write config");
+
+        let err = read_conf(&config_path).expect_err("config should be rejected");
+        assert!(err
+            .to_string()
+            .contains("[target].schema_name has 2 entries but [source].namespace has 1 entries"));
+
+        let _ = std::fs::remove_file(&config_path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
     fn resolve_target_mapping_for_namespace_index_prefers_array_values() {
         let conf = ConfData {
             base_dir: PathBuf::from("/tmp"),
@@ -1737,6 +1800,7 @@ schema_name = ["orders", "catalog", "extra"]
             max_time_ms: None,
             chunk_size: None,
             auth_retry_max: None,
+            infer_mode: None,
             log_level: None,
             log_format: None,
             add_grouped_key: false,
@@ -1745,7 +1809,6 @@ schema_name = ["orders", "catalog", "extra"]
             include: Vec::new(),
             exclude: Vec::new(),
             kafka: None,
-            datadog: None,
         };
 
         let (db0, schema0) = resolve_target_mapping_for_namespace_index(&conf, 0, "src_a");
@@ -1777,6 +1840,7 @@ schema_name = ["orders", "catalog", "extra"]
             max_time_ms: None,
             chunk_size: None,
             auth_retry_max: None,
+            infer_mode: None,
             log_level: None,
             log_format: None,
             add_grouped_key: false,
@@ -1785,7 +1849,6 @@ schema_name = ["orders", "catalog", "extra"]
             include: Vec::new(),
             exclude: Vec::new(),
             kafka: None,
-            datadog: None,
         };
 
         let (db1, schema1) = resolve_target_mapping_for_namespace_index(&conf, 1, "src_b");
@@ -2198,11 +2261,14 @@ copy_mode = true
     }
 
     #[test]
-    fn validate_multi_db_filter_entries_skips_validation_for_single_database() {
+    fn validate_multi_db_filter_entries_rejects_unprefixed_entries_for_single_database() {
         let databases = vec!["orders".to_owned()];
         let include = vec!["invoices".to_owned()];
 
-        assert!(validate_multi_db_filter_entries(&databases, &include, &[]).is_ok());
+        let err = validate_multi_db_filter_entries(&databases, &include, &[])
+            .expect_err("single configured database still requires '<database>.' prefixes");
+        assert!(err.to_string().contains("orders"));
+        assert!(err.to_string().contains("invoices"));
     }
 
     #[test]

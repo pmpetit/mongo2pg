@@ -1,0 +1,115 @@
+name: Branch validation
+
+permissions:
+    contents: write
+    pull-requests: write
+    packages: write
+    id-token: write
+    actions: write
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened, closed]
+        branches: [main]
+        paths:
+            - "src/**"
+            - "Dockerfile"
+            - "Cargo.toml"
+            - "Cargo.lock"
+            - ".github/workflows/**"
+
+concurrency:
+    group: branches-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+env:
+jobs:
+    branch_tag:
+        runs-on: [self-hosted, Linux, X64, stable]
+        outputs:
+            tag: ${{ steps.tag.outputs.tag }}
+        steps:
+            - id: tag
+              shell: bash
+              env:
+                  BRANCH: ${{ github.event.pull_request.head.ref }}
+              run: |
+                  set -euo pipefail
+                  tag="$(printf '%s' "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9_.-]+#-#g; s#^-+##; s#-+$##')"
+                  [ -n "$tag" ] || { echo 'Branch produces empty Docker tag'; exit 1; }
+                  echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+    push_branch_image:
+        if: github.event.action != 'closed' && !startsWith(github.event.pull_request.head.ref, 'release/') && github.event.pull_request.head.repo.full_name == github.repository
+        needs: [branch_tag]
+        uses: ./.github/workflows/publish-image.yml
+        with:
+            image_tag: ${{ needs.branch_tag.outputs.tag }}
+
+    release_src_scope_check:
+        if: "${{ github.event.action == 'closed' && github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/') && !startsWith(github.event.pull_request.title, 'chore: release ') }}"
+        runs-on: [self-hosted, Linux, X64, stable]
+        outputs:
+            has_src_changes: ${{ steps.check.outputs.has_src_changes }}
+        steps:
+            - id: check
+              uses: actions/github-script@v9
+              with:
+                  script: |
+                      const pullNumber = context.payload.pull_request.number;
+                      const files = await github.paginate(github.rest.pulls.listFiles, {
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        pull_number: pullNumber,
+                        per_page: 100,
+                      });
+
+                      const changedFiles = files.map((f) => f.filename);
+                      const hasSrcChanges = changedFiles.some((f) => f.startsWith('src/'));
+
+                      core.setOutput('has_src_changes', hasSrcChanges ? 'true' : 'false');
+                      core.notice(`Changed files (${changedFiles.length}): ${changedFiles.join(', ')}`);
+                      core.notice(`Release gating (has src changes) = ${hasSrcChanges}`);
+
+    e2e:
+        if: "${{ github.event.action == 'closed' && github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/') && !startsWith(github.event.pull_request.title, 'chore: release ') && needs.release_src_scope_check.outputs.has_src_changes == 'true' }}"
+        needs: [release_src_scope_check]
+        uses: ./.github/workflows/e2e_tests.yml
+        secrets: inherit
+        with:
+            database: sample_analytics sample_airbnb sample_geospatial sample_mflix sample_supplies sample_training sample_weatherdata sample_events sample_payload sample_externals
+            release_tag: ""
+
+    create_release_pr:
+        if: "${{ github.event.action == 'closed' && github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/') && !startsWith(github.event.pull_request.title, 'chore: release ') && needs.release_src_scope_check.outputs.has_src_changes == 'true' }}"
+        needs: [release_src_scope_check, e2e]
+        runs-on: [self-hosted, Linux, X64, stable]
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+                  token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Create release pull request
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  current_version="$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"$/\1/p' Cargo.toml | head -n1)"
+                  IFS=. read -r major minor patch <<< "$current_version"
+                  next_version="$major.$minor.$((patch + 1))"
+                  release_tag="$next_version"
+                  branch="release/$release_tag"
+                  legacy_branch="release/v$next_version"
+                  git push origin --delete "$legacy_branch" || true
+                  git checkout -B "$branch"
+                  sed -i "0,/^version = \"$current_version\"$/s//version = \"$next_version\"/" Cargo.toml
+                  cargo update -p mongo2pg --precise "$next_version" || true
+                  git config user.name github-actions[bot]
+                  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+                  git add Cargo.toml Cargo.lock
+                  git diff --cached --quiet && exit 0
+                  git commit -m "chore: prepare release $release_tag"
+                  git push --force origin "$branch"
+                  gh pr create --base main --head "$branch" --title "chore: release $release_tag" --body "Release PR created after merged PR #$PR_NUMBER passed E2E tests." || true

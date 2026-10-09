@@ -1,107 +1,166 @@
 name: Release
 
-on:
-  push:
-    tags:
-      - "v*.*.*"
-      - "mongo2pg-v*.*.*"
-  workflow_call:
-    inputs:
-      tag:
-        description: "Release tag to build/upload assets for"
-        required: true
-        type: string
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing tag to build/upload release assets for"
-        required: true
-        type: string
-
 permissions:
-  contents: write
+    contents: write
+    packages: write
+    id-token: write
+    actions: read
+
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: Release version to publish (semver, e.g. 0.8.7)
+                required: true
+                type: string
+    pull_request:
+        types: [closed]
+        branches:
+            - "main"
+
+concurrency:
+    group: release-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build – ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact: mongo2pg-linux-x86_64
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            artifact: mongo2pg-linux-aarch64
-          - os: macos-26-intel
-            target: x86_64-apple-darwin
-            artifact: mongo2pg-macos-x86_64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact: mongo2pg-macos-aarch64
-          # - os: windows-latest
-          #   target: x86_64-pc-windows-msvc
-          #   artifact: mongo2pg-windows-x86_64.exe
-          # - os: windows-11-arm
-          #   target: aarch64-pc-windows-msvc
-          #   artifact: mongo2pg-windows-aarch64.exe
+    resolve_release_version:
+        if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
+        runs-on: [self-hosted, Linux, X64, stable]
+        outputs:
+            tag: ${{ steps.resolve.outputs.tag }}
+        steps:
+            - id: resolve
+              shell: bash
+              env:
+                  PR_TITLE: ${{ github.event.pull_request.title }}
+                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+                  RELEASE_VERSION: ${{ inputs.version }}
+              run: |
+                  set -euo pipefail
 
-    steps:
-      - uses: actions/checkout@v7.0.1
+                  semver_capture='([0-9]+\.[0-9]+\.[0-9]+)'
+                  version=""
+                  if [[ -n "${RELEASE_VERSION:-}" ]]; then
+                      if [[ "$RELEASE_VERSION" =~ ^v?$semver_capture$ ]]; then
+                          version="${BASH_REMATCH[1]}"
+                      fi
+                  elif [[ "$PR_TITLE" =~ ^chore:\ release\ $semver_capture$ ]]; then
+                      version="${BASH_REMATCH[1]}"
+                  elif [[ "$HEAD_REF" =~ ^release/$semver_capture$ ]]; then
+                      version="${BASH_REMATCH[1]}"
+                  fi
+
+                  if [ -z "$version" ]; then
+                      echo "Unable to resolve release version from PR title '$PR_TITLE' or branch '$HEAD_REF'." >&2
+                      exit 1
+                  fi
+
+                  if [[ ! "$version" =~ ^$semver_capture$ ]]; then
+                      echo "Resolved version '$version' is invalid. Expected strict semver x.y.z (digits only)." >&2
+                      exit 1
+                  fi
+
+                  echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+    sonar-scan:
+        if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
+        uses: ./.github/workflows/sonar-scan.yml
+        secrets: inherit
+
+    production_image:
+        if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
+        needs: [resolve_release_version, sonar-scan]
+        uses: ./.github/workflows/publish-image.yml
         with:
-          ref: ${{ github.event_name == 'workflow_call' && inputs.tag || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+            image_tag: ${{ needs.resolve_release_version.outputs.tag }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+    build-binaries:
+        if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
+        needs: [sonar-scan]
+        name: Build ${{ matrix.target }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: [self-hosted, Linux, X64, stable]
+                      target: x86_64-unknown-linux-gnu
+                      artifact: mongo2pg-linux-x86_64
+                    - os: [self-hosted, Linux, ARM64, stable]
+                      target: aarch64-unknown-linux-gnu
+                      artifact: mongo2pg-linux-aarch64
+                    - os: macos-26-intel
+                      target: x86_64-apple-darwin
+                      artifact: mongo2pg-macos-x86_64
+                    - os: macos-latest
+                      target: aarch64-apple-darwin
+                      artifact: mongo2pg-macos-aarch64
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659
+              with:
+                  toolchain: stable
+                  target: ${{ matrix.target }}
+            - name: Test and build
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  # Tests already ran before opening/merging the release PR; avoid rerunning here.
+                  cargo check
+                  cargo build --release --locked --target "${{ matrix.target }}"
+            - name: Package binaries
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  mkdir -p dist
+                  cp "target/${{ matrix.target }}/release/mongo2pg" "dist/${{ matrix.artifact }}"
+                  chmod +x "dist/${{ matrix.artifact }}"
+                  sha256sum "dist/${{ matrix.artifact }}" > "dist/${{ matrix.artifact }}.sha256"
+                  tar -C dist -czf "dist/${{ matrix.artifact }}.tar.gz" "${{ matrix.artifact }}" "${{ matrix.artifact }}.sha256"
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: mongo2pg-binaries-${{ matrix.artifact }}
+                  path: |
+                      dist/*.tar.gz
+                      dist/*.sha256
+                  if-no-files-found: error
 
-      - name: Cache cargo registry
-        uses: actions/cache@v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key:
-            ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock')
-            }}
-          restore-keys: ${{ runner.os }}-${{ matrix.target }}-cargo-
+    publish-github-release:
+        if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
+        needs: [resolve_release_version, build-binaries]
+        runs-on: [self-hosted, Linux, X64, stable]
+        steps:
+            - name: Download binary artifacts
+              uses: actions/download-artifact@v8
+              with:
+                  pattern: mongo2pg-binaries-*
+                  path: artifacts
+                  merge-multiple: true
 
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+            - name: Validate release artifacts
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  find artifacts -maxdepth 2 -type f -print
+                  if ! find artifacts -maxdepth 2 -type f -name '*.tar.gz' -print -quit | grep -q .; then
+                      echo "No .tar.gz binary archives found to publish"
+                      exit 1
+                  fi
+                  if ! find artifacts -maxdepth 2 -type f -name '*.sha256' -print -quit | grep -q .; then
+                      echo "No .sha256 checksum files found to publish"
+                      exit 1
+                  fi
 
-      - name: Rename binary (Unix)
-        if: runner.os != 'Windows'
-        run: cp target/${{ matrix.target }}/release/mongo2pg ${{ matrix.artifact }}
-
-      - name: Rename binary (Windows)
-        if: runner.os == 'Windows'
-        run: cp target/${{ matrix.target }}/release/mongo2pg.exe ${{ matrix.artifact }}
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
-
-  release:
-    name: Create GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Create release and upload assets
-        uses: softprops/action-gh-release@v3.0.3
-        with:
-          tag_name: ${{ github.event_name == 'workflow_call' && inputs.tag || github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
-          target_commitish: ${{ github.event_name == 'workflow_call' && inputs.tag || github.sha }}
-          files: artifacts/*
-          generate_release_notes: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Create or update GitHub Release with binaries
+              uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
+              with:
+                  tag_name: ${{ needs.resolve_release_version.outputs.tag }}
+                  name: ${{ needs.resolve_release_version.outputs.tag }}
+                  target_commitish: ${{ github.sha }}
+                  prerelease: false
+                  make_latest: true
+                  generate_release_notes: true
+                  files: |
+                      artifacts/*.tar.gz
+                      artifacts/*.sha256
+                  fail_on_unmatched_files: true

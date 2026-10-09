@@ -97,96 +97,121 @@ fn kafka_hosts_ports(bootstrap_servers: &str) -> (String, String) {
     let mut ports = Vec::new();
 
     for entry in bootstrap_servers.split(',').map(str::trim).filter(|v| !v.is_empty()) {
-        let without_scheme = entry
-            .strip_prefix("kafka-secure://")
-            .or_else(|| entry.strip_prefix("kafka://"))
-            .or_else(|| entry.strip_prefix("ssl://"))
-            .unwrap_or(entry);
-        let host_port = without_scheme
-            .split_once('/')
-            .map(|(value, _)| value)
-            .unwrap_or(without_scheme)
-            .trim();
-        if host_port.is_empty() {
+        let Some(host_port) = normalize_kafka_bootstrap_entry(entry) else {
             continue;
-        }
-
-        let (host, port) = if let Some(stripped) = host_port.strip_prefix('[') {
-            if let Some(end_bracket) = stripped.find(']') {
-                let host = stripped[..end_bracket].to_owned();
-                let remainder = &stripped[end_bracket + 1..];
-                let port = remainder
-                    .strip_prefix(':')
-                    .map(str::trim)
-                    .unwrap_or("")
-                    .to_owned();
-                (host, port)
-            } else {
-                (host_port.to_owned(), String::new())
-            }
-        } else if let Some((host, port)) = host_port.rsplit_once(':') {
-            if port.chars().all(|ch| ch.is_ascii_digit()) {
-                (host.to_owned(), port.to_owned())
-            } else {
-                (host_port.to_owned(), String::new())
-            }
-        } else {
-            (host_port.to_owned(), String::new())
         };
-
+        let (host, port) = parse_kafka_host_port(host_port);
         hosts.push(host);
-        if !port.is_empty() {
-            ports.push(port);
+        if let Some(port_value) = port {
+            ports.push(port_value);
         }
     }
 
-    let host_display = if hosts.is_empty() {
-        "unknown".to_owned()
-    } else {
-        hosts.join(",")
-    };
-    let port_display = if ports.is_empty() {
-        "unknown".to_owned()
-    } else {
-        ports.join(",")
-    };
+    (
+        join_or_unknown(&hosts),
+        join_or_unknown(&ports),
+    )
+}
 
-    (host_display, port_display)
+fn normalize_kafka_bootstrap_entry(entry: &str) -> Option<&str> {
+    let without_scheme = entry
+        .strip_prefix("kafka-secure://")
+        .or_else(|| entry.strip_prefix("kafka://"))
+        .or_else(|| entry.strip_prefix("ssl://"))
+        .unwrap_or(entry);
+    let host_port = without_scheme
+        .split_once('/')
+        .map(|(value, _)| value)
+        .unwrap_or(without_scheme)
+        .trim();
+    if host_port.is_empty() {
+        None
+    } else {
+        Some(host_port)
+    }
+}
+
+fn parse_kafka_host_port(host_port: &str) -> (String, Option<String>) {
+    if let Some(stripped) = host_port.strip_prefix('[') {
+        return parse_bracketed_host_port(host_port, stripped);
+    }
+    parse_plain_host_port(host_port)
+}
+
+fn parse_bracketed_host_port(host_port: &str, stripped: &str) -> (String, Option<String>) {
+    if let Some(end_bracket) = stripped.find(']') {
+        let host = stripped[..end_bracket].to_owned();
+        let remainder = &stripped[end_bracket + 1..];
+        let port = remainder
+            .strip_prefix(':')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        (host, port)
+    } else {
+        (host_port.to_owned(), None)
+    }
+}
+
+fn parse_plain_host_port(host_port: &str) -> (String, Option<String>) {
+    if let Some((host, port)) = host_port.rsplit_once(':') {
+        if port.chars().all(|ch| ch.is_ascii_digit()) {
+            return (host.to_owned(), Some(port.to_owned()));
+        }
+    }
+    (host_port.to_owned(), None)
+}
+
+fn join_or_unknown(values: &[String]) -> String {
+    if values.is_empty() {
+        "unknown".to_owned()
+    } else {
+        values.join(",")
+    }
 }
 
 fn detect_process_ip_for_endpoint(host: Option<&str>, port: Option<&str>) -> String {
-    let resolved_port = port
-        .and_then(|value| value.parse::<u16>().ok())
-        .unwrap_or(80);
+    let resolved_port = resolve_endpoint_port(port);
 
-    if let Some(host_value) = host.map(str::trim).filter(|value| !value.is_empty()) {
-        if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
-            if socket.connect((host_value, resolved_port)).is_ok() {
-                if let Ok(addr) = socket.local_addr() {
-                    return addr.ip().to_string();
-                }
-            }
-        }
-        if let Ok(socket) = std::net::UdpSocket::bind("[::]:0") {
-            if socket.connect((host_value, resolved_port)).is_ok() {
-                if let Ok(addr) = socket.local_addr() {
-                    return addr.ip().to_string();
-                }
-            }
+    if let Some(host_value) = normalize_endpoint_host(host) {
+        if let Some(addr) = try_detect_local_ip_for_host(host_value, resolved_port) {
+            return addr;
         }
     }
 
+    try_detect_local_ip_from_fallbacks().unwrap_or_else(|| "unknown".to_owned())
+}
+
+fn resolve_endpoint_port(port: Option<&str>) -> u16 {
+    port.and_then(|value| value.parse::<u16>().ok()).unwrap_or(80)
+}
+
+fn normalize_endpoint_host(host: Option<&str>) -> Option<&str> {
+    host.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn try_detect_local_ip_for_host(host: &str, port: u16) -> Option<String> {
+    try_detect_local_ip_with_bind_addr("0.0.0.0:0", (host, port))
+        .or_else(|| try_detect_local_ip_with_bind_addr("[::]:0", (host, port)))
+}
+
+fn try_detect_local_ip_from_fallbacks() -> Option<String> {
     for fallback in ["8.8.8.8:80", "1.1.1.1:80", "9.9.9.9:80"] {
-        if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0") {
-            if socket.connect(fallback).is_ok() {
-                if let Ok(addr) = socket.local_addr() {
-                    return addr.ip().to_string();
-                }
-            }
+        if let Some(addr) = try_detect_local_ip_with_bind_addr("0.0.0.0:0", fallback) {
+            return Some(addr);
         }
     }
+    None
+}
 
-    "unknown".to_owned()
+fn try_detect_local_ip_with_bind_addr<T: std::net::ToSocketAddrs>(
+    bind_addr: &str,
+    endpoint: T,
+) -> Option<String> {
+    let socket = std::net::UdpSocket::bind(bind_addr).ok()?;
+    socket.connect(endpoint).ok()?;
+    let addr = socket.local_addr().ok()?;
+    Some(addr.ip().to_string())
 }
 
 fn ping_failure_context(backend: PingBackend, conf: &crate::util::ConfData) -> String {
@@ -672,4 +697,59 @@ pub async fn run_ping(args: PingArgs) -> Result<()> {
 
     info!("Ping completed successfully.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{kafka_hosts_ports, normalize_endpoint_host, resolve_endpoint_port};
+
+    #[test]
+    fn resolve_endpoint_port_defaults_to_80_when_missing() {
+        assert_eq!(resolve_endpoint_port(None), 80);
+    }
+
+    #[test]
+    fn resolve_endpoint_port_defaults_to_80_when_invalid() {
+        assert_eq!(resolve_endpoint_port(Some("not-a-port")), 80);
+        assert_eq!(resolve_endpoint_port(Some("70000")), 80);
+    }
+
+    #[test]
+    fn resolve_endpoint_port_parses_valid_value() {
+        assert_eq!(resolve_endpoint_port(Some("9092")), 9092);
+    }
+
+    #[test]
+    fn normalize_endpoint_host_rejects_empty_values() {
+        assert_eq!(normalize_endpoint_host(None), None);
+        assert_eq!(normalize_endpoint_host(Some("   ")), None);
+    }
+
+    #[test]
+    fn normalize_endpoint_host_trims_and_keeps_value() {
+        assert_eq!(normalize_endpoint_host(Some(" kafka.local ")), Some("kafka.local"));
+    }
+
+    #[test]
+    fn kafka_hosts_ports_parses_mixed_entries() {
+        let input = "kafka://host1:9092, ssl://host2:9093/path , host3";
+        let (hosts, ports) = kafka_hosts_ports(input);
+        assert_eq!(hosts, "host1,host2,host3");
+        assert_eq!(ports, "9092,9093");
+    }
+
+    #[test]
+    fn kafka_hosts_ports_handles_ipv6_and_invalid_port() {
+        let input = "[2001:db8::1]:9092,example:abc";
+        let (hosts, ports) = kafka_hosts_ports(input);
+        assert_eq!(hosts, "2001:db8::1,example:abc");
+        assert_eq!(ports, "9092");
+    }
+
+    #[test]
+    fn kafka_hosts_ports_defaults_to_unknown() {
+        let (hosts, ports) = kafka_hosts_ports(" , / , ");
+        assert_eq!(hosts, "unknown");
+        assert_eq!(ports, "unknown");
+    }
 }

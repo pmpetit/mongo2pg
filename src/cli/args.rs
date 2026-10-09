@@ -35,11 +35,6 @@ pub struct Cli {
     #[arg(long = "log-format", global = true)]
     pub log_format: Option<String>,
 
-    /// Unified runtime service name used for both OpenTelemetry traces and runtime logs.
-    /// When set, this overrides env/fallback service-name resolution.
-    #[arg(long = "dd-service", global = true)]
-    pub service_name: Option<String>,
-
     #[command(subcommand)]
     pub command: Option<Command>,
 
@@ -80,18 +75,14 @@ pub struct InferArgs {
     #[arg(long = "auth-retry-max")]
     pub auth_retry_max: Option<u32>,
 
+    /// Inference mode: decoded (existing path) or raw (raw BSON traversal).
+    #[arg(long = "infer-mode")]
+    pub infer_mode: Option<String>,
+
     /// Treat all MongoDB Object fields as JSONB columns in the generated DDL
     /// instead of creating 1:1 child tables (arrays of objects are unaffected)
     #[arg(long = "jsonb", action = clap::ArgAction::SetTrue)]
     pub jsonb: bool,
-
-    /// Print inferred schema JSON to stdout
-    #[arg(long = "print-json", action = clap::ArgAction::SetTrue)]
-    pub print_json: bool,
-
-    /// Deprecated compatibility flag. JSON is no longer printed by default.
-    #[arg(long = "no-output", hide = true, action = clap::ArgAction::SetTrue)]
-    pub no_output: bool,
 
     /// PostgreSQL target database name. When -c is provided, this overwrites
     /// target.database_name in the config file before running.
@@ -328,6 +319,11 @@ pub struct ImportArgs {
     /// project.project_dir in the config file before running.
     #[arg(long = "project-dir")]
     pub project_dir: Option<String>,
+
+    /// Reuse existing destination tables instead of failing preflight.
+    /// When enabled, DDL files targeting existing tables are skipped.
+    #[arg(long = "force", action = clap::ArgAction::SetTrue)]
+    pub force: bool,
 }
 
 #[derive(Parser, Debug)]

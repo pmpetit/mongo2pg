@@ -6,7 +6,7 @@
 //!
 //! Nested arrays and objects are expanded across child tables exactly as
 //! `to_pg` generated them, so the CSV files can be loaded directly into
-//! PostgreSQL with `\COPY`.
+//! PostgreSQL with `\COPY`. fake commit 2
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -225,6 +225,16 @@ fn gcs_object_key(prefix: &str, db_name: &str, sql_lookup_name: &str, file_name:
     parts.join("/")
 }
 
+fn remove_uploaded_staged_file<T>(path: &Path, upload_result: Result<T>) -> Result<()> {
+    upload_result?;
+    std::fs::remove_file(path).with_context(|| {
+        format!(
+            "Cannot remove uploaded staged export file {}",
+            path.display()
+        )
+    })
+}
+
 async fn upload_export_files_to_gcs(
     out_dir: &Path,
     db_name: &str,
@@ -271,7 +281,7 @@ async fn upload_export_files_to_gcs(
             bucket,
             object_name
         );
-        storage
+        let upload_result = storage
             .write_object(
                 bucket_resource.clone(),
                 object_name.clone(),
@@ -285,7 +295,8 @@ async fn upload_export_files_to_gcs(
                     &format!("gs://{bucket}/{object_name}"),
                     &anyhow!(err),
                 )
-            })?;
+            });
+        remove_uploaded_staged_file(&path, upload_result)?;
         uploaded_files += 1;
     }
     debug!(
@@ -336,24 +347,6 @@ fn finish_writers(writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>>)
             .with_context(|| format!("Cannot finish gzip stream for table '{}'", table_name))?;
     }
     Ok(())
-}
-
-fn reopen_writers_for_append(
-    sql_tables: &[SqlTable],
-    out_dir: &Path,
-) -> Result<HashMap<String, GzEncoder<BufWriter<std::fs::File>>>> {
-    let mut writers: HashMap<String, GzEncoder<BufWriter<std::fs::File>>> = HashMap::new();
-    for sql_t in sql_tables {
-        let csv_path = out_dir.join(format!("{}.csv.gz", sql_t.name));
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&csv_path)
-            .with_context(|| format!("Cannot reopen {} for append", csv_path.display()))?;
-        let gz = GzEncoder::new(BufWriter::new(file), Compression::default());
-        writers.insert(sql_t.name.clone(), gz);
-    }
-    Ok(writers)
 }
 
 fn sync_alias_export_files(
@@ -579,6 +572,10 @@ fn is_geometry_col_type(col_type: &str) -> bool {
     col_type.trim().to_ascii_lowercase().starts_with("geometry")
 }
 
+fn is_array_col_type(col_type: &str) -> bool {
+    col_type.trim().ends_with("[]")
+}
+
 fn bson_number_to_f64(value: &Bson) -> Option<f64> {
     match value {
         Bson::Double(v) => Some(*v),
@@ -649,6 +646,7 @@ fn serialize_column_value(
     timestamp_cols: &HashSet<String>,
     uuid_cols: &HashSet<String>,
     geometry_cols: &HashSet<String>,
+    array_cols: &HashSet<String>,
     col: &str,
     value: &Bson,
 ) -> Option<String> {
@@ -660,6 +658,8 @@ fn serialize_column_value(
         bson_to_uuid_string(value)
     } else if geometry_cols.contains(col) {
         bson_to_geometry_ewkt(value)
+    } else if matches!(value, Bson::Array(_)) && !array_cols.contains(col) {
+        Some(serde_json::to_string(&bson_to_json_value(value)).unwrap_or_default())
     } else {
         bson_to_string(value)
     }
@@ -818,6 +818,8 @@ struct TableNode {
     uuid_cols: HashSet<String>,
     /// Columns whose SQL type is geometry and should be exported as EWKT text.
     geometry_cols: HashSet<String>,
+    /// Columns whose SQL type is SQL array (e.g. TEXT[], UUID[]).
+    array_cols: HashSet<String>,
     /// For a promoted root array-of-objects table, the MongoDB array field to iterate.
     root_array_field: Option<String>,
     /// For a promoted root array-of-objects table, the root `_id` column stored on each row.
@@ -921,6 +923,12 @@ fn build_tree_with_grouped_root(
             .filter(|c| is_geometry_col_type(&c.col_type))
             .map(|c| unquote_sql_ident(&c.name))
             .collect();
+        let array_cols: HashSet<String> = sql_t
+            .columns
+            .iter()
+            .filter(|c| is_array_col_type(&c.col_type))
+            .map(|c| unquote_sql_ident(&c.name))
+            .collect();
 
         let children: Vec<TableNode> = children_of
             .get(sql_t.name.as_str())
@@ -969,6 +977,7 @@ fn build_tree_with_grouped_root(
             timestamp_cols,
             uuid_cols,
             geometry_cols,
+            array_cols,
             root_array_field,
             root_parent_id_col,
             children,
@@ -1309,6 +1318,12 @@ fn build_node_from_plan(
         .filter(|c| is_geometry_col_type(&c.col_type))
         .map(|c| unquote_sql_ident(&c.name))
         .collect();
+    let array_cols: HashSet<String> = sql_t
+        .columns
+        .iter()
+        .filter(|c| is_array_col_type(&c.col_type))
+        .map(|c| unquote_sql_ident(&c.name))
+        .collect();
 
     let children = children_of
         .get(&table_key)
@@ -1380,6 +1395,7 @@ fn build_node_from_plan(
         timestamp_cols,
         uuid_cols,
         geometry_cols,
+        array_cols,
         root_array_field,
         root_parent_id_col,
         children,
@@ -1629,6 +1645,7 @@ fn extract_child_document_rows(
                             &child.timestamp_cols,
                             &child.uuid_cols,
                             &child.geometry_cols,
+                            &child.array_cols,
                             col,
                             v,
                         )
@@ -1670,6 +1687,7 @@ fn extract_child_document_rows(
                                             &grandchild.timestamp_cols,
                                             &grandchild.uuid_cols,
                                             &grandchild.geometry_cols,
+                                            &grandchild.array_cols,
                                             col,
                                             item,
                                         )
@@ -1741,6 +1759,24 @@ fn map_document_entries<'a>(
         return Vec::new();
     }
 
+    // If this node has declared child objects present in current document,
+    // keep regular container traversal and do not reinterpret as map entries.
+    // This prevents optional scalar columns (e.g. `errors`) from forcing
+    // payload containers into map mode when those columns are absent.
+    if node.children.iter().any(|child| {
+        let first_segment = child
+            .mongo_field
+            .split('.')
+            .find(|segment| !segment.trim().is_empty());
+
+        first_segment.is_some_and(|segment| {
+            let wanted = sanitize(segment);
+            doc.keys().any(|key| sanitize(key) == wanted)
+        })
+    }) {
+        return Vec::new();
+    }
+
     doc.iter()
         .filter_map(|(entry_key, entry_val)| match entry_val {
             Bson::Document(entry_doc) => Some((entry_key.as_str(), entry_doc)),
@@ -1780,7 +1816,15 @@ fn extract_rows(
 ) {
     let empty = HashMap::new();
     extract_rows_with_mapping(
-        val, node, parent_id, is_root, all_rows, counters, &empty, &empty,
+        val,
+        node,
+        parent_id,
+        is_root,
+        all_rows,
+        counters,
+        &empty,
+        &empty,
+        None,
     );
 }
 
@@ -1793,6 +1837,7 @@ fn extract_rows_with_mapping(
     counters: &mut HashMap<String, u64>,
     root_target_to_source: &HashMap<String, String>,
     root_target_to_literal: &HashMap<String, String>,
+    source_collection_name: Option<&str>,
 ) {
     let doc = match val {
         Bson::Document(d) => d,
@@ -1835,6 +1880,7 @@ fn extract_rows_with_mapping(
                                             &node.timestamp_cols,
                                             &node.uuid_cols,
                                             &node.geometry_cols,
+                                            &node.array_cols,
                                             col,
                                             v,
                                         )
@@ -1873,6 +1919,7 @@ fn extract_rows_with_mapping(
                                                             &child.timestamp_cols,
                                                             &child.uuid_cols,
                                                             &child.geometry_cols,
+                                                            &child.array_cols,
                                                             col,
                                                             child_item,
                                                         )
@@ -1950,6 +1997,7 @@ fn extract_rows_with_mapping(
                                         &node.timestamp_cols,
                                         &node.uuid_cols,
                                         &node.geometry_cols,
+                                        &node.array_cols,
                                         col,
                                         v,
                                     )
@@ -1986,6 +2034,7 @@ fn extract_rows_with_mapping(
                                                         &child.timestamp_cols,
                                                         &child.uuid_cols,
                                                         &child.geometry_cols,
+                                                        &child.array_cols,
                                                         col,
                                                         child_item,
                                                     )
@@ -2056,6 +2105,7 @@ fn extract_rows_with_mapping(
                                     &node.timestamp_cols,
                                     &node.uuid_cols,
                                     &node.geometry_cols,
+                                    &node.array_cols,
                                     col,
                                     v,
                                 )
@@ -2094,6 +2144,7 @@ fn extract_rows_with_mapping(
                                                     &child.timestamp_cols,
                                                     &child.uuid_cols,
                                                     &child.geometry_cols,
+                                                    &child.array_cols,
                                                     col,
                                                     item,
                                                 )
@@ -2167,6 +2218,15 @@ fn extract_rows_with_mapping(
                     if let Some(lit) = root_target_to_literal.get(col.as_str()) {
                         return Some(lit.clone());
                     }
+                    if col == "_key" {
+                        if let Some(derived) = source_collection_name
+                            .and_then(|source| source.strip_prefix(&node.sql_name))
+                            .and_then(|rest| rest.strip_prefix('_'))
+                            .filter(|suffix| !suffix.trim().is_empty())
+                        {
+                            return Some(derived.to_owned());
+                        }
+                    }
                 }
                 let lookup = if is_root {
                     find_root_mongo_field_mapped(doc, col, root_target_to_source)
@@ -2179,6 +2239,7 @@ fn extract_rows_with_mapping(
                         &node.timestamp_cols,
                         &node.uuid_cols,
                         &node.geometry_cols,
+                        &node.array_cols,
                         col,
                         v,
                     )
@@ -2226,6 +2287,7 @@ fn extract_rows_with_mapping(
                                                 &child.timestamp_cols,
                                                 &child.uuid_cols,
                                                 &child.geometry_cols,
+                                                &child.array_cols,
                                                 col,
                                                 v,
                                             )
@@ -2276,6 +2338,7 @@ fn extract_rows_with_mapping(
                                                                     &grandchild.timestamp_cols,
                                                                     &grandchild.uuid_cols,
                                                                     &grandchild.geometry_cols,
+                                                                    &grandchild.array_cols,
                                                                     col,
                                                                     item,
                                                                 )
@@ -2350,6 +2413,7 @@ fn extract_rows_with_mapping(
                                         &child.timestamp_cols,
                                         &child.uuid_cols,
                                         &child.geometry_cols,
+                                        &child.array_cols,
                                         col,
                                         item,
                                     )
@@ -2452,7 +2516,12 @@ pub async fn export_collections_to_sql(
     let mut coll_names = coll_names.to_vec();
     coll_names.sort();
 
-    let out_dir = data_dir.join(db_name).join(&sql_lookup_name);
+    let data_collection_name = if coll_names.len() == 1 {
+        coll_names[0].replace(['/', '\\'], "_")
+    } else {
+        sql_lookup_name.clone()
+    };
+    let out_dir = data_dir.join(data_collection_name);
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("Cannot create {}", out_dir.display()))?;
 
@@ -2709,6 +2778,7 @@ pub async fn export_collections_to_sql(
                         &mut counters,
                         &root_target_to_source,
                         &root_target_to_literal,
+                        Some(coll_name.as_str()),
                     );
                 }
 
@@ -2744,31 +2814,22 @@ pub async fn export_collections_to_sql(
         );
 
         flush_pending_rows_to_writers(&out_dir, &mut all_rows, &mut writers)?;
-
-        if let ExportWriteBackend::Gcs { bucket, prefix } = backend {
-            finish_writers(std::mem::take(&mut writers))?;
-            sync_alias_export_files(&sql_tables, &alias_for_table, &out_dir)?;
-
-            info!(
-                "-> export source [{} / {}] upload: {}.{} -> gs://{}/{}",
-                source_index + 1,
-                total_sources,
-                db_name,
-                coll_name,
-                bucket,
-                prefix.trim_matches('/'),
-            );
-            upload_export_files_to_gcs(&out_dir, db_name, &sql_lookup_name, bucket, prefix).await?;
-
-            if source_index + 1 < total_sources {
-                writers = reopen_writers_for_append(&sql_tables, &out_dir)?;
-            }
-        }
     }
 
     flush_pending_rows_to_writers(&out_dir, &mut all_rows, &mut writers)?;
     finish_writers(std::mem::take(&mut writers))?;
     sync_alias_export_files(&sql_tables, &alias_for_table, &out_dir)?;
+
+    if let ExportWriteBackend::Gcs { bucket, prefix } = backend {
+        info!(
+            "-> export output upload: {}.{} -> gs://{}/{}",
+            db_name,
+            sql_lookup_name,
+            bucket,
+            prefix.trim_matches('/'),
+        );
+        upload_export_files_to_gcs(&out_dir, db_name, &sql_lookup_name, bucket, prefix).await?;
+    }
 
     Ok(())
 }
@@ -2801,7 +2862,8 @@ mod tests {
     use super::{
         build_tree, build_tree_with_grouped_root, categorize_cloud_error_message, extract_rows,
         flattened_grouped_root_for_export, flush_chunk_buffers, gcs_object_key,
-        grouped_root_table_sources, unquote_sql_ident, CloudWriteErrorCategory,
+        grouped_root_table_sources, remove_uploaded_staged_file, unquote_sql_ident,
+        CloudWriteErrorCategory,
     };
     use crate::engine::analyzer::Analyzer;
     use crate::schema_diagram::parse_sql;
@@ -2837,8 +2899,34 @@ mod tests {
 
     #[test]
     fn gcs_object_key_keeps_grouped_export_layout() {
-        let key = gcs_object_key("team/prefix", "idm_prep", "events", "events.csv.gz");
-        assert_eq!(key, "team/prefix/data/idm_prep/events/events.csv.gz");
+        let key = gcs_object_key("team/prefix", "ciam_prep", "events", "events.csv.gz");
+        assert_eq!(key, "team/prefix/data/ciam_prep/events/events.csv.gz");
+    }
+
+    #[test]
+    fn staged_export_file_is_removed_after_successful_upload() {
+        let temp = tempfile::tempdir().expect("temp dir should be created");
+        let path = temp.path().join("events.csv.gz");
+        std::fs::write(&path, b"compressed data").expect("staged file should be created");
+
+        remove_uploaded_staged_file(&path, Ok(())).expect("successful upload should remove file");
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn staged_export_file_is_retained_after_upload_failure() {
+        let temp = tempfile::tempdir().expect("temp dir should be created");
+        let path = temp.path().join("events.csv.gz");
+        std::fs::write(&path, b"compressed data").expect("staged file should be created");
+
+        let result = remove_uploaded_staged_file(
+            &path,
+            Err::<(), _>(anyhow::anyhow!("upload failed")),
+        );
+
+        assert!(result.is_err());
+        assert!(path.exists());
     }
 
     #[test]
@@ -3359,7 +3447,7 @@ CREATE TABLE communities_available_localizations (
     fn export_map_object_child_table_emits_rows_per_entry() {
         let sql = r#"
 CREATE TABLE customers (
-    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    id UUID DEFAULT pg_catalog.gen_random_uuid() PRIMARY KEY,
     name TEXT NOT NULL
 );
 
@@ -3428,7 +3516,7 @@ CREATE TABLE tier_and_details (
     fn export_map_like_object_without_key_column_emits_rows_per_entry() {
         let sql = r#"
 CREATE TABLE customers (
-    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    id UUID DEFAULT pg_catalog.gen_random_uuid() PRIMARY KEY,
     name TEXT NOT NULL
 );
 
@@ -3489,7 +3577,7 @@ CREATE TABLE tier_and_details (
     fn export_container_object_without_payload_skips_empty_child_rows() {
         let sql = r#"
 CREATE TABLE companies (
-    id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+    id UUID DEFAULT pg_catalog.gen_random_uuid() PRIMARY KEY,
     name TEXT NOT NULL
 );
 
@@ -3837,6 +3925,107 @@ CREATE TABLE host (
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0][0].as_deref(), Some("10021707"));
         assert_eq!(rows[0][1].as_deref(), Some("{email,phone,reviews,kba}"));
+    }
+
+    #[test]
+    fn export_scalar_text_column_keeps_bson_array_as_json_text() {
+        let sql = r#"
+CREATE TABLE payload (
+    id BIGSERIAL PRIMARY KEY,
+    errors TEXT
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "errors": [
+                {
+                    "message": "Company already exists"
+                },
+                {
+                    "message": "Tax number is not coherent"
+                }
+            ]
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let rows = all_rows.get("payload").expect("root rows missing");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0][1].as_deref(),
+            Some(
+                "[{\"message\":\"Company already exists\"},{\"message\":\"Tax number is not coherent\"}]"
+            )
+        );
+    }
+
+    #[test]
+    fn export_payload_container_without_optional_errors_keeps_nested_company_rows() {
+        let sql = r#"
+CREATE TABLE events (
+    id UUID PRIMARY KEY
+);
+
+CREATE TABLE payload (
+    id BIGSERIAL PRIMARY KEY,
+    events_id UUID NOT NULL,
+    errors JSONB,
+    FOREIGN KEY (events_id) REFERENCES events (id) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE TABLE company (
+    id BIGSERIAL PRIMARY KEY,
+    payload_id BIGINT NOT NULL,
+    internalstatus VARCHAR(20),
+    legalname TEXT,
+    FOREIGN KEY (payload_id) REFERENCES payload (id) DEFERRABLE INITIALLY DEFERRED
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("675858a648b5bb4754315abb").unwrap(),
+            "payload": {
+                "company": {
+                    "internalStatus": "INACTIVE",
+                    "legalName": "SOC EQUIPEMENT PRODUITS INDUSTRIE CONST."
+                }
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        let payload_rows = all_rows.get("payload").expect("payload rows missing");
+        assert_eq!(payload_rows.len(), 1);
+
+        let company_rows = all_rows.get("company").expect("company rows missing");
+        assert_eq!(company_rows.len(), 1);
+        assert_eq!(company_rows[0][2].as_deref(), Some("INACTIVE"));
+        assert_eq!(
+            company_rows[0][3].as_deref(),
+            Some("SOC EQUIPEMENT PRODUITS INDUSTRIE CONST.")
+        );
     }
 
     #[test]

@@ -11,11 +11,9 @@ RUN apt-get update \
 
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir .cargo
-COPY .cargo/config.toml .cargo/config.toml
 COPY src ./src
 
-RUN --mount=type=secret,id=cargo_token,env=CARGO_REGISTRIES_ARTIFACTORY_TOKEN \
-    cargo build --release --bin mongo2pg
+RUN cargo build --release --bin mongo2pg
 
 FROM debian:bookworm-slim
 

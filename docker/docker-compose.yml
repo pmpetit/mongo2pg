@@ -1,7 +1,7 @@
 services:
   # --- POSTGRESQL ---
   postgres:
-    image: postgis/postgis:16-3.4-alpine
+    image: ${DOCKER_REGISTRY_PREFIX:-}postgis/postgis:16-3.4-alpine
     container_name: postgres_db
     environment:
       POSTGRES_USER: myuser
@@ -19,7 +19,7 @@ services:
 
   # --- MONGODB (Replica Set Setup) ---
   mongodb:
-    image: mongodb/mongodb-community-server
+    image: ${DOCKER_REGISTRY_PREFIX:-}mongodb/mongodb-community-server
     container_name: mongodb_db
     entrypoint: ["/bin/sh", "/usr/local/bin/mongodb-entrypoint.sh"]
     command:
@@ -47,40 +47,60 @@ services:
           "CMD-SHELL",
           'echo ''db.runCommand("ping").ok'' | mongosh ''mongodb://user:pass@localhost:27017/admin?authSource=admin'' --quiet',
         ]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
 
   # --- MONGO INIT (Automatically starts the replica set) ---
   mongodb-init:
-    image: mongodb/mongodb-community-server
+    image: ${DOCKER_REGISTRY_PREFIX:-}mongodb/mongodb-community-server
     container_name: mongodb_init
     depends_on:
       mongodb:
         condition: service_healthy
     entrypoint:
-      [
-        "mongosh",
-        "--host",
-        "mongodb:27017",
-        "-u",
-        "user",
-        "-p",
-        "pass",
-        "--authenticationDatabase",
-        "admin",
-        "--eval",
-        "try { rs.status(); } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongodb:27017'}]}); }",
-      ]
+      - /bin/bash
+      - -lc
+      - |
+        set -euo pipefail
+
+        for attempt in {1..60}; do
+          if mongosh \
+            --host mongodb:27017 \
+            -u user \
+            -p pass \
+            --authenticationDatabase admin \
+            --quiet \
+            --eval 'try { rs.status(); } catch (e) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongodb:27017"}]}); }'; then
+            if mongosh \
+              --host mongodb:27017 \
+              -u user \
+              -p pass \
+              --authenticationDatabase admin \
+              --quiet \
+              --eval 'db.hello().isWritablePrimary' | grep -q true; then
+              echo "MongoDB replica set primary is ready"
+              exit 0
+            fi
+          fi
+
+          echo "Waiting for MongoDB replica set primary (${attempt}/60)"
+          sleep 2
+        done
+
+        echo "MongoDB replica set did not become ready"
+        exit 1
 
   # --- MONGO SAMPLE DATA SEEDING ---
   mongodb-seed:
-    image: mongodb/mongodb-community-server
+    image: ${DOCKER_REGISTRY_PREFIX:-}mongodb/mongodb-community-server
     container_name: mongodb_seed
     user: root
     environment:
       MONGO_DATABASE: ${MONGO_DATABASE:-}
+    volumes:
+      - ../e2e_tests/data:/seed-data:ro
     depends_on:
       mongodb-init:
         condition: service_completed_successfully
@@ -98,26 +118,29 @@ services:
         done
         echo ' MongoDB primary is UP!'
 
-        # Install dependencies and run the seeding script
+        # Run the seeding script against the local fixture directory.
         echo 'Seeding MongoDB with sample data...'
-        apt-get update && \
-        apt-get install -y --no-install-recommends git ca-certificates && \
-        rm -rf /var/lib/apt/lists/* && \
-        rm -rf /tmp/mongodb-sample-dataset && \
-        git clone --depth 1 https://github.com/neelabalan/mongodb-sample-dataset /tmp/mongodb-sample-dataset && \
-        cd /tmp/mongodb-sample-dataset
+        seed_root="/seed-data"
+        if [ ! -d "$$seed_root" ]; then
+          echo "Seed root '$$seed_root' not found"
+          exit 1
+        fi
 
         if [ -n "$$MONGO_DATABASE" ]; then
-          if [ ! -d "$$MONGO_DATABASE" ]; then
+          if [ ! -d "$$seed_root/$$MONGO_DATABASE" ]; then
             echo "Dataset '$$MONGO_DATABASE' not found"
             echo "Available datasets:"
-            ls -1d */ | sed 's#/$$##'
+            find "$$seed_root" -mindepth 1 -maxdepth 1 -type d -name 'sample*' -printf '%f\n' | sort || true
             exit 1
           fi
-          db_dirs="$$MONGO_DATABASE"
+          db_dirs="$$seed_root/$$MONGO_DATABASE"
           echo "Seeding only dataset: $$MONGO_DATABASE"
         else
-          db_dirs=$$(find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n')
+          db_dirs=$$(find "$$seed_root" -mindepth 1 -maxdepth 1 -type d -name 'sample*' | sort)
+          if [ -z "$$db_dirs" ]; then
+            echo "No sample* datasets found under $$seed_root"
+            exit 1
+          fi
           echo "Seeding all datasets"
         fi
 
@@ -155,7 +178,7 @@ services:
 
   # --- MONGO SAMPLE DATA SEEDING (LOCAL e2e DATASET) ---
   mongodb-seed-e2e:
-    image: mongodb/mongodb-community-server
+    image: ${DOCKER_REGISTRY_PREFIX:-}mongodb/mongodb-community-server
     container_name: mongodb_seed_e2e
     user: root
     profiles: ["e2e-local-seed"]
@@ -229,7 +252,7 @@ services:
 
   # --- APACHE KAFKA (KRaft Mode - No Zookeeper) ---
   kafka:
-    image: confluentinc/cp-kafka:8.2.1
+    image: ${DOCKER_REGISTRY_PREFIX:-}confluentinc/cp-kafka:8.2.1
     container_name: kafka_broker
     ports:
       - "9092:9092"
@@ -265,7 +288,7 @@ services:
 
   # --- KAFKA TOPIC INIT (Ensure Schema Registry topic shape) ---
   kafka-topics-init:
-    image: confluentinc/cp-kafka:8.2.1
+    image: ${DOCKER_REGISTRY_PREFIX:-}confluentinc/cp-kafka:8.2.1
     container_name: kafka_topics_init
     depends_on:
       kafka:
@@ -283,7 +306,7 @@ services:
 
   # --- CONFLUENT SCHEMA REGISTRY ---
   schema-registry:
-    image: confluentinc/cp-schema-registry:8.2.1
+    image: ${DOCKER_REGISTRY_PREFIX:-}confluentinc/cp-schema-registry:8.2.1
     container_name: schema_registry
     ports:
       - "8081:8081"
@@ -334,7 +357,7 @@ services:
         condition: service_completed_successfully
 
   kafkaconnect-init:
-    image: curlimages/curl:8.8.0
+    image: ${DOCKER_REGISTRY_PREFIX:-}curlimages/curl:8.8.0
     container_name: kafka_connect_init
     depends_on:
       kafkaconnect:
@@ -367,7 +390,7 @@ services:
 
   # --- KAFKA UI ---
   kafkaui:
-    image: provectuslabs/kafka-ui:latest
+    image: ${DOCKER_REGISTRY_PREFIX:-}provectuslabs/kafka-ui:latest
     container_name: kafka_ui
     ports:
       - "8080:8080"

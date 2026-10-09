@@ -16,9 +16,9 @@ use crate::commands::shared::{
     import_table_name_from_csv_path, is_missing_postgis_control_file, is_supported_import_csv_path,
     pg_uri_with_database, preflight_existing_tables_error, quote_ident,
     resolve_local_project_root_from_config, sanitize_name, split_namespace_scope,
-    stage_export_metadata_from_gcs, stream_reader_to_copy, strip_postgis_extension_statement,
-    strip_psql_preamble, write_post_import_report,
-    write_post_import_report_for_configured_databases, ConfigOverrides,
+    stage_export_metadata_from_gcs_for_databases,
+    stream_reader_to_copy, strip_postgis_extension_statement,
+    strip_psql_preamble, write_post_import_report, ConfigOverrides,
 };
 use crate::db::pg::connect_client as connect_pg_client;
 use crate::export::{ensure_gcs_authentication, resolve_export_write_backend, ExportWriteBackend};
@@ -134,23 +134,13 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
 
     fn has_inferred_collections_for_database(project_root: &Path, db_name: &str) -> bool {
         let multi_db_dir = crate::commands::shared::multi_db_source_collections_dir(project_root, db_name);
-        if multi_db_dir.is_dir() && has_collection_json_files(&multi_db_dir) {
-            return true;
-        }
-
-        let flat_db_dir = project_root.join("source").join("collections").join(db_name);
-        if flat_db_dir.is_dir() && has_collection_json_files(&flat_db_dir) {
-            return true;
-        }
-
-        let legacy_collections_root = project_root.join("source").join("collections");
-        legacy_collections_root.is_dir() && has_collection_json_files(&legacy_collections_root)
+        multi_db_dir.is_dir() && has_collection_json_files(&multi_db_dir)
     }
 
     log_import_stage("start");
 
     let initial_conf = read_conf(&args.config)?;
-    if args.namespace.is_none() && initial_conf.namespace_databases.len() > 1 {
+    if args.namespace.is_none() && !initial_conf.namespace_databases.is_empty() {
         let mut failures: Vec<String> = Vec::new();
         let local_project_root = configured_project_root(&initial_conf);
         let is_local_backend = matches!(
@@ -228,18 +218,6 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
             ));
         }
 
-        // Build one combined post-import report with one tab per configured
-        // database after all grouped imports complete successfully.
-        let wrote_multi_db_report = write_post_import_report_for_configured_databases(
-            &args.config,
-            "",
-            true,
-        )
-        .await?;
-        if !wrote_multi_db_report {
-            write_post_import_report(&args.config, "", "", true).await?;
-        }
-
         return Ok(());
     }
 
@@ -269,7 +247,19 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
         })?;
     let (db_name, namespace_collection) = split_namespace_scope(&namespace);
     let target_database_name = c.target_database_name.as_deref().unwrap_or(db_name);
-    let requested_collection = args.collection.as_deref().or(namespace_collection);
+    let force_via_collection_alias = args.collection.as_deref() == Some("--force");
+    let force = args.force || force_via_collection_alias;
+    if force_via_collection_alias {
+        warn!(
+            "Detected legacy invocation `import ... -- --force`; treating it as `--force` and importing all collections."
+        );
+    }
+    let requested_collection = if force_via_collection_alias {
+        None
+    } else {
+        args.collection.as_deref()
+    }
+    .or(namespace_collection);
     let requested_collection_dir = requested_collection.map(sanitize_name);
 
     let storage_backend =
@@ -289,7 +279,7 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
 
     let mut tables_root = project_root.join("schema").join("tables");
     let multi_db_tables_dir =
-        crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
+        crate::commands::shared::multi_db_schema_tables_dir(&project_root, target_database_name);
     let mut tables_dir = if multi_db_tables_dir.is_dir() {
         multi_db_tables_dir
     } else if tables_root.join(db_name).is_dir() {
@@ -298,42 +288,23 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
         tables_root.clone()
     };
 
-    // Backward/forward compatibility: grouped to-pg may place SQL files under
-    // <tables_dir>/<target_db>/*.sql. If no SQL exists at the root, descend.
-    let has_sql_in_tables_root = std::fs::read_dir(&tables_dir)
-        .ok()
-        .into_iter()
-        .flat_map(|entries| entries.filter_map(|entry| entry.ok()))
-        .any(|entry| {
-            entry
-                .path()
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"))
-        });
-    if !has_sql_in_tables_root {
-        let nested_tables_dir = tables_dir.join(target_database_name);
-        if nested_tables_dir.is_dir() {
-            tables_dir = nested_tables_dir;
-        }
-    }
-
     if !tables_dir.is_dir() {
         if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
             log_import_stage("gcs_stage_metadata_begin");
-            if let Some(stage) = stage_export_metadata_from_gcs(
+            if let Some(stage) = stage_export_metadata_from_gcs_for_databases(
                 bucket,
                 prefix,
                 c.cluster_name.as_deref(),
                 &c.project_dir,
                 db_name,
+                target_database_name,
             )
             .await?
             {
                 project_root = stage.path().to_path_buf();
                 tables_root = project_root.join("schema").join("tables");
-                tables_dir = if tables_root.join(db_name).is_dir() {
-                    tables_root.join(db_name)
+                tables_dir = if tables_root.join(target_database_name).is_dir() {
+                    tables_root.join(target_database_name)
                 } else {
                     tables_root.clone()
                 };
@@ -370,16 +341,6 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
         data_root.clone()
     };
 
-    if !data_db_dir.is_dir() {
-        let nested_multi_db_data_dir = crate::commands::shared::multi_db_data_dir(&project_root, db_name)
-            .join(db_name);
-        let flat_data_dir = data_root.join(db_name);
-        if nested_multi_db_data_dir.is_dir() {
-            data_db_dir = nested_multi_db_data_dir;
-        } else if flat_data_dir.is_dir() {
-            data_db_dir = flat_data_dir;
-        }
-    }
     let mut import_data_stage: Option<tempfile::TempDir> = None;
     log_import_stage("config_resolved");
 
@@ -565,6 +526,7 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
     let mut allowed_table_names: HashSet<String> = HashSet::new();
     let mut table_columns_by_name: HashMap<String, Vec<String>> = HashMap::new();
     let mut preflight_existing_tables: Vec<(String, String)> = Vec::new();
+    let mut ddl_files_with_existing_tables: HashSet<PathBuf> = HashSet::new();
 
     // if let Some(schema_name) = target_schema.as_deref() {
     //     ensure_pg_schema(&pg_client, schema_name).await?;
@@ -597,6 +559,9 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
             })?;
             if exists.is_some() {
                 preflight_existing_tables.push((file_schema.clone(), table.name.clone()));
+                if force {
+                    ddl_files_with_existing_tables.insert(sql_path.clone());
+                }
             }
             allowed_table_names.insert(table.name.clone());
             table_columns_by_name.insert(
@@ -610,14 +575,29 @@ pub async fn run_import(args: ImportArgs) -> Result<()> {
         }
     }
 
-    if !preflight_existing_tables.is_empty() {
+    if !force && !preflight_existing_tables.is_empty() {
         return Err(preflight_existing_tables_error(
             target_database_name,
             &preflight_existing_tables,
         ));
     }
 
+    if force && !ddl_files_with_existing_tables.is_empty() {
+        warn!(
+            "--force enabled: reusing existing destination tables and skipping DDL execution for {} file(s)",
+            ddl_files_with_existing_tables.len()
+        );
+    }
+
     for sql_path in &sql_files {
+        if force && ddl_files_with_existing_tables.contains(sql_path) {
+            info!(
+                "Reusing existing PostgreSQL objects from {} (--force): skipped DDL execution",
+                sql_path.display()
+            );
+            continue;
+        }
+
         let sql = std::fs::read_to_string(sql_path)
             .with_context(|| format!("Failed to read {}", sql_path.display()))?;
         let executable_sql = strip_psql_preamble(&sql);

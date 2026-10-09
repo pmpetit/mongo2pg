@@ -1,0 +1,50 @@
+---
+name: Provide Env Vars
+
+on:
+    workflow_call:
+        inputs:
+            environment:
+                description: The environment to load variables for
+                required: false
+                default: ""
+                type: string
+        outputs:
+            IMAGE_FOLDER:
+                value: ${{ jobs.load-env-vars.outputs.IMAGE_FOLDER }}
+            IMAGE_NAME:
+                value: ${{ jobs.load-env-vars.outputs.IMAGE_NAME }}
+            IMAGE_REPOSITORY:
+                value: ${{ jobs.load-env-vars.outputs.IMAGE_REPOSITORY }}
+
+jobs:
+    load-env-vars:
+        runs-on: self-hosted
+        env:
+            ENV: ${{ inputs.environment }}
+        outputs:
+            IMAGE_FOLDER: ${{ steps.load_output.outputs.IMAGE_FOLDER }}
+            IMAGE_NAME: ${{ steps.load_output.outputs.IMAGE_NAME }}
+            IMAGE_REPOSITORY: ${{ steps.load_output.outputs.IMAGE_REPOSITORY }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+
+            - name: Check inputs
+              run: |
+                  exit_code=0
+                  if [[ -n "${ENV}" ]] && [[ ! "${ENV}" =~ ^(production|staging)$ ]]; then
+                    echo "Environment input must be empty or one of production/staging."
+                    exit_code=$((exit_code+2))
+                  fi
+                  exit ${exit_code}
+
+            - name: Load environment variables
+              id: load_output
+              run: |
+                  cat .github/environment/global.env >> "${GITHUB_OUTPUT}"
+                                    printf '\n' >> "${GITHUB_OUTPUT}"
+                  if [[ -n "${ENV}" ]]; then
+                    cat ".github/environment/${ENV}.env" >> "${GITHUB_OUTPUT}"
+                                        printf '\n' >> "${GITHUB_OUTPUT}"
+                  fi

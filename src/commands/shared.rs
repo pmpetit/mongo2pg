@@ -15,7 +15,7 @@ use bytes::Bytes;
 use futures::SinkExt;
 use google_cloud_storage::client::{Storage, StorageControl};
 use indexmap::IndexMap;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::AsyncReadExt;
@@ -29,14 +29,14 @@ use crate::export::{
     ExportWriteBackend, DEFAULT_EXPORT_CHUNK_ROWS,
 };
 use crate::report::{
-    cluster_from_uri, render_post_import_html, render_post_import_multi_db_html,
-    PostImportCollectionRow, PostImportCountDiffRow, PostImportMd5Column, PostImportMd5MismatchRow,
-    PostImportMd5Summary, PostImportNode, PostImportSnapshotSkipSummary, PostImportTableRow,
+    cluster_from_uri, render_post_import_html, PostImportCollectionRow, PostImportCountDiffRow,
+    PostImportMd5Column, PostImportMd5MismatchRow, PostImportMd5Summary, PostImportNode,
+    PostImportSnapshotSkipSummary, PostImportTableRow,
 };
 use crate::schema_diagram::{parse_sql, Table};
 use crate::util::{
     configured_project_root, connection_failed_context, is_pg_reserved, read_conf,
-    resolve_target_mapping_for_namespace_index, should_infer_collection,
+    resolve_target_mapping_for_namespace_index,
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -86,6 +86,7 @@ pub struct ConfigOverrides {
     pub max_time_ms: Option<u64>,
     pub chunk_size: Option<u64>,
     pub auth_retry_max: Option<u32>,
+    pub infer_mode: Option<String>,
     pub jsonb: Option<bool>,
     pub target_database_name: Option<String>,
     pub target_schema_name: Option<String>,
@@ -127,6 +128,7 @@ pub fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> 
         || overrides.max_time_ms.is_some()
         || overrides.chunk_size.is_some()
         || overrides.auth_retry_max.is_some()
+        || overrides.infer_mode.is_some()
         || overrides.jsonb.is_some()
         || overrides.target_database_name.is_some()
         || overrides.target_schema_name.is_some()
@@ -174,6 +176,9 @@ pub fn apply_config_overrides(conf_path: &Path, overrides: &ConfigOverrides) -> 
         }
         if let Some(v) = overrides.auth_retry_max {
             source.insert("auth_retry_max".to_owned(), TomlValue::Integer(v as i64));
+        }
+        if let Some(v) = &overrides.infer_mode {
+            source.insert("infer_mode".to_owned(), TomlValue::String(v.clone()));
         }
         if let Some(v) = overrides.jsonb {
             source.insert("jsonb".to_owned(), TomlValue::Boolean(v));
@@ -600,7 +605,7 @@ pub fn render_ddl_from_mapping_tables_with_owner(
                     rendered_sql_type(&column.sql_type)
                 );
                 if column.primary_key && column.sql_type.eq_ignore_ascii_case("uuid") {
-                    line.push_str(" DEFAULT public.gen_random_uuid()");
+                    line.push_str(" DEFAULT pg_catalog.gen_random_uuid()");
                 }
                 if primary_keys.len() == 1 && column.primary_key {
                     line.push_str(" PRIMARY KEY");
@@ -664,7 +669,7 @@ pub fn render_ddl_from_mapping_tables_with_owner(
         }
     }
 
-    let needs_pgcrypto = ddl_body.contains("public.gen_random_uuid()");
+    let needs_pgcrypto = ddl_body.contains("pg_catalog.gen_random_uuid()");
     let needs_postgis = ddl_body.to_ascii_lowercase().contains("geometry(");
 
     let mut ddl = String::new();
@@ -836,31 +841,31 @@ pub fn resolve_collections_dir(project_root: &Path, db_name: &str) -> PathBuf {
     }
 }
 
-/// Root directory for one database's generated artifacts when a project is
-/// configured with more than one database (`[source].namespace` array with
-/// 2+ entries). `data/`, `schema/`, and `source/` live below this directory;
-/// `config/` and `reports/` remain directly under `project_root`.
-///
-/// Not used for single-database projects, which keep the flat
-/// `project_root/{data,schema,source}` layout for backward compatibility.
+/// Root directory for database-scoped generated artifacts. `data/`,
+/// `schema/`, and `source/` use canonical project-root layouts; `config/`
+/// and `reports/` remain directly under `project_root`.
 pub fn multi_db_database_root(project_root: &Path, db_name: &str) -> PathBuf {
     project_root.join(sanitize_name(db_name))
 }
 
 pub fn multi_db_source_collections_dir(project_root: &Path, db_name: &str) -> PathBuf {
-    multi_db_database_root(project_root, db_name)
+    project_root
         .join("source")
         .join("collections")
+        .join(sanitize_name(db_name))
 }
 
 pub fn multi_db_schema_tables_dir(project_root: &Path, db_name: &str) -> PathBuf {
-    multi_db_database_root(project_root, db_name)
+    project_root
         .join("schema")
         .join("tables")
+        .join(sanitize_name(db_name))
 }
 
 pub fn multi_db_data_dir(project_root: &Path, db_name: &str) -> PathBuf {
-    multi_db_database_root(project_root, db_name).join("data")
+    project_root
+        .join("data")
+        .join(sanitize_name(db_name))
 }
 
 pub fn resolve_local_project_root_from_config(
@@ -1178,6 +1183,25 @@ pub async fn stage_export_metadata_from_gcs(
     project_dir: &str,
     db_name: &str,
 ) -> Result<Option<tempfile::TempDir>> {
+    stage_export_metadata_from_gcs_for_databases(
+        bucket,
+        prefix,
+        cluster_name,
+        project_dir,
+        db_name,
+        db_name,
+    )
+    .await
+}
+
+pub async fn stage_export_metadata_from_gcs_for_databases(
+    bucket: &str,
+    prefix: &str,
+    cluster_name: Option<&str>,
+    project_dir: &str,
+    source_db_name: &str,
+    target_db_name: &str,
+) -> Result<Option<tempfile::TempDir>> {
     ensure_gcs_authentication().await?;
 
     let stage = tempfile::Builder::new()
@@ -1185,7 +1209,11 @@ pub async fn stage_export_metadata_from_gcs(
         .tempdir()
         .context("Cannot create temporary export metadata staging directory")?;
 
-    let staged_tables_dir = stage.path().join("schema").join("tables").join(db_name);
+    let staged_tables_dir = stage
+        .path()
+        .join("schema")
+        .join("tables")
+        .join(target_db_name);
     std::fs::create_dir_all(&staged_tables_dir).with_context(|| {
         format!(
             "Cannot create staged schema directory {}",
@@ -1198,7 +1226,7 @@ pub async fn stage_export_metadata_from_gcs(
         prefix,
         cluster_name,
         project_dir,
-        &format!("schema/tables/{db_name}"),
+        &format!("schema/tables/{target_db_name}"),
     ) {
         let count = download_gcs_prefix_to_local_dir(bucket, &candidate, &staged_tables_dir)
             .await
@@ -1234,15 +1262,15 @@ pub async fn stage_export_metadata_from_gcs(
     })?;
 
     let collection_candidates = [
-        format!("source/collections/{db_name}"),
+        format!("source/collections/{source_db_name}"),
         "source/collections".to_owned(),
     ];
     for subdir in collection_candidates {
         for candidate in
             gcs_prefix_candidates_for_project_subdir(prefix, cluster_name, project_dir, &subdir)
         {
-            let target_dir = if subdir.ends_with(&format!("/{db_name}")) {
-                staged_collections_root.join(db_name)
+            let target_dir = if subdir.ends_with(&format!("/{source_db_name}")) {
+                staged_collections_root.join(source_db_name)
             } else {
                 staged_collections_root.clone()
             };
@@ -1950,130 +1978,6 @@ pub fn should_fail_post_import_on_warnings(warning_count: usize) -> bool {
     warning_count > 0
 }
 
-/// Writes one combined `--post-import` report with one tab per database, for
-/// configurations where `[source].namespace` resolves to more than one
-/// database. Returns `Ok(false)` (without writing anything) when the
-/// configuration resolves to a single database, so callers can fall back to
-/// [`write_post_import_report`].
-pub async fn write_post_import_report_for_configured_databases(
-    conf: &Path,
-    source_uri_override: &str,
-    include_md5: bool,
-) -> Result<bool> {
-    let c = read_conf(conf)?;
-    if c.namespace_databases.len() <= 1 {
-        return Ok(false);
-    }
-
-    let storage_backend =
-        resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
-    let metadata_root = match &storage_backend {
-        ExportWriteBackend::LocalFs => configured_project_root(&c),
-        ExportWriteBackend::Gcs { .. } => resolve_local_project_root_from_config(conf, &c),
-    };
-    let reports_dir = resolve_local_project_root_from_config(conf, &c).join("reports");
-    std::fs::create_dir_all(&reports_dir)
-        .with_context(|| format!("Can't create reports dir {}", reports_dir.display()))?;
-
-    let source_uri = if source_uri_override.is_empty() {
-        c.source_uri
-            .as_deref()
-            .ok_or_else(|| anyhow!("SOURCE_URI not found in the config file"))?
-            .to_owned()
-    } else {
-        source_uri_override.to_owned()
-    };
-    let target_uri = c
-        .target_uri
-        .as_deref()
-        .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
-    let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
-    let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
-
-    let mut all_rows: Vec<(String, Vec<PostImportCollectionRow>)> = Vec::new();
-    let mut warning_entries: Vec<String> = Vec::new();
-
-    for (idx, db_name) in c.namespace_databases.iter().enumerate() {
-        let collections_dir = multi_db_source_collections_dir(&metadata_root, db_name);
-        let schema_tables_root = multi_db_schema_tables_dir(&metadata_root, db_name);
-        if !collections_dir.is_dir() {
-            warn!(
-                "Skipping post-import report for database '{db_name}': no source collections found at {}",
-                collections_dir.display()
-            );
-            continue;
-        }
-
-        let (target_db_name, _) = resolve_target_mapping_for_namespace_index(&c, idx, db_name);
-        let target_uri_for_db = pg_uri_with_database(target_uri, &target_db_name);
-
-        match build_post_import_rows(
-            conf,
-            &source_uri,
-            &target_uri_for_db,
-            db_name,
-            &conf_include,
-            &conf_exclude,
-            &reports_dir,
-            &collections_dir,
-            &schema_tables_root,
-            include_md5,
-        )
-        .await
-        {
-            Ok(rows) => {
-                warning_entries.extend(summarize_post_import_warning_entries(&rows));
-                all_rows.push((db_name.clone(), rows));
-            }
-            Err(e) => warn!("post-import row build failed for database '{db_name}': {e:#}"),
-        }
-    }
-
-    let entries: Vec<(&str, &[PostImportCollectionRow])> = all_rows
-        .iter()
-        .map(|(name, rows)| (name.as_str(), rows.as_slice()))
-        .collect();
-
-    let first_db_name = c
-        .namespace_databases
-        .first()
-        .map(String::as_str)
-        .unwrap_or("postgres");
-    let (target_db_for_label, _) = resolve_target_mapping_for_namespace_index(&c, 0, first_db_name);
-    let target_uri_for_cluster_label = pg_uri_with_database(target_uri, &target_db_for_label);
-    let html = render_post_import_multi_db_html(
-        &entries,
-        &cluster_from_uri(&source_uri),
-        &cluster_from_uri(&target_uri_for_cluster_label),
-    );
-    let output_path = reports_dir.join("post_report.html");
-    write_file_atomically(&output_path, &html)
-        .with_context(|| format!("Failed to write {}", output_path.display()))?;
-    info!("Post-import report written to {}", output_path.display());
-
-    if should_fail_post_import_on_warnings(warning_entries.len()) {
-        let preview = warning_entries
-            .iter()
-            .take(10)
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(", ");
-        let suffix = if warning_entries.len() > 10 {
-            format!(", ... (+{} more)", warning_entries.len() - 10)
-        } else {
-            String::new()
-        };
-        return Err(anyhow!(
-            "post-import report contains validation warnings in {} node(s): {}{}",
-            warning_entries.len(),
-            preview,
-            suffix
-        ));
-    }
-
-    Ok(true)
-}
-
 pub async fn write_post_import_report(
     conf: &Path,
     namespace_override: &str,
@@ -2095,10 +1999,14 @@ pub async fn write_post_import_report(
         let bucket_resource = format!("projects/_/buckets/{bucket}");
 
         let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
+        let file_name = output_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("post_report.html");
         let object_key = if effective_prefix.is_empty() {
-            "reports/post_report.html".to_owned()
+            format!("reports/{file_name}")
         } else {
-            format!("{effective_prefix}/reports/post_report.html")
+            format!("{effective_prefix}/reports/{file_name}")
         };
 
         let bytes = tokio::fs::read(output_path).await.with_context(|| {
@@ -2149,8 +2057,8 @@ pub async fn write_post_import_report(
 
     let outcome: Result<()> = async {
         let c = read_conf(conf)?;
-        let conf_include: Vec<String> = c.include.iter().map(|name| sanitize_name(name)).collect();
-        let conf_exclude: Vec<String> = c.exclude.iter().map(|name| sanitize_name(name)).collect();
+        let conf_include = c.include.clone();
+        let conf_exclude = c.exclude.clone();
         let storage_backend =
             resolve_export_write_backend(&c.base_dir).unwrap_or(ExportWriteBackend::LocalFs);
         let mut metadata_root = match &storage_backend {
@@ -2225,8 +2133,23 @@ pub async fn write_post_import_report(
             .target_uri
             .as_deref()
             .ok_or_else(|| anyhow!("TARGET_URI not found in the config file"))?;
-        let target_database_name = c.target_database_name.as_deref();
         let (db_name, _) = split_namespace_scope(&namespace);
+        let target_database_name = if c.target_database_name.is_some()
+            || !c.target_database_names.is_empty()
+        {
+            let namespace_index = c
+                .namespace_databases
+                .iter()
+                .position(|configured_db| configured_db == db_name)
+                .unwrap_or(0);
+            Some(
+                resolve_target_mapping_for_namespace_index(&c, namespace_index, db_name).0,
+            )
+        } else {
+            None
+        };
+        let target_database_name = target_database_name.as_deref();
+        let schema_database_name = target_database_name.unwrap_or(db_name);
 
         if include_md5 {
             log_post_import_trace(
@@ -2238,21 +2161,28 @@ pub async fn write_post_import_report(
         }
 
         let mut metadata_stage: Option<tempfile::TempDir> = None;
-        let mut schema_tables_root = metadata_root.join("schema").join("tables");
+        let mut schema_tables_root = metadata_root
+            .join("schema")
+            .join("tables")
+            .join(schema_database_name);
 
-        if !(schema_tables_root.join(db_name).is_dir() || schema_tables_root.is_dir()) {
+        if !schema_tables_root.is_dir() {
             if let ExportWriteBackend::Gcs { bucket, prefix } = &storage_backend {
-                if let Some(stage) = stage_export_metadata_from_gcs(
+                if let Some(stage) = stage_export_metadata_from_gcs_for_databases(
                     bucket,
                     prefix,
                     c.cluster_name.as_deref(),
                     &c.project_dir,
                     db_name,
+                    schema_database_name,
                 )
                 .await?
                 {
                     metadata_root = stage.path().to_path_buf();
-                    schema_tables_root = metadata_root.join("schema").join("tables");
+                    schema_tables_root = metadata_root
+                        .join("schema")
+                        .join("tables")
+                        .join(schema_database_name);
                     info!(
                         "post-import report metadata staged from GCS into temporary directory {}",
                         metadata_root.display()
@@ -2268,7 +2198,8 @@ pub async fn write_post_import_report(
             }
         }
 
-        let multi_db_schema_tables_root = multi_db_schema_tables_dir(&metadata_root, db_name);
+        let multi_db_schema_tables_root =
+            multi_db_schema_tables_dir(&metadata_root, schema_database_name);
         if multi_db_schema_tables_root.is_dir() {
             schema_tables_root = multi_db_schema_tables_root;
         }
@@ -2279,7 +2210,10 @@ pub async fn write_post_import_report(
         } else {
             resolve_collections_dir(&metadata_root, db_name)
         };
-        let output_path = reports_dir.join("post_report.html");
+        let report_file_name = target_database_name
+            .map(|name| format!("post_report_{}.html", sanitize_name(name)))
+            .unwrap_or_else(|| "post_report.html".to_owned());
+        let output_path = reports_dir.join(report_file_name);
 
         log_post_import_trace(
             "rows_build_begin",
@@ -2293,6 +2227,7 @@ pub async fn write_post_import_report(
             &target_database_name
                 .map(|db_name| pg_uri_with_database(target_uri, db_name))
                 .unwrap_or_else(|| target_uri.to_owned()),
+            target_database_name,
             &namespace,
             &conf_include,
             &conf_exclude,
@@ -2411,6 +2346,9 @@ pub async fn write_post_import_report(
             Ok(())
         }
         Err(err) => {
+            error!(
+                "❌ post-import report failed for namespace={trace_namespace}: {err:#}"
+            );
             log_post_import_trace(
                 "failure",
                 &trace_namespace,
@@ -2590,6 +2528,7 @@ pub async fn build_post_import_rows(
     config_path: &Path,
     source_uri: &str,
     target_uri: &str,
+    target_db_name: Option<&str>,
     namespace: &str,
     include: &[String],
     exclude: &[String],
@@ -3063,6 +3002,74 @@ pub async fn build_post_import_rows(
             .map(str::to_owned)
     }
 
+    fn grouped_key_literals_by_table(collection_dir: &Path) -> HashMap<String, String> {
+        let Ok(entries) = std::fs::read_dir(collection_dir) else {
+            return HashMap::new();
+        };
+
+        let mut literals = HashMap::new();
+        for entry in entries.filter_map(|entry| entry.ok()) {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !name.starts_with("mapping_") || !name.ends_with(".yaml") {
+                continue;
+            }
+
+            let Ok(content) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(mapping) = serde_yaml::from_str::<CollectionMapping>(&content) else {
+                continue;
+            };
+
+            let key_literal = mapping
+                .pg_mapping
+                .columns
+                .iter()
+                .find(|column| column.target_field.eq_ignore_ascii_case("_key"))
+                .and_then(|column| column.literal_value.as_deref())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned);
+
+            if let Some(key_literal) = key_literal {
+                literals.insert(mapping.pg_mapping.table_name.to_ascii_lowercase(), key_literal);
+            }
+        }
+
+        literals
+    }
+
+    fn collect_sql_paths_recursive(root: &Path) -> Vec<PathBuf> {
+        let mut pending_dirs = vec![root.to_path_buf()];
+        let mut sql_paths = Vec::new();
+        while let Some(dir) = pending_dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.filter_map(|entry| entry.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending_dirs.push(path);
+                    continue;
+                }
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("sql"))
+                {
+                    sql_paths.push(path);
+                }
+            }
+        }
+        sql_paths
+    }
+
     let (db_name, only_collection) = split_namespace_scope(namespace);
 
     let mongo_client = Client::with_uri_str(source_uri).await.with_context(|| {
@@ -3079,17 +3086,37 @@ pub async fn build_post_import_rows(
         )
     })?;
     collection_names.retain(|name| !name.starts_with("system."));
-    collection_names.retain(|name| should_infer_collection(&sanitize_name(name), include, exclude));
+    collection_names.retain(|name| {
+        crate::util::should_infer_collection_for_database(
+            namespace,
+            name,
+            include,
+            exclude,
+        )
+    });
     if let Some(coll_name) = only_collection {
         collection_names.retain(|name| name == coll_name);
     }
     collection_names.sort();
 
-    let ddl_dir = if schema_tables_root.join(db_name).is_dir() {
-        schema_tables_root.join(db_name)
-    } else {
-        schema_tables_root.to_path_buf()
-    };
+    let ddl_dir = target_db_name
+        .filter(|name| !name.trim().is_empty())
+        .map(|name| schema_tables_root.join(name))
+        .filter(|path| path.is_dir())
+        .or_else(|| {
+            let source_db_dir = schema_tables_root.join(db_name);
+            source_db_dir.is_dir().then_some(source_db_dir)
+        })
+        .unwrap_or_else(|| schema_tables_root.to_path_buf());
+    let mut sql_path_index: HashMap<String, PathBuf> = HashMap::new();
+    for path in collect_sql_paths_recursive(schema_tables_root) {
+        let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        sql_path_index
+            .entry(stem.to_ascii_lowercase())
+            .or_insert(path);
+    }
     let snapshot_skip_summaries = load_snapshot_skip_summaries_for_post_report(reports_dir);
     let collections_dir_for_lookup = if collections_root.join(db_name).is_dir() {
         collections_root.join(db_name)
@@ -3110,15 +3137,18 @@ pub async fn build_post_import_rows(
             })?;
 
         let safe_coll_name = coll_name.replace('/', "_");
-        let mut sql_path = ddl_dir.join(format!("{}.sql", sanitize_name(&coll_name)));
+        let direct_lookup = sanitize_name(&coll_name);
+        let mut sql_path = ddl_dir.join(format!("{}.sql", direct_lookup));
         let mut schema_path = collections_dir_for_lookup
             .join(&safe_coll_name)
             .join(format!("{}.json", safe_coll_name));
+        let mut sql_lookup_candidates = vec![direct_lookup.clone()];
 
         if !sql_path.is_file() || !schema_path.is_file() {
             if let Some(grouped_lookup) =
                 resolve_grouped_sql_lookup_name(&collections_dir_for_lookup, &coll_name)
             {
+                sql_lookup_candidates.push(grouped_lookup.clone());
                 if !sql_path.is_file() {
                     let grouped_sql_path = ddl_dir.join(format!("{}.sql", grouped_lookup));
                     if grouped_sql_path.is_file() {
@@ -3139,6 +3169,7 @@ pub async fn build_post_import_rows(
             if !sql_path.is_file() || !schema_path.is_file() {
                 if let Some((group_prefix, _)) = coll_name.split_once('_') {
                     let safe_group_prefix = group_prefix.replace('/', "_");
+                    sql_lookup_candidates.push(safe_group_prefix.clone());
 
                     if !sql_path.is_file() {
                         let grouped_sql_path = ddl_dir.join(format!("{}.sql", safe_group_prefix));
@@ -3157,6 +3188,17 @@ pub async fn build_post_import_rows(
                     }
                 }
             }
+
+            if !sql_path.is_file() {
+                for candidate in sql_lookup_candidates {
+                    if let Some(indexed_path) =
+                        sql_path_index.get(&candidate.to_ascii_lowercase())
+                    {
+                        sql_path = indexed_path.clone();
+                        break;
+                    }
+                }
+            }
         }
 
         let schema: CollectionSchema = serde_json::from_str(
@@ -3164,6 +3206,10 @@ pub async fn build_post_import_rows(
                 .with_context(|| format!("Failed to read {}", schema_path.display()))?,
         )
         .with_context(|| format!("Failed to parse {}", schema_path.display()))?;
+        let grouped_key_literals = schema_path
+            .parent()
+            .map(grouped_key_literals_by_table)
+            .unwrap_or_default();
 
         let root = if sql_path.is_file() {
             let sql = std::fs::read_to_string(&sql_path)
@@ -3182,21 +3228,51 @@ pub async fn build_post_import_rows(
                     .iter()
                     .any(|column| column.name.eq_ignore_ascii_case("_key"))
                 {
-                    grouped_table_key_filter_value(&coll_name, &table.name)
+                    let mut candidates = Vec::<String>::new();
+                    if let Some(literal) = grouped_key_literals
+                        .get(&table.name.to_ascii_lowercase())
+                        .cloned()
+                    {
+                        candidates.push(literal);
+                    }
+                    if let Some(suffix) = grouped_table_key_filter_value(&coll_name, &table.name) {
+                        candidates.push(suffix);
+                    }
+                    candidates.push(coll_name.clone());
+                    candidates.retain(|value| !value.trim().is_empty());
+                    candidates.sort();
+                    candidates.dedup();
+                    Some(candidates)
                 } else {
                     None
                 };
-                let count_sql = if let Some(grouped_key) = grouped_key_filter {
-                    format!(
-                        "SELECT COUNT(*)::BIGINT FROM {qualified_name} WHERE {} = {}",
-                        quote_ident("_key"),
-                        quote_sql_literal(&grouped_key)
-                    )
+
+                let row_count = if let Some(grouped_key_candidates) = grouped_key_filter {
+                    let mut selected_row_count = None;
+                    for grouped_key in grouped_key_candidates {
+                        let count_sql = format!(
+                            "SELECT COUNT(*)::BIGINT FROM {qualified_name} WHERE {} = {}",
+                            quote_ident("_key"),
+                            quote_sql_literal(&grouped_key)
+                        );
+                        let candidate_count =
+                            query_pg_count_with_retry(target_uri, &qualified_name, &count_sql).await?;
+
+                        if candidate_count > 0 {
+                            selected_row_count = Some(candidate_count);
+                            break;
+                        }
+
+                        if selected_row_count.is_none() {
+                            selected_row_count = Some(candidate_count);
+                        }
+                    }
+
+                    selected_row_count.unwrap_or(0)
                 } else {
-                    format!("SELECT COUNT(*)::BIGINT FROM {qualified_name}")
+                    let count_sql = format!("SELECT COUNT(*)::BIGINT FROM {qualified_name}");
+                    query_pg_count_with_retry(target_uri, &qualified_name, &count_sql).await?
                 };
-                let row_count =
-                    query_pg_count_with_retry(target_uri, &qualified_name, &count_sql).await?;
                 table_rows.insert(
                     table.name.clone(),
                     PostImportTableRow {
@@ -3259,6 +3335,7 @@ pub async fn build_post_import_rows(
                                         .into_iter()
                                         .map(|mismatch| PostImportMd5MismatchRow {
                                             row_index: mismatch.row_index,
+                                            mongo_object_id: mismatch.mongo_object_id,
                                             mongo_values: mismatch.mongo_values,
                                             pg_values: mismatch.pg_values,
                                         })
@@ -3391,6 +3468,7 @@ pub async fn build_post_import_rows(
                                 .iter()
                                 .map(|mismatch| PostImportCountDiffRow {
                                     row_index: mismatch.row_index,
+                                    mongo_object_id: mismatch.mongo_object_id.clone(),
                                     mongo_values: mismatch.mongo_values.clone(),
                                     pg_values: mismatch.pg_values.clone(),
                                 })
@@ -3421,6 +3499,7 @@ pub async fn build_post_import_rows(
                                         .into_iter()
                                         .map(|mismatch| PostImportCountDiffRow {
                                             row_index: mismatch.row_index,
+                                            mongo_object_id: mismatch.mongo_object_id,
                                             mongo_values: mismatch.mongo_values,
                                             pg_values: mismatch.pg_values,
                                         })

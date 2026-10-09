@@ -17,14 +17,17 @@ use crate::commands::shared::{
     normalize_pg_identifier, quote_ident, render_ddl_from_mapping_tables,
     render_ddl_from_mapping_tables_with_owner, resolve_local_project_root_from_config,
     resolve_preamble_database_name, resolve_target_database_name_from_conf,
-    stage_source_collections_from_gcs, CollectionMapping, ConfigOverrides, DdlColumnMapping,
-    DdlTableMapping, MappingColumn,
+    sanitize_name, stage_source_collections_from_gcs, CollectionMapping, ConfigOverrides,
+    DdlColumnMapping, DdlTableMapping, MappingColumn,
 };
 use crate::db::pg::connect_client as connect_pg_client;
 use crate::engine::analyzer::CollectionSchema;
 use crate::engine::ddl::schema_to_ddl_with_timestamp_fields_and_owner;
 use crate::export::{resolve_export_write_backend, ExportWriteBackend};
-use crate::util::{connection_failed_context, read_conf, resolve_target_mapping_for_namespace_index};
+use crate::util::{
+    connection_failed_context, read_conf, resolve_target_mapping_for_namespace_index,
+    should_infer_collection_for_database,
+};
 
 pub struct CollectionGroup {
     /// Shared table name = prefix (e.g. "events" for events_lmfr / events_lmza).
@@ -448,9 +451,9 @@ fn collect_single_collection_json_file(
     let flat = collections_dir.join(name).join(format!("{name}.json"));
     if flat.exists() {
         let rel_sql = if let Some(db_name) = config_db_name {
-            PathBuf::from(db_name).join(format!("{}.sql", name.to_lowercase()))
+            PathBuf::from(db_name).join(format!("{}.sql", sanitize_name(name)))
         } else {
-            PathBuf::from(format!("{}.sql", name.to_lowercase()))
+            PathBuf::from(format!("{}.sql", sanitize_name(name)))
         };
         return Ok(vec![(rel_sql, flat)]);
     }
@@ -461,7 +464,7 @@ fn collect_single_collection_json_file(
             format!("{coll}.json")
         });
         return Ok(vec![(
-            PathBuf::from(format!("{}.sql", name.to_lowercase())),
+            PathBuf::from(format!("{}.sql", sanitize_name(name))),
             json,
         )]);
     }
@@ -491,9 +494,9 @@ fn collect_all_collection_json_files(
 
         if direct_json.exists() {
             let rel_sql = if let Some(db_name) = config_db_name {
-                PathBuf::from(db_name).join(format!("{}.sql", top_name.to_lowercase()))
+                PathBuf::from(db_name).join(format!("{}.sql", sanitize_name(&top_name)))
             } else {
-                PathBuf::from(format!("{}.sql", top_name.to_lowercase()))
+                PathBuf::from(format!("{}.sql", sanitize_name(&top_name)))
             };
             entries.push((rel_sql, direct_json));
             continue;
@@ -510,8 +513,8 @@ fn collect_all_collection_json_files(
                     Some((
                         PathBuf::from(format!(
                             "{}/{}.sql",
-                            top_name.to_lowercase(),
-                            coll_name.to_lowercase()
+                            sanitize_name(&top_name),
+                            sanitize_name(&coll_name)
                         )),
                         json,
                     ))
@@ -533,11 +536,31 @@ fn collect_json_files_to_process(
     collections_dir: &Path,
     config_db_name: Option<&str>,
 ) -> Result<Vec<(PathBuf, PathBuf)>> {
-    if let Some(name) = args.collection.as_deref() {
-        collect_single_collection_json_file(collections_dir, name, config_db_name)
+    let mut json_files = if let Some(name) = args.collection.as_deref() {
+        collect_single_collection_json_file(collections_dir, name, config_db_name)?
     } else {
-        collect_all_collection_json_files(collections_dir, config_db_name)
+        collect_all_collection_json_files(collections_dir, config_db_name)?
+    };
+
+    if let Some(config_path) = args.config.as_deref() {
+        let config = read_conf(config_path)?;
+        if let Some(database) = config.namespace.as_deref() {
+            json_files.retain(|(_, path)| {
+                let collection = path
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or_default();
+                should_infer_collection_for_database(
+                    database,
+                    collection,
+                    &config.include,
+                    &config.exclude,
+                )
+            });
+        }
     }
+
+    Ok(json_files)
 }
 
 fn resolve_add_grouped_key_from_config(args: &ToPgArgs) -> bool {
@@ -736,7 +759,7 @@ pub async fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
 
     if let Some(conf) = args.config.as_deref() {
         let c = read_conf(conf)?;
-        if c.namespace_databases.len() > 1 && args.collection.is_none() {
+        if !c.namespace_databases.is_empty() && args.collection.is_none() {
             return run_to_pg_for_configured_databases(&args, quiet, conf, &c).await;
         }
     }
@@ -744,14 +767,14 @@ pub async fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
     let config_values = read_run_to_pg_config_values(&args)?;
     let (collections_dir, output_dir, source_stage) =
         resolve_collections_and_output_dirs(&args).await?;
-    run_to_pg_for_dirs(&args, quiet, &collections_dir, &output_dir, &config_values)?;
+    run_to_pg_for_dirs(&args, quiet, &collections_dir, &output_dir, &config_values, false)?;
     log_to_pg_completion(quiet);
     sync_infer_artifacts_if_gcs(args.config.as_deref(), source_stage.as_ref()).await?;
     Ok(())
 }
 
 /// Generates PostgreSQL DDL for each explicitly configured database
-/// (`[source].namespace` array with 2+ entries), reading from and writing to
+/// (`[source].namespace` entries), reading from and writing to
 /// each database's isolated `<database_name>/source` and
 /// `<database_name>/schema` directories under the project root.
 async fn run_to_pg_for_configured_databases(
@@ -760,7 +783,19 @@ async fn run_to_pg_for_configured_databases(
     conf: &Path,
     c: &crate::util::ConfData,
 ) -> Result<()> {
-    let project_root = resolve_local_project_root_from_config(conf, c);
+    let (project_root, _source_stage) = match resolve_export_write_backend(&c.base_dir)? {
+        ExportWriteBackend::LocalFs => (resolve_local_project_root_from_config(conf, c), None),
+        ExportWriteBackend::Gcs { bucket, prefix } => {
+            let stage = stage_source_collections_from_gcs(
+                &bucket,
+                &prefix,
+                c.cluster_name.as_deref(),
+                &c.project_dir,
+            )
+            .await?;
+            (stage.path().to_path_buf(), Some(stage))
+        }
+    };
     let schema_owner = c
         .target_uri
         .as_deref()
@@ -769,8 +804,6 @@ async fn run_to_pg_for_configured_databases(
     for (idx, db_name) in c.namespace_databases.iter().enumerate() {
         let collections_dir =
             crate::commands::shared::multi_db_source_collections_dir(&project_root, db_name);
-        let output_dir =
-            crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
         if !collections_dir.is_dir() {
             warn!(
                 "Skipping to-pg for database '{db_name}': no source collections found at {}",
@@ -781,6 +814,10 @@ async fn run_to_pg_for_configured_databases(
 
         let (target_db_name, target_schema_name) =
             resolve_target_mapping_for_namespace_index(c, idx, db_name);
+        let output_dir = crate::commands::shared::multi_db_schema_tables_dir(
+            &project_root,
+            &target_db_name,
+        );
 
         let config_values = RunToPgConfigValues {
             db_name: Some(target_db_name),
@@ -790,13 +827,16 @@ async fn run_to_pg_for_configured_databases(
         };
 
         if let Err(err) =
-            run_to_pg_for_dirs(args, quiet, &collections_dir, &output_dir, &config_values)
+            run_to_pg_for_dirs(args, quiet, &collections_dir, &output_dir, &config_values, true)
         {
             warn!("to-pg failed for database '{db_name}': {err:#}");
         }
     }
 
     log_to_pg_completion(quiet);
+    if matches!(resolve_export_write_backend(&c.base_dir)?, ExportWriteBackend::Gcs { .. }) {
+        move_infer_artifacts_to_gcs_if_needed_with_project_root(conf, Some(&project_root)).await?;
+    }
     Ok(())
 }
 
@@ -806,9 +846,14 @@ fn run_to_pg_for_dirs(
     collections_dir: &Path,
     output_dir: &Path,
     config_values: &RunToPgConfigValues,
+    output_dir_is_database_scoped: bool,
 ) -> Result<()> {
     let json_files =
-        collect_json_files_to_process(args, collections_dir, config_values.db_name.as_deref())?;
+        collect_json_files_to_process(
+            args,
+            collections_dir,
+            (!output_dir_is_database_scoped).then_some(config_values.db_name.as_deref()).flatten(),
+        )?;
     if json_files.is_empty() {
         warn!(
             "No JSON schema files found in {}",

@@ -1,14 +1,14 @@
 [project]
 title = "Mongo2Pg Project migration"
 base_dir = "results"
-project_name = "sample_training"
+project_name = "local_project"
 
 [source]
 uri = "mongodb://user:pass@localhost:27017/?authSource=admin&directConnection=true"
-namespace = "sample_training"
+namespace = ["sample_analytics", "sample_airbnb", "sample_geospatial", "sample_supplies", "sample_weatherdata", "sample_events", "sample_payload","sample_externals"]
 #number = 1000
 percent = 100.0
-jsonb = false
+jsonb = true
 # include = ["collection_a", "collection_b"]
 # exclude = ["collection_to_skip"]
 datetime_field = ["created_at", "last_update", "updated_at", "*_date", "date"]
@@ -18,15 +18,15 @@ add_grouped_key = true
 
 [target]
 uri = "postgres://myuser:x@localhost:5432/postgres?sslmode=disable"
-database_name = "sample_training"
-schema_name = "sample_training"
+database_name = ["sample_analytics", "sample_airbnb", "sample_geospatial", "sample_supplies", "sample_weatherdata", "sample_events", "sample_payload", "sample_externals"]
+schema_name = ["sample_analytics", "sample_airbnb", "sample_geospatial", "sample_supplies", "sample_weatherdata", "sample_events", "sample_externals"]
 
 [kafka]
 bootstrap_servers = "localhost:9092"
-group_id = "s3-sample_training_group"
+group_id = "t4-group"
 # topics = ["mongo2pg_sample_training.sample_training.listingsAndReviews"]
 # ...or use only a Debezium topic prefix and let kafka-import parse db/collection from topics.
-topic_prefix = "s3.sample_supplies"
+topic_prefix = "t4"
 schema_registry_url = "http://localhost:8081"
 batch_log_messages = 1000
 transaction_batch_size = 2000
