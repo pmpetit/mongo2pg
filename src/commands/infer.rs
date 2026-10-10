@@ -5,6 +5,8 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
@@ -19,10 +21,10 @@ use crate::cli::{InferArgs, ReportArgs, ToPgArgs, UriArg};
 use crate::commands::report::run_report;
 use crate::commands::shared::{
     apply_config_overrides, ddl_table_mapping_from_table, default_ddl_editing_guidance,
-    ensure_output_prefix_segments, normalize_pg_identifier, parse_namespace,
-    resolve_local_project_root_from_config, sanitize_name, sanitize_pg_name, split_namespace_scope,
-    CollectionMapping, ConfigOverrides, DdlTableMapping, MappingColumn, PgMapping, TraversalMode,
-    TraversalPlan,
+    ensure_output_prefix_segments, normalize_pg_identifier,
+    multi_db_database_root, resolve_local_project_root_from_config, sanitize_name,
+    sanitize_pg_name, CollectionMapping, ConfigOverrides, DdlTableMapping,
+    MappingColumn, PgMapping, TraversalMode, TraversalPlan,
 };
 use crate::commands::to_pg::run_to_pg;
 use crate::engine::analyzer::{
@@ -35,17 +37,62 @@ use crate::engine::stats::{
     InferWarningTypeYaml, InferWarningYaml,
 };
 use crate::export::{ensure_gcs_authentication, resolve_export_write_backend, ExportWriteBackend};
-use crate::report::{collect_rows, compute_cluster_score, compute_db_score, SYSTEM_DATABASES};
+use crate::report::SYSTEM_DATABASES;
 use crate::schema_diagram::parse_sql;
 use crate::util::{
     can_inline_object_fields, connection_failed_context, flatten_grouped_root_array_object_fields,
     flatten_root_array_object_field, flattened_root_parent_id_column,
     grouped_root_array_object_fields, inline_object_column_names_with_prefix,
-    inline_object_leaf_fields_with_prefix, is_pg_reserved, property_filter_entries_for_collection,
+    inline_object_leaf_fields_with_prefix, is_pg_reserved,
+    property_filter_entries_for_collection, property_filter_entries_for_database_collection,
     read_conf, sanitize, scalar_type_family, should_infer_collection,
 };
 
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
+
+fn infer_write_lock() -> &'static tokio::sync::Mutex<()> {
+    static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
+fn infer_inflight_counter() -> &'static AtomicUsize {
+    static INFLIGHT: OnceLock<AtomicUsize> = OnceLock::new();
+    INFLIGHT.get_or_init(|| AtomicUsize::new(0))
+}
+
+fn infer_worker_count() -> usize {
+    if let Ok(raw) = std::env::var("M2PG_INFER_WORKERS") {
+        if let Ok(parsed) = raw.trim().parse::<usize>() {
+            if parsed > 0 {
+                return parsed;
+            }
+        }
+    }
+
+    let host_cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+
+    let cgroup_workers = std::fs::read_to_string("/sys/fs/cgroup/cpu.max")
+        .ok()
+        .and_then(|content| {
+            let mut parts = content.split_whitespace();
+            let quota_raw = parts.next()?;
+            let period_raw = parts.next()?;
+            if quota_raw == "max" {
+                return None;
+            }
+            let quota = quota_raw.parse::<u64>().ok()?;
+            let period = period_raw.parse::<u64>().ok()?;
+            if period == 0 {
+                return None;
+            }
+            let workers = (quota / period).max(1) as usize;
+            Some(workers)
+        });
+
+    cgroup_workers.unwrap_or(host_cpus).clamp(1, host_cpus)
+}
 
 pub async fn run_infer(args: InferArgs) -> Result<()> {
     if args.config.is_none() {
@@ -71,6 +118,7 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
                 max_time_ms: args.max_time_ms,
                 chunk_size: args.chunk_size,
                 auth_retry_max: args.auth_retry_max,
+                infer_mode: args.infer_mode.clone(),
                 jsonb: args.jsonb.then_some(true),
                 target_database_name: args.database_name.clone(),
                 target_schema_name: args.schema_name.clone(),
@@ -88,13 +136,15 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
         resolved_source_uri,
         effective_output_dir,
         conf_namespace,
+        conf_namespace_databases,
+        conf_project_root,
         conf_number,
         conf_percent,
         conf_max_time_ms,
         conf_chunk_size,
         conf_auth_retry_max,
+        conf_infer_mode,
         conf_jsonb,
-        conf_target_schema,
         conf_timestamp_fields,
         conf_include,
         conf_exclude,
@@ -110,11 +160,16 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
             })?;
         if args.output_dir.is_some() {
             warn!(
-                "--output-dir is ignored when --config is set; infer outputs are written under base_dir/project_dir/source/collections"
+                "--output-dir is ignored when --config is set; infer outputs are written under base_dir/project_dir/<namespace>/"
             );
         }
+        crate::util::validate_multi_db_filter_entries(
+            &c.namespace_databases,
+            &c.include,
+            &c.exclude,
+        )?;
         let configured_project_root = resolve_local_project_root_from_config(conf, &c);
-        let configured_out_dir = configured_project_root.join("source").join("collections");
+        let configured_out_dir = configured_project_root.clone();
 
         let (local_project_root, out_dir) = match std::fs::create_dir_all(&configured_out_dir) {
             Ok(()) => (configured_project_root, configured_out_dir),
@@ -122,7 +177,7 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
                 let fallback_project_root = std::env::temp_dir()
                     .join("mongo2pg-infer")
                     .join(sanitize_name(&c.project_dir));
-                let fallback_out_dir = fallback_project_root.join("source").join("collections");
+                let fallback_out_dir = fallback_project_root.clone();
                 std::fs::create_dir_all(&fallback_out_dir).with_context(|| {
                     format!(
                         "Failed to create configured infer output dir {} (original error: {}) and fallback dir {}",
@@ -149,13 +204,15 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
             source_uri,
             Some(out_dir),
             c.namespace,
+            c.namespace_databases,
+            Some(local_project_root),
             c.number,
             c.percent,
             c.max_time_ms,
             c.chunk_size,
             c.auth_retry_max,
+            c.infer_mode,
             c.jsonb,
-            c.target_schema,
             c.timestamp_fields,
             c.include,
             c.exclude,
@@ -168,20 +225,23 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
         (
             source_uri,
             args.output_dir.clone(),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            false,
-            None,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
+            None,       // conf_namespace
+            Vec::new(), // conf_namespace_databases
+            None,       // conf_project_root
+            None,       // conf_number
+            None,       // conf_percent
+            None,       // conf_max_time_ms
+            None,       // conf_chunk_size
+            None,       // conf_auth_retry_max
+            None,       // conf_infer_mode
+            false,      // conf_jsonb
+            Vec::new(), // conf_timestamp_fields
+            Vec::new(), // conf_include
+            Vec::new(), // conf_exclude
         )
     };
 
+    let cli_namespace = args.namespace.clone();
     let namespace = args.namespace.clone().or(conf_namespace);
 
     let client_options = crate::db::mongo::parse_client_options(&resolved_source_uri)
@@ -219,6 +279,8 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
     let resolved_chunk_size = resolve_infer_chunk_size(args.chunk_size.or(conf_chunk_size))?;
     let resolved_auth_retry_max =
         resolve_infer_auth_retry_max(args.auth_retry_max.or(conf_auth_retry_max))?;
+    let resolved_infer_mode =
+        resolve_infer_mode(args.infer_mode.as_deref().or(conf_infer_mode.as_deref()))?;
     let resolved_jsonb = args.jsonb || conf_jsonb;
 
     let args = InferArgs {
@@ -232,147 +294,48 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
         max_time_ms: resolved_max_time_ms,
         chunk_size: Some(resolved_chunk_size),
         auth_retry_max: Some(resolved_auth_retry_max),
+        infer_mode: Some(resolved_infer_mode.as_str().to_owned()),
         jsonb: resolved_jsonb,
         config: None,
         ..args
     };
 
-    match namespace {
-        None => {
-            // No namespace provided: enumerate all user databases and infer each.
-            infer_all_databases(
-                &client,
-                &args,
-                &conf_include,
-                &conf_exclude,
-                &conf_timestamp_fields,
-                !quiet_infer,
-            )
-            .await?;
-        }
-        Some(ref ns) if ns.contains('.') => {
-            // Single collection: <db>.<collection>
-            let (db_name, coll_name) = parse_namespace(ns)?;
-            let existing_dbs = client.list_database_names().await.with_context(|| {
-                format!(
-                    "{}: failed to list databases",
-                    connection_failed_context("mongo", "query")
-                )
-            })?;
-            if !existing_dbs.iter().any(|d| d == db_name) {
-                warn!(
-                    "database '{db_name}' does not exist on the server. Available databases: {}",
-                    existing_dbs.join(", ")
-                );
-            }
-            let existing_colls = client
-                .database(db_name)
-                .list_collection_names()
-                .await
-                .with_context(|| {
-                    format!(
-                        "{}: failed to list collections",
-                        connection_failed_context("mongo", "query")
-                    )
-                })?;
-            if !existing_colls.iter().any(|c| c == coll_name) {
-                warn!(
-                    "collection '{coll_name}' does not exist in database '{db_name}'. Available collections: {}",
-                    existing_colls.join(", ")
-                );
-            }
-            let inferred_root_table_names = existing_colls
-                .iter()
-                .filter(|name| !name.starts_with("system."))
-                .filter(|name| should_infer_collection(name, &conf_include, &conf_exclude))
-                .map(|name| sanitize(name))
-                .collect::<HashSet<_>>();
-            if !should_infer_collection(coll_name, &conf_include, &conf_exclude) {
-                info!(
-                    "Skipping {db_name}.{coll_name}: filtered out by source.include/source.exclude"
-                );
-                return Ok(());
-            }
-            let schema = infer_collection(
-                &client,
-                db_name,
-                coll_name,
-                coll_name,
-                conf_target_schema.as_deref(),
-                &conf_include,
-                &conf_exclude,
-                &conf_timestamp_fields,
-                &args,
-                None,
-                Some(&inferred_root_table_names),
-                Some((1, 1)),
-                !quiet_infer,
-            )
-            .await?;
-            if args.print_json && !args.no_output {
-                info!("{}", serde_json::to_string_pretty(&schema)?);
-            }
-        }
-        Some(ref ns) => {
-            // Whole single database: infer every collection.
-            let db_name = ns.as_str();
-            let existing_dbs = client.list_database_names().await.with_context(|| {
-                format!(
-                    "{}: failed to list databases",
-                    connection_failed_context("mongo", "query")
-                )
-            })?;
-            if !existing_dbs.iter().any(|d| d == db_name) {
-                warn!(
-                    "database '{db_name}' does not exist on the server. Available databases: {}",
-                    existing_dbs.join(", ")
-                );
-            }
-            let db = client.database(db_name);
-            let coll_names = db.list_collection_names().await.with_context(|| {
-                format!(
-                    "{}: failed to list collections",
-                    connection_failed_context("mongo", "query")
-                )
-            })?;
-            let filtered_coll_names: Vec<&String> = coll_names
-                .iter()
-                .filter(|n| !n.starts_with("system."))
-                .filter(|n| should_infer_collection(n, &conf_include, &conf_exclude))
-                .collect();
-            let inferred_root_table_names = filtered_coll_names
-                .iter()
-                .map(|name| sanitize(name))
-                .collect::<HashSet<_>>();
-            let total_collections = filtered_coll_names.len();
-
-            let mut all_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
-            for (index, coll_name) in filtered_coll_names.iter().enumerate() {
-                match infer_collection(
+    if cli_namespace.is_none() && !conf_namespace_databases.is_empty() {
+        // Configured `[source].namespace` entries:
+        // process the explicit, ordered list under database-scoped output
+        // directories.
+        let project_root = conf_project_root.clone().ok_or_else(|| {
+            anyhow!("Configured namespace list requires -c <config> so output paths can be resolved")
+        })?;
+        infer_configured_databases(InferConfiguredDatabasesContext {
+            client: &client,
+            args: &args,
+            project_root: &project_root,
+            databases: &conf_namespace_databases,
+            include: &conf_include,
+            exclude: &conf_exclude,
+            timestamp_fields: &conf_timestamp_fields,
+            emit_stats: !quiet_infer,
+        })
+        .await?;
+    } else {
+        match namespace {
+            None => {
+                // No namespace list configured: enumerate all user databases and infer each.
+                infer_all_databases(
                     &client,
-                    db_name,
-                    coll_name,
-                    coll_name,
-                    conf_target_schema.as_deref(),
+                    &args,
                     &conf_include,
                     &conf_exclude,
                     &conf_timestamp_fields,
-                    &args,
-                    None,
-                    Some(&inferred_root_table_names),
-                    Some((index + 1, total_collections)),
                     !quiet_infer,
                 )
-                .await
-                {
-                    Ok(schema) => {
-                        all_schemas.insert((*coll_name).clone(), schema);
-                    }
-                    Err(e) => warn!(" skipping {db_name}.{coll_name}: {e:#}"),
-                }
+                .await?;
             }
-            if args.print_json && !args.no_output {
-                info!("{}", serde_json::to_string_pretty(&all_schemas)?);
+            Some(ns) => {
+                return Err(anyhow!(
+                    "Single-namespace infer mode was removed. Use [source].namespace as a list in -c <config> (for one database, provide one entry). Received namespace='{ns}'."
+                ));
             }
         }
     }
@@ -485,7 +448,6 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
         .await?;
         validate_infer_artifacts_use_base_dir(conf)?;
         move_infer_artifacts_to_gcs_if_needed(conf).await?;
-        print_infer_summary(conf)?;
     }
 
     if chained_config.is_none() {
@@ -507,6 +469,30 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
 }
 
 pub fn validate_infer_artifacts_use_base_dir(conf: &Path) -> Result<()> {
+    fn has_collection_json_files(root: &Path) -> bool {
+        let mut pending_dirs = vec![root.to_path_buf()];
+        while let Some(dir) = pending_dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.filter_map(|entry| entry.ok()) {
+                let path = entry.path();
+                if path.is_dir() {
+                    pending_dirs.push(path);
+                    continue;
+                }
+                if path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     let c = read_conf(conf)?;
     if matches!(
         resolve_export_write_backend(&c.base_dir)?,
@@ -520,26 +506,66 @@ pub fn validate_infer_artifacts_use_base_dir(conf: &Path) -> Result<()> {
     }
 
     let project_root = resolve_local_project_root_from_config(conf, &c);
-    let source_collections_dir = project_root.join("source").join("collections");
-    let schema_tables_dir = project_root.join("schema").join("tables");
     let reports_main = project_root.join("reports").join("main.html");
 
-    if !source_collections_dir.is_dir() {
-        return Err(anyhow!(
-            "Infer output validation failed: source collections directory not found at {} (derived from base_dir='{}', project_dir='{}')",
-            source_collections_dir.display(),
-            c.base_dir.display(),
-            c.project_dir
-        ));
+    if !c.namespace_databases.is_empty() {
+        for db_name in &c.namespace_databases {
+            let source_collections_dir =
+                crate::commands::shared::multi_db_source_collections_dir(&project_root, db_name);
+            let schema_tables_dir =
+                crate::commands::shared::multi_db_schema_tables_dir(&project_root, db_name);
+
+            if !source_collections_dir.is_dir() {
+                return Err(anyhow!(
+                    "Infer output validation failed: source collections directory not found at {} for database '{}' (derived from base_dir='{}', project_dir='{}')",
+                    source_collections_dir.display(),
+                    db_name,
+                    c.base_dir.display(),
+                    c.project_dir
+                ));
+            }
+
+            if !has_collection_json_files(&source_collections_dir) {
+                warn!(
+                    "Infer artifact validation: skipping schema/tables check for database '{}' because no inferred collection JSON files were produced under {}",
+                    db_name,
+                    source_collections_dir.display()
+                );
+                continue;
+            }
+
+            if !schema_tables_dir.is_dir() {
+                return Err(anyhow!(
+                    "Infer output validation failed: schema tables directory not found at {} for database '{}' (derived from base_dir='{}', project_dir='{}')",
+                    schema_tables_dir.display(),
+                    db_name,
+                    c.base_dir.display(),
+                    c.project_dir
+                ));
+            }
+        }
+    } else {
+        let source_collections_dir = project_root.join("source").join("collections");
+        let schema_tables_dir = project_root.join("schema").join("tables");
+
+        if !source_collections_dir.is_dir() {
+            return Err(anyhow!(
+                "Infer output validation failed: source collections directory not found at {} (derived from base_dir='{}', project_dir='{}')",
+                source_collections_dir.display(),
+                c.base_dir.display(),
+                c.project_dir
+            ));
+        }
+        if !schema_tables_dir.is_dir() {
+            return Err(anyhow!(
+                "Infer output validation failed: schema tables directory not found at {} (derived from base_dir='{}', project_dir='{}')",
+                schema_tables_dir.display(),
+                c.base_dir.display(),
+                c.project_dir
+            ));
+        }
     }
-    if !schema_tables_dir.is_dir() {
-        return Err(anyhow!(
-            "Infer output validation failed: schema tables directory not found at {} (derived from base_dir='{}', project_dir='{}')",
-            schema_tables_dir.display(),
-            c.base_dir.display(),
-            c.project_dir
-        ));
-    }
+
     if !reports_main.is_file() {
         return Err(anyhow!(
             "Infer output validation failed: report file not found at {} (derived from base_dir='{}', project_dir='{}')",
@@ -549,12 +575,22 @@ pub fn validate_infer_artifacts_use_base_dir(conf: &Path) -> Result<()> {
         ));
     }
 
-    info!(
-        "Infer artifact validation succeeded under base_dir/project_dir: source={}, schema={}, report={}",
-        source_collections_dir.display(),
-        schema_tables_dir.display(),
-        reports_main.display()
-    );
+    if !c.namespace_databases.is_empty() {
+        info!(
+            "Infer artifact validation succeeded under base_dir/project_dir for {} database(s): report={}",
+            c.namespace_databases.len(),
+            reports_main.display()
+        );
+    } else {
+        let source_collections_dir = project_root.join("source").join("collections");
+        let schema_tables_dir = project_root.join("schema").join("tables");
+        info!(
+            "Infer artifact validation succeeded under base_dir/project_dir: source={}, schema={}, report={}",
+            source_collections_dir.display(),
+            schema_tables_dir.display(),
+            reports_main.display()
+        );
+    }
     Ok(())
 }
 
@@ -605,6 +641,7 @@ pub fn infer_object_key(
         })?
         .to_string_lossy()
         .replace('\\', "/");
+    let relative = canonicalize_multi_db_artifact_path(&relative);
 
     let effective_prefix = ensure_output_prefix_segments(prefix, cluster_name, project_dir);
     if effective_prefix.is_empty() {
@@ -617,6 +654,27 @@ pub fn infer_object_key(
     } else {
         Ok(format!("{effective_prefix}/{relative}"))
     }
+}
+
+fn canonicalize_multi_db_artifact_path(relative: &str) -> String {
+    let mut segments = relative.split('/');
+    let Some(database) = segments.next() else {
+        return relative.to_owned();
+    };
+    let Some(area) = segments.next() else {
+        return relative.to_owned();
+    };
+
+    if !matches!(area, "source" | "schema") {
+        return relative.to_owned();
+    }
+
+    let remainder = segments.collect::<Vec<_>>();
+    if remainder.len() < 2 {
+        return relative.to_owned();
+    }
+
+    format!("{area}/{}/{database}/{}", remainder[0], remainder[1..].join("/"))
 }
 
 pub fn infer_object_mime_type(file_path: &Path) -> &'static str {
@@ -677,6 +735,16 @@ pub async fn move_infer_artifacts_to_gcs_if_needed_with_project_root(
         project_root.display()
     );
     let artifact_dirs = infer_artifact_directories(&project_root);
+    let mut artifact_dirs = artifact_dirs;
+    for db_name in &c.namespace_databases {
+        artifact_dirs.push(multi_db_database_root(&project_root, db_name));
+    }
+    for database_name in &c.target_database_names {
+        artifact_dirs.push(multi_db_database_root(&project_root, database_name));
+    }
+    if let Some(database_name) = c.target_database_name.as_deref() {
+        artifact_dirs.push(multi_db_database_root(&project_root, database_name));
+    }
     for dir in &artifact_dirs {
         debug!(
             "[gcs] infer upload scan dir: {} exists={} is_dir={}",
@@ -704,12 +772,13 @@ pub async fn move_infer_artifacts_to_gcs_if_needed_with_project_root(
     }
 
     info!(
-        "Moving {} infer artifact files to gs://{}/{}",
+        "Moving {} infer artifact files to/from gs://{}/{}",
         files_to_move.len(),
         bucket,
         prefix.trim_matches('/')
     );
     let mut uploaded_files = 0usize;
+    let mut uploaded_report_keys: Vec<String> = Vec::new();
 
     for file_path in &files_to_move {
         let object_key = infer_object_key(
@@ -746,6 +815,10 @@ pub async fn move_infer_artifacts_to_gcs_if_needed_with_project_root(
                     object_key
                 )
             })?;
+        let normalized_path = file_path.to_string_lossy().replace('\\', "/");
+        if normalized_path.ends_with("/reports/main.html") {
+            uploaded_report_keys.push(object_key.clone());
+        }
         uploaded_files += 1;
     }
 
@@ -764,7 +837,7 @@ pub async fn move_infer_artifacts_to_gcs_if_needed_with_project_root(
                 "1" | "true" | "yes" | "on"
             )
         })
-        .unwrap_or(false);
+        .unwrap_or(true);
 
     if purge_local {
         for file_path in &files_to_move {
@@ -789,96 +862,10 @@ pub async fn move_infer_artifacts_to_gcs_if_needed_with_project_root(
             project_root.display()
         );
     }
-    Ok(())
-}
 
-pub fn print_infer_summary(conf: &Path) -> Result<()> {
-    let c = read_conf(conf)?;
-    let project_root = resolve_local_project_root_from_config(conf, &c);
-    let collections_dir = project_root.join("source").join("collections");
-    let tables_root = project_root.join("schema").join("tables");
-    let report_path = project_root.join("reports").join("main.html");
-
-    let is_multi_db = std::fs::read_dir(&collections_dir)
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_dir())
-                .any(|e| {
-                    std::fs::read_dir(e.path())
-                        .map(|sub| sub.filter_map(|s| s.ok()).any(|s| s.path().is_dir()))
-                        .unwrap_or(false)
-                })
-        })
-        .unwrap_or(false);
-
-    let (score, collection_count, table_count) = if is_multi_db {
-        let mut db_scores = Vec::new();
-        let mut total_collections = 0usize;
-        let mut total_tables = 0usize;
-
-        let mut db_names: Vec<String> = std::fs::read_dir(&collections_dir)
-            .with_context(|| format!("Cannot read {}", collections_dir.display()))?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
-        db_names.sort();
-
-        for db_name in &db_names {
-            let db_dir = collections_dir.join(db_name);
-            let tables_dir = tables_root.join(db_name);
-            let rows = collect_rows(&db_dir, tables_dir.is_dir().then_some(tables_dir.as_path()))?;
-            total_collections += rows.len();
-            total_tables += rows
-                .iter()
-                .map(|row| row.tables_count().unwrap_or(0))
-                .sum::<usize>();
-            db_scores.push(compute_db_score(db_name, &rows));
-        }
-
-        (
-            compute_cluster_score(&db_scores).score_total,
-            total_collections,
-            total_tables,
-        )
-    } else {
-        let tables_dir_for_summary = {
-            let db_name = c
-                .namespace
-                .as_deref()
-                .map(|namespace| split_namespace_scope(namespace).0)
-                .filter(|db_name| !db_name.is_empty())
-                .map(|db_name| tables_root.join(db_name));
-            db_name
-                .filter(|dir| dir.is_dir())
-                .unwrap_or_else(|| tables_root.clone())
-        };
-        let rows = collect_rows(
-            &collections_dir,
-            tables_dir_for_summary
-                .is_dir()
-                .then_some(tables_dir_for_summary.as_path()),
-        )?;
-        let score = compute_db_score(&c.project_dir, &rows).score_db;
-        let table_count = rows
-            .iter()
-            .map(|row| row.tables_count().unwrap_or(0))
-            .sum::<usize>();
-        (score, rows.len(), table_count)
-    };
-
-    info!("Inference summary");
-    info!("  Score: {:.2}", score);
-    info!("  Collections: {}", collection_count);
-    info!("  PostgreSQL tables: {}", table_count);
-    info!("  Detailed HTML report: {}", report_path.display());
-    info!(
-        "  Next step: review the generated DDL files under {} and then run `mongo2pg export -c {}`",
-        tables_root.display(),
-        conf.display()
-    );
-
+    for report_key in uploaded_report_keys {
+        info!("Infer report uploaded to gs://{}/{}", bucket, report_key);
+    }
     Ok(())
 }
 
@@ -1390,6 +1377,9 @@ pub async fn infer_all_databases(
     timestamp_fields: &[String],
     emit_stats: bool,
 ) -> Result<()> {
+    let worker_count = infer_worker_count();
+    info!("infer worker concurrency: {worker_count}");
+
     let all_dbs = client.list_database_names().await.with_context(|| {
         format!(
             "{}: failed to list databases",
@@ -1442,54 +1432,260 @@ pub async fn infer_all_databases(
     let mut current_collection = 0usize;
 
     for (db_name, coll_names) in &databases_with_collections {
-        let inferred_root_table_names = coll_names
+        let inferred_root_table_names = Arc::new(
+            coll_names
             .iter()
             .map(|name| sanitize(name))
-            .collect::<HashSet<_>>();
-        let mut db_schemas: IndexMap<String, CollectionSchema> = IndexMap::new();
+            .collect::<HashSet<_>>(),
+        );
+        let db_name_owned = db_name.clone();
+        let db_out_dir = args.output_dir.as_deref().map(|d| d.join(db_name));
+        let db_start_index = current_collection;
+        current_collection += coll_names.len();
 
-        for coll_name in coll_names {
-            current_collection += 1;
-            let db_out_dir = args.output_dir.as_deref().map(|d| d.join(db_name));
-            match infer_collection(
-                client,
-                db_name,
-                coll_name,
-                coll_name,
-                None,
-                include,
-                exclude,
-                timestamp_fields,
-                args,
-                db_out_dir.as_deref(),
-                Some(&inferred_root_table_names),
-                Some((current_collection, total_collections)),
-                emit_stats,
-            )
-            .await
-            {
-                Ok(schema) => {
-                    db_schemas.insert(coll_name.clone(), schema);
-                }
-                Err(e) => warn!("skipping {db_name}.{coll_name}: {e:#}"),
+        let mut jobs = futures::stream::iter(coll_names.iter().enumerate().map(|(idx, coll)| {
+            let coll_name = coll.clone();
+            let db_name = db_name_owned.clone();
+            let inferred_root_table_names = Arc::clone(&inferred_root_table_names);
+            let db_out_dir = db_out_dir.clone();
+            let worker_slot = (idx % worker_count) + 1;
+            async move {
+                let inflight = infer_inflight_counter().fetch_add(1, Ordering::SeqCst) + 1;
+                info!(
+                    "[worker {}/{}] start infer {}.{} (inflight={})",
+                    worker_slot,
+                    worker_count,
+                    db_name,
+                    coll_name,
+                    inflight
+                );
+                let result = infer_collection(
+                    client,
+                    &db_name,
+                    &coll_name,
+                    &coll_name,
+                    None,
+                    include,
+                    exclude,
+                    timestamp_fields,
+                    args,
+                    db_out_dir.as_deref(),
+                    Some(inferred_root_table_names.as_ref()),
+                    Some((worker_slot, worker_count)),
+                    Some((db_start_index + idx + 1, total_collections)),
+                    emit_stats,
+                )
+                .await;
+                let inflight_after = infer_inflight_counter().fetch_sub(1, Ordering::SeqCst) - 1;
+                info!(
+                    "[worker {}/{}] done infer {}.{} (inflight={})",
+                    worker_slot,
+                    worker_count,
+                    db_name,
+                    coll_name,
+                    inflight_after
+                );
+                (db_name, coll_name, result)
             }
-        }
+        }))
+        .buffer_unordered(worker_count);
 
-        if args.print_json && !args.no_output && args.output_dir.is_none() {
-            info!(
-                "{}",
-                serde_json::to_string_pretty(&IndexMap::from([(db_name.clone(), &db_schemas)]))?
-            );
+        while let Some((db_name, coll_name, result)) = jobs.next().await {
+            if let Err(e) = result {
+                warn!("skipping {db_name}.{coll_name}: {e:#}");
+            }
         }
     }
 
     Ok(())
 }
 
-/// Default maximum time we allow a single infer sampling query to run on the server.
-pub const DEFAULT_SAMPLE_MAX_TIME: Duration = Duration::from_secs(120);
-pub const DEFAULT_INFER_CHUNK_SIZE: u64 = 1_000_000;
+/// Infers an explicit list of configured databases (`[source].namespace`),
+/// writing each database's generated
+/// `source/collections` artifacts under `<project_root>/<database_name>/`.
+///
+/// Unlike [`infer_all_databases`] (which discovers every database on the
+/// server when no namespace is configured), this processes exactly the
+/// configured databases, in their declared order, and keeps failures scoped
+/// to the database that produced them.
+pub async fn infer_configured_databases(
+    ctx: InferConfiguredDatabasesContext<'_>,
+) -> Result<()> {
+    let worker_count = infer_worker_count();
+    info!("infer worker concurrency: {worker_count}");
+
+    use crate::commands::shared::multi_db_source_collections_dir;
+    use crate::util::should_infer_collection_for_database;
+
+    if ctx.databases.is_empty() {
+        return Ok(());
+    }
+
+    let existing_dbs = ctx.client.list_database_names().await.with_context(|| {
+        format!(
+            "{}: failed to list databases",
+            connection_failed_context("mongo", "query")
+        )
+    })?;
+
+    info!(
+        "Inferring {} configured database(s) in declared order: {}",
+        ctx.databases.len(),
+        ctx.databases.join(", ")
+    );
+
+    let mut databases_with_collections: Vec<(String, Vec<String>)> = Vec::new();
+
+    for db_name in ctx.databases {
+        if !existing_dbs.iter().any(|d| d == db_name) {
+            warn!(
+                "database '{db_name}' does not exist on the server. Available databases: {}",
+                existing_dbs.join(", ")
+            );
+        }
+
+        let db = ctx.client.database(db_name);
+        let coll_names = match db.list_collection_names().await {
+            Ok(n) => n,
+            Err(e) => {
+                warn!("skipping database '{db_name}' (cannot list collections): {e:#}");
+                continue;
+            }
+        };
+
+        let filtered_coll_names: Vec<String> = coll_names
+            .into_iter()
+            .filter(|n| !n.starts_with("system."))
+            .filter(|n| {
+                should_infer_collection_for_database(db_name, n, ctx.include, ctx.exclude)
+            })
+            .collect();
+
+        databases_with_collections.push((db_name.clone(), filtered_coll_names));
+    }
+
+    let total_collections: usize = databases_with_collections
+        .iter()
+        .map(|(_, coll_names)| coll_names.len())
+        .sum();
+    let mut current_collection = 0usize;
+
+    for (db_name, coll_names) in &databases_with_collections {
+        let db_out_dir = multi_db_source_collections_dir(ctx.project_root, db_name);
+        std::fs::create_dir_all(&db_out_dir).with_context(|| {
+            format!(
+                "Failed to create infer output dir {} for database '{db_name}'",
+                db_out_dir.display()
+            )
+        })?;
+
+        let inferred_root_table_names = Arc::new(
+            coll_names
+            .iter()
+            .map(|name| sanitize(name))
+            .collect::<HashSet<_>>(),
+        );
+        let db_name_owned = db_name.clone();
+        let db_start_index = current_collection;
+        current_collection += coll_names.len();
+
+        let mut jobs = futures::stream::iter(coll_names.iter().enumerate().map(|(idx, coll)| {
+            let coll_name = coll.clone();
+            let db_name = db_name_owned.clone();
+            let inferred_root_table_names = Arc::clone(&inferred_root_table_names);
+            let db_out_dir = db_out_dir.clone();
+            let worker_slot = (idx % worker_count) + 1;
+            async move {
+                let inflight = infer_inflight_counter().fetch_add(1, Ordering::SeqCst) + 1;
+                info!(
+                    "[worker {}/{}] start infer {}.{} (inflight={})",
+                    worker_slot,
+                    worker_count,
+                    db_name,
+                    coll_name,
+                    inflight
+                );
+                let result = infer_collection(
+                    ctx.client,
+                    &db_name,
+                    &coll_name,
+                    &coll_name,
+                    None,
+                    ctx.include,
+                    ctx.exclude,
+                    ctx.timestamp_fields,
+                    ctx.args,
+                    Some(db_out_dir.as_path()),
+                    Some(inferred_root_table_names.as_ref()),
+                    Some((worker_slot, worker_count)),
+                    Some((db_start_index + idx + 1, total_collections)),
+                    ctx.emit_stats,
+                )
+                .await;
+                let inflight_after = infer_inflight_counter().fetch_sub(1, Ordering::SeqCst) - 1;
+                info!(
+                    "[worker {}/{}] done infer {}.{} (inflight={})",
+                    worker_slot,
+                    worker_count,
+                    db_name,
+                    coll_name,
+                    inflight_after
+                );
+                (db_name, coll_name, result)
+            }
+        }))
+        .buffer_unordered(worker_count);
+
+        while let Some((db_name, coll_name, result)) = jobs.next().await {
+            if let Err(e) = result {
+                warn!("skipping {db_name}.{coll_name}: {e:#}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub struct InferConfiguredDatabasesContext<'a> {
+    pub client: &'a Client,
+    pub args: &'a InferArgs,
+    pub project_root: &'a Path,
+    pub databases: &'a [String],
+    pub include: &'a [String],
+    pub exclude: &'a [String],
+    pub timestamp_fields: &'a [String],
+    pub emit_stats: bool,
+}
+
+pub const DEFAULT_SAMPLE_MAX_TIME: Duration = Duration::from_secs(60);
+pub const DEFAULT_INFER_CHUNK_SIZE: u64 = 50_000;
 pub const DEFAULT_INFER_AUTH_RETRY_MAX: u32 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InferMode {
+    Decoded,
+    Raw,
+}
+
+impl InferMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Decoded => "decoded",
+            Self::Raw => "raw",
+        }
+    }
+}
+
+pub fn resolve_infer_mode(value: Option<&str>) -> Result<InferMode> {
+    match value.map(|mode| mode.trim().to_ascii_lowercase()) {
+        None => Ok(InferMode::Raw),
+        Some(mode) if mode.is_empty() || mode == "raw" => Ok(InferMode::Raw),
+        Some(mode) if mode == "decoded" => Ok(InferMode::Decoded),
+        Some(mode) => Err(anyhow!(
+            "infer_mode must be one of: decoded, raw (received '{mode}')"
+        )),
+    }
+}
 
 pub fn infer_query_max_time(max_time_ms: Option<u64>) -> Duration {
     max_time_ms
@@ -1574,11 +1770,13 @@ pub async fn infer_collection(
     args: &InferArgs,
     output_dir_override: Option<&Path>,
     known_root_table_names: Option<&HashSet<String>>,
+    worker: Option<(usize, usize)>,
     progress: Option<(usize, usize)>,
     emit_stats: bool,
 ) -> Result<CollectionSchema> {
     let collection_label = format!("{db_name}.{coll_name}");
     let progress_prefix = progress.map(|(current, total)| format!("[{current}/{total}] "));
+    let worker_prefix = worker.map(|(slot, total)| format!("[worker {slot}/{total}] "));
 
     let output_dir = output_dir_override.or(args.output_dir.as_deref());
     let db = client.database(db_name);
@@ -1611,228 +1809,542 @@ pub async fn infer_collection(
         info!("Inferring {collection_label} ({sample_basis})");
     };
 
-    let mut analyzer = Analyzer::new(true);
     let sample_max_time = infer_query_max_time(args.max_time_ms);
     let fallback_chunk_size = resolve_infer_chunk_size(args.chunk_size)?;
     let fallback_auth_retry_max = resolve_infer_auth_retry_max(args.auth_retry_max)?;
+    let infer_mode = resolve_infer_mode(args.infer_mode.as_deref())?;
 
-    // Try $sample; on any error fall back to a sequential find().limit().
-    // $sample internally sorts documents, which can fail on provider2 shared tiers
-    // (error 292 – sort memory limit) or emit deserialization errors on some
-    // server/driver combinations.  find().limit() has no sort stage and works
-    // on those tiers.  If find() also fails (e.g. error 241 in a broken view
-    // pipeline), infer_collection returns that error and batch callers skip.
-    let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
-    // Errors from $sample (sort memory limit, deserialization, etc.) surface during
-    // cursor iteration, not at this .await.  The cursor loop below handles all of them
-    // and falls back to find().limit() as needed.
-    let sample_result = collection
-        .aggregate(pipeline)
-        .allow_disk_use(true)
-        .max_time(sample_max_time)
-        .await;
-
-    /// Run chunked `find().skip().limit()` into `analyzer`, logging any error without propagating.
-    async fn find_fallback(
+    async fn infer_decoded_collection_analyzer(
         collection: &mongodb::Collection<bson::Document>,
-        analyzer: &mut Analyzer,
         sample_size: u64,
-        chunk_size: u64,
-        auth_retry_max: u32,
+        fallback_chunk_size: u64,
+        fallback_auth_retry_max: u32,
         sample_max_time: Duration,
+        max_time_ms: Option<u64>,
         db_name: &str,
         coll_name: &str,
-    ) -> Result<()> {
-        let total_chunks = sample_size.div_ceil(chunk_size).max(1);
-        let mut processed = 0_u64;
-        let mut chunk_index = 0_u64;
-        let mut last_processed_id: Option<bson::Bson> = None;
+        worker_prefix: Option<&str>,
+    ) -> Result<Analyzer> {
+        let mut analyzer = Analyzer::new(true);
 
-        while processed < sample_size {
-            chunk_index += 1;
-            let remaining = sample_size - processed;
-            let this_chunk = remaining.min(chunk_size);
-            let chunk_start_id = last_processed_id.clone();
-            info!(
-                "chunk {}/{} size={} processed={}/{} collection={}.{} start_after_id={}",
-                chunk_index,
-                total_chunks,
-                this_chunk,
-                processed,
-                sample_size,
-                db_name,
-                coll_name,
-                chunk_start_id
-                    .as_ref()
-                    .map(|id| id.to_string())
-                    .unwrap_or_else(|| "<begin>".to_owned())
-            );
+        async fn find_fallback(
+            collection: &mongodb::Collection<bson::Document>,
+            analyzer: &mut Analyzer,
+            sample_size: u64,
+            chunk_size: u64,
+            auth_retry_max: u32,
+            sample_max_time: Duration,
+            db_name: &str,
+            coll_name: &str,
+            worker_prefix: Option<&str>,
+        ) -> Result<()> {
+            let total_chunks = sample_size.div_ceil(chunk_size).max(1);
+            let mut processed = 0_u64;
+            let mut chunk_index = 0_u64;
+            let mut last_processed_id: Option<bson::Bson> = None;
 
-            let mut auth_retry_attempt = 0_u32;
+            while processed < sample_size {
+                chunk_index += 1;
+                let remaining = sample_size - processed;
+                let this_chunk = remaining.min(chunk_size);
+                let chunk_start_id = last_processed_id.clone();
+                if let Some(prefix) = worker_prefix {
+                    info!(
+                        "{prefix}chunk {}/{} size={} processed={}/{} collection={}.{} start_after_id={}",
+                        chunk_index,
+                        total_chunks,
+                        this_chunk,
+                        processed,
+                        sample_size,
+                        db_name,
+                        coll_name,
+                        chunk_start_id
+                            .as_ref()
+                            .map(|id| id.to_string())
+                            .unwrap_or_else(|| "<begin>".to_owned())
+                    );
+                } else {
+                    info!(
+                        "chunk {}/{} size={} processed={}/{} collection={}.{} start_after_id={}",
+                        chunk_index,
+                        total_chunks,
+                        this_chunk,
+                        processed,
+                        sample_size,
+                        db_name,
+                        coll_name,
+                        chunk_start_id
+                            .as_ref()
+                            .map(|id| id.to_string())
+                            .unwrap_or_else(|| "<begin>".to_owned())
+                    );
+                }
 
-            'retry_chunk: loop {
-                let filter = match chunk_start_id.as_ref() {
-                    Some(last_id) => doc! { "_id": { "$gt": last_id.clone() } },
-                    None => doc! {},
-                };
-                let cursor_result = collection
-                    .find(filter)
-                    .sort(doc! { "_id": 1 })
-                    .limit(this_chunk as i64)
-                    .max_time(sample_max_time)
-                    .await;
+                let mut auth_retry_attempt = 0_u32;
 
-                let mut chunk_docs = 0_u64;
-                let mut chunk_last_id: Option<bson::Bson> = None;
-                let mut cur = match cursor_result {
-                    Ok(cur) => cur,
-                    Err(e) => {
-                        warn!(
-                            "find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
-                            db_name,
-                            coll_name,
-                            chunk_index,
-                            total_chunks,
-                            chunk_start_id
-                                .as_ref()
-                                .map(|id| id.to_string())
-                                .unwrap_or_else(|| "<begin>".to_owned()),
-                            this_chunk,
-                            e
-                        );
-                        break;
-                    }
-                };
+                'retry_chunk: loop {
+                    let filter = match chunk_start_id.as_ref() {
+                        Some(last_id) => doc! { "_id": { "$gt": last_id.clone() } },
+                        None => doc! {},
+                    };
+                    let cursor_result = collection
+                        .find(filter)
+                        .sort(doc! { "_id": 1 })
+                        .limit(this_chunk as i64)
+                        .max_time(sample_max_time)
+                        .await;
 
-                loop {
-                    match cur.try_next().await {
-                        Ok(Some(d)) => {
-                            chunk_last_id = d.get("_id").cloned();
-                            analyzer.process_document(&d);
-                            chunk_docs += 1;
-                        }
-                        Ok(None) => break,
+                    let mut chunk_docs = 0_u64;
+                    let mut chunk_last_id: Option<bson::Bson> = None;
+                    let mut cur = match cursor_result {
+                        Ok(cur) => cur,
                         Err(e) => {
-                            let error_text = e.to_string();
-                            match classify_unauthorized_retry(
-                                &error_text,
-                                auth_retry_attempt,
-                                auth_retry_max,
-                            ) {
-                                Some(UnauthorizedRetryDecision::Retry) => {
-                                    auth_retry_attempt += 1;
-                                    warn!(
-                                        "auth_retry namespace={}.{} chunk={}/{} processed={}/{} retry_attempt={}/{} reason={}",
-                                        db_name,
-                                        coll_name,
-                                        chunk_index,
-                                        total_chunks,
-                                        processed,
-                                        sample_size,
-                                        auth_retry_attempt,
-                                        auth_retry_max,
-                                        error_text
-                                    );
-                                    continue 'retry_chunk;
-                                }
-                                Some(UnauthorizedRetryDecision::Exhausted) => {
-                                    warn!(
-                                        "auth_retry_exhausted namespace={}.{} chunk={}/{} processed={}/{} retries={} reason={}",
-                                        db_name,
-                                        coll_name,
-                                        chunk_index,
-                                        total_chunks,
-                                        processed,
-                                        sample_size,
-                                        auth_retry_max,
-                                        error_text
-                                    );
-                                    return Err(anyhow!(
-                                        "Unauthorized cursor iteration persists for {}.{} at chunk {}/{} after {} retries",
-                                        db_name,
-                                        coll_name,
-                                        chunk_index,
-                                        total_chunks,
-                                        auth_retry_max
-                                    ));
-                                }
-                                None => {
-                                    warn!(
-                                        "find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
-                                        db_name, coll_name, chunk_index, total_chunks, e
-                                    );
-                                    break;
+                            warn!(
+                                "find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
+                                db_name,
+                                coll_name,
+                                chunk_index,
+                                total_chunks,
+                                chunk_start_id
+                                    .as_ref()
+                                    .map(|id| id.to_string())
+                                    .unwrap_or_else(|| "<begin>".to_owned()),
+                                this_chunk,
+                                e
+                            );
+                            break;
+                        }
+                    };
+
+                    loop {
+                        match cur.try_next().await {
+                            Ok(Some(d)) => {
+                                chunk_last_id = d.get("_id").cloned();
+                                analyzer.process_document(&d);
+                                chunk_docs += 1;
+                            }
+                            Ok(None) => break,
+                            Err(e) => {
+                                let error_text = e.to_string();
+                                match classify_unauthorized_retry(
+                                    &error_text,
+                                    auth_retry_attempt,
+                                    auth_retry_max,
+                                ) {
+                                    Some(UnauthorizedRetryDecision::Retry) => {
+                                        auth_retry_attempt += 1;
+                                        warn!(
+                                            "auth_retry namespace={}.{} chunk={}/{} processed={}/{} retry_attempt={}/{} reason={}",
+                                            db_name,
+                                            coll_name,
+                                            chunk_index,
+                                            total_chunks,
+                                            processed,
+                                            sample_size,
+                                            auth_retry_attempt,
+                                            auth_retry_max,
+                                            error_text
+                                        );
+                                        continue 'retry_chunk;
+                                    }
+                                    Some(UnauthorizedRetryDecision::Exhausted) => {
+                                        warn!(
+                                            "auth_retry_exhausted namespace={}.{} chunk={}/{} processed={}/{} retries={} reason={}",
+                                            db_name,
+                                            coll_name,
+                                            chunk_index,
+                                            total_chunks,
+                                            processed,
+                                            sample_size,
+                                            auth_retry_max,
+                                            error_text
+                                        );
+                                        return Err(anyhow!(
+                                            "Unauthorized cursor iteration persists for {}.{} at chunk {}/{} after {} retries",
+                                            db_name,
+                                            coll_name,
+                                            chunk_index,
+                                            total_chunks,
+                                            auth_retry_max
+                                        ));
+                                    }
+                                    None => {
+                                        warn!(
+                                            "find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
+                                            db_name, coll_name, chunk_index, total_chunks, e
+                                        );
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                if chunk_docs == 0 {
+                    if chunk_docs == 0 {
+                        return Ok(());
+                    }
+
+                    last_processed_id = chunk_last_id.or(chunk_start_id);
+                    processed = processed.saturating_add(chunk_docs);
+                    if chunk_docs < this_chunk {
+                        break;
+                    }
                     break;
                 }
-
-                last_processed_id = chunk_last_id.or(chunk_start_id);
-                processed = processed.saturating_add(chunk_docs);
-                if chunk_docs < this_chunk {
-                    break;
-                }
-                break;
             }
+
+            Ok(())
         }
 
-        Ok(())
+        let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
+        let sample_result = collection
+            .aggregate(pipeline)
+            .allow_disk_use(true)
+            .max_time(sample_max_time)
+            .await;
+
+        match sample_result {
+            Err(e) => {
+                let timeout_hint = timeout_fallback_hint(&e.to_string(), max_time_ms);
+                warn!(
+                    "$sample failed for {db_name}.{coll_name} \
+                     ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
+                );
+                find_fallback(
+                    collection,
+                    &mut analyzer,
+                    sample_size,
+                    fallback_chunk_size,
+                    fallback_auth_retry_max,
+                    sample_max_time,
+                    db_name,
+                    coll_name,
+                    worker_prefix,
+                )
+                .await?;
+            }
+            Ok(mut cursor) => loop {
+                match cursor.try_next().await {
+                    Ok(Some(doc)) => analyzer.process_document(&doc),
+                    Ok(None) => break,
+                    Err(e) => {
+                        analyzer = Analyzer::new(true);
+                        let timeout_hint = timeout_fallback_hint(&e.to_string(), max_time_ms);
+                        warn!(
+                            "$sample cursor error for {db_name}.{coll_name} \
+                                ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
+                        );
+                        find_fallback(
+                            collection,
+                            &mut analyzer,
+                            sample_size,
+                            fallback_chunk_size,
+                            fallback_auth_retry_max,
+                            sample_max_time,
+                            db_name,
+                            coll_name,
+                            worker_prefix,
+                        )
+                        .await?;
+                        break;
+                    }
+                }
+            },
+        }
+
+        Ok(analyzer)
     }
 
-    match sample_result {
-        Err(e) => {
-            let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
-            warn!(
-                "$sample failed for {db_name}.{coll_name} \
-                 ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
-            );
-            find_fallback(
-                &collection,
-                &mut analyzer,
+    async fn infer_raw_collection_analyzer(
+        collection: &mongodb::Collection<bson::RawDocumentBuf>,
+        sample_size: u64,
+        fallback_chunk_size: u64,
+        fallback_auth_retry_max: u32,
+        sample_max_time: Duration,
+        max_time_ms: Option<u64>,
+        db_name: &str,
+        coll_name: &str,
+        worker_prefix: Option<&str>,
+    ) -> Result<Analyzer> {
+        let mut analyzer = Analyzer::new(true);
+
+        async fn find_fallback(
+            collection: &mongodb::Collection<bson::RawDocumentBuf>,
+            analyzer: &mut Analyzer,
+            sample_size: u64,
+            chunk_size: u64,
+            auth_retry_max: u32,
+            sample_max_time: Duration,
+            db_name: &str,
+            coll_name: &str,
+            worker_prefix: Option<&str>,
+        ) -> Result<()> {
+            let total_chunks = sample_size.div_ceil(chunk_size).max(1);
+            let mut processed = 0_u64;
+            let mut chunk_index = 0_u64;
+            let mut last_processed_id: Option<bson::Bson> = None;
+
+            while processed < sample_size {
+                chunk_index += 1;
+                let remaining = sample_size - processed;
+                let this_chunk = remaining.min(chunk_size);
+                let chunk_start_id = last_processed_id.clone();
+                if let Some(prefix) = worker_prefix {
+                    info!(
+                        "{prefix}chunk {}/{} size={} processed={}/{} collection={}.{} start_after_id={}",
+                        chunk_index,
+                        total_chunks,
+                        this_chunk,
+                        processed,
+                        sample_size,
+                        db_name,
+                        coll_name,
+                        chunk_start_id
+                            .as_ref()
+                            .map(|id| id.to_string())
+                            .unwrap_or_else(|| "<begin>".to_owned())
+                    );
+                } else {
+                    info!(
+                        "chunk {}/{} size={} processed={}/{} collection={}.{} start_after_id={}",
+                        chunk_index,
+                        total_chunks,
+                        this_chunk,
+                        processed,
+                        sample_size,
+                        db_name,
+                        coll_name,
+                        chunk_start_id
+                            .as_ref()
+                            .map(|id| id.to_string())
+                            .unwrap_or_else(|| "<begin>".to_owned())
+                    );
+                }
+
+                let mut auth_retry_attempt = 0_u32;
+
+                'retry_chunk: loop {
+                    let filter = match chunk_start_id.as_ref() {
+                        Some(last_id) => doc! { "_id": { "$gt": last_id.clone() } },
+                        None => doc! {},
+                    };
+                    let cursor_result = collection
+                        .find(filter)
+                        .sort(doc! { "_id": 1 })
+                        .limit(this_chunk as i64)
+                        .max_time(sample_max_time)
+                        .await;
+
+                    let mut chunk_docs = 0_u64;
+                    let mut chunk_last_id: Option<bson::Bson> = None;
+                    let mut cur = match cursor_result {
+                        Ok(cur) => cur,
+                        Err(e) => {
+                            warn!(
+                                "find() chunk failed for {}.{} at chunk {}/{} (start_after_id={}, limit={}): {:#}",
+                                db_name,
+                                coll_name,
+                                chunk_index,
+                                total_chunks,
+                                chunk_start_id
+                                    .as_ref()
+                                    .map(|id| id.to_string())
+                                    .unwrap_or_else(|| "<begin>".to_owned()),
+                                this_chunk,
+                                e
+                            );
+                            break;
+                        }
+                    };
+
+                    loop {
+                        match cur.try_next().await {
+                            Ok(Some(d)) => {
+                                chunk_last_id = d
+                                    .get("_id")
+                                    .ok()
+                                    .flatten()
+                                    .and_then(|id| bson::Bson::try_from(id).ok());
+                                analyzer.process_raw_document(d.as_ref()).with_context(|| {
+                                    format!(
+                                        "raw infer decode failed for {}.{} while iterating fallback cursor",
+                                        db_name, coll_name
+                                    )
+                                })?;
+                                chunk_docs += 1;
+                            }
+                            Ok(None) => break,
+                            Err(e) => {
+                                let error_text = e.to_string();
+                                match classify_unauthorized_retry(
+                                    &error_text,
+                                    auth_retry_attempt,
+                                    auth_retry_max,
+                                ) {
+                                    Some(UnauthorizedRetryDecision::Retry) => {
+                                        auth_retry_attempt += 1;
+                                        warn!(
+                                            "auth_retry namespace={}.{} chunk={}/{} processed={}/{} retry_attempt={}/{} reason={}",
+                                            db_name,
+                                            coll_name,
+                                            chunk_index,
+                                            total_chunks,
+                                            processed,
+                                            sample_size,
+                                            auth_retry_attempt,
+                                            auth_retry_max,
+                                            error_text
+                                        );
+                                        continue 'retry_chunk;
+                                    }
+                                    Some(UnauthorizedRetryDecision::Exhausted) => {
+                                        warn!(
+                                            "auth_retry_exhausted namespace={}.{} chunk={}/{} processed={}/{} retries={} reason={}",
+                                            db_name,
+                                            coll_name,
+                                            chunk_index,
+                                            total_chunks,
+                                            processed,
+                                            sample_size,
+                                            auth_retry_max,
+                                            error_text
+                                        );
+                                        return Err(anyhow!(
+                                            "Unauthorized cursor iteration persists for {}.{} at chunk {}/{} after {} retries",
+                                            db_name,
+                                            coll_name,
+                                            chunk_index,
+                                            total_chunks,
+                                            auth_retry_max
+                                        ));
+                                    }
+                                    None => {
+                                        warn!(
+                                            "find() chunk cursor error for {}.{} at chunk {}/{}: {:#}",
+                                            db_name, coll_name, chunk_index, total_chunks, e
+                                        );
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if chunk_docs == 0 {
+                        return Ok(());
+                    }
+
+                    last_processed_id = chunk_last_id.or(chunk_start_id);
+                    processed = processed.saturating_add(chunk_docs);
+                    if chunk_docs < this_chunk {
+                        break;
+                    }
+                    break;
+                }
+            }
+
+            Ok(())
+        }
+
+        let pipeline = vec![doc! { "$sample": { "size": sample_size as i64 } }];
+        let sample_result = collection
+            .aggregate(pipeline)
+            .with_type::<bson::RawDocumentBuf>()
+            .allow_disk_use(true)
+            .max_time(sample_max_time)
+            .await;
+
+        match sample_result {
+            Err(e) => {
+                let timeout_hint = timeout_fallback_hint(&e.to_string(), max_time_ms);
+                warn!(
+                    "$sample failed for {db_name}.{coll_name} \
+                     ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
+                );
+                find_fallback(
+                    collection,
+                    &mut analyzer,
+                    sample_size,
+                    fallback_chunk_size,
+                    fallback_auth_retry_max,
+                    sample_max_time,
+                    db_name,
+                    coll_name,
+                    worker_prefix,
+                )
+                .await?;
+            }
+            Ok(mut cursor) => loop {
+                match cursor.try_next().await {
+                    Ok(Some(raw_doc)) => {
+                        analyzer.process_raw_document(raw_doc.as_ref()).with_context(|| {
+                            format!(
+                                "raw infer decode failed for {}.{} while iterating sample cursor",
+                                db_name, coll_name
+                            )
+                        })?
+                    }
+                    Ok(None) => break,
+                    Err(e) => {
+                        analyzer = Analyzer::new(true);
+                        let timeout_hint = timeout_fallback_hint(&e.to_string(), max_time_ms);
+                        warn!(
+                            "$sample cursor error for {db_name}.{coll_name} \
+                                ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
+                        );
+                        find_fallback(
+                            collection,
+                            &mut analyzer,
+                            sample_size,
+                            fallback_chunk_size,
+                            fallback_auth_retry_max,
+                            sample_max_time,
+                            db_name,
+                            coll_name,
+                            worker_prefix,
+                        )
+                        .await?;
+                        break;
+                    }
+                }
+            },
+        }
+
+        Ok(analyzer)
+    }
+
+    let mut schema = match infer_mode {
+        InferMode::Decoded => infer_decoded_collection_analyzer(
+            &collection,
+            sample_size,
+            fallback_chunk_size,
+            fallback_auth_retry_max,
+            sample_max_time,
+            args.max_time_ms,
+            db_name,
+            coll_name,
+            worker_prefix.as_deref(),
+        )
+        .await?
+        .finish(),
+        InferMode::Raw => {
+            let raw_collection = db.collection::<bson::RawDocumentBuf>(coll_name);
+            infer_raw_collection_analyzer(
+                &raw_collection,
                 sample_size,
                 fallback_chunk_size,
                 fallback_auth_retry_max,
                 sample_max_time,
+                args.max_time_ms,
                 db_name,
                 coll_name,
+                worker_prefix.as_deref(),
             )
-            .await?;
+            .await?
+            .finish()
         }
-        Ok(mut cursor) => loop {
-            match cursor.try_next().await {
-                Ok(Some(doc)) => analyzer.process_document(&doc),
-                Ok(None) => break,
-                Err(e) => {
-                    analyzer = Analyzer::new(true);
-                    let timeout_hint = timeout_fallback_hint(&e.to_string(), args.max_time_ms);
-                    warn!(
-                        "$sample cursor error for {db_name}.{coll_name} \
-                            ({e}){timeout_hint}; falling back to chunked sequential find() with chunk_size={fallback_chunk_size} target={sample_size}"
-                    );
-                    find_fallback(
-                        &collection,
-                        &mut analyzer,
-                        sample_size,
-                        fallback_chunk_size,
-                        fallback_auth_retry_max,
-                        sample_max_time,
-                        db_name,
-                        coll_name,
-                    )
-                    .await?;
-                    break;
-                }
-            }
-        },
-    }
-
-    let mut schema = analyzer.finish();
-    apply_collection_property_filters(&mut schema, coll_name, include, exclude);
+    };
+    apply_collection_property_filters(&mut schema, db_name, coll_name, include, exclude);
     let total_docs = if let Some(t) = known_total {
         t
     } else {
@@ -1867,6 +2379,7 @@ pub async fn infer_collection(
     }
 
     if let Some(out_dir) = output_dir {
+        let _write_guard = infer_write_lock().lock().await;
         write_collection_files(
             out_dir,
             db_name,
@@ -1970,13 +2483,40 @@ pub async fn detect_search_node_capability(
 
 pub fn apply_collection_property_filters(
     schema: &mut CollectionSchema,
+    db_name: &str,
     coll_name: &str,
     include: &[String],
     exclude: &[String],
 ) {
-    let has_collection_wide_include = include.iter().any(|entry| entry == coll_name);
-    let included_properties = property_filter_entries_for_collection(coll_name, include);
-    let excluded_properties = property_filter_entries_for_collection(coll_name, exclude);
+    let has_db_prefix = |entry: &String| {
+        entry
+            .split_once('.')
+            .map(|(prefix, _)| prefix == db_name)
+            .unwrap_or(false)
+    };
+    let has_multi_db_entries = include.iter().chain(exclude.iter()).any(has_db_prefix);
+
+    let has_collection_wide_include = if has_multi_db_entries {
+        include.iter().any(|entry| {
+            entry
+                .split_once('.')
+                .map(|(entry_db, rest)| entry_db == db_name && rest == coll_name)
+                .unwrap_or(false)
+        })
+    } else {
+        include.iter().any(|entry| entry == coll_name)
+    };
+
+    let included_properties = if has_multi_db_entries {
+        property_filter_entries_for_database_collection(db_name, coll_name, include)
+    } else {
+        property_filter_entries_for_collection(coll_name, include)
+    };
+    let excluded_properties = if has_multi_db_entries {
+        property_filter_entries_for_database_collection(db_name, coll_name, exclude)
+    } else {
+        property_filter_entries_for_collection(coll_name, exclude)
+    };
 
     if !has_collection_wide_include && !included_properties.is_empty() {
         schema.object.retain(|field_name, _| {

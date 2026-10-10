@@ -6,13 +6,12 @@
 //! * After processing all documents [`Analyzer::finish`] computes probabilities,
 //!   injects implicit `Undefined` entries, and sorts fields (`_id` first, then
 //!   case-insensitive alphabetical order).
-//! * Values are kept via reservoir sampling; the reservoir capacity is 100 for
-//!   `String`, `Binary`, `JavaScriptCode`, `JavaScriptCodeWithScope`, and 10 000
-//!   for all other types.
+//! * Values are kept via reservoir sampling with capacity 10 for all types.
 
 use std::collections::{HashMap, HashSet};
 
 use bson::Bson;
+use bson::raw::{RawBsonRef, RawDocument};
 use indexmap::IndexMap;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
@@ -246,6 +245,87 @@ impl FieldAcc {
             _ => {}
         }
     }
+
+    fn observe_raw_value(&mut self, raw: RawBsonRef<'_>) -> bson::raw::Result<()> {
+        match raw {
+            RawBsonRef::Array(arr) => {
+                let mut iter = arr.into_iter();
+                let Some(first_item) = iter.next() else {
+                    return Ok(());
+                };
+
+                self.count += 1;
+                let type_name = TYPE_ARRAY;
+                let acc = self
+                    .types
+                    .entry(type_name.to_owned())
+                    .or_insert_with(|| TypeAcc::new(type_name, self.collect_values));
+                acc.count += 1;
+
+                let items = acc
+                    .array_items
+                    .get_or_insert_with(|| Box::new(FieldAcc::new(self.collect_values)));
+
+                items.observe_raw_value(first_item?)?;
+                for item in iter {
+                    items.observe_raw_value(item?)?;
+                }
+                Ok(())
+            }
+            RawBsonRef::Document(doc) => {
+                let mut iter = doc.iter();
+                let Some(first_field) = iter.next() else {
+                    return Ok(());
+                };
+
+                self.count += 1;
+                let type_name = TYPE_OBJECT;
+                let acc = self
+                    .types
+                    .entry(type_name.to_owned())
+                    .or_insert_with(|| TypeAcc::new(type_name, self.collect_values));
+                acc.count += 1;
+
+                let nested = acc.nested_object.get_or_insert_with(ObjectAcc::new);
+                let (first_key, first_value) = first_field?;
+                nested.observe_raw_field(first_key, first_value, self.collect_values)?;
+                for field in iter {
+                    let (key, value) = field?;
+                    nested.observe_raw_field(key, value, self.collect_values)?;
+                }
+                Ok(())
+            }
+            raw_scalar => {
+                self.count += 1;
+                let type_name = raw_bson_type_name(raw_scalar);
+                let acc = self
+                    .types
+                    .entry(type_name.to_owned())
+                    .or_insert_with(|| TypeAcc::new(type_name, self.collect_values));
+                acc.count += 1;
+
+                let scalar_bson = Bson::try_from(raw_scalar)?;
+                if let Some(v) = bson_to_json_value(&scalar_bson) {
+                    if let Some(len) = v.as_str().map(str::len) {
+                        acc.max_string_length = Some(acc.max_string_length.unwrap_or(0).max(len));
+                    }
+                    if let Some(reservoir) = acc.values.as_mut() {
+                        reservoir.add(v.clone());
+                    }
+                    if acc.distinct_values.len() < DISTINCT_CAP {
+                        if let Ok(s) = serde_json::to_string(&v) {
+                            let is_new = acc.distinct_values.insert(s);
+                            if is_new && acc.first_distinct_values.len() < 20 {
+                                acc.first_distinct_values.push(v);
+                            }
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+        }
+    }
 }
 
 struct ObjectAcc {
@@ -265,6 +345,19 @@ impl ObjectAcc {
             .entry(key.to_owned())
             .or_insert_with(|| FieldAcc::new(collect_values));
         acc.observe_value(value);
+    }
+
+    fn observe_raw_field(
+        &mut self,
+        key: &str,
+        value: RawBsonRef<'_>,
+        collect_values: bool,
+    ) -> bson::raw::Result<()> {
+        let acc = self
+            .fields
+            .entry(key.to_owned())
+            .or_insert_with(|| FieldAcc::new(collect_values));
+        acc.observe_raw_value(value)
     }
 }
 
@@ -299,6 +392,16 @@ impl Analyzer {
         }
     }
 
+    /// Feed one raw BSON document into the analyzer.
+    pub fn process_raw_document(&mut self, doc: &RawDocument) -> bson::raw::Result<()> {
+        self.total_docs += 1;
+        for field in doc.iter() {
+            let (key, value) = field?;
+            self.root.observe_raw_field(key, value, self.collect_values)?;
+        }
+        Ok(())
+    }
+
     /// Finalize and return the inferred [`CollectionSchema`].
     pub fn finish(self) -> CollectionSchema {
         let total = self.total_docs;
@@ -308,6 +411,32 @@ impl Analyzer {
             sampled: total,
             object,
         }
+    }
+}
+
+fn raw_bson_type_name(raw: RawBsonRef<'_>) -> &'static str {
+    match raw {
+        RawBsonRef::Double(_) => TYPE_DOUBLE,
+        RawBsonRef::String(_) => TYPE_STRING,
+        RawBsonRef::Array(_) => TYPE_ARRAY,
+        RawBsonRef::Document(_) => TYPE_OBJECT,
+        RawBsonRef::Boolean(_) => TYPE_BOOLEAN,
+        RawBsonRef::Null => TYPE_NULL,
+        RawBsonRef::RegularExpression(_) => TYPE_REGEX,
+        RawBsonRef::JavaScriptCode(_) => TYPE_CODE,
+        RawBsonRef::JavaScriptCodeWithScope(_) => TYPE_CODE_W_SCOPE,
+        RawBsonRef::Int32(_) => TYPE_INT32,
+        RawBsonRef::Int64(_) => TYPE_INT64,
+        RawBsonRef::Timestamp(_) => TYPE_TIMESTAMP,
+        RawBsonRef::Binary(_) => TYPE_BINARY,
+        RawBsonRef::ObjectId(_) => TYPE_OBJECTID,
+        RawBsonRef::DateTime(_) => TYPE_DATE,
+        RawBsonRef::Symbol(_) => TYPE_SYMBOL,
+        RawBsonRef::Decimal128(_) => TYPE_DECIMAL128,
+        RawBsonRef::Undefined => TYPE_UNDEFINED,
+        RawBsonRef::MaxKey => TYPE_MAXKEY,
+        RawBsonRef::MinKey => TYPE_MINKEY,
+        RawBsonRef::DbPointer(_) => TYPE_DBPOINTER,
     }
 }
 
@@ -555,10 +684,8 @@ pub fn bson_type_name(bson: &Bson) -> &'static str {
 
 /// Reservoir capacity for a given internal type name.
 fn reservoir_capacity(type_name: &str) -> usize {
-    match type_name {
-        TYPE_STRING | TYPE_BINARY | TYPE_CODE | TYPE_CODE_W_SCOPE => 100,
-        _ => 10_000,
-    }
+    let _ = type_name;
+    10
 }
 
 /// Convert a BSON value to a JSON-compatible value for sample storage.
@@ -598,8 +725,31 @@ pub fn bson_to_json_value(bson: &Bson) -> Option<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Analyzer, TYPE_DOUBLE, TYPE_INT32, TYPE_INT64, TYPE_STRING};
+    use super::{
+        Analyzer, CollectionSchema, FieldSchema, TYPE_DOUBLE, TYPE_INT32, TYPE_INT64,
+        TYPE_STRING,
+    };
     use bson::doc;
+
+    fn clear_sample_values(schema: &mut CollectionSchema) {
+        fn clear_field(field: &mut FieldSchema) {
+            for type_schema in field.types.values_mut() {
+                type_schema.values = None;
+                if let Some(object) = type_schema.object.as_mut() {
+                    for child in object.values_mut() {
+                        clear_field(child);
+                    }
+                }
+                if let Some(array_items) = type_schema.array.as_mut() {
+                    clear_field(array_items);
+                }
+            }
+        }
+
+        for field in schema.object.values_mut() {
+            clear_field(field);
+        }
+    }
 
     #[test]
     fn empty_arrays_do_not_count_as_present_for_probability() {
@@ -697,5 +847,109 @@ mod tests {
         assert_eq!(string_type.max_length, Some(22));
         assert_eq!(string_type.varchar_length, None);
         assert_eq!(string_type.values.as_ref().map(Vec::len), Some(20));
+    }
+
+    #[test]
+    fn raw_and_decoded_inference_match_for_nested_documents_and_arrays() {
+        let docs = vec![
+            doc! {
+                "_id": 1_i32,
+                "name": "alpha",
+                "meta": {
+                    "enabled": true,
+                    "score": 10_i32,
+                },
+                "items": [
+                    {
+                        "kind": "A",
+                        "tags": ["x", "y"],
+                    },
+                    {
+                        "kind": "B",
+                        "tags": ["z"],
+                    }
+                ]
+            },
+            doc! {
+                "_id": 2_i32,
+                "name": "beta",
+                "meta": {
+                    "enabled": false,
+                    "score": 11_i64,
+                },
+                "items": [
+                    {
+                        "kind": "C",
+                        "tags": ["k"],
+                    }
+                ],
+                "optional": bson::Bson::Null,
+            },
+            doc! {
+                "_id": 3_i32,
+                "name": "gamma",
+                "meta": {},
+                "items": [],
+                "optional": "set",
+            },
+        ];
+
+        let mut decoded = Analyzer::new(true);
+        let mut raw = Analyzer::new(true);
+
+        for doc in &docs {
+            decoded.process_document(doc);
+            let raw_doc = bson::RawDocumentBuf::try_from(doc)
+                .expect("raw conversion from document should succeed");
+            raw.process_raw_document(raw_doc.as_ref())
+                .expect("raw document traversal should succeed");
+        }
+
+        let mut decoded_schema = decoded.finish();
+        let mut raw_schema = raw.finish();
+        clear_sample_values(&mut decoded_schema);
+        clear_sample_values(&mut raw_schema);
+
+        let decoded_json =
+            serde_json::to_value(&decoded_schema).expect("decoded schema should serialize");
+        let raw_json = serde_json::to_value(&raw_schema).expect("raw schema should serialize");
+        assert_eq!(decoded_json, raw_json);
+    }
+
+    #[test]
+    fn raw_inference_skips_empty_object_and_array_values() {
+        let docs = vec![
+            doc! {
+                "_id": 1_i32,
+                "empty_obj": {},
+                "empty_arr": [],
+            },
+            doc! {
+                "_id": 2_i32,
+                "empty_obj": { "value": 1_i32 },
+                "empty_arr": [1_i32],
+            },
+        ];
+
+        let mut raw = Analyzer::new(true);
+        for doc in &docs {
+            let raw_doc = bson::RawDocumentBuf::try_from(doc)
+                .expect("raw conversion from document should succeed");
+            raw.process_raw_document(raw_doc.as_ref())
+                .expect("raw document traversal should succeed");
+        }
+
+        let schema = raw.finish();
+        let empty_obj = schema
+            .object
+            .get("empty_obj")
+            .expect("empty_obj field should be present");
+        let empty_arr = schema
+            .object
+            .get("empty_arr")
+            .expect("empty_arr field should be present");
+
+        assert!((empty_obj.probability - 0.5).abs() < f64::EPSILON);
+        assert!((empty_arr.probability - 0.5).abs() < f64::EPSILON);
     }
 }

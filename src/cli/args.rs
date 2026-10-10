@@ -35,11 +35,6 @@ pub struct Cli {
     #[arg(long = "log-format", global = true)]
     pub log_format: Option<String>,
 
-    /// Unified runtime service name used for runtime logs.
-    /// When set, this overrides env/fallback service-name resolution.
-    #[arg(long = "dd-service", global = true)]
-    pub service_name: Option<String>,
-
     #[command(subcommand)]
     pub command: Option<Command>,
 
@@ -80,18 +75,14 @@ pub struct InferArgs {
     #[arg(long = "auth-retry-max")]
     pub auth_retry_max: Option<u32>,
 
+    /// Inference mode: decoded (existing path) or raw (raw BSON traversal).
+    #[arg(long = "infer-mode")]
+    pub infer_mode: Option<String>,
+
     /// Treat all MongoDB Object fields as JSONB columns in the generated DDL
     /// instead of creating 1:1 child tables (arrays of objects are unaffected)
     #[arg(long = "jsonb", action = clap::ArgAction::SetTrue)]
     pub jsonb: bool,
-
-    /// Print inferred schema JSON to stdout
-    #[arg(long = "print-json", action = clap::ArgAction::SetTrue)]
-    pub print_json: bool,
-
-    /// Deprecated compatibility flag. JSON is no longer printed by default.
-    #[arg(long = "no-output", hide = true, action = clap::ArgAction::SetTrue)]
-    pub no_output: bool,
 
     /// PostgreSQL target database name. When -c is provided, this overwrites
     /// target.database_name in the config file before running.
@@ -149,7 +140,7 @@ pub struct ToPgArgs {
 #[derive(Parser, Debug)]
 pub struct InitArgs {
     /// Base directory under which the project folder will be created
-    #[arg(long)]
+    #[arg(long, alias = "base-dir")]
     pub project_base: PathBuf,
 
     /// Name of the project (becomes a sub-folder inside project_base)
@@ -168,6 +159,24 @@ pub struct InitArgs {
     /// NAMESPACE is not written to the config file so `infer` will enumerate all databases
     #[arg(long = "namespace")]
     pub namespace: Option<String>,
+
+    /// PostgreSQL target database name(s) to store in the config file.
+    /// Accepts a single value or a comma-separated list for multi-database mapping.
+    #[arg(long = "database-name")]
+    pub database_name: Option<String>,
+
+    /// PostgreSQL target schema name(s) to store in the config file.
+    /// Accepts a single value or a comma-separated list for multi-database mapping.
+    #[arg(long = "schema-name")]
+    pub schema_name: Option<String>,
+
+    /// Percentage of each collection to sample during infer (between 0 and 100)
+    #[arg(long = "percent", value_parser = clap::value_parser!(f64))]
+    pub percent: Option<f64>,
+
+    /// Runtime log format to store in the generated project configuration
+    #[arg(long = "log-format")]
+    pub log_format: Option<String>,
 
     /// Optional cluster segment appended under project_dir for all outputs
     #[arg(long = "cluster-name", visible_alias = "cluster-naem")]
@@ -238,7 +247,7 @@ pub struct SchemaArgs {
     pub output: Option<PathBuf>,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub struct ExportArgs {
     /// Optional collection name; if omitted all collections in schema/tables/ are exported
     pub collection: Option<String>,
@@ -282,7 +291,7 @@ pub struct ExportArgs {
     pub chunk_size: Option<u64>,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub struct ImportArgs {
     /// Optional collection name; if omitted all collections for the namespace are imported
     pub collection: Option<String>,
@@ -310,6 +319,11 @@ pub struct ImportArgs {
     /// project.project_dir in the config file before running.
     #[arg(long = "project-dir")]
     pub project_dir: Option<String>,
+
+    /// Reuse existing destination tables instead of failing preflight.
+    /// When enabled, DDL files targeting existing tables are skipped.
+    #[arg(long = "force", action = clap::ArgAction::SetTrue)]
+    pub force: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -327,7 +341,7 @@ pub struct ClusterReportArgs {
     pub cluster_label: String,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub struct KafkaImportArgs {
     /// Path to the project config file (TOML)
     #[arg(short = 'c', long = "config")]

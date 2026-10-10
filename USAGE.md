@@ -746,10 +746,10 @@ base_dir = "gs://my-migration-bucket/mongo2pg-exports"
 project_dir = "retail"
 ```
 
-With namespace `ciam_prep` and grouped SQL lookup `events`, one uploaded object is:
+With namespace `idm_prep` and grouped SQL lookup `events`, one uploaded object is:
 
 ```text
-gs://my-migration-bucket/mongo2pg-exports/data/ciam_prep/events/events.csv.gz
+gs://my-migration-bucket/mongo2pg-exports/data/idm_prep/events/events.csv.gz
 ```
 
 **Output layout**

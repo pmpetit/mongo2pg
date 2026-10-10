@@ -12,7 +12,7 @@ vars:
     sample_supplies
     sample_training
     sample_weatherdata
-    sample_events
+    sample_movies
   TOPIC_PREFIX: "t4"
 
 env:
@@ -101,11 +101,61 @@ tasks:
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
           cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^database_name = .*/database_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^schema_name = .*/schema_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          awk -v db="$db" '
+            /^\[source\]/ { in_source = 1; in_target = 0; print; next }
+            /^\[target\]/ { in_source = 0; in_target = 1; print; next }
+            /^\[project\]/ { in_project = 1; in_source = 0; in_target = 0; print; next }
+            /^\[/ && $0 !~ /^\[source\]/ && $0 !~ /^\[target\]/ && $0 !~ /^\[project\]/ {
+              in_project = 0
+              in_source = 0
+              in_target = 0
+            }
+
+            skip_block {
+              if ($0 ~ /^[[:space:]]*\]/) {
+                skip_block = 0
+              }
+              next
+            }
+
+            {
+              if (in_project && $0 ~ /^[[:space:]]*project_name[[:space:]]*=/) {
+                print "project_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_source && $0 ~ /^[[:space:]]*namespace[[:space:]]*=/) {
+                print "namespace = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*database_name[[:space:]]*=/) {
+                print "database_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*schema_name[[:space:]]*=/) {
+                print "schema_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              print
+            }
+          ' "{{.OUT}}/$db/config/$db.toml" > "{{.OUT}}/$db/config/$db.toml.tmp" && mv "{{.OUT}}/$db/config/$db.toml.tmp" "{{.OUT}}/$db/config/$db.toml"
           echo "📐 infer $db"
-          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output
+          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml"
         done
       - echo "👉 results in {{.OUT}}"
 
@@ -146,6 +196,7 @@ tasks:
     silent: true
     vars:
       OUT: "{{.RESULTS_DIR}}"
+      jsonb: '{{default "false" .jsonb}}'
       DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
     cmds:
       - mkdir -p "{{.OUT}}"
@@ -161,14 +212,202 @@ tasks:
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
           cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
+          awk -v db="$db" '
+            /^\[source\]/ { in_source = 1; in_target = 0; print; next }
+            /^\[target\]/ { in_source = 0; in_target = 1; print; next }
+            /^\[project\]/ { in_project = 1; in_source = 0; in_target = 0; print; next }
+            /^\[/ && $0 !~ /^\[source\]/ && $0 !~ /^\[target\]/ && $0 !~ /^\[project\]/ {
+              in_project = 0
+              in_source = 0
+              in_target = 0
+            }
+
+            skip_block {
+              if ($0 ~ /^[[:space:]]*\]/) {
+                skip_block = 0
+              }
+              next
+            }
+
+            {
+              if (in_project && $0 ~ /^[[:space:]]*project_name[[:space:]]*=/) {
+                print "project_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_source && $0 ~ /^[[:space:]]*namespace[[:space:]]*=/) {
+                print "namespace = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*database_name[[:space:]]*=/) {
+                print "database_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*schema_name[[:space:]]*=/) {
+                print "schema_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              print
+            }
+          ' "{{.OUT}}/$db/config/$db.toml" > "{{.OUT}}/$db/config/$db.toml.tmp" && mv "{{.OUT}}/$db/config/$db.toml.tmp" "{{.OUT}}/$db/config/$db.toml"
+          sed -i -E "s/^[[:space:]]*jsonb[[:space:]]*=.*/jsonb = {{.jsonb}}/" "{{.OUT}}/$db/config/$db.toml"
           echo "📐 infer $db"
-          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output
+          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml"
           echo "🍃 ➡️ 📄 export $db"
-          "{{.BIN}}" export -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db
+          "{{.BIN}}" export -c "{{.OUT}}/$db/config/$db.toml"
           echo "📄 ➡️ 🐘 import $db"
-          "{{.BIN}}" import -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db
+          "{{.BIN}}" import -c "{{.OUT}}/$db/config/$db.toml"
         done
       - echo "👉 results in {{.OUT}}"
+
+  tests-all-grouped:
+    desc: Infer/export/Import for all provided databases in one run
+    silent: true
+    vars:
+      OUT: "{{.RESULTS_DIR}}"
+      DBS_TO_PROCESS: '{{join " " .CLI_ARGS}}'
+    cmds:
+      - |
+        if [ ! -x "{{.BIN}}" ] \
+          || [ Cargo.toml -nt "{{.BIN}}" ] \
+          || [ Cargo.lock -nt "{{.BIN}}" ] \
+          || [ -n "$(find src -type f -name '*.rs' -newer "{{.BIN}}" -print -quit)" ]; then
+          echo "🔨 binary stale or missing, running cargo build"
+          cargo build
+        else
+          echo "✅ binary up-to-date: {{.BIN}}"
+        fi
+
+        if [ -z "{{.DBS_TO_PROCESS}}" ]; then
+          echo "Usage: task tests-all-grouped -- <db1> <db2> [db3 ...]"
+          echo "Example: task tests-all-grouped -- sample_mflix sample_airbnb"
+          exit 1
+        fi
+
+        dbs=( {{.DBS_TO_PROCESS}} )
+        total=${#dbs[@]}
+
+        if [ "$total" -eq 0 ]; then
+          echo "No databases provided"
+          exit 1
+        fi
+
+        group_dbs=( "${dbs[@]}" )
+        echo "▶️ tests-all group: ${group_dbs[*]}"
+
+        group_array="["
+        for db in "${group_dbs[@]}"
+        do
+          if [ "$group_array" != "[" ]; then
+            group_array="$group_array, "
+          fi
+          group_array="$group_array\"$db\""
+        done
+        group_array="$group_array]"
+
+        results_snapshot_dir="{{.OUT}}/local_project"
+        if [ -d "$results_snapshot_dir" ]; then
+          rm -rf -- "$results_snapshot_dir"
+        fi
+        config_snapshot_dir="{{.OUT}}/local_project/config"       
+        mkdir -p "$config_snapshot_dir"
+        config_path="$(mktemp "$config_snapshot_dir/local_project.grouped.XXXXXX.toml")"
+        cp docker/localhost.toml "$config_path"
+
+        awk -v arr="$group_array" '
+          /^\[source\]/ { in_source = 1; in_target = 0; print; next }
+          /^\[target\]/ { in_source = 0; in_target = 1; print; next }
+          /^\[/ && $0 !~ /^\[source\]/ && $0 !~ /^\[target\]/ {
+            in_source = 0
+            in_target = 0
+          }
+
+          skip_block {
+            if ($0 ~ /^[[:space:]]*\]/) {
+              skip_block = 0
+            }
+            next
+          }
+
+          {
+            if (in_source && $0 ~ /^[[:space:]]*namespace[[:space:]]*=/) {
+              print "namespace = " arr
+              if ($0 ~ /\[/ && $0 !~ /\]/) {
+                skip_block = 1
+              }
+              next
+            }
+
+            if (in_target && $0 ~ /^[[:space:]]*database_name[[:space:]]*=/) {
+              print "database_name = " arr
+              if ($0 ~ /\[/ && $0 !~ /\]/) {
+                skip_block = 1
+              }
+              next
+            }
+
+            if (in_target && $0 ~ /^[[:space:]]*schema_name[[:space:]]*=/) {
+              print "schema_name = " arr
+              if ($0 ~ /\[/ && $0 !~ /\]/) {
+                skip_block = 1
+              }
+              next
+            }
+
+            print
+          }
+        ' "$config_path" > "$config_path.tmp" && mv "$config_path.tmp" "$config_path"
+        echo "🧾 updated $config_path with grouped namespace/target arrays"
+
+        config_snapshot_dir="{{.OUT}}/local_project/config"
+        mkdir -p "$config_snapshot_dir"
+        cp "$config_path" "$config_snapshot_dir/local_project.toml"
+        echo "🧾 config snapshot written: $config_snapshot_dir/local_project.toml"
+
+        for db in "${group_dbs[@]}"
+        do
+          echo "🗑️  database $db"
+          psql -U myuser -d mydb -h localhost -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid();"
+          psql -U myuser -d mydb -h localhost -c "DROP DATABASE IF EXISTS $db"
+          psql -U myuser -d mydb -h localhost -c "CREATE DATABASE $db"
+        done
+
+        # if [ "${OFFLINE_ONLY:-false}" = "true" ]; then
+        echo "🌱 reseed local MongoDB fixtures for: ${group_dbs[*]}"
+        for db in "${group_dbs[@]}"; do
+          MONGO_DATABASE="$db" docker compose -f docker/docker-compose.yml up --force-recreate --abort-on-container-exit mongodb-seed
+          if [ "$db" = "sample_events" ]; then
+            MONGO_DATABASE="$db" docker compose -f docker/docker-compose.yml --profile e2e-local-seed up --force-recreate --abort-on-container-exit mongodb-seed-e2e
+          fi
+        done
+        # else
+        #   echo "🧹 reset Kafka topics/connect and reseed for: ${group_dbs[*]}"
+        #   task kafka-reset-and-seed -- "${group_dbs[@]}"
+        # fi
+
+        echo "📐 infer grouped"
+        "{{.BIN}}" infer -c "$config_path"
+        echo "🍃 ➡️ 📄 export grouped"
+        "{{.BIN}}" export -c "$config_path"
+        echo "📄 ➡️ 🐘 import grouped"
+        "{{.BIN}}" import -c "$config_path"
+
+        echo "👉 results in {{.OUT}}"
 
   tests-kafka-all:
     desc: kafka-import for all sample databases
@@ -176,6 +415,7 @@ tasks:
     vars:
       OUT: "{{.RESULTS_DIR}}"
       DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
+      NO_MESSAGE_OK_DBS: "sample_events"
     cmds:
       #- task kafka-reset-and-seed -- {{.DBS_TO_PROCESS}}
       - mkdir -p "{{.OUT}}"
@@ -190,10 +430,59 @@ tasks:
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
           cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^project_name = .*/project_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^database_name = .*/database_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^schema_name = .*/schema_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          awk -v db="$db" '
+            /^\[source\]/ { in_source = 1; in_target = 0; print; next }
+            /^\[target\]/ { in_source = 0; in_target = 1; print; next }
+            /^\[project\]/ { in_project = 1; in_source = 0; in_target = 0; print; next }
+            /^\[/ && $0 !~ /^\[source\]/ && $0 !~ /^\[target\]/ && $0 !~ /^\[project\]/ {
+              in_project = 0
+              in_source = 0
+              in_target = 0
+            }
+
+            skip_block {
+              if ($0 ~ /^[[:space:]]*\]/) {
+                skip_block = 0
+              }
+              next
+            }
+
+            {
+              if (in_project && $0 ~ /^[[:space:]]*project_name[[:space:]]*=/) {
+                print "project_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_source && $0 ~ /^[[:space:]]*namespace[[:space:]]*=/) {
+                print "namespace = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*database_name[[:space:]]*=/) {
+                print "database_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*schema_name[[:space:]]*=/) {
+                print "schema_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              print
+            }
+          ' "{{.OUT}}/$db/config/$db.toml" > "{{.OUT}}/$db/config/$db.toml.tmp" && mv "{{.OUT}}/$db/config/$db.toml.tmp" "{{.OUT}}/$db/config/$db.toml"
           sed -i "s|^topic_prefix = .*|topic_prefix = \"{{.TOPIC_PREFIX}}\"|" "{{.OUT}}/$db/config/$db.toml"
           sed -i "s/^group_id = .*/group_id = \"{{.TOPIC_PREFIX}}-$db-group\"/" "{{.OUT}}/$db/config/$db.toml"
           if grep -q '^stop_on_no_lag\s*=' "{{.OUT}}/$db/config/$db.toml"; then
@@ -202,10 +491,15 @@ tasks:
             printf "\nstop_on_no_lag = true\n" >> "{{.OUT}}/$db/config/$db.toml"
           fi
           echo "📐 infer $db"
-          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output
+          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml"
+          require_messages="true"
+          if printf "%s\n" "{{.NO_MESSAGE_OK_DBS}}" | tr ' ' '\n' | grep -Fxq "$db"; then
+            require_messages="false"
+            echo "ℹ️ allowing zero-message wait result for '$db' (configured in NO_MESSAGE_OK_DBS)"
+          fi
 
           echo "⏳ waiting for Debezium topics to be filled with prefix '{{.TOPIC_PREFIX}}.$db.'"
-          REQUIRE_MESSAGES=true task TOPIC_PREFIX="{{.TOPIC_PREFIX}}.$db" kafka-wait-for-topics-filled
+          REQUIRE_MESSAGES="$require_messages" task TOPIC_PREFIX="{{.TOPIC_PREFIX}}.$db" kafka-wait-for-topics-filled
 
           echo "🗄️ ➔ 🔍 ➔ 🪵 ➔ 🐘 kafka import $db"
           "{{.BIN}}" kafka-import -c "{{.OUT}}/$db/config/$db.toml" --group-id "$db-group" --topic-prefix "{{.TOPIC_PREFIX}}.$db" --project-dir $db --database-name $db --schema-name $db
@@ -214,6 +508,159 @@ tasks:
         vars:
           CLI_ARGS: "{{.DBS_TO_PROCESS}}"
       - task: kafka-delete-debezium-connectors
+
+  tests-kafka-all-grouped:
+    desc: kafka-import for all provided databases in one grouped online run
+    silent: true
+    vars:
+      OUT: "{{.RESULTS_DIR}}"
+      DBS_TO_PROCESS: '{{join " " .CLI_ARGS}}'
+      NO_MESSAGE_OK_DBS: "sample_events"
+    cmds:
+      - |
+        if [ ! -x "{{.BIN}}" ] \
+          || [ Cargo.toml -nt "{{.BIN}}" ] \
+          || [ Cargo.lock -nt "{{.BIN}}" ] \
+          || [ -n "$(find src -type f -name '*.rs' -newer "{{.BIN}}" -print -quit)" ]; then
+          echo "🔨 binary stale or missing, running cargo build"
+          cargo build
+        else
+          echo "✅ binary up-to-date: {{.BIN}}"
+        fi
+
+        if [ -z "{{.DBS_TO_PROCESS}}" ]; then
+          echo "Usage: task tests-kafka-all-grouped -- <db1> <db2> [db3 ...]"
+          echo "Example: task tests-kafka-all-grouped -- sample_analytics sample_airbnb"
+          exit 1
+        fi
+
+        dbs=( {{.DBS_TO_PROCESS}} )
+        total=${#dbs[@]}
+
+        if [ "$total" -eq 0 ]; then
+          echo "No databases provided"
+          exit 1
+        fi
+
+        echo "▶️ tests-kafka-all-grouped databases: ${dbs[*]}"
+
+        group_array="["
+        for db in "${dbs[@]}"
+        do
+          if [ "$group_array" != "[" ]; then
+            group_array="$group_array, "
+          fi
+          group_array="$group_array\"$db\""
+        done
+        group_array="$group_array]"
+       
+        results_snapshot_dir="{{.OUT}}/local_project"
+        if [ -d "$results_snapshot_dir" ]; then
+          rm -rf -- "$results_snapshot_dir"
+        fi
+        config_snapshot_dir="{{.OUT}}/local_project/config"
+        mkdir -p "$config_snapshot_dir"
+        config_path="$(mktemp "$config_snapshot_dir/local_project.grouped-kafka.XXXXXX.toml")"
+        cp docker/localhost.toml "$config_path"
+
+        awk -v arr="$group_array" '
+          /^\[source\]/ { in_source = 1; in_target = 0; print; next }
+          /^\[target\]/ { in_source = 0; in_target = 1; print; next }
+          /^\[/ && $0 !~ /^\[source\]/ && $0 !~ /^\[target\]/ {
+            in_source = 0
+            in_target = 0
+          }
+
+          skip_block {
+            if ($0 ~ /^[[:space:]]*\]/) {
+              skip_block = 0
+            }
+            next
+          }
+
+          {
+            if (in_source && $0 ~ /^[[:space:]]*namespace[[:space:]]*=/) {
+              print "namespace = " arr
+              if ($0 ~ /\[/ && $0 !~ /\]/) {
+                skip_block = 1
+              }
+              next
+            }
+
+            if (in_target && $0 ~ /^[[:space:]]*database_name[[:space:]]*=/) {
+              print "database_name = " arr
+              if ($0 ~ /\[/ && $0 !~ /\]/) {
+                skip_block = 1
+              }
+              next
+            }
+
+            if (in_target && $0 ~ /^[[:space:]]*schema_name[[:space:]]*=/) {
+              print "schema_name = " arr
+              if ($0 ~ /\[/ && $0 !~ /\]/) {
+                skip_block = 1
+              }
+              next
+            }
+
+            print
+          }
+        ' "$config_path" > "$config_path.tmp" && mv "$config_path.tmp" "$config_path"
+
+        sed -i "s|^topic_prefix = .*|topic_prefix = \"{{.TOPIC_PREFIX}}\"|" "$config_path"
+        sed -i "s|^group_id = .*|group_id = \"{{.TOPIC_PREFIX}}-group\"|" "$config_path"
+        if grep -q '^stop_on_no_lag\s*=' "$config_path"; then
+          sed -i "s/^stop_on_no_lag = .*/stop_on_no_lag = true/" "$config_path"
+        else
+          printf "\nstop_on_no_lag = true\n" >> "$config_path"
+        fi
+        echo "🧾 updated grouped kafka config: $config_path"
+
+        # Stable snapshot path kept for post-run diagnostics.
+        cp "$config_path" "$config_snapshot_dir/local_project.toml"
+        echo "🧾 config snapshot written: $config_snapshot_dir/local_project.toml"
+
+        for db in "${dbs[@]}"
+        do
+          echo "🗑️  database $db"
+          psql -U myuser -d mydb -h localhost -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid();"
+          psql -U myuser -d mydb -h localhost -c "DROP DATABASE IF EXISTS $db"
+          psql -U myuser -d mydb -h localhost -c "CREATE DATABASE $db"
+        done
+
+        echo "🧹 reset Kafka topics/connect and reseed for: ${dbs[*]}"
+        task kafka-reset-and-seed -- "${dbs[@]}"
+
+        echo "📐 infer grouped"
+        "{{.BIN}}" infer -c "$config_path"
+
+        echo "🛠️  to-pg grouped"
+        "{{.BIN}}" to-pg -c "$config_path"
+
+        for db in "${dbs[@]}"
+        do
+          require_messages="true"
+          if [ "$total" -eq 1 ] && printf "%s\n" "{{.NO_MESSAGE_OK_DBS}}" | tr ' ' '\n' | grep -Fxq "$db"; then
+            require_messages="false"
+            echo "ℹ️ allowing zero-message wait result for '$db' (single-db run and configured in NO_MESSAGE_OK_DBS)"
+          fi
+
+          echo "⏳ waiting for Debezium topics to be filled with prefix '{{.TOPIC_PREFIX}}.$db.'"
+          REQUIRE_MESSAGES="$require_messages" task TOPIC_PREFIX="{{.TOPIC_PREFIX}}.$db" kafka-wait-for-topics-filled
+        done
+
+        echo "🗄️ ➔ 🔍 ➔ 🪵 ➔ 🐘 kafka import grouped"
+        "{{.BIN}}" kafka-import -c "$config_path" --topic-prefix "{{.TOPIC_PREFIX}}"
+
+        echo "📈 report --post-import grouped"
+        for db in "${dbs[@]}"
+        do
+          "{{.BIN}}" report --post-import -c "$config_path" --namespace "$db"
+        done
+
+        task kafka-delete-debezium-connectors
+
+        echo "👉 results in {{.OUT}}"
 
   kafka-clean-groups:
     desc: Delete consumer groups for processed databases.
@@ -312,6 +759,7 @@ tasks:
         requested_dbs="{{.DBS_TO_PROCESS}}"
         db_count=0
         seed_db=""
+        seed_events_db="false"
         for db in $requested_dbs
         do
           [ -n "$db" ] || continue
@@ -319,12 +767,18 @@ tasks:
           if [ "$db_count" -eq 1 ]; then
             seed_db="$db"
           fi
+          if [ "$db" = "sample_events" ]; then
+            seed_events_db="true"
+          fi
         done
         if [ "$db_count" -ne 1 ]; then
           seed_db=""
         fi
 
         seed_service="${MONGO_SEED_SERVICE:-mongodb-seed}"
+        if [ -z "${MONGO_SEED_SERVICE:-}" ] && [ "$seed_db" = "sample_events" ]; then
+          seed_service="mongodb-seed-e2e"
+        fi
         echo "🌱 reseed MongoDB using service: $seed_service"
         if [ -n "$seed_db" ]; then
           echo "🎯 limiting seed to dataset: $seed_db"
@@ -356,6 +810,18 @@ tasks:
             echo "::error::mongodb-seed failed with exit code $seed_exit_code"
             docker logs mongodb_seed --tail 100 || true
             exit 1
+          fi
+
+          if [ "$seed_events_db" = "true" ]; then
+            echo "🌱 supplementing seed with local e2e dataset: sample_events"
+            docker compose -f docker/docker-compose.yml --profile e2e-local-seed rm -sf mongodb-seed-e2e >/dev/null 2>&1 || true
+            MONGO_DATABASE="sample_events" docker compose -f docker/docker-compose.yml --profile e2e-local-seed up -d mongodb-seed-e2e >/dev/null
+            seed_events_exit_code="$(docker wait mongodb_seed_e2e 2>/dev/null || echo 1)"
+            if [ "$seed_events_exit_code" != "0" ]; then
+              echo "::error::mongodb-seed-e2e failed with exit code $seed_events_exit_code"
+              docker logs mongodb_seed_e2e --tail 100 || true
+              exit 1
+            fi
           fi
         fi
 
@@ -495,15 +961,26 @@ tasks:
         
         PREV_TOTAL=-1
         STABLE_CHECKS=0
-        REQUIRED_STABLE_CHECKS=6  # 6 * 5s = 30s (2 minutes)
-        CHECK_INTERVAL=5
+        REQUIRED_STABLE_CHECKS=4  # 4 * 4s = 16s
+        CHECK_INTERVAL=4
         MAX_WAIT_ITERATIONS=60
         WARNED_COUNT_FAILURE=0
         COUNT_FAILURE_STREAK=0
         MAX_COUNT_FAILURE_STREAK=3
+        ZERO_TOPIC_STREAK=0
+        ZERO_MESSAGE_STREAK=0
+        MAX_ZERO_TOPIC_STREAK=12
+        MAX_ZERO_MESSAGE_STREAK=24
         WAIT_RESULT="timeout"
         REQUIRE_MESSAGES="${REQUIRE_MESSAGES:-false}"
         MAX_TOTAL_MESSAGES=0
+
+        count_matching_topics() {
+          docker exec kafka_broker kafka-topics --bootstrap-server localhost:29092 --list 2>/dev/null \
+            | grep -E '^{{.TOPIC_PREFIX}}\.' \
+            | wc -l \
+            | xargs
+        }
 
         count_messages_via_broker() {
           local matched_topics
@@ -541,6 +1018,11 @@ tasks:
         }
 
         for iteration in $(seq 1 $MAX_WAIT_ITERATIONS); do
+          TOPIC_COUNT=$(count_matching_topics 2>/dev/null || echo 0)
+          if ! [[ "$TOPIC_COUNT" =~ ^[0-9]+$ ]]; then
+            TOPIC_COUNT=0
+          fi
+
           TOTAL_MESSAGES=$(count_messages_via_broker 2>/dev/null || true)
           if ! [[ "$TOTAL_MESSAGES" =~ ^[0-9]+$ ]]; then
             TOTAL_MESSAGES=$(count_messages_via_kafdrop 2>/dev/null || true)
@@ -563,8 +1045,33 @@ tasks:
           fi
 
           echo "  ├─ Total messages across '{{.TOPIC_PREFIX}}.*' topics: $TOTAL_MESSAGES"
+          echo "  ├─ Matching topics count: $TOPIC_COUNT"
           if [ "$TOTAL_MESSAGES" -gt "$MAX_TOTAL_MESSAGES" ]; then
             MAX_TOTAL_MESSAGES="$TOTAL_MESSAGES"
+          fi
+
+          if [ "$TOPIC_COUNT" -eq 0 ]; then
+            ZERO_TOPIC_STREAK=$((ZERO_TOPIC_STREAK + 1))
+          else
+            ZERO_TOPIC_STREAK=0
+          fi
+
+          if [ "$TOTAL_MESSAGES" -eq 0 ]; then
+            ZERO_MESSAGE_STREAK=$((ZERO_MESSAGE_STREAK + 1))
+          else
+            ZERO_MESSAGE_STREAK=0
+          fi
+
+          if [ "$REQUIRE_MESSAGES" = "true" ] && [ "$ZERO_TOPIC_STREAK" -ge "$MAX_ZERO_TOPIC_STREAK" ]; then
+            echo "::error::No Kafka topics matched prefix '{{.TOPIC_PREFIX}}.*' after $((ZERO_TOPIC_STREAK * CHECK_INTERVAL))s."
+            echo "::error::Likely causes: Debezium connector not producing, wrong topic prefix, or no seeded data for requested dataset."
+            exit 1
+          fi
+
+          if [ "$REQUIRE_MESSAGES" = "true" ] && [ "$TOPIC_COUNT" -gt 0 ] && [ "$ZERO_MESSAGE_STREAK" -ge "$MAX_ZERO_MESSAGE_STREAK" ]; then
+            echo "::error::Kafka topics '{{.TOPIC_PREFIX}}.*' exist but still contain 0 messages after $((ZERO_MESSAGE_STREAK * CHECK_INTERVAL))s."
+            echo "::error::Likely causes: connector snapshot not running, include-list mismatch, or empty source collections."
+            exit 1
           fi
 
           if [ "$TOTAL_MESSAGES" -gt 0 ]; then
@@ -617,7 +1124,22 @@ tasks:
             mkdir -p "{{.OUT}}/$db/config"
             cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
           fi
-          sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          if grep -q '^namespace\s*=\s*\[' "{{.OUT}}/$db/config/$db.toml"; then
+            sed -i '/^namespace\s*=\s*\[/,/^\s*\]/d' "{{.OUT}}/$db/config/$db.toml"
+            awk -v db="$db" '
+              /^\[source\]/ { in_source = 1 }
+              /^\[target\]/ { in_source = 0 }
+              {
+                print
+                if (in_source && !inserted && $0 ~ /^[[:space:]]*uri[[:space:]]*=/) {
+                  print "namespace = \"" db "\""
+                  inserted = 1
+                }
+              }
+            ' "{{.OUT}}/$db/config/$db.toml" > "{{.OUT}}/$db/config/$db.toml.tmp" && mv "{{.OUT}}/$db/config/$db.toml.tmp" "{{.OUT}}/$db/config/$db.toml"
+          else
+            sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+          fi
           sed -i "s/^database_name = .*/database_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
           sed -i "s/^schema_name = .*/schema_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
           echo "📈 report --post-import $db"

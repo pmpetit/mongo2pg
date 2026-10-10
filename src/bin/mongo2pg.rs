@@ -25,7 +25,6 @@ use env_logger::Builder as EnvLoggerBuilder;
 use log::{Level, LevelFilter};
 // use mongo2pg::engine::checksum::run_check_md5;
 use mongo2pg::util::read_conf;
-use tracing::Instrument;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI definition (see mongo2pg::cli::{args, commands})
@@ -46,7 +45,7 @@ use mongo2pg::commands::infer::{
     build_collection_mappings_with_timestamp_fields, classify_unauthorized_retry,
     collect_infer_type_warnings, collect_nullable_scalar_warnings, infer_query_max_time,
     is_unauthorized_cursor_error, reconcile_mongo_paths_with_fk_lineage,
-    resolve_infer_auth_retry_max, resolve_infer_chunk_size, run_infer,
+    resolve_infer_auth_retry_max, resolve_infer_chunk_size, resolve_infer_mode, run_infer,
     should_regenerate_from_schema_when_objectid_pk, timeout_fallback_hint,
     UnauthorizedRetryDecision, DEFAULT_INFER_AUTH_RETRY_MAX, DEFAULT_INFER_CHUNK_SIZE,
     DEFAULT_SAMPLE_MAX_TIME,
@@ -83,6 +82,7 @@ async fn main() -> Result<()> {
     let runtime_project_name = resolve_runtime_project_name(&cli);
     let runtime_namespace = resolve_runtime_namespace(&cli);
     let (log_level, log_format) = resolve_effective_runtime_log_settings(&cli)?;
+
     init_runtime_logger(
         log_level,
         log_format,
@@ -94,20 +94,7 @@ async fn main() -> Result<()> {
     let Cli { command, infer, .. } = cli;
     validate_command_and_args(&command, infer.as_ref())?;
 
-    let command_name = command_name_from_command(&command);
-    let root_span = tracing::info_span!(
-        "mongo2pg.command",
-        command = command_name,
-        service_name = runtime_service_name.as_str(),
-        project_name = runtime_project_name.as_str(),
-        namespace = runtime_namespace.as_str()
-    );
-
-    let result = async move { mongo2pg::commands::run_command(command, infer).await }
-        .instrument(root_span)
-        .await;
-
-    result
+    mongo2pg::commands::run_command(command, infer).await
 }
 
 fn normalize_project_name(raw: &str) -> Option<String> {
@@ -155,7 +142,7 @@ fn project_name_from_command(command: &Option<Command>) -> Option<String> {
     }
 }
 
-fn resolve_default_service_name(cli: &Cli) -> String {
+fn resolve_project_service_name(cli: &Cli) -> String {
     if let Some(project_name) = project_name_from_command(&cli.command) {
         return format!("m2pg-{}", project_name);
     }
@@ -182,16 +169,8 @@ fn resolve_default_service_name(cli: &Cli) -> String {
 }
 
 fn resolve_runtime_service_name(cli: &Cli) -> String {
-    if let Some(value) = cli.service_name.as_deref() {
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_owned();
-        }
-    }
-
     for key in [
         "M2PG_SERVICE_NAME",
-        "DD_SERVICE",
         "K8S_CRONJOB_NAME",
         "CRONJOB_NAME",
     ] {
@@ -203,7 +182,7 @@ fn resolve_runtime_service_name(cli: &Cli) -> String {
         }
     }
 
-    resolve_default_service_name(cli)
+    resolve_project_service_name(cli)
 }
 
 fn normalize_runtime_namespace(raw: &str) -> Option<String> {
@@ -301,21 +280,6 @@ fn resolve_runtime_namespace(cli: &Cli) -> String {
     }
 
     "unknown".to_owned()
-}
-
-fn command_name_from_command(command: &Option<Command>) -> &'static str {
-    match command {
-        Some(Command::Init(_)) => "init",
-        Some(Command::Infer(_)) => "infer",
-        Some(Command::ToPg(_)) => "to-pg",
-        Some(Command::Report(_)) => "report",
-        Some(Command::Export(_)) => "export",
-        Some(Command::Import(_)) => "import",
-        Some(Command::ClusterReport(_)) => "cluster-report",
-        Some(Command::KafkaImport(_)) => "kafka-import",
-        Some(Command::Ping(_)) => "ping",
-        None => "infer",
-    }
 }
 
 fn parse_log_level(raw: &str) -> Result<LevelFilter> {
@@ -616,6 +580,8 @@ fn validate_infer_args(args: &InferArgs) -> Result<()> {
         }
     }
 
+    mongo2pg::commands::infer::resolve_infer_mode(args.infer_mode.as_deref())?;
+
     Ok(())
 }
 
@@ -774,8 +740,9 @@ mod tests {
         infer_query_max_time, is_unauthorized_cursor_error, plan_export_jobs_for_collections,
         render_ddl_from_mapping_tables, resolve_collections_dir, resolve_export_chunk_size,
         resolve_export_sql_lookup_for_collection, resolve_infer_auth_retry_max,
-        resolve_infer_chunk_size, resolve_log_format_precedence, resolve_log_level_precedence,
-        resolve_post_import_table_row, resolve_root_table_name, sanitize_name,
+        resolve_infer_chunk_size, resolve_infer_mode, resolve_log_format_precedence,
+        resolve_log_level_precedence, resolve_post_import_table_row, resolve_root_table_name,
+        sanitize_name,
         should_fail_post_import_on_warnings, should_fail_report_on_warnings,
         should_infer_collection, strip_psql_preamble, timeout_fallback_hint,
         validate_command_and_args, validate_group_schema_compatibility, Cli, Command,
@@ -821,6 +788,7 @@ mod tests {
         max_time_ms: Option<u64>,
         chunk_size: Option<u64>,
         auth_retry_max: Option<u32>,
+        infer_mode: Option<String>,
         jsonb: Option<bool>,
         #[serde(default)]
         include: Vec<String>,
@@ -870,6 +838,7 @@ mod tests {
                 max_time_ms: Some(60_000),
                 chunk_size: Some(1_000_000),
                 auth_retry_max: Some(3),
+                infer_mode: Some("raw".to_owned()),
                 jsonb: Some(true),
                 target_schema_name: Some("sample_training".to_owned()),
                 ..ConfigOverrides::default()
@@ -893,6 +862,7 @@ mod tests {
         assert_eq!(source.max_time_ms, Some(60_000));
         assert_eq!(source.chunk_size, Some(1_000_000));
         assert_eq!(source.auth_retry_max, Some(3));
+        assert_eq!(source.infer_mode.as_deref(), Some("raw"));
         assert_eq!(source.jsonb, Some(true));
 
         let target = parsed.target.expect("target section should exist");
@@ -1021,6 +991,27 @@ mod tests {
     #[test]
     fn resolve_infer_auth_retry_max_rejects_invalid_values() {
         assert!(resolve_infer_auth_retry_max(Some(101)).is_err());
+    }
+
+    #[test]
+    fn resolve_infer_mode_defaults_to_raw() {
+        assert_eq!(
+            resolve_infer_mode(None).expect("default infer mode should resolve"),
+            mongo2pg::commands::infer::InferMode::Raw
+        );
+        assert_eq!(
+            resolve_infer_mode(Some("decoded")).expect("decoded infer mode should resolve"),
+            mongo2pg::commands::infer::InferMode::Decoded
+        );
+    }
+
+    #[test]
+    fn resolve_infer_mode_accepts_raw_and_rejects_compare() {
+        assert_eq!(
+            resolve_infer_mode(Some("raw")).expect("raw infer mode should resolve"),
+            mongo2pg::commands::infer::InferMode::Raw
+        );
+        assert!(resolve_infer_mode(Some("compare")).is_err());
     }
 
     #[test]
@@ -1390,6 +1381,39 @@ mod tests {
     }
 
     #[test]
+    fn init_cli_parses_legacy_base_dir_percent_and_log_format() {
+        let cli = Cli::try_parse_from([
+            "mongo2pg",
+            "init",
+            "--project-name",
+            "project",
+            "--cluster-name",
+            "cluster",
+            "--namespace",
+            "database",
+            "--base-dir",
+            "gs://bucket/",
+            "--percent",
+            "100.0",
+            "--log-format",
+            "json",
+        ])
+        .expect("init CLI args should parse");
+
+        match cli.command {
+            Some(Command::Init(args)) => {
+                assert_eq!(args.project_base, PathBuf::from("gs://bucket/"));
+                assert_eq!(args.project_name, "project");
+                assert_eq!(args.cluster_name.as_deref(), Some("cluster"));
+                assert_eq!(args.namespace.as_deref(), Some("database"));
+                assert_eq!(args.percent, Some(100.0));
+                assert_eq!(args.log_format.as_deref(), Some("json"));
+            }
+            _ => panic!("expected init command"),
+        }
+    }
+
+    #[test]
     fn kafka_import_cli_parses_force_flag() {
         let cli = Cli::try_parse_from(["mongo2pg", "kafka-import", "-c", "sample.toml", "--force"])
             .expect("kafka-import CLI args should parse");
@@ -1400,6 +1424,36 @@ mod tests {
                 assert_eq!(args.config, PathBuf::from("sample.toml"));
             }
             _ => panic!("expected kafka-import command"),
+        }
+    }
+
+    #[test]
+    fn import_cli_parses_force_flag() {
+        let cli = Cli::try_parse_from(["mongo2pg", "import", "-c", "sample.toml", "--force"])
+            .expect("import CLI args should parse");
+
+        match cli.command {
+            Some(Command::Import(args)) => {
+                assert!(args.force);
+                assert!(args.collection.is_none());
+                assert_eq!(args.config, PathBuf::from("sample.toml"));
+            }
+            _ => panic!("expected import command"),
+        }
+    }
+
+    #[test]
+    fn import_cli_parses_legacy_force_as_collection_token() {
+        let cli =
+            Cli::try_parse_from(["mongo2pg", "import", "-c", "sample.toml", "--", "--force"])
+                .expect("import legacy force token should parse");
+
+        match cli.command {
+            Some(Command::Import(args)) => {
+                assert!(!args.force);
+                assert_eq!(args.collection.as_deref(), Some("--force"));
+            }
+            _ => panic!("expected import command"),
         }
     }
 
@@ -1695,6 +1749,7 @@ pg_mapping:
 
         apply_collection_property_filters(
             &mut schema,
+            "sample_airbnb",
             "projects",
             &[],
             &["projects.archived_services".to_owned()],
@@ -1722,6 +1777,7 @@ pg_mapping:
 
         apply_collection_property_filters(
             &mut schema,
+            "sample_airbnb",
             "projects",
             &["projects.archived_services".to_owned()],
             &[],
@@ -1730,6 +1786,38 @@ pg_mapping:
         assert_eq!(schema.object.len(), 2);
         assert!(schema.object.contains_key("_id"));
         assert!(schema.object.contains_key("archived_services"));
+    }
+
+    #[test]
+    fn apply_collection_property_filters_supports_multi_db_prefixed_property_entries() {
+        let docs = vec![doc! {
+            "_id": 1,
+            "name": "project-a",
+            "archived_services": [{"name": "svc-a"}],
+            "tags": ["critical"]
+        }];
+        let mut analyzer = Analyzer::new(true);
+        for doc in &docs {
+            analyzer.process_document(doc);
+        }
+        let mut schema = analyzer.finish();
+
+        apply_collection_property_filters(
+            &mut schema,
+            "sample_airbnb",
+            "projects",
+            &[
+                "sample_airbnb.projects.name".to_owned(),
+                "sample_airbnb.projects.archived_services".to_owned(),
+                "sample_mflix.projects.tags".to_owned(),
+            ],
+            &["sample_airbnb.projects.archived_services".to_owned()],
+        );
+
+        assert!(schema.object.contains_key("_id"));
+        assert!(schema.object.contains_key("name"));
+        assert!(!schema.object.contains_key("archived_services"));
+        assert!(!schema.object.contains_key("tags"));
     }
 
     #[test]
@@ -3004,7 +3092,7 @@ pg_mapping:
                     columns: vec![
                         super::DdlColumnMapping {
                             name: "id".to_owned(),
-                            sql_type: "UUID DEFAULT public.gen_random_uuid()".to_owned(),
+                            sql_type: "UUID DEFAULT pg_catalog.gen_random_uuid()".to_owned(),
                             nullable: false,
                             primary_key: true,
                         },
@@ -3055,7 +3143,7 @@ pg_mapping:
                 columns: vec![
                     super::DdlColumnMapping {
                         name: "id".to_owned(),
-                        sql_type: "UUID DEFAULT public.gen_random_uuid()".to_owned(),
+                        sql_type: "UUID DEFAULT pg_catalog.gen_random_uuid()".to_owned(),
                         nullable: false,
                         primary_key: true,
                     },
@@ -3363,11 +3451,8 @@ pg_mapping:
 
     #[tokio::test]
     async fn run_init_writes_default_datetime_field_patterns() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
-        let project_base = std::env::temp_dir().join(format!("mongo2pg-init-test-{unique}"));
+        let temp_dir = TempDir::new().expect("temp dir should be created");
+        let project_base = temp_dir.path().to_path_buf();
 
         super::run_init(super::InitArgs {
             project_base: project_base.clone(),
@@ -3375,6 +3460,10 @@ pg_mapping:
             source_uri: None,
             target_uri: None,
             namespace: Some("dbapi".to_owned()),
+            database_name: None,
+            schema_name: None,
+            percent: None,
+            log_format: None,
             cluster_name: None,
         })
         .await
@@ -3386,13 +3475,53 @@ pg_mapping:
         assert!(content.contains(
             "datetime_field = [\"created_at\", \"last_update\", \"updated_at\", \"*_date\", \"date\"]"
         ));
+        assert!(content.contains("max_time_ms = 120000"));
+        assert!(content.contains("chunk_size = 50000"));
+        assert!(content.contains("auth_retry_max = 3"));
+        assert!(content.contains("infer_mode = \"raw\""));
+        assert!(content.contains("log_level = \"info\""));
+        assert!(content.contains("log_format = \"text\""));
+        assert!(content.contains("add_grouped_key = false"));
         assert!(content.contains("namespace = \"dbapi\""));
         assert!(!content.contains("#namespace = \"dbapi\""));
         assert!(content.contains("database_name = \"dbapi\""));
         assert!(content.contains("schema_name = \"dbapi\""));
         assert!(!content.contains("# schema_name = \"shared_schema\""));
+    }
 
-        std::fs::remove_dir_all(&project_base).expect("temp project base should be removed");
+    #[tokio::test]
+    async fn run_init_writes_percent_and_log_format_to_config() {
+        let temp_dir = TempDir::new().expect("temp dir should be created");
+        let project_base = temp_dir.path().to_path_buf();
+
+        super::run_init(super::InitArgs {
+            project_base: project_base.clone(),
+            project_name: "project".to_owned(),
+            source_uri: None,
+            target_uri: None,
+            namespace: Some("database".to_owned()),
+            database_name: None,
+            schema_name: None,
+            percent: Some(100.0),
+            log_format: Some("json".to_owned()),
+            cluster_name: Some("cluster".to_owned()),
+        })
+        .await
+        .expect("init should succeed");
+
+        let config_path = project_base
+            .join("project")
+            .join("cluster")
+            .join("config")
+            .join("cluster.toml");
+        let content = std::fs::read_to_string(&config_path).expect("config should be readable");
+
+        assert!(content.contains("base_dir = "));
+        assert!(content.contains("project_dir = \"project\""));
+        assert!(content.contains("namespace = \"database\""));
+        assert!(content.contains("percent = 100"));
+        assert!(content.contains("log_format = \"json\""));
+        assert!(!content.contains("number = 1000"));
     }
 
     #[test]
@@ -3526,6 +3655,10 @@ pg_mapping:
             source_uri,
             target_uri,
             namespace,
+            database_name: None,
+            schema_name: None,
+            percent: None,
+            log_format: None,
             cluster_name: None,
         }
     }
@@ -3538,9 +3671,8 @@ pg_mapping:
             max_time_ms: None,
             chunk_size: None,
             auth_retry_max: None,
+            infer_mode: None,
             jsonb: false,
-            print_json: false,
-            no_output: false,
             database_name: None,
             schema_name: None,
             project_dir: None,
@@ -3568,6 +3700,7 @@ pg_mapping:
             database_name: None,
             schema_name: None,
             project_dir: None,
+            force: false,
             config: config,
         }
     }
@@ -3713,15 +3846,6 @@ pg_mapping:
             "Schema tables directory should be created"
         );
         assert!(
-            temp_dir
-                .path()
-                .join("test_project")
-                .join("source")
-                .join("collections")
-                .exists(),
-            "Source collections directory should be created"
-        );
-        assert!(
             temp_dir.path().join("test_project").join("data").exists(),
             "Data directory should be created"
         );
@@ -3799,12 +3923,13 @@ pg_mapping:
 
         log::info!("Inserted employee into MongoDB: {:?}", new_employee.name);
 
-        let ddl_file_path = temp_dir
-            .path()
-            .join("test_project")
+        let project_root = temp_dir.path().join("test_project");
+        let artifact_root = project_root.clone();
+
+        let ddl_file_path = artifact_root
             .join("schema")
             .join("tables")
-            .join("test_db")
+            .join(db_mongo)
             .join("employees.sql");
 
         assert!(
@@ -3812,44 +3937,40 @@ pg_mapping:
             "DDL file for employees should be created"
         );
         assert!(
-            temp_dir
-                .path()
-                .join("test_project")
+            artifact_root
                 .join("source")
                 .join("collections")
+                .join(db_mongo)
                 .join("employees")
                 .join("employees.json")
                 .exists(),
             "Source collections employees should be created"
         );
         assert!(
-            temp_dir
-                .path()
-                .join("test_project")
+            artifact_root
                 .join("source")
                 .join("collections")
+                .join(db_mongo)
                 .join("employees")
                 .join("employees.stats.txt")
                 .exists(),
             "Source collections stats txt format for employees should be created"
         );
         assert!(
-            temp_dir
-                .path()
-                .join("test_project")
+            artifact_root
                 .join("source")
                 .join("collections")
+                .join(db_mongo)
                 .join("employees")
                 .join("employees.stats.yaml")
                 .exists(),
             "Source collections stats yaml format for employees should be created"
         );
         assert!(
-            temp_dir
-                .path()
-                .join("test_project")
+            artifact_root
                 .join("source")
                 .join("collections")
+                .join(db_mongo)
                 .join("employees")
                 .join("mapping_employees.yaml")
                 .exists(),
@@ -3867,7 +3988,7 @@ pg_mapping:
             SET search_path = "test_db", public;
 
             CREATE TABLE employees (
-                id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY,
+                id UUID DEFAULT pg_catalog.gen_random_uuid() PRIMARY KEY,
                 created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                 hire_date TIMESTAMP WITH TIME ZONE NOT NULL,
                 last_update TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -3888,11 +4009,9 @@ pg_mapping:
         let export_args = create_default_export_args(config.clone());
         run_export(export_args).await?;
         assert!(
-            temp_dir
-                .path()
-                .join("test_project")
+            artifact_root
                 .join("data")
-                .join("test_db")
+                .join(db_mongo)
                 .join("employees")
                 .join("employees.csv.gz")
                 .exists(),

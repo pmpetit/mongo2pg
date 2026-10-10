@@ -102,8 +102,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Kafka copy-mode tuning options**: new `[kafka]` settings for copy-mode imports (`copy_mode`, `transaction_batch_size`, `flush_batch_after`, `worker_count`, `stop_on_no_lag`, `group_id_log_suffix`).
 * **Kafka write-mode diagnostics artifact**: post-import reporting now produces `kafka_import_write_mode.stats.yaml` and CI exposes it on failures.
 * **`sample_events` e2e fixtures**: added local event datasets for deterministic online test coverage.
-* **Datadog service override flag**: added global CLI option `--dd-service` to set runtime service name for telemetry output.
-* **Datadog config section support**: added optional `[DATADOG]` config key `dd_service`.
 * **Structured runtime JSON logs**: runtime logs now support JSON formatting suitable for log pipelines.
 
 ### Changed
@@ -111,15 +109,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Kafka import command layout**: moved the runtime handler into `src/commands/kafka_import.rs`, routed `KafkaImport` through the central command dispatcher, and replaced binary-relative wildcard imports with explicit module dependencies without changing CLI behavior.
 * **Kafka import behavior in copy mode**: improved flushing and multi-worker runtime handling for long-running/large topic imports.
 * **CI execution model**: refreshed self-hosted runner and release/e2e workflow wiring.
-* **Trace volume in Kafka import**: removed per-message tracing in high-throughput path and kept stage-level spans to reduce cardinality and overhead.
-* **Unified telemetry service naming**: trace and log service names now resolve through the same runtime logic (CLI override + config fallback).
-* **Telemetry context enrichment**: `project_name` and `namespace` are now emitted on runtime JSON logs and attached to retained runtime spans.
-* **Kafka tracing model**: replaced trace-file workflow with OTLP-only stage spans; no local/GCS Chrome trace artifacts are produced.
-
-### Removed
-
-* **Kafka trace-file CLI/runtime options**: removed `--trace`, `--duration`, and `--max-size` plus all related trace artifact persistence logic.
-* **`[DATADOG].dd_service` runtime dependency**: service naming now resolves from CLI/env/fallback logic without requiring DATADOG config section.
 
 ### Fixed
 

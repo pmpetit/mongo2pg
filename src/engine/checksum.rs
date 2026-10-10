@@ -84,6 +84,8 @@ struct DdlTableYaml {
 struct DdlColumnYaml {
     name: String,
     sql_type: String,
+    #[serde(default)]
+    primary_key: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -110,6 +112,7 @@ pub struct Md5Summary {
 #[derive(Debug, Clone)]
 pub struct Md5MismatchRow {
     pub row_index: usize,
+    pub mongo_object_id: Option<String>,
     pub mongo_values: Option<Vec<String>>,
     pub pg_values: Option<Vec<String>>,
 }
@@ -159,6 +162,7 @@ struct MismatchDelta {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RowSnapshot {
     md5: String,
+    mongo_object_id: Option<String>,
     delta: Vec<String>, // The string representations from your values array
 }
 
@@ -237,7 +241,41 @@ fn append_copy_text_row(buffer: &mut String, md5: &str, values: &str) {
     buffer.push_str(&copy_text_escape(md5));
     buffer.push('\t');
     buffer.push_str(&copy_text_escape(values));
+    buffer.push('\t');
+    buffer.push_str("\\N");
     buffer.push('\n');
+}
+
+fn append_copy_text_row_with_object_id(
+    buffer: &mut String,
+    md5: &str,
+    values: &str,
+    mongo_object_id: Option<&str>,
+) {
+    buffer.push_str(&copy_text_escape(md5));
+    buffer.push('\t');
+    buffer.push_str(&copy_text_escape(values));
+    buffer.push('\t');
+    if let Some(object_id) = mongo_object_id {
+        buffer.push_str(&copy_text_escape(object_id));
+    } else {
+        buffer.push_str("\\N");
+    }
+    buffer.push('\n');
+}
+
+fn mongo_object_id_literal(doc: &Document) -> Option<String> {
+    let raw_id = doc.get("_id")?;
+    match raw_id {
+        Bson::ObjectId(object_id) => Some(object_id.to_hex()),
+        _ => {
+            let comparable = bson_to_comparable_json(raw_id);
+            Some(normalize_json_literal(
+                &serde_json::to_string(&comparable)
+                    .expect("serializing MongoDB _id for report should succeed"),
+            ))
+        }
+    }
 }
 
 fn build_row_deltas(
@@ -281,7 +319,10 @@ async fn compute_collection_checksums_via_temp_tables(
     pg_write_client: &Client,
     mongo_collection: &mongodb::Collection<bson::Document>,
     source_fields: &[(String, Option<String>)], // Typed MongoDB source fields
+    checksum_columns: &[Md5ColumnMapping],
     source_path: &SourcePath,
+    payload_field_indexes: &[usize],
+    table_has_children: bool,
     db_name: &str,
     coll_name: &str,
     schema_name: Option<&str>,
@@ -298,6 +339,7 @@ async fn compute_collection_checksums_via_temp_tables(
     const PG_STREAM_IDLE_STALL_RETRY_MAX: u32 = 2;
     const PG_QUERY_HEARTBEAT_SECS: u64 = 30;
     const PG_EXPLAIN_TIMEOUT_SECS: u64 = 120;
+    let objectid_text_id_indexes = objectid_text_id_column_indexes(checksum_columns);
 
     async fn await_pg_with_heartbeat<T, F>(
         future: F,
@@ -371,7 +413,7 @@ async fn compute_collection_checksums_via_temp_tables(
     pg_write_client
         .execute(
             &format!(
-                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) ON COMMIT PRESERVE ROWS",
+                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT, mongo_object_id TEXT) ON COMMIT PRESERVE ROWS",
                 temp_mongo_ident
             ),
             &[],
@@ -382,7 +424,7 @@ async fn compute_collection_checksums_via_temp_tables(
     pg_write_client
         .execute(
             &format!(
-                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT) ON COMMIT PRESERVE ROWS",
+                "CREATE TEMP TABLE {} (md5 TEXT, values TEXT, mongo_object_id TEXT) ON COMMIT PRESERVE ROWS",
                 temp_pg_ident
             ),
             &[],
@@ -406,7 +448,7 @@ async fn compute_collection_checksums_via_temp_tables(
             None
         }
     };
-    let mongo_copy_sql = format!("COPY {} (md5, values) FROM STDIN", temp_mongo_ident);
+    let mongo_copy_sql = format!("COPY {} (md5, values, mongo_object_id) FROM STDIN", temp_mongo_ident);
     let mongo_copy_sink = pg_write_client.copy_in(&mongo_copy_sql).await?;
     let mut mongo_copy_sink = std::pin::pin!(mongo_copy_sink);
     let mut mongo_copy_buffer = String::with_capacity(256 * 1024);
@@ -478,8 +520,13 @@ async fn compute_collection_checksums_via_temp_tables(
             {
                 let record = mongo_hash_record_for_columns(&doc, source_fields);
                 let record_values = mongo_hash_values_pipe_for_columns(&doc, source_fields);
-
-                append_copy_text_row(&mut mongo_copy_buffer, &record.md5, &record_values);
+                let object_id = mongo_object_id_literal(&doc);
+                append_copy_text_row_with_object_id(
+                    &mut mongo_copy_buffer,
+                    &record.md5,
+                    &record_values,
+                    object_id.as_deref(),
+                );
                 mongo_copy_buffered_rows += 1;
                 if mongo_copy_buffered_rows >= COPY_BUFFER_ROWS {
                     mongo_copy_sink
@@ -510,6 +557,7 @@ async fn compute_collection_checksums_via_temp_tables(
             }
 
             for mut source_doc in extract_source_documents(&doc, source_path) {
+                let root_object_id = mongo_object_id_literal(&doc);
                 if source_fields.iter().any(|(field, _)| field == "_id")
                     && !source_doc.contains_key("_id")
                 {
@@ -519,8 +567,22 @@ async fn compute_collection_checksums_via_temp_tables(
                 }
 
                 let record = mongo_hash_record_for_columns(&source_doc, source_fields);
+                if should_skip_empty_md5_row(
+                    source_path,
+                    table_has_children,
+                    &record,
+                    payload_field_indexes,
+                ) {
+                    continue;
+                }
                 let record_values = mongo_hash_values_pipe_for_columns(&source_doc, source_fields);
-                append_copy_text_row(&mut mongo_copy_buffer, &record.md5, &record_values);
+                let object_id = mongo_object_id_literal(&source_doc).or(root_object_id.clone());
+                append_copy_text_row_with_object_id(
+                    &mut mongo_copy_buffer,
+                    &record.md5,
+                    &record_values,
+                    object_id.as_deref(),
+                );
                 mongo_copy_buffered_rows += 1;
                 if mongo_copy_buffered_rows >= COPY_BUFFER_ROWS {
                     mongo_copy_sink
@@ -588,7 +650,7 @@ async fn compute_collection_checksums_via_temp_tables(
     log_oom_probe("pg_stream_start", table_name, mongo_row_count, 0);
     let _pg_stream_started_at = Instant::now();
 
-    let pg_copy_sql = format!("COPY {} (md5, values) FROM STDIN", temp_pg_ident);
+    let pg_copy_sql = format!("COPY {} (md5, values, mongo_object_id) FROM STDIN", temp_pg_ident);
     let pg_copy_sink = pg_write_client.copy_in(&pg_copy_sql).await?;
     let mut pg_copy_sink = std::pin::pin!(pg_copy_sink);
     let mut pg_copy_buffer = String::with_capacity(256 * 1024);
@@ -823,8 +885,8 @@ async fn compute_collection_checksums_via_temp_tables(
             }
 
             // Transform columns into normalized representations and calculate row MD5
-            let record = pg_hash_record(&row);
-            let record_values = pg_hash_values_pipe(&row, target_fields);
+            let record = pg_hash_record(&row, &objectid_text_id_indexes);
+            let record_values = pg_hash_values_pipe(&row, target_fields, &objectid_text_id_indexes);
             append_copy_text_row(&mut pg_copy_buffer, &record.md5, &record_values);
             pg_copy_buffered_rows += 1;
             if pg_copy_buffered_rows >= COPY_BUFFER_ROWS {
@@ -986,18 +1048,19 @@ async fn compute_collection_checksums_via_temp_tables(
         //   3. id in PG only           -> row missing from MongoDB
         let diff_query = format!(
             "WITH m_ord AS (
-                SELECT md5, values, ROW_NUMBER() OVER (ORDER BY values) AS rn
+                     SELECT md5, values, mongo_object_id, ROW_NUMBER() OVER (ORDER BY values) AS rn
                 FROM {mongo}
              ),
              p_ord AS (
-                SELECT md5, values, ROW_NUMBER() OVER (ORDER BY values) AS rn
+                     SELECT md5, values, mongo_object_id, ROW_NUMBER() OVER (ORDER BY values) AS rn
                 FROM {pg}
              )
              SELECT
                 m_ord.md5  AS mongo_md5,
                 p_ord.md5  AS pg_md5,
                 m_ord.values AS mongo_vals,
-                p_ord.values AS pg_vals
+                     p_ord.values AS pg_vals,
+                     m_ord.mongo_object_id AS mongo_object_id
              FROM m_ord
              FULL OUTER JOIN p_ord ON m_ord.rn = p_ord.rn
              WHERE m_ord.md5 IS DISTINCT FROM p_ord.md5
@@ -1025,6 +1088,7 @@ async fn compute_collection_checksums_via_temp_tables(
             let p_md5: Option<String> = row.get("pg_md5");
             let mongo_vals: Option<String> = row.get("mongo_vals");
             let pg_vals: Option<String> = row.get("pg_vals");
+            let mongo_object_id: Option<String> = row.get("mongo_object_id");
 
             let mongo_split: Option<Vec<String>> =
                 mongo_vals.as_ref().map(|s| s.split('|').map(String::from).collect());
@@ -1037,8 +1101,16 @@ async fn compute_collection_checksums_via_temp_tables(
                 target_fields,
             );
 
-            mongo_only.push(RowSnapshot { md5: m_md5.unwrap_or_default(), delta: mongo_deltas });
-            pg_only.push(RowSnapshot { md5: p_md5.unwrap_or_default(), delta: pg_deltas });
+            mongo_only.push(RowSnapshot {
+                md5: m_md5.unwrap_or_default(),
+                mongo_object_id,
+                delta: mongo_deltas,
+            });
+            pg_only.push(RowSnapshot {
+                md5: p_md5.unwrap_or_default(),
+                mongo_object_id: None,
+                delta: pg_deltas,
+            });
         }
 
         mismatches = Some(MismatchDelta { mongo_only, pg_only });
@@ -1144,6 +1216,30 @@ fn grouped_key_filter_for_target(target: &MappingTarget) -> Option<(String, Stri
         .map(|suffix| ("_key".to_owned(), suffix.to_owned()))
 }
 
+fn resolve_md5_table_and_grouped_filter(
+    target: &MappingTarget,
+    add_grouped_key: bool,
+) -> (String, Option<(String, String)>) {
+    let mut table_name = target.mapping_yaml.pg_mapping.table_name.clone();
+    let mut grouped_key_filter = grouped_key_filter_for_target(target);
+
+    // Compatibility fallback: when grouped mode is enabled but stale mappings
+    // still point at per-collection root tables (e.g. events_bmit), derive the
+    // grouped root table and _key filter from the source collection name.
+    if add_grouped_key && grouped_key_filter.is_none() {
+        if let Some((group_prefix, suffix)) = target.source_collection.split_once('_') {
+            if !suffix.trim().is_empty()
+                && table_name.eq_ignore_ascii_case(target.source_collection.as_str())
+            {
+                table_name = group_prefix.to_owned();
+                grouped_key_filter = Some(("_key".to_owned(), suffix.to_owned()));
+            }
+        }
+    }
+
+    (table_name, grouped_key_filter)
+}
+
 fn comparable_md5_columns(columns: &[MappingColumnYaml]) -> Vec<&MappingColumnYaml> {
     columns
         .iter()
@@ -1209,14 +1305,20 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
     }
 
     fn canonicalize_json_object(map: &serde_json::Map<String, serde_json::Value>) -> String {
+        let mut keys = map.keys().cloned().collect::<Vec<_>>();
+        keys.sort_unstable();
+
         format!(
             "{{{}}}",
-            map.iter()
-                .map(|(key, value)| format!(
+            keys.iter()
+                .map(|key| format!(
                     "{}: {}",
                     serde_json::to_string(key)
                         .expect("serializing canonical JSON object key should succeed"),
-                    canonicalize_json_value(value)
+                    canonicalize_json_value(
+                        map.get(key)
+                            .expect("canonical JSON object key should resolve in map")
+                    )
                 ))
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -1250,10 +1352,72 @@ fn canonicalize_json_value(value: &serde_json::Value) -> String {
         None
     }
 
+    fn canonical_extended_json_date(value: &serde_json::Value) -> Option<String> {
+        let object = value.as_object()?;
+        if object.len() != 1 {
+            return None;
+        }
+
+        let date = object.get("$date")?;
+        let millis = date
+            .as_i64()
+            .or_else(|| date.as_u64().and_then(|value| i64::try_from(value).ok()))
+            .or_else(|| {
+                date.as_object()?
+                    .get("$numberLong")?
+                    .as_str()?
+                    .parse::<i64>()
+                    .ok()
+            });
+
+        if let Some(millis) = millis {
+            let datetime = chrono::DateTime::<Utc>::from_timestamp_millis(millis)?;
+            let normalized = datetime.to_rfc3339_opts(SecondsFormat::Secs, true);
+            return Some(
+                serde_json::to_string(&normalized)
+                    .expect("serializing normalized Extended JSON date should succeed"),
+            );
+        }
+
+        date.as_str()
+            .map(|value| canonicalize_json_value(&serde_json::Value::String(value.to_owned())))
+    }
+
+    fn canonical_extended_json_number(value: &serde_json::Value) -> Option<String> {
+        let object = value.as_object()?;
+        if object.len() != 1 {
+            return None;
+        }
+
+        let (kind, encoded) = object.iter().next()?;
+        if !matches!(
+            kind.as_str(),
+            "$numberInt" | "$numberLong" | "$numberDouble" | "$numberDecimal"
+        ) {
+            return None;
+        }
+
+        let encoded = encoded.as_str()?;
+        if matches!(encoded, "NaN" | "Infinity" | "-Infinity") {
+            return Some("null".to_owned());
+        }
+
+        let number = encoded.parse::<serde_json::Number>().ok()?;
+        Some(canonicalize_json_value(&serde_json::Value::Number(number)))
+    }
+
     if let Some(geometry) = canonical_geojson_geometry(value) {
         if let serde_json::Value::Object(map) = geometry {
             return canonicalize_json_object(&map);
         }
+    }
+
+    if let Some(date) = canonical_extended_json_date(value) {
+        return date;
+    }
+
+    if let Some(number) = canonical_extended_json_number(value) {
+        return number;
     }
 
     match value {
@@ -1544,20 +1708,79 @@ fn mongo_field_literal_for_type(
     }
 }
 
-
-fn pg_hash_values_pipe(row: &Row, target_fields: &[String]) -> String {
+fn pg_hash_values_pipe(
+    row: &Row,
+    target_fields: &[String],
+    objectid_text_id_indexes: &HashSet<usize>,
+) -> String {
     target_fields
         .iter()
         .enumerate()
         .map(|(index, _)| {
             let val: Option<String> = row.get(index);
             // SQL NULL → "null" matches MongoDB Bson::Null serialization
-            normalize_json_literal(val.as_deref().unwrap_or("null"))
+            normalize_pg_checksum_literal(
+                val.as_deref().unwrap_or("null"),
+                objectid_text_id_indexes.contains(&index),
+            )
         })
         .collect::<Vec<_>>()
         .join("|")
 }
 
+fn objectid_text_id_column_indexes(columns: &[Md5ColumnMapping]) -> HashSet<usize> {
+    columns
+        .iter()
+        .enumerate()
+        .filter_map(|(index, column)| {
+            (column.source_field == "_id"
+                && column.target_field.eq_ignore_ascii_case("id")
+                && target_type_family(column.target_type.as_deref()) == Some("string"))
+            .then_some(index)
+        })
+        .collect()
+}
+
+fn objectid_hex_from_padded_uuid(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 36
+        || [8, 13, 18, 23].iter().any(|index| bytes[*index] != b'-')
+        || bytes[..8].iter().any(|byte| *byte != b'0')
+    {
+        return None;
+    }
+
+    let hex = bytes
+        .iter()
+        .copied()
+        .filter(|byte| *byte != b'-')
+        .collect::<Vec<_>>();
+    if hex.len() != 32 || !hex.iter().all(u8::is_ascii_hexdigit) {
+        return None;
+    }
+
+    String::from_utf8(hex[8..].to_vec())
+        .ok()
+        .map(|hex| hex.to_ascii_lowercase())
+}
+
+fn normalize_pg_checksum_literal(value: &str, normalize_objectid_text_id: bool) -> String {
+    let normalized = normalize_json_literal(value);
+    if !normalize_objectid_text_id {
+        return normalized;
+    }
+
+    let Ok(serde_json::Value::String(value)) =
+        serde_json::from_str::<serde_json::Value>(&normalized)
+    else {
+        return normalized;
+    };
+    let Some(object_id) = objectid_hex_from_padded_uuid(&value) else {
+        return normalized;
+    };
+
+    serde_json::to_string(&object_id).unwrap_or(normalized)
+}
 
 fn mongo_hash_values_pipe_for_columns(
     doc: &Document,
@@ -1586,6 +1809,25 @@ fn mongo_hash_record_for_columns(
         md5: md5_hex_from_fragments(values.iter()),
         values,
     }
+}
+
+fn should_skip_empty_md5_row(
+    source_path: &SourcePath,
+    table_has_children: bool,
+    record: &HashRecord,
+    payload_field_indexes: &[usize],
+) -> bool {
+    let is_root = source_path.path.is_empty() && source_path.grouped_fields.is_none();
+    if is_root || source_path.scalar_array_field.is_some() || table_has_children {
+        return false;
+    }
+
+    payload_field_indexes.iter().all(|index| {
+        record
+            .values
+            .get(*index)
+            .is_none_or(|value| value == "null")
+    })
 }
 
 fn sanitize_pg_name(name: &str) -> String {
@@ -2307,7 +2549,18 @@ fn collection_paths_from_conf(
                 .join("source")
                 .join("collections")
         });
-    let collections_dir = if collections_root.join(&db_name).is_dir() {
+    let multi_db_collections_dir = collections_root_override.is_none().then(|| {
+        crate::commands::shared::multi_db_source_collections_dir(
+            &crate::util::configured_project_root(conf),
+            &db_name,
+        )
+    });
+    let collections_dir = if multi_db_collections_dir
+        .as_deref()
+        .is_some_and(Path::is_dir)
+    {
+        multi_db_collections_dir.expect("checked is_some_and above")
+    } else if collections_root.join(&db_name).is_dir() {
         collections_root.join(&db_name)
     } else {
         collections_root
@@ -2627,9 +2880,14 @@ fn discover_mapping_targets_for_collection(
 
 
 
-fn pg_hash_record(row: &Row) -> HashRecord {
+fn pg_hash_record(row: &Row, objectid_text_id_indexes: &HashSet<usize>) -> HashRecord {
     let values = (0..row.len())
-        .map(|index| normalize_json_literal(&row.get::<usize, String>(index)))
+        .map(|index| {
+            normalize_pg_checksum_literal(
+                &row.get::<usize, String>(index),
+                objectid_text_id_indexes.contains(&index),
+            )
+        })
         .collect::<Vec<_>>();
     HashRecord {
         md5: md5_hex_from_fragments(values.iter()),
@@ -2698,6 +2956,37 @@ async fn ensure_pg_database_exists(target_uri: &str, database_name: &str) -> Res
     Ok(())
 }
 
+fn resolve_md5_target_pg_uri(
+    conf_target_uri: Option<&str>,
+    conf_target_database_name: Option<&str>,
+    mapping_dbname: Option<&str>,
+    mapping_mongo_dbname: Option<&str>,
+    target_uri_override: Option<&str>,
+) -> Result<String> {
+    if let Some(override_uri) = target_uri_override {
+        return Ok(override_uri.to_owned());
+    }
+
+    let target_uri = conf_target_uri.ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
+    let target_database_name = conf_target_database_name
+        .or(mapping_dbname)
+        .or(mapping_mongo_dbname)
+        .ok_or_else(|| anyhow!("TARGET_DATABASE_NAME not found in config or mapping"))?;
+
+    Ok(pg_uri_with_database(target_uri, target_database_name))
+}
+
+fn resolve_md5_target_schema_name(
+    conf_target_schema: Option<&str>,
+    mapping_schema_name: Option<&str>,
+    target_schema_override: Option<&str>,
+) -> Option<String> {
+    target_schema_override
+        .map(ToOwned::to_owned)
+        .or_else(|| mapping_schema_name.map(ToOwned::to_owned))
+        .or_else(|| conf_target_schema.map(ToOwned::to_owned))
+}
+
 async fn connect_pg_client(target_uri: &str) -> Result<Client> {
     let mut tls_builder = native_tls::TlsConnector::builder();
     if matches!(pg_sslmode(target_uri), Some(mode) if mode.eq_ignore_ascii_case("require")) {
@@ -2740,6 +3029,25 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
     config_path: &Path,
     collections_root_override: Option<&Path>,
 ) -> Result<Vec<Md5TableSummary>> {
+    compute_md5_summaries_for_collection_with_overrides(
+        collection,
+        config_path,
+        collections_root_override,
+        None,
+        None,
+        None,
+    )
+    .await
+}
+
+pub async fn compute_md5_summaries_for_collection_with_overrides(
+    collection: &str,
+    config_path: &Path,
+    collections_root_override: Option<&Path>,
+    source_db_override: Option<&str>,
+    target_uri_override: Option<&str>,
+    target_schema_override: Option<&str>,
+) -> Result<Vec<Md5TableSummary>> {
     fn is_transient_md5_error(err: &anyhow::Error) -> bool {
         let message = err.to_string().to_ascii_lowercase();
         message.contains("connection closed")
@@ -2753,6 +3061,9 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
             || message.contains("interrupted")
             || message.contains("timed out")
             || message.contains("timeout")
+            || message.contains("terminating connection due to administrator command")
+            || message.contains("admin shutdown")
+            || message.contains("57p01")
     }
 
     let conf = read_conf(config_path)?;
@@ -2762,12 +3073,26 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
         .source_uri
         .as_ref()
         .ok_or_else(|| anyhow!("SOURCE_URI not found in config"))?;
-    let (db_name, _) = collection_paths_from_conf(&conf, collections_root_override)?;
+    let (db_name_from_conf, _) = collection_paths_from_conf(&conf, collections_root_override)?;
+    let db_name = source_db_override.unwrap_or(db_name_from_conf.as_str());
     let client_options = crate::db::mongo::parse_client_options(mongo_uri).await?;
     let mongo_client = crate::db::mongo::client_with_options(client_options)?;
     let mut summaries = Vec::new();
 
     const TARGET_MD5_RETRY_MAX: u32 = 4;
+
+    let tables_with_children = targets
+        .iter()
+        .filter_map(|target| {
+            target
+                .mapping_yaml
+                .traversal
+                .as_ref()?
+                .parent_table
+                .as_deref()
+                .map(str::to_ascii_lowercase)
+        })
+        .collect::<HashSet<_>>();
 
     for target in targets {
         let ddl_type_by_target = target
@@ -2792,6 +3117,37 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
             .iter()
             .map(|c| (c.source_field.clone(), c.data_type.clone()))
             .collect();
+        let payload_field_indexes = md5_columns
+            .iter()
+            .enumerate()
+            .filter_map(|(index, column)| {
+                let target_field = column.target_field.as_str();
+                let is_primary_key = target
+                    .mapping_yaml
+                    .pg_mapping
+                    .ddl
+                    .as_ref()
+                    .is_some_and(|ddl| {
+                        ddl.columns.iter().any(|ddl_column| {
+                            ddl_column.name == target_field && ddl_column.primary_key
+                        })
+                    });
+                let is_foreign_key = target
+                    .mapping_yaml
+                    .pg_mapping
+                    .ddl
+                    .as_ref()
+                    .is_some_and(|ddl| {
+                        ddl.foreign_keys
+                            .iter()
+                            .any(|foreign_key| foreign_key.from_col == target_field)
+                    });
+                let is_structural = is_primary_key
+                    || is_foreign_key
+                    || matches!(target_field, "id" | "key" | "_key");
+                (!is_structural).then_some(index)
+            })
+            .collect::<Vec<_>>();
         let target_fields: Vec<String> = md5_columns.iter().map(|c| c.target_field.clone()).collect();
         let columns = md5_columns
             .iter()
@@ -2814,26 +3170,29 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
         }
 
         let mongo_collection = mongo_client
-            .database(&db_name)
+            .database(db_name)
             .collection::<bson::Document>(&target.source_collection);
 
-        let target_uri = conf
-            .target_uri
-            .as_ref()
-            .ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
         let target_database_name = conf
             .target_database_name
             .as_deref()
             .or(target.mapping_yaml.pg_mapping.dbname.as_deref())
-            .or(target.mapping_yaml.mongo_dbname.as_deref())
-            .ok_or_else(|| anyhow!("TARGET_DATABASE_NAME not found in config or mapping"))?;
-        let schema_name = conf
-            .target_schema
-            .as_deref()
-            .or(target.mapping_yaml.pg_mapping.schema_name.as_deref());
-        let table_name = target.mapping_yaml.pg_mapping.table_name.clone();
-        let grouped_key_filter = grouped_key_filter_for_target(&target);
-        let pg_uri = pg_uri_with_database(target_uri, target_database_name);
+            .or(target.mapping_yaml.mongo_dbname.as_deref());
+        let schema_name = resolve_md5_target_schema_name(
+            conf.target_schema.as_deref(),
+            target.mapping_yaml.pg_mapping.schema_name.as_deref(),
+            target_schema_override,
+        );
+        let (table_name, grouped_key_filter) =
+            resolve_md5_table_and_grouped_filter(&target, conf.add_grouped_key);
+        let table_has_children = tables_with_children.contains(&table_name.to_ascii_lowercase());
+        let pg_uri = resolve_md5_target_pg_uri(
+            conf.target_uri.as_deref(),
+            conf.target_database_name.as_deref(),
+            target.mapping_yaml.pg_mapping.dbname.as_deref(),
+            target.mapping_yaml.mongo_dbname.as_deref(),
+            target_uri_override,
+        )?;
 
         let mut attempt = 0_u32;
         let mut ensured_target_db = false;
@@ -2848,10 +3207,13 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
                     &pg_write_client,
                     &mongo_collection,
                     &typed_source_fields,
+                    &columns,
                     &target.source_path,
-                    &db_name,
+                    &payload_field_indexes,
+                    table_has_children,
+                    db_name,
                     &target.source_collection,
-                    schema_name,
+                    schema_name.as_deref(),
                     &table_name,
                     &target_fields,
                     grouped_key_filter
@@ -2865,13 +3227,19 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
             match compute_result {
                 Ok(result) => break result,
                 Err(err) => {
-                    if !ensured_target_db
-                        && is_missing_database_error(&err, target_database_name)
-                    {
-                        ensure_pg_database_exists(target_uri, target_database_name).await?;
-                        ensured_target_db = true;
-                        attempt = 0;
-                        continue;
+                    if !ensured_target_db {
+                        if let Some(target_db_name) = target_database_name {
+                            if is_missing_database_error(&err, target_db_name) {
+                                let base_target_uri = conf
+                                    .target_uri
+                                    .as_deref()
+                                    .ok_or_else(|| anyhow!("TARGET_URI not found in config"))?;
+                                ensure_pg_database_exists(base_target_uri, target_db_name).await?;
+                                ensured_target_db = true;
+                                attempt = 0;
+                                continue;
+                            }
+                        }
                     }
 
                     if attempt <= TARGET_MD5_RETRY_MAX && is_transient_md5_error(&err) {
@@ -2901,6 +3269,7 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
                 .enumerate()
                 .map(|(idx, m_row)| Md5MismatchRow {
                     row_index: idx + 1,
+                    mongo_object_id: m_row.mongo_object_id.clone(),
                     mongo_values: Some(m_row.delta.clone()),
                     pg_values: mismatch_delta.pg_only.get(idx).map(|row| row.delta.clone()),
                 })
@@ -2926,6 +3295,17 @@ pub async fn compute_md5_summaries_for_collection_with_collections_root(
 
 #[cfg(test)]
 mod tests {
+
+    fn test_pg_uri(db_name: &str) -> String {
+        let password = std::env::var("MONGO2PG_TEST_PG_PASSWORD")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "p".repeat(3));
+        format!(
+            "postgres://user:{}@localhost:5432/{}?sslmode=disable",
+            password, db_name
+        )
+    }
 
 
     fn mongo_field_literal(doc: &Document, field: &str) -> String {
@@ -3143,8 +3523,74 @@ pg_mapping:
     }
 
     #[test]
+    fn normalize_json_literal_matches_extended_json_dates_to_iso_timestamps() {
+        let mongodb = r#"{"critic":{"lastUpdated":"2015-08-08T19:16:10Z"}}"#;
+        let postgres_numeric_date =
+            r#"{"critic":{"lastUpdated":{"$date":1439061370000}}}"#;
+        let postgres_canonical_date =
+            r#"{"critic":{"lastUpdated":{"$date":{"$numberLong":"1439061370000"}}}}"#;
+        let postgres_string_date =
+            r#"{"critic":{"lastUpdated":{"$date":"2015-08-08T19:16:10Z"}}}"#;
+
+        let expected = normalize_json_literal(mongodb);
+        assert_eq!(normalize_json_literal(postgres_numeric_date), expected);
+        assert_eq!(normalize_json_literal(postgres_canonical_date), expected);
+        assert_eq!(normalize_json_literal(postgres_string_date), expected);
+    }
+
+    #[test]
+    fn normalize_json_literal_matches_extended_json_numbers_to_json_numbers() {
+        let mongodb = r#"{"valuation_amount":4000000000}"#;
+        let postgres = r#"{"valuation_amount":{"$numberLong":"4000000000"}}"#;
+
+        assert_eq!(normalize_json_literal(postgres), normalize_json_literal(mongodb));
+    }
+
+    #[test]
     fn normalize_json_literal_preserves_json_strings() {
         assert_eq!(normalize_json_literal("\"647.0\""), "\"647.0\"");
+    }
+
+    #[test]
+    fn pg_checksum_trims_padded_objectid_only_for_text_id_mapping() {
+        let padded = r#""00000000-507d-95d5-719d-bef170f15bf9""#;
+
+        let text_id_mapping = [Md5ColumnMapping {
+            source_field: "_id".to_owned(),
+            source_type: Some("objectId".to_owned()),
+            target_field: "id".to_owned(),
+            target_type: Some("TEXT".to_owned()),
+        }];
+        let text_id_indexes = objectid_text_id_column_indexes(&text_id_mapping);
+        assert_eq!(text_id_indexes, HashSet::from([0]));
+        assert_eq!(
+            normalize_pg_checksum_literal(padded, text_id_indexes.contains(&0)),
+            r#""507d95d5719dbef170f15bf9""#
+        );
+
+        let uuid_id_mapping = [Md5ColumnMapping {
+            source_field: "_id".to_owned(),
+            source_type: Some("objectId".to_owned()),
+            target_field: "id".to_owned(),
+            target_type: Some("UUID".to_owned()),
+        }];
+        let uuid_id_indexes = objectid_text_id_column_indexes(&uuid_id_mapping);
+        assert!(uuid_id_indexes.is_empty());
+        assert_eq!(normalize_pg_checksum_literal(padded, false), padded);
+
+        let ordinary_uuid = r#""12345678-507d-95d5-719d-bef170f15bfa""#;
+        assert_eq!(
+            normalize_pg_checksum_literal(ordinary_uuid, true),
+            ordinary_uuid
+        );
+    }
+
+    #[test]
+    fn normalize_json_literal_ignores_object_key_order_recursively() {
+        let left = r#"[{"message":"Company already exists","payload":{"sent":{"internalStatus":"ACTIVE","legalName":"OMBRELLIFICIO R.T. MAGNANI SRL","taxNum":{"taxNumber":" IT02349770400","taxType":"VAT"}}}}]"#;
+        let right = r#"[{"message":"Company already exists","payload":{"sent":{"taxNum":{"taxType":"VAT","taxNumber":" IT02349770400"},"legalName":"OMBRELLIFICIO R.T. MAGNANI SRL","internalStatus":"ACTIVE"}}}]"#;
+
+        assert_eq!(normalize_json_literal(left), normalize_json_literal(right));
     }
 
     #[test]
@@ -3387,6 +3833,52 @@ pg_mapping:
     }
 
     #[test]
+    fn should_skip_empty_md5_row_matches_export_leaf_payload_rules() {
+        let nested_path = SourcePath {
+            path: vec!["details".to_owned()],
+            scalar_array_field: None,
+            grouped_fields: None,
+        };
+        let empty_payload = HashRecord {
+            md5: String::new(),
+            values: vec!["parent-id".to_owned(), "null".to_owned()],
+        };
+        let payload_field_indexes = [1];
+
+        assert!(should_skip_empty_md5_row(
+            &nested_path,
+            false,
+            &empty_payload,
+            &payload_field_indexes,
+        ));
+        assert!(!should_skip_empty_md5_row(
+            &nested_path,
+            true,
+            &empty_payload,
+            &payload_field_indexes,
+        ));
+        assert!(!should_skip_empty_md5_row(
+            &SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+            false,
+            &empty_payload,
+            &payload_field_indexes,
+        ));
+        assert!(!should_skip_empty_md5_row(
+            &nested_path,
+            false,
+            &HashRecord {
+                md5: String::new(),
+                values: vec!["parent-id".to_owned(), "42".to_owned()],
+            },
+            &payload_field_indexes,
+        ));
+    }
+
+    #[test]
     fn extract_source_documents_groups_root_array_siblings_with_key() {
         let doc = doc! {
             "_id": 42,
@@ -3594,7 +4086,7 @@ pg_mapping:
     - { source_field: status, target_field: status }
   ddl:
     columns:
-      - { name: id, sql_type: "UUID DEFAULT public.gen_random_uuid() PRIMARY KEY" }
+      - { name: id, sql_type: "UUID DEFAULT pg_catalog.gen_random_uuid() PRIMARY KEY" }
       - { name: status, sql_type: TEXT }
     foreign_keys: []
 "#,
@@ -3785,6 +4277,64 @@ pg_mapping:
         );
     }
 
+    #[test]
+    fn resolve_md5_table_and_grouped_filter_falls_back_for_stale_grouped_mapping() {
+        let mapping_yaml: MappingYaml = serde_yaml::from_str(
+            r#"
+pg_mapping:
+  table_name: events_bmit
+  columns:
+    - { source_field: "", target_field: id }
+"#,
+        )
+        .expect("mapping yaml should parse");
+
+        let target = super::MappingTarget {
+            source_collection: "events_bmit".to_owned(),
+            mapping_path: PathBuf::from("mapping_events_bmit.yaml"),
+            mapping_yaml,
+            source_path: super::SourcePath {
+                path: Vec::new(),
+                scalar_array_field: None,
+                grouped_fields: None,
+            },
+        };
+
+        let (table, grouped_filter) = super::resolve_md5_table_and_grouped_filter(&target, true);
+        assert_eq!(table, "events");
+        assert_eq!(
+            grouped_filter,
+            Some(("_key".to_owned(), "bmit".to_owned()))
+        );
+    }
+
+    #[test]
+    fn resolve_md5_target_pg_uri_prefers_override_for_grouped_runs() {
+        let default_uri = test_pg_uri("postgres");
+        let override_uri = test_pg_uri("sample_airbnb");
+        let uri = resolve_md5_target_pg_uri(
+            Some(&default_uri),
+            Some("sample_analytics"),
+            Some("sample_analytics"),
+            None,
+            Some(&override_uri),
+        )
+        .expect("override URI should be accepted");
+
+        assert_eq!(uri, override_uri);
+    }
+
+    #[test]
+    fn resolve_md5_target_schema_name_prefers_override_for_grouped_runs() {
+        let schema = resolve_md5_target_schema_name(
+            Some("sample_analytics"),
+            Some("sample_analytics"),
+            Some("sample_airbnb"),
+        );
+
+        assert_eq!(schema.as_deref(), Some("sample_airbnb"));
+    }
+
     use super::*;
     #[cfg(not(target_os = "macos"))]
     use crate::engine::checksum::compute_collection_checksums_via_temp_tables;
@@ -3832,11 +4382,14 @@ pg_mapping:
             &harness.pg_client,
             &harness.mongo_collection,
             &source_fields,
+            &[],
             &SourcePath {
                 path: Vec::new(),
                 scalar_array_field: None,
                 grouped_fields: None,
             },
+            &[],
+            false,
             "test_db",
             "employees",
             harness.schema_name.as_deref(),
@@ -3966,11 +4519,14 @@ pg_mapping:
             &harness.pg_client,
             &harness.mongo_collection,
             &source_fields,
+            &[],
             &SourcePath {
                 path: Vec::new(),
                 scalar_array_field: None,
                 grouped_fields: None,
             },
+            &[],
+            false,
             "test_db",
             "employees",
             harness.schema_name.as_deref(),

@@ -504,7 +504,7 @@ fn prepend_schema_preamble(
 
     let mut preamble = String::new();
 
-    if ddl.contains("DEFAULT public.gen_random_uuid()") {
+    if ddl.contains("DEFAULT pg_catalog.gen_random_uuid()") {
         preamble.push_str("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n");
     }
 
@@ -1721,7 +1721,7 @@ fn render_column(col: &Column, inline_primary_key: bool) -> String {
         col.pg_type.as_str()
     };
     let default_clause = if col.primary_key && col.pg_type.eq_ignore_ascii_case("UUID") {
-        " DEFAULT public.gen_random_uuid()"
+        " DEFAULT pg_catalog.gen_random_uuid()"
     } else {
         ""
     };
@@ -2204,7 +2204,7 @@ mod tests {
         let schema = analyze(&docs);
         let ddl = schema_to_ddl(&schema, "t", None);
         assert!(
-            ddl.contains("id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY"),
+            ddl.contains("id UUID DEFAULT pg_catalog.gen_random_uuid() PRIMARY KEY"),
             "ObjectId PK should become UUID"
         );
     }
@@ -2326,7 +2326,7 @@ mod tests {
         let ddl = schema_to_ddl(&schema, "transactions", None);
 
         assert!(ddl.contains("CREATE TABLE transactions ("));
-        assert!(ddl.contains("id UUID DEFAULT public.gen_random_uuid() PRIMARY KEY"));
+        assert!(ddl.contains("id UUID DEFAULT pg_catalog.gen_random_uuid() PRIMARY KEY"));
         assert!(ddl.contains("account_id INTEGER NOT NULL"));
         assert!(ddl.contains("CREATE TABLE transactions_transactions ("));
         assert!(ddl.contains("transactions_id UUID NOT NULL"));
@@ -2740,6 +2740,26 @@ mod tests {
         assert!(ddl.contains("permalink "));
         assert!(!ddl.contains("CREATE TABLE relationships ("));
         assert!(!ddl.contains("CREATE TABLE relationships_person ("));
+    }
+
+    #[test]
+    fn monitoring_with_items_skewed_item_between_string_and_object() {
+        let doc = bson::doc! {
+            "_id": "monitoring-1",
+            "items": [
+                { "item": { "name": "before" }, "status": "UNKNOWN" },
+                "skewed-item",
+                { "item": { "name": "after" }, "status": "UNKNOWN" }
+            ]
+        };
+
+        let mut analyzer = Analyzer::new(true);
+        analyzer.process_document(&doc);
+        let schema = analyzer.finish();
+
+        let ddl = schema_to_ddl(&schema, "monitoring", None);
+
+        assert!(ddl.contains("CREATE TABLE monitoring ("));
     }
 
     #[test]

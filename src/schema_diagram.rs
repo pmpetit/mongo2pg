@@ -170,7 +170,43 @@ pub fn parse_sql(sql: &str) -> Vec<Table> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_sql;
+    use super::{parse_sql, render_schema_html_multi_db, Table};
+
+    #[test]
+    fn render_schema_html_multi_db_renders_one_tab_per_database_isolated_from_others() {
+        fn single_table(sql: &str) -> Vec<Table> {
+            parse_sql(sql)
+        }
+
+        let orders_tables = single_table(
+            r#"
+CREATE TABLE invoices (
+    id BIGSERIAL PRIMARY KEY
+);
+"#,
+        );
+        let catalog_tables = single_table(
+            r#"
+CREATE TABLE products (
+    id BIGSERIAL PRIMARY KEY
+);
+"#,
+        );
+        let entries: Vec<(&str, &[Table])> = vec![
+            ("orders", orders_tables.as_slice()),
+            ("catalog", catalog_tables.as_slice()),
+        ];
+
+        let html = render_schema_html_multi_db(&entries);
+
+        assert!(html.contains(r#"id="tab-btn-orders""#));
+        assert!(html.contains(r#"id="tab-btn-catalog""#));
+        assert!(html.contains(r#"class="db-section active" id="orders""#));
+        assert!(html.contains(r#"class="db-section" id="catalog""#));
+        assert!(html.contains("invoices"));
+        assert!(html.contains("products"));
+        assert!(html.contains("function showDbTab(name)"));
+    }
 
     #[test]
     fn parse_sql_marks_table_level_primary_key_columns_without_fake_primary_column() {
@@ -534,6 +570,9 @@ pub fn render_schema_html(tables: &[Table], project_name: &str) -> String {
       padding: 2rem;
       overflow: auto;
     }}
+        .origin-links {{ margin: 0 0 1rem; color: #5d6d7e; font-size: 0.82rem; }}
+        .origin-links a {{ color: #2471a3; text-decoration: none; }}
+        .origin-links a:hover {{ text-decoration: underline; }}
     .mermaid {{
       background: white;
       border-radius: 8px;
@@ -564,6 +603,7 @@ pub fn render_schema_html(tables: &[Table], project_name: &str) -> String {
       </ul>
     </aside>
     <main>
+            <p class="origin-links">Report source: <a href="../">project root</a> &nbsp;|&nbsp; <a href="../config/">config folder</a></p>
       {mermaid_block}
     </main>
   </div>
@@ -579,6 +619,101 @@ pub fn render_schema_html(tables: &[Table], project_name: &str) -> String {
         count = tables.len(),
         sidebar = sidebar,
         mermaid_block = mermaid_block,
+    )
+}
+
+/// Render one combined schema diagram HTML report with one navigable tab per
+/// database. Each database's tab reuses [`render_schema_html`]'s body
+/// verbatim (isolated per tab), so the Mermaid ERD and styling stay identical
+/// to the single-database schema diagram.
+pub fn render_schema_html_multi_db(entries: &[(&str, &[Table])]) -> String {
+    let mut head_html = String::new();
+    let mut bodies: Vec<(String, String)> = Vec::new();
+
+    for (db_name, tables) in entries {
+        let doc = render_schema_html(tables, db_name);
+        if head_html.is_empty() {
+            if let (Some(start), Some(end)) = (doc.find("<head>"), doc.find("</head>")) {
+                head_html = doc[start..end + "</head>".len()].to_owned();
+            }
+        }
+        let body_inner = doc
+            .find("<body>")
+            .zip(doc.find("</body>"))
+            .map(|(start, end)| doc[start + "<body>".len()..end].to_owned())
+            .unwrap_or_default();
+        bodies.push(((*db_name).to_owned(), body_inner));
+    }
+
+    let db_tabs: String = bodies
+        .iter()
+        .enumerate()
+        .map(|(index, (name, _))| {
+            format!(
+                r#"<button type="button" class="db-tab-btn{active}" id="tab-btn-{name}" onclick="showDbTab('{name}')">{name}</button>"#,
+                name = name,
+                active = if index == 0 { " active" } else { "" },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let db_sections: String = bodies
+        .iter()
+        .enumerate()
+        .map(|(index, (name, body))| {
+            format!(
+                r#"<div class="db-section{active}" id="{name}">{body}</div>"#,
+                name = name,
+                body = body,
+                active = if index == 0 { " active" } else { "" },
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+{head}
+<body>
+  <div class="db-tabs">
+    {db_tabs}
+  </div>
+
+  {db_sections}
+
+  <style>
+    .db-section {{ display: none; }}
+    .db-section.active {{ display: block; }}
+    .db-tabs {{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 2rem; }}
+    .db-tab-btn {{
+      padding: 0.5rem 1rem;
+      border: 1px solid #bdc3c7;
+      border-radius: 6px 6px 0 0;
+      background: #ecf0f1;
+      color: #2c3e50;
+      font-weight: 600;
+      cursor: pointer;
+    }}
+    .db-tab-btn.active {{ background: #2c3e50; color: white; border-color: #2c3e50; }}
+  </style>
+  <script>
+    function showDbTab(name) {{
+      document.querySelectorAll('.db-section').forEach(function(section) {{
+        section.classList.toggle('active', section.id === name);
+      }});
+      document.querySelectorAll('.db-tab-btn').forEach(function(btn) {{
+        btn.classList.toggle('active', btn.id === 'tab-btn-' + name);
+      }});
+    }}
+  </script>
+</body>
+</html>
+"#,
+        head = head_html,
+        db_tabs = db_tabs,
+        db_sections = db_sections,
     )
 }
 
@@ -704,6 +839,9 @@ pub fn render_mongo_schema_html(
       padding: 2rem;
       overflow: auto;
     }}
+        .origin-links {{ margin: 0 0 1rem; color: #5d6d7e; font-size: 0.82rem; }}
+        .origin-links a {{ color: #2471a3; text-decoration: none; }}
+        .origin-links a:hover {{ text-decoration: underline; }}
     .mermaid {{
       background: white;
       border-radius: 8px;
@@ -726,6 +864,7 @@ pub fn render_mongo_schema_html(
       </ul>
     </aside>
     <main>
+        <p class="origin-links">Report source: <a href="../">project root</a> &nbsp;|&nbsp; <a href="../config/">config folder</a></p>
       <div class="mermaid">
 {mermaid}
       </div>
