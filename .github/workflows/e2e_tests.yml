@@ -43,7 +43,7 @@ concurrency:
 jobs:
   prepare-matrix:
     name: Prepare database matrix
-    runs-on: [self-hosted, Linux, X64, stable]
+    runs-on: ubuntu-latest
     outputs:
       database_groups: ${{ steps.build.outputs.database_groups }}
       databases_cli: ${{ steps.build.outputs.databases_cli }}
@@ -82,7 +82,7 @@ jobs:
 
   prepare-matrix-grouped:
     name: Prepare grouped database matrix
-    runs-on: [self-hosted, Linux, X64, stable]
+    runs-on: ubuntu-latest
     outputs:
       database_groups: ${{ steps.build.outputs.database_groups }}
       database_count: ${{ steps.build.outputs.database_count }}
@@ -117,7 +117,7 @@ jobs:
 
   build-e2e-binary:
     name: Build binary for grouped E2E tests
-    runs-on: [self-hosted, Linux, X64, stable]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -139,7 +139,7 @@ jobs:
   e2e-tests-offline:
     name: Run e2e offline tests for ${{ matrix.database_group }}
     needs: [prepare-matrix, build-e2e-binary]
-    runs-on: [self-hosted, Linux, X64, stable]
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -479,7 +479,7 @@ jobs:
   e2e-tests-online:
     name: Run e2e online tests for ${{ matrix.database_group }}
     needs: [prepare-matrix, build-e2e-binary]
-    runs-on: [self-hosted, Linux, X64, stable]
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -825,7 +825,7 @@ jobs:
     name: Run grouped offline e2e tests for ${{ join(fromJSON(needs.prepare-matrix-grouped.outputs.database_groups), ' ') }}
     needs: [prepare-matrix-grouped, build-e2e-binary]
     if: ${{ fromJSON(needs.prepare-matrix-grouped.outputs.database_count) > 1 }}
-    runs-on: [self-hosted, Linux, X64, stable]
+    runs-on: ubuntu-latest
     timeout-minutes: 180
 
     services:
@@ -1171,7 +1171,7 @@ jobs:
     name: Run grouped online e2e tests for ${{ join(fromJSON(needs.prepare-matrix-grouped.outputs.database_groups), ' ') }}
     needs: [prepare-matrix-grouped, build-e2e-binary]
     if: ${{ fromJSON(needs.prepare-matrix-grouped.outputs.database_count) > 1 }}
-    runs-on: [self-hosted, Linux, X64, stable]
+    runs-on: ubuntu-latest
     timeout-minutes: 180
 
     services:

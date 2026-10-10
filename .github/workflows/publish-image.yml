@@ -14,7 +14,7 @@ permissions:
 
 jobs:
     publish:
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v7
 

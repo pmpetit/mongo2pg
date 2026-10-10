@@ -25,7 +25,7 @@ concurrency:
 env:
 jobs:
     branch_tag:
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         outputs:
             tag: ${{ steps.tag.outputs.tag }}
         steps:
@@ -48,7 +48,7 @@ jobs:
 
     release_src_scope_check:
         if: "${{ github.event.action == 'closed' && github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/') && !startsWith(github.event.pull_request.title, 'chore: release ') }}"
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         outputs:
             has_src_changes: ${{ steps.check.outputs.has_src_changes }}
         steps:
@@ -83,7 +83,7 @@ jobs:
     create_release_pr:
         if: "${{ github.event.action == 'closed' && github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/') && !startsWith(github.event.pull_request.title, 'chore: release ') && needs.release_src_scope_check.outputs.has_src_changes == 'true' }}"
         needs: [release_src_scope_check, e2e]
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v7
               with:

@@ -25,7 +25,7 @@ concurrency:
 jobs:
     resolve_release_version:
         if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         outputs:
             tag: ${{ steps.resolve.outputs.tag }}
         steps:
@@ -62,28 +62,23 @@ jobs:
 
                   echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
-    sonar-scan:
-        if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
-        uses: ./.github/workflows/sonar-scan.yml
-        secrets: inherit
-
     production_image:
         if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
-        needs: [resolve_release_version, sonar-scan]
+        needs: [resolve_release_version]
         uses: ./.github/workflows/publish-image.yml
         with:
             image_tag: ${{ needs.resolve_release_version.outputs.tag }}
 
     build-binaries:
         if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
-        needs: [sonar-scan]
+        needs: [resolve_release_version]
         name: Build ${{ matrix.target }}
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
             matrix:
                 include:
-                    - os: [self-hosted, Linux, X64, stable]
+                    - os: [ubuntu-latest]
                       target: x86_64-unknown-linux-gnu
                       artifact: mongo2pg-linux-x86_64
                     - os: [self-hosted, Linux, ARM64, stable]
@@ -128,7 +123,7 @@ jobs:
     publish-github-release:
         if: "${{ (github.event_name == 'workflow_dispatch' && inputs.version != '') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'release/') || startsWith(github.event.pull_request.title, 'chore: release '))) }}"
         needs: [resolve_release_version, build-binaries]
-        runs-on: [self-hosted, Linux, X64, stable]
+        runs-on: ubuntu-latest
         steps:
             - name: Download binary artifacts
               uses: actions/download-artifact@v8
