@@ -76,7 +76,7 @@ jobs:
         uses: ./.github/workflows/e2e_tests.yml
         secrets: inherit
         with:
-            database: sample_analytics sample_airbnb sample_geospatial sample_mflix sample_supplies sample_training sample_weatherdata sample_events sample_payload sample_externals
+            database: sample_analytics sample_airbnb sample_geospatial sample_mflix sample_supplies sample_training sample_weatherdata sample_movies
             release_tag: ""
 
     create_release_pr:
