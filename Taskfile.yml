@@ -12,9 +12,7 @@ vars:
     sample_supplies
     sample_training
     sample_weatherdata
-    sample_events
-    sample_payload
-    sample_externals
+    sample_movies
   TOPIC_PREFIX: "t4"
 
 env:
@@ -432,25 +430,59 @@ tasks:
           "{{.BIN}}" init --project-base "{{.OUT}}" --project-name "$db" --source-uri "{{.URI}}"
           echo "⚙️  config $db"
           cp docker/localhost.toml "{{.OUT}}/$db/config/$db.toml"
-          if grep -q '^namespace\s*=\s*\[' "{{.OUT}}/$db/config/$db.toml"; then
-            sed -i '/^namespace\s*=\s*\[/,/^\s*\]/d' "{{.OUT}}/$db/config/$db.toml"
-            awk -v db="$db" '
-              /^\[source\]/ { in_source = 1 }
-              /^\[target\]/ { in_source = 0 }
-              {
-                print
-                if (in_source && !inserted && $0 ~ /^[[:space:]]*uri[[:space:]]*=/) {
-                  print "namespace = \"" db "\""
-                  inserted = 1
-                }
+          awk -v db="$db" '
+            /^\[source\]/ { in_source = 1; in_target = 0; print; next }
+            /^\[target\]/ { in_source = 0; in_target = 1; print; next }
+            /^\[project\]/ { in_project = 1; in_source = 0; in_target = 0; print; next }
+            /^\[/ && $0 !~ /^\[source\]/ && $0 !~ /^\[target\]/ && $0 !~ /^\[project\]/ {
+              in_project = 0
+              in_source = 0
+              in_target = 0
+            }
+
+            skip_block {
+              if ($0 ~ /^[[:space:]]*\]/) {
+                skip_block = 0
               }
-            ' "{{.OUT}}/$db/config/$db.toml" > "{{.OUT}}/$db/config/$db.toml.tmp" && mv "{{.OUT}}/$db/config/$db.toml.tmp" "{{.OUT}}/$db/config/$db.toml"
-          else
-            sed -i "s/^namespace = .*/namespace = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          fi
-          sed -i "s/^project_name = .*/project_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^database_name = .*/database_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
-          sed -i "s/^schema_name = .*/schema_name = \"$db\"/" "{{.OUT}}/$db/config/$db.toml"
+              next
+            }
+
+            {
+              if (in_project && $0 ~ /^[[:space:]]*project_name[[:space:]]*=/) {
+                print "project_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_source && $0 ~ /^[[:space:]]*namespace[[:space:]]*=/) {
+                print "namespace = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*database_name[[:space:]]*=/) {
+                print "database_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              if (in_target && $0 ~ /^[[:space:]]*schema_name[[:space:]]*=/) {
+                print "schema_name = \"" db "\""
+                if ($0 ~ /\[/ && $0 !~ /\]/) {
+                  skip_block = 1
+                }
+                next
+              }
+
+              print
+            }
+          ' "{{.OUT}}/$db/config/$db.toml" > "{{.OUT}}/$db/config/$db.toml.tmp" && mv "{{.OUT}}/$db/config/$db.toml.tmp" "{{.OUT}}/$db/config/$db.toml"
           sed -i "s|^topic_prefix = .*|topic_prefix = \"{{.TOPIC_PREFIX}}\"|" "{{.OUT}}/$db/config/$db.toml"
           sed -i "s/^group_id = .*/group_id = \"{{.TOPIC_PREFIX}}-$db-group\"/" "{{.OUT}}/$db/config/$db.toml"
           if grep -q '^stop_on_no_lag\s*=' "{{.OUT}}/$db/config/$db.toml"; then
@@ -459,8 +491,7 @@ tasks:
             printf "\nstop_on_no_lag = true\n" >> "{{.OUT}}/$db/config/$db.toml"
           fi
           echo "📐 infer $db"
-          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml" --project-dir $db --namespace $db --database-name $db --schema-name $db --no-output
-
+          "{{.BIN}}" infer -c "{{.OUT}}/$db/config/$db.toml"
           require_messages="true"
           if printf "%s\n" "{{.NO_MESSAGE_OK_DBS}}" | tr ' ' '\n' | grep -Fxq "$db"; then
             require_messages="false"

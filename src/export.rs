@@ -1843,6 +1843,9 @@ fn extract_rows_with_mapping(
         Bson::Document(d) => d,
         _ => return,
     };
+    if !is_root && doc.is_empty() {
+        return;
+    }
     if is_root {
         if let (Some(root_parent_id_col), Some(grouped_fields)) =
             (&node.root_parent_id_col, &node.grouped_root_fields)
@@ -3683,6 +3686,66 @@ CREATE TABLE review_scores (
                 .unwrap_or(true),
             "empty embedded review_scores object should not emit a null-only child row"
         );
+    }
+
+    #[test]
+    fn export_skips_empty_structural_object_with_child_tables() {
+        let sql = r#"
+CREATE TABLE countries_small (
+    id UUID PRIMARY KEY
+);
+
+CREATE TABLE name (
+    id BIGSERIAL PRIMARY KEY,
+    countries_small_id UUID NOT NULL,
+    common TEXT NOT NULL,
+    official TEXT NOT NULL,
+    FOREIGN KEY (countries_small_id) REFERENCES countries_small (id)
+);
+
+CREATE TABLE native (
+    id BIGSERIAL PRIMARY KEY,
+    name_id BIGINT NOT NULL,
+    FOREIGN KEY (name_id) REFERENCES name (id)
+);
+
+CREATE TABLE afr (
+    id BIGSERIAL PRIMARY KEY,
+    native_id BIGINT NOT NULL,
+    common TEXT NOT NULL,
+    official TEXT NOT NULL,
+    FOREIGN KEY (native_id) REFERENCES native (id)
+);
+"#;
+
+        let tables = parse_sql(sql);
+        let roots = build_tree(&tables, None, &HashMap::new());
+        let mut all_rows = HashMap::new();
+        let mut counters = HashMap::new();
+        let doc = doc! {
+            "_id": bson::oid::ObjectId::parse_str("55a0f42f20a4d760b5fc3064").unwrap(),
+            "name": {
+                "common": "Empty native object",
+                "official": "Empty native object",
+                "native": {}
+            }
+        };
+
+        extract_rows(
+            &Bson::Document(doc),
+            &roots[0],
+            None,
+            true,
+            &mut all_rows,
+            &mut counters,
+        );
+
+        assert_eq!(all_rows.get("name").map(Vec::len), Some(1));
+        assert!(
+            all_rows.get("native").map_or(true, Vec::is_empty),
+            "empty structural object should not emit an FK-only row"
+        );
+        assert!(all_rows.get("afr").map_or(true, Vec::is_empty));
     }
 
     #[test]

@@ -319,6 +319,7 @@ async fn compute_collection_checksums_via_temp_tables(
     pg_write_client: &Client,
     mongo_collection: &mongodb::Collection<bson::Document>,
     source_fields: &[(String, Option<String>)], // Typed MongoDB source fields
+    checksum_columns: &[Md5ColumnMapping],
     source_path: &SourcePath,
     payload_field_indexes: &[usize],
     table_has_children: bool,
@@ -338,6 +339,7 @@ async fn compute_collection_checksums_via_temp_tables(
     const PG_STREAM_IDLE_STALL_RETRY_MAX: u32 = 2;
     const PG_QUERY_HEARTBEAT_SECS: u64 = 30;
     const PG_EXPLAIN_TIMEOUT_SECS: u64 = 120;
+    let objectid_text_id_indexes = objectid_text_id_column_indexes(checksum_columns);
 
     async fn await_pg_with_heartbeat<T, F>(
         future: F,
@@ -883,8 +885,8 @@ async fn compute_collection_checksums_via_temp_tables(
             }
 
             // Transform columns into normalized representations and calculate row MD5
-            let record = pg_hash_record(&row);
-            let record_values = pg_hash_values_pipe(&row, target_fields);
+            let record = pg_hash_record(&row, &objectid_text_id_indexes);
+            let record_values = pg_hash_values_pipe(&row, target_fields, &objectid_text_id_indexes);
             append_copy_text_row(&mut pg_copy_buffer, &record.md5, &record_values);
             pg_copy_buffered_rows += 1;
             if pg_copy_buffered_rows >= COPY_BUFFER_ROWS {
@@ -1706,20 +1708,79 @@ fn mongo_field_literal_for_type(
     }
 }
 
-
-fn pg_hash_values_pipe(row: &Row, target_fields: &[String]) -> String {
+fn pg_hash_values_pipe(
+    row: &Row,
+    target_fields: &[String],
+    objectid_text_id_indexes: &HashSet<usize>,
+) -> String {
     target_fields
         .iter()
         .enumerate()
         .map(|(index, _)| {
             let val: Option<String> = row.get(index);
             // SQL NULL → "null" matches MongoDB Bson::Null serialization
-            normalize_json_literal(val.as_deref().unwrap_or("null"))
+            normalize_pg_checksum_literal(
+                val.as_deref().unwrap_or("null"),
+                objectid_text_id_indexes.contains(&index),
+            )
         })
         .collect::<Vec<_>>()
         .join("|")
 }
 
+fn objectid_text_id_column_indexes(columns: &[Md5ColumnMapping]) -> HashSet<usize> {
+    columns
+        .iter()
+        .enumerate()
+        .filter_map(|(index, column)| {
+            (column.source_field == "_id"
+                && column.target_field.eq_ignore_ascii_case("id")
+                && target_type_family(column.target_type.as_deref()) == Some("string"))
+            .then_some(index)
+        })
+        .collect()
+}
+
+fn objectid_hex_from_padded_uuid(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 36
+        || [8, 13, 18, 23].iter().any(|index| bytes[*index] != b'-')
+        || bytes[..8].iter().any(|byte| *byte != b'0')
+    {
+        return None;
+    }
+
+    let hex = bytes
+        .iter()
+        .copied()
+        .filter(|byte| *byte != b'-')
+        .collect::<Vec<_>>();
+    if hex.len() != 32 || !hex.iter().all(u8::is_ascii_hexdigit) {
+        return None;
+    }
+
+    String::from_utf8(hex[8..].to_vec())
+        .ok()
+        .map(|hex| hex.to_ascii_lowercase())
+}
+
+fn normalize_pg_checksum_literal(value: &str, normalize_objectid_text_id: bool) -> String {
+    let normalized = normalize_json_literal(value);
+    if !normalize_objectid_text_id {
+        return normalized;
+    }
+
+    let Ok(serde_json::Value::String(value)) =
+        serde_json::from_str::<serde_json::Value>(&normalized)
+    else {
+        return normalized;
+    };
+    let Some(object_id) = objectid_hex_from_padded_uuid(&value) else {
+        return normalized;
+    };
+
+    serde_json::to_string(&object_id).unwrap_or(normalized)
+}
 
 fn mongo_hash_values_pipe_for_columns(
     doc: &Document,
@@ -2819,9 +2880,14 @@ fn discover_mapping_targets_for_collection(
 
 
 
-fn pg_hash_record(row: &Row) -> HashRecord {
+fn pg_hash_record(row: &Row, objectid_text_id_indexes: &HashSet<usize>) -> HashRecord {
     let values = (0..row.len())
-        .map(|index| normalize_json_literal(&row.get::<usize, String>(index)))
+        .map(|index| {
+            normalize_pg_checksum_literal(
+                &row.get::<usize, String>(index),
+                objectid_text_id_indexes.contains(&index),
+            )
+        })
         .collect::<Vec<_>>();
     HashRecord {
         md5: md5_hex_from_fragments(values.iter()),
@@ -3141,6 +3207,7 @@ pub async fn compute_md5_summaries_for_collection_with_overrides(
                     &pg_write_client,
                     &mongo_collection,
                     &typed_source_fields,
+                    &columns,
                     &target.source_path,
                     &payload_field_indexes,
                     table_has_children,
@@ -3482,6 +3549,40 @@ pg_mapping:
     #[test]
     fn normalize_json_literal_preserves_json_strings() {
         assert_eq!(normalize_json_literal("\"647.0\""), "\"647.0\"");
+    }
+
+    #[test]
+    fn pg_checksum_trims_padded_objectid_only_for_text_id_mapping() {
+        let padded = r#""00000000-507d-95d5-719d-bef170f15bf9""#;
+
+        let text_id_mapping = [Md5ColumnMapping {
+            source_field: "_id".to_owned(),
+            source_type: Some("objectId".to_owned()),
+            target_field: "id".to_owned(),
+            target_type: Some("TEXT".to_owned()),
+        }];
+        let text_id_indexes = objectid_text_id_column_indexes(&text_id_mapping);
+        assert_eq!(text_id_indexes, HashSet::from([0]));
+        assert_eq!(
+            normalize_pg_checksum_literal(padded, text_id_indexes.contains(&0)),
+            r#""507d95d5719dbef170f15bf9""#
+        );
+
+        let uuid_id_mapping = [Md5ColumnMapping {
+            source_field: "_id".to_owned(),
+            source_type: Some("objectId".to_owned()),
+            target_field: "id".to_owned(),
+            target_type: Some("UUID".to_owned()),
+        }];
+        let uuid_id_indexes = objectid_text_id_column_indexes(&uuid_id_mapping);
+        assert!(uuid_id_indexes.is_empty());
+        assert_eq!(normalize_pg_checksum_literal(padded, false), padded);
+
+        let ordinary_uuid = r#""12345678-507d-95d5-719d-bef170f15bfa""#;
+        assert_eq!(
+            normalize_pg_checksum_literal(ordinary_uuid, true),
+            ordinary_uuid
+        );
     }
 
     #[test]
@@ -4281,6 +4382,7 @@ pg_mapping:
             &harness.pg_client,
             &harness.mongo_collection,
             &source_fields,
+            &[],
             &SourcePath {
                 path: Vec::new(),
                 scalar_array_field: None,
@@ -4417,6 +4519,7 @@ pg_mapping:
             &harness.pg_client,
             &harness.mongo_collection,
             &source_fields,
+            &[],
             &SourcePath {
                 path: Vec::new(),
                 scalar_array_field: None,
