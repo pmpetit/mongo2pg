@@ -159,3 +159,44 @@ jobs:
                       artifacts/*.tar.gz
                       artifacts/*.sha256
                   fail_on_unmatched_files: true
+    cleanup_non_semver_images:
+        name: Remove non-SemVer container images
+        needs: [production_image, publish-github-release]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Delete GHCR versions without SemVer tags
+              uses: actions/github-script@v9
+              with:
+                  script: |
+                                            const { owner, repo } = context.repo;
+                                            const { data: repository } = await github.rest.repos.get({ owner, repo });
+                                            const packageName = repo.toLowerCase();
+                                            const packageParams = { package_type: 'container', package_name: packageName, per_page: 100 };
+                                            const isOrganization = repository.owner.type === 'Organization';
+                                            const getVersions = isOrganization
+                                                ? github.rest.packages.getAllPackageVersionsForOrg
+                                                : github.rest.packages.getAllPackageVersionsForUser;
+                                            const ownerParams = isOrganization ? { org: owner } : { username: owner };
+                                            const versions = await github.paginate(getVersions, { ...ownerParams, ...packageParams });
+                                            const semverTag = /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+                                            for (const version of versions) {
+                                                const tags = version.metadata?.container?.tags ?? [];
+                                                const semanticTags = tags.filter((tag) => semverTag.test(tag));
+                                                if (semanticTags.length > 0) {
+                                                    core.info(`Keeping package version ${version.id}; SemVer tags: ${semanticTags.join(', ')}`);
+                                                    continue;
+                                                }
+
+                                                core.info(`Deleting package version ${version.id}; non-SemVer tags: ${tags.join(', ') || '<untagged>'}`);
+                                                const deleteParams = {
+                                                    package_type: 'container',
+                                                    package_name: packageName,
+                                                    package_version_id: version.id,
+                                                };
+                                                if (isOrganization) {
+                                                    await github.rest.packages.deletePackageVersionForOrg({ org: owner, ...deleteParams });
+                                                } else {
+                                                    await github.rest.packages.deletePackageVersionForUser({ username: owner, ...deleteParams });
+                                                }
+                                            }
