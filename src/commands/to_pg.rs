@@ -73,15 +73,32 @@ pub fn collection_field_signature(
     collections_dir: &Path,
     coll_name: &str,
 ) -> Result<std::collections::BTreeSet<String>> {
-    let safe_name = coll_name.replace('/', "_");
-    let json_path = collections_dir
-        .join(&safe_name)
-        .join(format!("{safe_name}.json"));
+    let collection_dir = resolve_collection_artifact_dir(collections_dir, coll_name);
+    let artifact_name = collection_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(coll_name);
+    let json_path = collection_dir.join(format!("{artifact_name}.json"));
     let content = std::fs::read_to_string(&json_path)
         .with_context(|| format!("Cannot read {}", json_path.display()))?;
     let schema: CollectionSchema = serde_json::from_str(&content)
         .with_context(|| format!("Cannot parse {}", json_path.display()))?;
     Ok(schema.object.keys().cloned().collect())
+}
+
+fn resolve_collection_artifact_dir(collections_dir: &Path, coll_name: &str) -> PathBuf {
+    let safe_name = coll_name.replace('/', "_");
+    let underscore_dir = collections_dir.join(&safe_name);
+    if underscore_dir.exists() {
+        return underscore_dir;
+    }
+
+    let hyphen_dir = collections_dir.join(safe_name.replace('_', "-"));
+    if hyphen_dir.exists() {
+        return hyphen_dir;
+    }
+
+    underscore_dir
 }
 
 /// Returns true when all member schema artifacts are readable.
@@ -92,10 +109,23 @@ pub fn validate_group_schema_compatibility(
     collections_dir: &Path,
     group: &CollectionGroup,
 ) -> bool {
-    group
+    let signatures = group
         .members
         .iter()
-        .all(|member| collection_field_signature(collections_dir, member).is_ok())
+        .map(|member| collection_field_signature(collections_dir, member))
+        .collect::<Result<Vec<_>>>();
+
+    let Ok(signatures) = signatures else {
+        return false;
+    };
+
+    signatures.windows(2).all(|pair| {
+        let shared_fields = pair[0]
+            .intersection(&pair[1])
+            .filter(|field| field.as_str() != "_id")
+            .count();
+        shared_fields > 0
+    })
 }
 
 /// Rewrite each group member's mapping YAML to use the shared `prefix` table name.
@@ -118,9 +148,12 @@ pub fn apply_grouping_to_mappings(
     let mut loaded_members: Vec<(String, PathBuf, CollectionMapping)> = Vec::new();
 
     for member in &group.members {
-        let safe_name = member.replace('/', "_");
-        let member_dir = collections_dir.join(&safe_name);
-        let exact_mapping_path = member_dir.join(format!("mapping_{safe_name}.yaml"));
+        let member_dir = resolve_collection_artifact_dir(collections_dir, member);
+        let artifact_name = member_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(member);
+        let exact_mapping_path = member_dir.join(format!("mapping_{artifact_name}.yaml"));
         let mapping_path = if exact_mapping_path.exists() {
             exact_mapping_path
         } else {

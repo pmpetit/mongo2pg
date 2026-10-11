@@ -1280,6 +1280,17 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         match value {
             Value::Null => "NULL".to_owned(),
             Value::Bool(v) => {
+                if normalized_sql_type(sql_type)
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().contains("json"))
+                    .unwrap_or(false)
+                {
+                    return format!(
+                        "'{}'::{}",
+                        if *v { "true" } else { "false" },
+                        normalized_sql_type(sql_type).as_deref().unwrap_or("jsonb")
+                    );
+                }
                 if *v {
                     "TRUE".to_owned()
                 } else {
@@ -1287,10 +1298,33 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 }
             }
             Value::Number(v) => {
+                if normalized_sql_type(sql_type)
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().contains("json"))
+                    .unwrap_or(false)
+                {
+                    return format!(
+                        "'{}'::{}",
+                        escape_sql_string(&v.to_string()),
+                        normalized_sql_type(sql_type).as_deref().unwrap_or("jsonb")
+                    );
+                }
                 map_extended_json_literal(value, sql_type).unwrap_or_else(|| v.to_string())
             }
             Value::String(v) => {
                 let normalized = normalized_sql_type(sql_type);
+                if normalized
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().contains("json"))
+                    .unwrap_or(false)
+                {
+                    let json_string = serde_json::to_string(v).unwrap_or_else(|_| "null".to_owned());
+                    return format!(
+                        "'{}'::{}",
+                        escape_sql_string(&json_string),
+                        normalized.as_deref().unwrap_or("jsonb")
+                    );
+                }
                 if normalized
                     .as_deref()
                     .map(|t| t.to_ascii_lowercase().starts_with("geometry"))
@@ -4170,9 +4204,19 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .map(parse_flush_batch_after)
         .transpose()?;
     let stop_on_no_lag = kafka_conf.stop_on_no_lag.unwrap_or(false);
+    let has_nested_mappings = mappings_by_collection
+        .values()
+        .flatten()
+        .any(|mapping| !is_root_mapping(mapping));
     let snapshot_copy_enabled = kafka_conf
         .copy_mode
-        .unwrap_or(enable_auto_commit && transaction_batch_size > 1);
+        .unwrap_or(enable_auto_commit && transaction_batch_size > 1)
+        && !has_nested_mappings;
+    if has_nested_mappings && kafka_conf.copy_mode.unwrap_or(false) {
+        info!(
+            "Kafka snapshot COPY disabled because nested mappings require row expansion"
+        );
+    }
     let transaction_batching_enabled = !snapshot_copy_enabled && transaction_batch_size > 1;
     let configured_write_mode = if snapshot_copy_enabled {
         "copy_batch_insert_fallback"

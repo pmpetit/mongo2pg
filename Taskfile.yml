@@ -417,7 +417,9 @@ tasks:
       DBS_TO_PROCESS: '{{if .CLI_ARGS}}{{join " " .CLI_ARGS}}{{else}}{{.DATABASES}}{{end}}'
       NO_MESSAGE_OK_DBS: "sample_events"
     cmds:
-      #- task kafka-reset-and-seed -- {{.DBS_TO_PROCESS}}
+      - task: kafka-reset-and-seed
+        vars:
+          CLI_ARGS: "{{.DBS_TO_PROCESS}}"
       - mkdir -p "{{.OUT}}"
       - |
         for db in {{.DBS_TO_PROCESS}}
@@ -912,6 +914,7 @@ tasks:
           \"tasks.max\": \"1\",
           \"mongodb.connection.string\": \"mongodb://user:pass@mongodb:27017/?replicaSet=rs0&authSource=admin\",
           \"topic.prefix\": \"{{.TOPIC_PREFIX}}\",
+          \"schema.name.adjustment.mode\": \"avro\",
           \"topic.creation.default.partitions\": \"4\",
           \"topic.creation.default.replication.factor\": \"1\",
           \"snapshot.mode\": \"initial\"${extra_db_filter}

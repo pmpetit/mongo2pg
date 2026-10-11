@@ -1171,7 +1171,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_group_schema_compatibility_allows_different_fields_when_artifacts_parse() {
+    fn validate_group_schema_compatibility_allows_sparse_shared_fields() {
         use std::time::{SystemTime, UNIX_EPOCH};
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1181,7 +1181,7 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("create temp dir");
 
         let schema_a = r#"{"count":10,"sampled":10,"object":{"_id":{"probability":1.0,"types":{"ObjectId":{"probability":1.0,"sampled":10}}},"name":{"probability":1.0,"types":{"String":{"probability":1.0,"sampled":10}}}}}"#;
-        let schema_b = r#"{"count":10,"sampled":10,"object":{"_id":{"probability":1.0,"types":{"ObjectId":{"probability":1.0,"sampled":10}}},"title":{"probability":1.0,"types":{"String":{"probability":1.0,"sampled":10}}}}}"#;
+        let schema_b = r#"{"count":10,"sampled":10,"object":{"_id":{"probability":1.0,"types":{"ObjectId":{"probability":1.0,"sampled":10}}},"name":{"probability":1.0,"types":{"String":{"probability":1.0,"sampled":10}}},"title":{"probability":1.0,"types":{"String":{"probability":1.0,"sampled":10}}}}}"#;
 
         for (coll, schema) in [("events_lmfr", schema_a), ("events_lmza", schema_b)] {
             let coll_dir = dir.join(coll);
