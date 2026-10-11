@@ -1216,28 +1216,9 @@ fn grouped_key_filter_for_target(target: &MappingTarget) -> Option<(String, Stri
         .map(|suffix| ("_key".to_owned(), suffix.to_owned()))
 }
 
-fn resolve_md5_table_and_grouped_filter(
-    target: &MappingTarget,
-    add_grouped_key: bool,
-) -> (String, Option<(String, String)>) {
-    let mut table_name = target.mapping_yaml.pg_mapping.table_name.clone();
-    let mut grouped_key_filter = grouped_key_filter_for_target(target);
-
-    // Compatibility fallback: when grouped mode is enabled but stale mappings
-    // still point at per-collection root tables (e.g. events_bmit), derive the
-    // grouped root table and _key filter from the source collection name.
-    if add_grouped_key && grouped_key_filter.is_none() {
-        if let Some((group_prefix, suffix)) = target.source_collection.split_once('_') {
-            if !suffix.trim().is_empty()
-                && table_name.eq_ignore_ascii_case(target.source_collection.as_str())
-            {
-                table_name = group_prefix.to_owned();
-                grouped_key_filter = Some(("_key".to_owned(), suffix.to_owned()));
-            }
-        }
-    }
-
-    (table_name, grouped_key_filter)
+fn resolve_md5_table_and_grouped_filter(target: &MappingTarget) -> (String, Option<(String, String)>) {
+    let table_name = target.mapping_yaml.pg_mapping.table_name.clone();
+    (table_name, grouped_key_filter_for_target(target))
 }
 
 fn comparable_md5_columns(columns: &[MappingColumnYaml]) -> Vec<&MappingColumnYaml> {
@@ -3183,8 +3164,7 @@ pub async fn compute_md5_summaries_for_collection_with_overrides(
             target.mapping_yaml.pg_mapping.schema_name.as_deref(),
             target_schema_override,
         );
-        let (table_name, grouped_key_filter) =
-            resolve_md5_table_and_grouped_filter(&target, conf.add_grouped_key);
+        let (table_name, grouped_key_filter) = resolve_md5_table_and_grouped_filter(&target);
         let table_has_children = tables_with_children.contains(&table_name.to_ascii_lowercase());
         let pg_uri = resolve_md5_target_pg_uri(
             conf.target_uri.as_deref(),
@@ -4278,7 +4258,7 @@ pg_mapping:
     }
 
     #[test]
-    fn resolve_md5_table_and_grouped_filter_falls_back_for_stale_grouped_mapping() {
+    fn resolve_md5_table_and_grouped_filter_does_not_infer_grouping() {
         let mapping_yaml: MappingYaml = serde_yaml::from_str(
             r#"
 pg_mapping:
@@ -4300,12 +4280,9 @@ pg_mapping:
             },
         };
 
-        let (table, grouped_filter) = super::resolve_md5_table_and_grouped_filter(&target, true);
-        assert_eq!(table, "events");
-        assert_eq!(
-            grouped_filter,
-            Some(("_key".to_owned(), "bmit".to_owned()))
-        );
+        let (table, grouped_filter) = super::resolve_md5_table_and_grouped_filter(&target);
+        assert_eq!(table, "events_bmit");
+        assert_eq!(grouped_filter, None);
     }
 
     #[test]
