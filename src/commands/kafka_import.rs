@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
-use apache_avro::{from_avro_datum, types::Value as AvroValue, Schema};
+use apache_avro::{reader::datum::GenericDatumReader, types::Value as AvroValue, Schema};
 use bson::doc;
 use bytes::Bytes;
 use chrono::TimeZone;
@@ -770,7 +770,11 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             };
 
             let mut slice: &[u8] = &bytes[5..];
-            let avro = from_avro_datum(&schema, &mut slice, None)
+            let reader = GenericDatumReader::builder(&schema)
+                .build()
+                .with_context(|| "Failed to decode Avro payload")?;
+            let avro = reader
+                .read_value(&mut slice)
                 .with_context(|| "Failed to decode Avro payload")?;
             return Ok(avro_to_json(avro));
         }
@@ -1280,6 +1284,17 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         match value {
             Value::Null => "NULL".to_owned(),
             Value::Bool(v) => {
+                if normalized_sql_type(sql_type)
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().contains("json"))
+                    .unwrap_or(false)
+                {
+                    return format!(
+                        "'{}'::{}",
+                        if *v { "true" } else { "false" },
+                        normalized_sql_type(sql_type).as_deref().unwrap_or("jsonb")
+                    );
+                }
                 if *v {
                     "TRUE".to_owned()
                 } else {
@@ -1287,10 +1302,33 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 }
             }
             Value::Number(v) => {
+                if normalized_sql_type(sql_type)
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().contains("json"))
+                    .unwrap_or(false)
+                {
+                    return format!(
+                        "'{}'::{}",
+                        escape_sql_string(&v.to_string()),
+                        normalized_sql_type(sql_type).as_deref().unwrap_or("jsonb")
+                    );
+                }
                 map_extended_json_literal(value, sql_type).unwrap_or_else(|| v.to_string())
             }
             Value::String(v) => {
                 let normalized = normalized_sql_type(sql_type);
+                if normalized
+                    .as_deref()
+                    .map(|t| t.to_ascii_lowercase().contains("json"))
+                    .unwrap_or(false)
+                {
+                    let json_string = serde_json::to_string(v).unwrap_or_else(|_| "null".to_owned());
+                    return format!(
+                        "'{}'::{}",
+                        escape_sql_string(&json_string),
+                        normalized.as_deref().unwrap_or("jsonb")
+                    );
+                }
                 if normalized
                     .as_deref()
                     .map(|t| t.to_ascii_lowercase().starts_with("geometry"))
@@ -1463,6 +1501,17 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             let msg = cause.to_string();
             msg.contains("duplicate key value violates unique constraint")
                 || msg.contains("SQLSTATE 23505")
+        })
+    }
+
+    fn is_postgres_unavailable(err: &anyhow::Error) -> bool {
+        err.chain().any(|cause| {
+            let msg = cause.to_string().to_ascii_lowercase();
+            msg.contains("connection refused")
+                || msg.contains("connection is closed")
+                || msg.contains("server closed the connection")
+                || msg.contains("broken pipe")
+                || msg.contains("could not connect")
         })
     }
 
@@ -2020,13 +2069,25 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     async fn traced_pg_execute<C>(
         pg_client: &C,
         sql: &str,
-        _sql_kind: &str,
-        _table: &str,
+        sql_kind: &str,
+        table: &str,
     ) -> std::result::Result<u64, tokio_postgres::Error>
     where
         C: tokio_postgres::GenericClient + Sync,
     {
-        pg_client.execute(sql, &[]).await
+        match pg_client.execute(sql, &[]).await {
+            Ok(rows) => Ok(rows),
+            Err(err) => {
+                warn!(
+                    "PostgreSQL statement failed kind={} table={} error={} sql={}",
+                    sql_kind,
+                    table,
+                    format_postgres_error(&err),
+                    sql
+                );
+                Err(err)
+            }
+        }
     }
 
     async fn traced_pg_query_one<C>(
@@ -3242,7 +3303,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                                 "failed to COMMIT snapshot COPY batch for table {}: {:#}",
                                 batch.table_name, commit_err
                             );
-                            let _ = pg_client.batch_execute("ROLLBACK").await;
                         } else {
                             *processed += batch.messages.len();
                             *total_affected_rows += rows;
@@ -3258,6 +3318,20 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                         error!(
                             "snapshot COPY failed for table {}: {:#}",
                             batch.table_name, copy_err
+                        );
+                        warn!(
+                            "snapshot COPY diagnostic: table={} columns={} batch_rows={} postgres_error={:#} sample_rows={}",
+                            batch.table_name,
+                            batch.columns.join(","),
+                            batch.sql_rows.len(),
+                            copy_err,
+                            batch
+                                .sql_rows
+                                .iter()
+                                .take(3)
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join(" || ")
                         );
                         if is_duplicate_key_error(&copy_err) {
                             copy_allowed_cache.insert(batch.table_name.clone(), false);
@@ -3351,6 +3425,19 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             "fallback replay apply failed topic={} collection={} op={}: {:#}",
                             message.topic, message.collection_name, message.op, err
                         );
+                        warn!(
+                            "fallback failure source document topic={} collection={}: {}",
+                            message.topic,
+                            message.collection_name,
+                            serde_json::to_string_pretty(&message.payload)
+                                .unwrap_or_else(|_| message.payload.to_string())
+                        );
+
+                        if !is_postgres_unavailable(&err) {
+                            return Err(err.context(
+                                "PostgreSQL data/write error; message was not sent to DLQ",
+                            ));
+                        }
 
                         if let Some(payload) = message.payload_bytes.as_deref() {
                             let dlq_topic =
@@ -3472,7 +3559,9 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         Ok(())
     }
 
-    fn consumer_lag_snapshot(consumer: &StreamConsumer) -> Result<Option<(usize, i64, i64)>> {
+    fn consumer_lag_snapshot(
+        consumer: &StreamConsumer,
+    ) -> Result<Option<(usize, i64, i64, Vec<String>)>> {
         let assignment = consumer
             .assignment()
             .with_context(|| connection_failed_context("kafka", "query"))?;
@@ -3511,6 +3600,13 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         let assigned_count = assigned.len();
         let mut total_lag = 0_i64;
         let mut total_end_offsets = 0_i64;
+        let mut topics = assigned
+            .iter()
+            .map(|item| item.topic().to_owned())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        topics.sort();
         for item in assigned {
             let (low, high) = consumer
                 .fetch_watermarks(item.topic(), item.partition(), Duration::from_secs(1))
@@ -3537,7 +3633,7 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             total_lag += lag;
         }
 
-        Ok(Some((assigned_count, total_lag, total_end_offsets)))
+        Ok(Some((assigned_count, total_lag, total_end_offsets, topics)))
     }
 
     fn commit_offset(
@@ -4170,9 +4266,19 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         .map(parse_flush_batch_after)
         .transpose()?;
     let stop_on_no_lag = kafka_conf.stop_on_no_lag.unwrap_or(false);
+    let has_nested_mappings = mappings_by_collection
+        .values()
+        .flatten()
+        .any(|mapping| !is_root_mapping(mapping));
     let snapshot_copy_enabled = kafka_conf
         .copy_mode
-        .unwrap_or(enable_auto_commit && transaction_batch_size > 1);
+        .unwrap_or(enable_auto_commit && transaction_batch_size > 1)
+        && !has_nested_mappings;
+    if has_nested_mappings && kafka_conf.copy_mode.unwrap_or(false) {
+        info!(
+            "Kafka snapshot COPY disabled because nested mappings require row expansion"
+        );
+    }
     let transaction_batching_enabled = !snapshot_copy_enabled && transaction_batch_size > 1;
     let configured_write_mode = if snapshot_copy_enabled {
         "copy_batch_insert_fallback"
@@ -4298,8 +4404,14 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
     // In snapshot mode, use a long idle timeout to detect completion.
     // In streaming mode, use a slower default on multi-worker/CI runners to
     // avoid busy poll loops; configurable via kafka.idle_timeout_ms.
+    let snapshot_interval = kafka_conf
+        .snapshot_interval
+        .as_deref()
+        .map(parse_flush_batch_after)
+        .transpose()?
+        .unwrap_or_else(|| Duration::from_secs(10));
     let idle_timeout = if snapshot_mode {
-        Duration::from_secs(10)
+        snapshot_interval
     } else {
         let default_idle_timeout_ms = if worker_count_for_logs > 1 { 500 } else { 200 };
         let configured_idle_timeout_ms = kafka_conf
@@ -4483,7 +4595,6 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                 if transaction_batching_enabled && tx_open && tx_pending_processed > 0 {
                     if let Err(commit_err) = pg_client.batch_execute("COMMIT").await {
                         error!("Failed to commit idle transaction batch: {:?}", commit_err);
-                        let _ = pg_client.batch_execute("ROLLBACK").await;
                         tx_rolled_back_batches += 1;
                         tx_rolled_back_messages += tx_pending_processed;
                     } else {
@@ -4505,7 +4616,12 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
 
                 if stop_on_no_lag {
                     match consumer_lag_snapshot(&consumer) {
-                        Ok(Some((assigned_partitions, total_lag, total_end_offsets))) => {
+                        Ok(Some((
+                            assigned_partitions,
+                            total_lag,
+                            total_end_offsets,
+                            topics,
+                        ))) => {
                             stop_on_no_lag_had_assignment = true;
                             stop_on_no_lag_no_assignment_streak = 0;
                             let elapsed = Instant::now().duration_since(loop_started_at);
@@ -4523,8 +4639,9 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             if ready_for_stable {
                                 stop_on_no_lag_streak += 1;
                                 info!(
-                                    "stop_on_no_lag check: worker={} assigned_partitions={} total_lag={} total_end_offsets={} stable={}/{}",
+                                    "stop_on_no_lag check: worker={} topics={} assigned_partitions={} total_lag={} total_end_offsets={} stable={}/{}",
                                     worker_identity,
+                                    topics.join(","),
                                     assigned_partitions,
                                     total_lag,
                                     total_end_offsets,
@@ -4542,8 +4659,9 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                             } else {
                                 if stop_on_no_lag_streak > 0 {
                                     info!(
-                                        "stop_on_no_lag reset: worker={} assigned_partitions={} previous_stable={} reason=conditions_changed seen_end_offsets={} total_lag={} buffers_empty={} min_runtime_reached={}",
+                                        "stop_on_no_lag reset: worker={} topics={} assigned_partitions={} previous_stable={} reason=conditions_changed seen_end_offsets={} total_lag={} buffers_empty={} min_runtime_reached={}",
                                         worker_identity,
+                                        topics.join(","),
                                         assigned_partitions,
                                         stop_on_no_lag_streak,
                                         stop_on_no_lag_seen_end_offsets,
@@ -4571,13 +4689,16 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                                     >= stop_on_no_lag_heartbeat_interval
                                 {
                                     info!(
-                                        "stop_on_no_lag heartbeat: worker={} state=waiting assigned_partitions={} total_lag={} total_end_offsets={} seen_end_offsets={} buffers_empty={} min_runtime_reached={} stable={}/{} elapsed_ms={}",
+                                        "stop_on_no_lag heartbeat: worker={} state=waiting topics={} assigned_partitions={} total_lag={} total_end_offsets={} seen_end_offsets={} buffers_empty={} snapshot_buffered_messages={} pending_transaction_messages={} min_runtime_reached={} stable={}/{} elapsed_ms={}",
                                         worker_identity,
+                                        topics.join(","),
                                         assigned_partitions,
                                         total_lag,
                                         total_end_offsets,
                                         stop_on_no_lag_seen_end_offsets,
                                         buffers_empty,
+                                        snapshot_buffer.len(),
+                                        tx_pending_processed,
                                         min_runtime_reached,
                                         stop_on_no_lag_streak,
                                         stop_on_no_lag_required_streak,
@@ -4653,6 +4774,8 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
         };
 
         polled += 1;
+        let mut last_source_topic = "-".to_owned();
+        let mut last_target_pg_table = "-".to_owned();
         macro_rules! maybe_log_progress {
             () => {
                 if polled % batch_log_messages == 0 {
@@ -4665,8 +4788,8 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     };
                     let effective_processed = processed + buffered_inflight;
                     info!(
-                        "Kafka progress: polled={}, processed={}({}), flushed_processed={}, buffered_inflight={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, skipped_missing_required_snapshot={}, decode_failed={}, apply_failed={}, commit_failed={}",
-                        polled, effective_processed, processed_mode, processed, buffered_inflight, skipped_topic, skipped_db, skipped_mapping, skipped_no_payload, skipped_non_data_op, skipped_missing_after, skipped_missing_before, skipped_missing_required_snapshot, decode_failed, apply_failed, commit_failed
+                        "Kafka progress: source_topic={}, target_pg_table={}, polled={}, processed={}({}), flushed_processed={}, buffered_inflight={}, skipped_topic={}, skipped_db={}, skipped_mapping={}, skipped_no_payload={}, skipped_non_data_op={}, skipped_missing_after={}, skipped_missing_before={}, skipped_missing_required_snapshot={}, decode_failed={}, apply_failed={}, commit_failed={}",
+                        last_source_topic, last_target_pg_table, polled, effective_processed, processed_mode, processed, buffered_inflight, skipped_topic, skipped_db, skipped_mapping, skipped_no_payload, skipped_non_data_op, skipped_missing_after, skipped_missing_before, skipped_missing_required_snapshot, decode_failed, apply_failed, commit_failed
                     );
                     debug!(
                         "Kafka progress ops: c={}, u={}, r={}, d={}, other={}, total_affected_rows={}, fallback_payload_as_after={}",
@@ -4803,6 +4926,12 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             maybe_log_progress!();
             continue;
         };
+        last_source_topic = topic.to_owned();
+        last_target_pg_table = mappings
+            .iter()
+            .find(|mapping| is_root_mapping(mapping))
+            .map(|mapping| qualified_table_name(mapping, effective_target_schema.as_deref()))
+            .unwrap_or_else(|| "-".to_owned());
 
         let Some(bytes) = message.payload() else {
             skipped_no_payload += 1;
@@ -4957,6 +5086,14 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
             continue;
         }
 
+        if transaction_batching_enabled && !tx_open {
+            pg_client
+                .batch_execute("BEGIN")
+                .await
+                .context("failed to begin kafka-import transaction batch")?;
+            tx_open = true;
+        }
+
         let write_outcome = write_to_pg(
             &pg_client,
             &payload,
@@ -4992,6 +5129,19 @@ pub async fn run_kafka_import(args: KafkaImportArgs) -> Result<()> {
                     "apply failed topic={} collection={} op={}: {:#}\n  hint: extend map_extended_json_literal() in src/bin/mongo2pg.rs to support this payload shape",
                     topic, collection_name, op, err
                 );
+                warn!(
+                    "apply failure source document topic={} collection={}: {}",
+                    topic,
+                    collection_name,
+                    serde_json::to_string_pretty(&payload)
+                        .unwrap_or_else(|_| payload.to_string())
+                );
+
+                if !is_postgres_unavailable(&err) {
+                    return Err(err.context(
+                        "PostgreSQL data/write error; message was not sent to DLQ",
+                    ));
+                }
 
                 let key_bytes = message.key().map(|key| key.to_vec());
                 let payload_bytes = message.payload().map(|payload| payload.to_vec());

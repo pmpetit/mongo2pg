@@ -67,6 +67,7 @@ pub struct KafkaConfData {
     pub fetch_min_bytes: Option<usize>,
     pub fetch_wait_max_ms: Option<u64>,
     pub idle_timeout_ms: Option<u64>,
+    pub snapshot_interval: Option<String>,
     pub max_partition_fetch_bytes: Option<usize>,
     pub fetch_max_bytes: Option<usize>,
     pub transaction_batch_size: Option<usize>,
@@ -313,6 +314,8 @@ struct TomlKafkaSection {
         alias = "idle_timeout_ms"
     )]
     idle_timeout_ms: Option<u64>,
+    #[serde(alias = "SNAPSHOT_INTERVAL", alias = "snapshotInterval")]
+    snapshot_interval: Option<String>,
     #[serde(
         alias = "MAX_PARTITION_FETCH_BYTES",
         alias = "maxPartitionFetchBytes",
@@ -515,6 +518,7 @@ fn warn_unknown_toml_keys(path: &Path, parsed_doc: &toml::Value) {
                 "fetch.wait.max.ms",
                 "idle_timeout_ms",
                 "idle.timeout.ms",
+                "snapshot_interval",
                 "max_partition_fetch_bytes",
                 "max.partition.fetch.bytes",
                 "fetch_max_bytes",
@@ -625,6 +629,7 @@ This often means the config file was truncated or overwritten. Provide full conf
             fetch_min_bytes: k.fetch_min_bytes,
             fetch_wait_max_ms: k.fetch_wait_max_ms,
             idle_timeout_ms: k.idle_timeout_ms,
+            snapshot_interval: k.snapshot_interval,
             max_partition_fetch_bytes: k.max_partition_fetch_bytes,
             fetch_max_bytes: k.fetch_max_bytes,
             transaction_batch_size: k.transaction_batch_size,
