@@ -2254,7 +2254,7 @@ dependencies = [
 
 [[package]]
 name = "mongo2pg"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "anyhow",
  "apache-avro",
