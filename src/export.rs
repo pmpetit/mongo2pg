@@ -6,7 +6,7 @@
 //!
 //! Nested arrays and objects are expanded across child tables exactly as
 //! `to_pg` generated them, so the CSV files can be loaded directly into
-//! PostgreSQL with `\COPY`. fake commit 2
+//! PostgreSQL with `\COPY`. fake commit
 
 use std::collections::HashMap;
 use std::collections::HashSet;
