@@ -19,7 +19,7 @@ jobs:
             matrix:
                 include:
                     - platform: linux/amd64
-                      runner: ubuntu-latest
+                      runner: ubuntu-24.04
                       suffix: linux-amd64
                     - platform: linux/arm64
                       runner: ubuntu-24.04-arm
@@ -72,7 +72,7 @@ jobs:
 
     merge:
         needs: build
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: docker/setup-buildx-action@v4
 
