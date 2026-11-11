@@ -45,6 +45,53 @@ jobs:
         with:
             image_tag: ${{ needs.branch_tag.outputs.tag }}
 
+    delete_branch_image:
+        if: github.event.action == 'closed' && !startsWith(github.event.pull_request.head.ref, 'release/') && github.event.pull_request.head.repo.full_name == github.repository
+        needs: [branch_tag]
+        runs-on: ubuntu-24.04
+        permissions:
+            packages: write
+        steps:
+            - name: Delete PR branch image from GHCR
+              uses: actions/github-script@v9
+              env:
+                  IMAGE_TAG: ${{ needs.branch_tag.outputs.tag }}
+              with:
+                  script: |
+                      const { owner, repo } = context.repo;
+                      const tag = process.env.IMAGE_TAG;
+                      const packageName = repo.toLowerCase();
+                      const { data: repository } = await github.rest.repos.get({ owner, repo });
+                      const isOrganization = repository.owner.type === 'Organization';
+                      const getVersions = isOrganization
+                          ? github.rest.packages.getAllPackageVersionsForOrg
+                          : github.rest.packages.getAllPackageVersionsForUser;
+                      const ownerParams = isOrganization ? { org: owner } : { username: owner };
+                      const versions = await github.paginate(getVersions, {
+                          ...ownerParams,
+                          package_type: 'container',
+                          package_name: packageName,
+                          per_page: 100,
+                      });
+
+                      for (const version of versions) {
+                          const tags = version.metadata?.container?.tags ?? [];
+                          if (!tags.includes(tag)) {
+                              continue;
+                          }
+                          core.info(`Deleting package version ${version.id} for tag ${tag}`);
+                          const deleteParams = {
+                              package_type: 'container',
+                              package_name: packageName,
+                              package_version_id: version.id,
+                          };
+                          if (isOrganization) {
+                              await github.rest.packages.deletePackageVersionForOrg({ org: owner, ...deleteParams });
+                          } else {
+                              await github.rest.packages.deletePackageVersionForUser({ username: owner, ...deleteParams });
+                          }
+                      }
+
     release_src_scope_check:
         if: "${{ github.event.action == 'closed' && github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/') && !startsWith(github.event.pull_request.title, 'chore: release ') }}"
         runs-on: ubuntu-24.04
