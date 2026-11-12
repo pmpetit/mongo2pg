@@ -48,12 +48,12 @@ jobs:
               id: build
               uses: docker/build-push-action@v7
               with:
-                  context: .
-                  file: ./Dockerfile
-                  platforms: ${{ matrix.platform }}
-                  outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
-                  cache-from: type=gha,scope=${{ matrix.suffix }}
-                  cache-to: type=gha,mode=max,scope=${{ matrix.suffix }}
+                context: .
+                file: ./Dockerfile
+                platforms: ${{ matrix.platform }}
+                outputs: type=image,name=${{ steps.image.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+                cache-from: type=gha,scope=${{ matrix.suffix }}
+                cache-to: type=gha,mode=max,ignore-error=true,scope=${{ matrix.suffix }}
 
             - name: Export digest
               shell: bash
