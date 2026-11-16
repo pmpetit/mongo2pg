@@ -26,7 +26,7 @@ use crate::commands::shared::{
     sanitize_pg_name, CollectionMapping, ConfigOverrides, DdlTableMapping,
     MappingColumn, PgMapping, TraversalMode, TraversalPlan,
 };
-use crate::commands::to_pg::run_to_pg;
+use crate::commands::to_pg::run_to_pg_from_infer;
 use crate::engine::analyzer::{
     Analyzer, CollectionSchema, FieldSchema, TypeSchema, TYPE_NULL, TYPE_UNDEFINED,
 };
@@ -374,7 +374,7 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
                 )
                 .await?;
 
-                run_to_pg(
+                run_to_pg_from_infer(
                     ToPgArgs {
                         collection: None,
                         table: None,
@@ -419,7 +419,7 @@ pub async fn run_infer(args: InferArgs) -> Result<()> {
 
     if let Some(ref conf) = chained_config {
         move_infer_artifacts_to_gcs_if_needed(conf).await?;
-        run_to_pg(
+        run_to_pg_from_infer(
             ToPgArgs {
                 collection: None,
                 table: None,
