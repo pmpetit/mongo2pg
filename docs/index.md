@@ -39,6 +39,11 @@ PostgreSQL.
 | HTML reporting | `infer` writes collection-level and schema-level reports, flags collections with infer warnings, and `report` can regenerate them from existing files |
 | Post-import validation | `import` writes `reports/post_report.html` automatically, and `report --post-import` can regenerate it later |
 
+With a project config, `infer` only needs the MongoDB source to be available.
+It generates PostgreSQL DDL and HTML reports from local artifacts without
+connecting to the PostgreSQL target. Explicit `to-pg` commands still perform
+their configured target preflight.
+
 ---
 
 ## Typical Workflow

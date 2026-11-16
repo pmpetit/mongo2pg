@@ -788,7 +788,21 @@ async fn sync_infer_artifacts_if_gcs(
 }
 
 pub async fn run_to_pg(args: ToPgArgs, quiet: bool) -> Result<()> {
-    preflight_ping_target_if_configured(&args).await?;
+    run_to_pg_with_target_preflight(args, quiet, true).await
+}
+
+pub(crate) async fn run_to_pg_from_infer(args: ToPgArgs, quiet: bool) -> Result<()> {
+    run_to_pg_with_target_preflight(args, quiet, false).await
+}
+
+async fn run_to_pg_with_target_preflight(
+    args: ToPgArgs,
+    quiet: bool,
+    check_target_connection: bool,
+) -> Result<()> {
+    if check_target_connection {
+        preflight_ping_target_if_configured(&args).await?;
+    }
 
     if let Some(conf) = args.config.as_deref() {
         let c = read_conf(conf)?;
@@ -935,4 +949,146 @@ fn run_to_pg_for_dirs(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{run_to_pg, run_to_pg_from_infer};
+    use crate::cli::{ReportArgs, ToPgArgs, UriArg};
+
+    fn project_with_unavailable_target() -> (tempfile::TempDir, ToPgArgs) {
+        let project = tempfile::tempdir().expect("create temp project");
+        let project_root = project.path().join("demo");
+        let config_dir = project_root.join("config");
+        let collections_dir = project_root
+            .join("source")
+            .join("collections")
+            .join("source_db");
+        let collection_dir = collections_dir.join("transactions");
+        std::fs::create_dir_all(&config_dir).expect("create config dir");
+        std::fs::create_dir_all(&collection_dir).expect("create collection dir");
+
+        std::fs::write(
+            collection_dir.join("transactions.json"),
+            r#"{
+                "count": 1,
+                "sampled": 1,
+                "object": {
+                    "_id": {
+                        "probability": 1.0,
+                        "types": {
+                            "ObjectId": {"probability": 1.0, "sampled": 1}
+                        }
+                    },
+                    "name": {
+                        "probability": 1.0,
+                        "types": {
+                            "String": {"probability": 1.0, "sampled": 1}
+                        }
+                    }
+                }
+            }"#,
+        )
+        .expect("write collection schema");
+
+        let config_path = config_dir.join("demo.toml");
+        std::fs::write(
+            &config_path,
+            format!(
+                r#"
+[project]
+title = "Test"
+base_dir = "{}"
+project_dir = "demo"
+
+[source]
+uri = "mongodb://localhost"
+namespace = ["source_db"]
+
+[target]
+uri = "postgres://postgres:postgres@127.0.0.1:1/postgres?connect_timeout=1"
+database_name = ["target_db"]
+schema_name = ["target_schema"]
+"#,
+                project.path().display()
+            ),
+        )
+        .expect("write config");
+
+        (
+            project,
+            ToPgArgs {
+                collection: None,
+                table: None,
+                config: Some(config_path),
+                output_dir: None,
+                schema: None,
+                project_dir: None,
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn infer_chained_to_pg_generates_ddl_and_report_without_target_connection() {
+        let (project, args) = project_with_unavailable_target();
+
+        run_to_pg_from_infer(args, true)
+            .await
+            .expect("infer-chained to-pg should not need PostgreSQL");
+
+        let ddl_path = project
+            .path()
+            .join("demo")
+            .join("schema")
+            .join("tables")
+            .join("target_db")
+            .join("transactions.sql");
+        assert!(ddl_path.is_file(), "expected generated DDL at {ddl_path:?}");
+
+        let config_path = project
+            .path()
+            .join("demo")
+            .join("config")
+            .join("demo.toml");
+        crate::commands::report::run_report(
+            ReportArgs {
+                mongo: UriArg { source_uri: None },
+                config: Some(config_path),
+                collections_dir: None,
+                output: None,
+                namespace: String::new(),
+                project_dir: None,
+                post_import: false,
+                check_md5: true,
+                noaggregate: false,
+            },
+            true,
+        )
+        .await
+        .expect("report generation should not need PostgreSQL");
+
+        let report_path = project
+            .path()
+            .join("demo")
+            .join("reports")
+            .join("main.html");
+        assert!(
+            report_path.is_file(),
+            "expected generated report at {report_path:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn standalone_to_pg_keeps_target_connection_preflight() {
+        let (_project, args) = project_with_unavailable_target();
+
+        let error = run_to_pg(args, true)
+            .await
+            .expect_err("standalone to-pg should check target connectivity");
+        assert!(
+            error.to_string().contains("connect")
+                || format!("{error:#}").contains("connection"),
+            "unexpected preflight error: {error:#}"
+        );
+    }
 }
